@@ -94,7 +94,7 @@ about a minute.
 - Drop ROMs anywhere in the app. They are identified by SHA-1 against
   thousands of known Game Boy and Game Boy Color dumps, so titles, developers
   and years fill themselves in.
-- Favorites, search, sorting, filters, and grid or list views.
+- Favorites, faceted search (genre, players, region, year, developer… or type `genre:rpg players:2`), sorting, filters, and grid or list views.
 - Optional box art for recognized games. It is off by default: Cartouche asks
   first, and covers are then downloaded by your browser and stored only there.
 - Export your whole library (ROMs, saves, screenshots, settings) to one backup

@@ -5,7 +5,33 @@ import type { GameEntry } from '../types/game';
 export const paths = {
   play: (id: string, q = '') => `/game/${encodeURIComponent(id)}/play${q}`,
   game: (id: string) => `/game/${encodeURIComponent(id)}`,
+  /** The search overlay over the library, with a query in the search syntax (readable: `?q=genre:rpg+players:2`). */
+  search: (q: string) => `/?q=${encodeURIComponent(q).replace(/%20/g, '+').replace(/%3A/gi, ':').replace(/%2C/gi, ',')}`,
 };
+/**
+ * History state for a link that opens the search: the entry it was opened from (React Router's `idx`), so
+ * closing steps back to it however many searches were pushed since. Read when the link renders.
+ */
+export const searchState = () => ({ from: (history.state as { idx?: number } | null)?.idx ?? 0 });
+
+/** The focusable in `pool` nearest to `from` in an arrow key's direction (TV-style spatial navigation), or null. */
+export function spatialNext(from: Element, key: string, pool: Iterable<HTMLElement>): HTMLElement | null {
+  const d = ({ ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] } as Record<string, number[]>)[key];
+  if (!d) return null;
+  const a = from.getBoundingClientRect(), ax = a.left + a.width / 2, ay = a.top + a.height / 2;
+  let best: HTMLElement | null = null, bestDist = Infinity;
+  for (const el of pool) {
+    const r = el.getBoundingClientRect();
+    if (el === from || !r.width) continue;
+    const dx = r.left + r.width / 2 - ax, dy = r.top + r.height / 2 - ay;
+    const along = dx * d[0] + dy * d[1], across = Math.abs(d[0] ? dy : dx);
+    const reach = d[0] ? (a.width + r.width) / 2 : (a.height + r.height) / 2;
+    if (along < reach / 2) continue; // not past the current element in that direction
+    const dist = along + across * 3;
+    if (dist < bestDist) { bestDist = dist; best = el; }
+  }
+  return best;
+}
 
 /** Resolve a public asset / ROM URL against Vite's BASE_URL (the app is served from /cartouche/). Absolute URLs pass through. */
 export function assetUrl(url: string): string {
@@ -82,11 +108,15 @@ export function folded(s: string): { s: string; at: number[] } {
 /** A search query in the form `score` and `Hl` expect. */
 export const searchKey = (query: string) => folded(query).s;
 
+/** The folded title and details `score` searches (computed once per game by the search index). */
+export const searchFields = (g: GameEntry) => ({
+  t: folded(g.title).s,
+  rest: folded(`${g.developer ?? ''} ${g.publisher ?? ''} ${g.year ?? ''} ${g.platform ? `${PLATFORM[g.platform]} ${g.platform}` : ''} ${g.region ?? ''} ${g.genre}`).s,
+});
+
 /** Relevance of a game for a query (from `searchKey`); 0 = no match. Every word must appear in the title or the details. */
-export function score(g: GameEntry, q: string): number {
+export function score(g: GameEntry, q: string, { t, rest } = searchFields(g)): number {
   const words = q.split(' ').filter(Boolean);
-  const t = folded(g.title).s;
-  const rest = folded(`${g.developer ?? ''} ${g.year ?? ''} ${g.platform ? `${PLATFORM[g.platform]} ${g.platform}` : ''} ${g.region ?? ''} ${g.genre}`).s;
   if (!words.length || !words.every((w) => t.includes(w) || rest.includes(w))) return 0;
   const s = t === q ? 100 : t.startsWith(q) ? 80 : ` ${t}`.includes(` ${q}`) ? 60 : t.includes(q) ? 40
     : words.every((w) => t.includes(w)) ? 30 : words.some((w) => t.includes(w)) ? 20 : 10;

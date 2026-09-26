@@ -1,6 +1,7 @@
 import { Link } from 'react-router';
 import type { GameEntry } from '../../types/game';
 import { ago, byline, dur, letterOf, paths, tagOf } from '../../lib/ui';
+import { TagLinks } from './TagLinks';
 import { I } from '../icons';
 import { Cover, Title } from './Cover';
 
@@ -25,11 +26,10 @@ export function Item({ game, saved }: { game: GameEntry; saved: Set<string> }) {
 
 export function ListRow({ game, saved, onFavorite }: { game: GameEntry; saved: Set<string>; onFavorite: (id: string) => void }) {
   const [kind, label] = tagOf(game, saved);
-  const small = [byline(game), game.genre !== 'Unknown' ? game.genre : ''].filter(Boolean).join(' · ');
   return (
     <div className="lrow" data-letter={letterOf(game)}>
       <Link to={paths.game(game.id)} tabIndex={-1} aria-hidden="true"><Cover game={game} /></Link>
-      <Link className="t" to={paths.game(game.id)} style={{ textDecoration: 'none' }}><Title text={game.title} />{small && <small>{small}</small>}</Link>
+      <span className="t"><Link to={paths.game(game.id)} style={{ textDecoration: 'none' }}><Title text={game.title} /></Link><TagLinks game={game} /></span>
       <span className="c">{dur(game.totalPlayTime)}</span>
       <span className="c">{game.lastPlayed ? ago(game.lastPlayed) : 'Never'}</span>
       <span className={`tag ${kind}`}>{label}</span>

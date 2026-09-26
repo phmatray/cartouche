@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { create } from 'zustand';
 import type { GameEntry, GameLibrary } from '../types/game';
 import { getAllRoms, saveRom, deleteRom, getRom, getAllGameMeta, getGameMeta, setGameMeta, deleteSave, deleteSaveState, deleteScreenshots, getSavedGameIds, listProfiles, resumeStateId, slotStateId, SLOT_COUNT } from '../lib/db';
-import { parseRomTitle, computeSha1, isGameBoyRom } from '../lib/rom-utils';
+import { parseRomTitle, parseRomHeader, computeSha1, isGameBoyRom } from '../lib/rom-utils';
 import { lookupByHash, type GameDbEntry } from '../lib/gamedb';
 import { parseRegion } from '../lib/catalog-utils';
 import { assetUrl } from '../lib/ui';
-import { getCoverArtUrl, needsDownload } from '../lib/cover-art';
+import { boxArtAllowed, getCoverArtUrl, needsDownload } from '../lib/cover-art';
+import { indexFor } from '../lib/search';
+import { useSettingsStore } from '../store/settingsStore';
 import catalogData from '../data/catalog.json';
 
 /** ok: added and identified · unk: added, not a known dump · dup: same file already on the shelf · bad: not a Game Boy ROM */
@@ -27,6 +29,7 @@ function groupByCategory(games: GameEntry[]): GameLibrary {
 export const titleKey = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 function localEntry(id: string, title: string, genre: string, data: Uint8Array, sha1: string, dbEntry: GameDbEntry | undefined, importedAt?: number): GameEntry {
+  const h = parseRomHeader(data);
   return {
     id, title, description: dbEntry ? `${dbEntry.developer} · ${dbEntry.region}` : 'User-added ROM',
     genre, category: 'My Collection', coverArt: '', screenshots: [],
@@ -39,6 +42,10 @@ function localEntry(id: string, title: string, genre: string, data: Uint8Array, 
     players: dbEntry?.players,
     platform: dbEntry?.platform ?? (data[0x143] & 0x80 ? 'gbc' : 'gb'), // unknown dump: the header's CGB flag
     libretroName: dbEntry?.libretroName,
+    // Header facts the search filters on (publisher, color support, battery save).
+    publisher: h && !h.publisher.startsWith('Unknown') ? h.publisher : undefined,
+    compatibility: h ? ({ 'DMG Only': 'mono', 'CGB Compatible': 'dual', 'CGB Only': 'color' } as const)[h.cgbFlag] : undefined,
+    saveType: h ? (/BATTERY/.test(h.cartridgeType) ? 'battery' : 'none') : undefined,
   };
 }
 
@@ -222,4 +229,13 @@ export function useGameLibrary() {
   const getGameById = useCallback((id: string): GameEntry | undefined => games.find((g) => g.id === id), [games]);
 
   return { library, games, savedIds, loading, storageError, deleteGame, eraseSaves, linkRomToGame, fetchRomData, getGameById, toggleFavorite };
+}
+
+/** The search index of the library (shared: built once per library change). */
+export function useSearchIndex() {
+  const games = useLibraryStore((s) => s.games);
+  const savedIds = useLibraryStore((s) => s.savedIds);
+  const art = useSettingsStore(boxArtAllowed);
+  useEffect(() => { loadPromise ??= loadLibrary(); }, []);
+  return useMemo(() => indexFor(games, savedIds, art), [games, savedIds, art]);
 }

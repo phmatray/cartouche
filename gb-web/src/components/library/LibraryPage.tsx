@@ -1,20 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
-import { useGameLibrary } from '../../hooks/useGameLibrary';
+import { useGameLibrary, useSearchIndex } from '../../hooks/useGameLibrary';
+import { formatQuery, search, type Filter as SearchFilter } from '../../lib/search';
 import type { GameEntry } from '../../types/game';
-import { letterOf, motion, owned, playsNow, sortTitle, TEST_CATEGORY } from '../../lib/ui';
+import { letterOf, motion, owned, paths, playsNow, searchState, sortTitle, TEST_CATEGORY } from '../../lib/ui';
 import { I } from '../icons';
 import { ContinueHero, FirstHero } from './Heroes';
 import { Item, ListRow } from './GameItem';
 
-type Filter = 'all' | 'mine' | 'now' | 'fav' | 'US' | 'EU' | 'JP';
 type Sort = 'name' | 'recent' | 'most' | 'year';
-const FILTERS: [Filter, string][] = [['all', 'All'], ['mine', 'In my library'], ['now', 'Play now'], ['fav', 'Favorites'], ['US', 'US'], ['EU', 'EU'], ['JP', 'JP']];
+// Shortcuts into the search model (the same filters as `is:mine`, `region:us`… in the search overlay).
+const FILTERS = {
+  all: ['All', []], mine: ['In my library', [{ key: 'is', value: 'mine' }]], now: ['Play now', [{ key: 'is', value: 'now' }]],
+  fav: ['Favorites', [{ key: 'is', value: 'favorite' }]], US: ['US', [{ key: 'region', value: 'us' }]],
+  EU: ['EU', [{ key: 'region', value: 'eu' }]], JP: ['JP', [{ key: 'region', value: 'jp' }]],
+} satisfies Record<string, [string, SearchFilter[]]>;
+type Filter = keyof typeof FILTERS;
 const SORTS: [Sort, string][] = [['name', 'Name A–Z'], ['recent', 'Recently played'], ['most', 'Most played'], ['year', 'Release year']];
 const LETTERS = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
-const matches = (f: Filter) => (g: GameEntry) =>
-  f === 'all' ? true : f === 'mine' ? g.isLocal : f === 'now' ? owned(g) : f === 'fav' ? !!g.isFavorite : !!g.regions?.includes(f);
 const byName = (a: GameEntry, b: GameEntry) => sortTitle(a.title).localeCompare(sortTitle(b.title));
 const COMPARE: Record<Sort, (a: GameEntry, b: GameEntry) => number> = {
   name: byName,
@@ -56,6 +60,7 @@ function useSpatialFocus() {
 
 export function LibraryPage() {
   const { games, savedIds, loading, storageError, toggleFavorite } = useGameLibrary();
+  const index = useSearchIndex();
   const [filter, setFilter] = useState<Filter>('all');
   const [sort, setSort] = useState<Sort>('name');
   const [view, setView] = useState<'grid' | 'list'>('grid');
@@ -77,7 +82,7 @@ export function LibraryPage() {
     };
   }, [games]);
 
-  const list = useMemo(() => games.filter(matches(filter)).sort(COMPARE[sort]), [games, filter, sort]);
+  const list = useMemo(() => search(index, { text: '', filters: FILTERS[filter][1] }).sort(COMPARE[sort]), [index, filter, sort]);
   const present = useMemo(() => new Set(list.map(letterOf)), [list]);
 
   const pickFilter = (f: Filter, jump = false) => {
@@ -143,7 +148,8 @@ export function LibraryPage() {
           </div>
           <div className="tools">
             <div className="chips" role="group" aria-label="Filter">
-              {FILTERS.map(([v, l]) => <button key={v} className="chip" aria-pressed={filter === v} onClick={() => pickFilter(v)}>{l}</button>)}
+              {(Object.keys(FILTERS) as Filter[]).map((v) => <button key={v} className="chip" aria-pressed={filter === v} onClick={() => pickFilter(v)}>{FILTERS[v][0]}</button>)}
+              <Link className="chip more" to={paths.search(formatQuery({ text: '', filters: FILTERS[filter][1] }))} state={searchState()}>{I.search}More filters</Link>
             </div>
             <div className="right">
               <label className="sel">Sort

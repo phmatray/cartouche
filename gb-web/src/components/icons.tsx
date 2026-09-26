@@ -33,6 +33,7 @@ export const I = {
   back: svg(<><path d="m15 18-6-6 6-6" fill="none" stroke="currentColor" strokeWidth="2.6" /></>),
   up: svg(<><path d="M12 6l7 10H5z" fill="currentColor" /></>),
   down: svg(<><path d="M12 18 5 8h14z" fill="currentColor" /></>),
+  check: svg(<><path d="m5 12.5 4.5 4.5L19 7" fill="none" stroke="currentColor" strokeWidth="3" /></>),
   left: svg(<><path d="M6 12l10-7v14z" fill="currentColor" /></>),
   right: svg(<><path d="M18 12 8 19V5z" fill="currentColor" /></>),
   link: svg(<><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.2 1.2M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.2-1.2" fill="none" stroke="currentColor" strokeWidth="2.2" /></>),

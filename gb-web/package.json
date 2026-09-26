@@ -10,6 +10,7 @@
     "dev:full": "concurrently \"npm run dev:wasm\" \"npm run dev\"",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "node --test 'src/**/*.test.ts'",
     "preview": "vite preview",
     "generate-gamedb": "cd .. && npx tsx scripts/generate-gamedb.ts"
   },
