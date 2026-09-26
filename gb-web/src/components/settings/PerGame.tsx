@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
 import { Link } from 'react-router';
-import { getGameSaveStates, getScreenshots, getSram, putInto, deleteScreenshot, STORES, type StoredSave, type StoredSaveState, type StoredScreenshot } from '../../lib/db';
+import { deleteSave, getGameSaveStates, getScreenshots, listProfiles, putInto, deleteScreenshot, STORES, type StoredSave, type StoredSaveState, type StoredScreenshot } from '../../lib/db';
 import { refreshSavedIds, titleKey, useGameLibrary } from '../../hooks/useGameLibrary';
 import { forgetBoxArt } from '../../lib/cover-art';
 import { ago, mb, paths, sortTitle } from '../../lib/ui';
@@ -133,16 +133,16 @@ export function PerGame({ usage, onChanged, confirm }: { usage: Map<string, Game
       </div>
 
       {rows.length
-        ? <Rows rows={rows} picked={picked} toggle={toggle} open={open} setOpen={setOpen} onChanged={onChanged} remove={(l) => del([l])} />
+        ? <Rows rows={rows} picked={picked} toggle={toggle} open={open} setOpen={setOpen} onChanged={onChanged} remove={(l) => del([l])} confirm={confirm} />
         : <p className="empty-inline">No stored game matches. <button className="linkbtn" onClick={() => { setQ(''); setWithSaves(false); setNever(false); }}>Clear search and filters</button></p>}
     </div>
   );
 }
 
 /** The windowed list: rows are absolutely placed at i × ROW (plus the open row's detail height after it). */
-function Rows({ rows, picked, toggle, open, setOpen, onChanged, remove }: {
+function Rows({ rows, picked, toggle, open, setOpen, onChanged, remove, confirm }: {
   rows: Line[]; picked: Set<string>; toggle: (id: string) => void; open: string | null; setOpen: (id: string | null) => void;
-  onChanged: () => Promise<void>; remove: (l: Line) => void;
+  onChanged: () => Promise<void>; remove: (l: Line) => void; confirm: (r: ConfirmRequest) => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const [scroll, setScroll] = useState(0);
@@ -218,7 +218,7 @@ function Rows({ rows, picked, toggle, open, setOpen, onChanged, remove }: {
                   <span className="n">{g.coverArt ? 'Included' : u.art ? mb(u.art) : '—'}</span>
                   <span className="n tot">{mb(l.total)}</span>
                 </div>
-                {isOpen && <Detail id={`pgd-${i}`} line={l} onSize={setDetailH} onChanged={onChanged} onRemove={() => remove(l)} />}
+                {isOpen && <Detail id={`pgd-${i}`} line={l} onSize={setDetailH} onChanged={onChanged} onRemove={() => remove(l)} confirm={confirm} />}
               </div>
             );
           })}
@@ -228,18 +228,16 @@ function Rows({ rows, picked, toggle, open, setOpen, onChanged, remove }: {
   );
 }
 
-/** One game opened: its resume point, slots, battery save and album (screenshots delete one by one, with undo). */
-function Detail({ id, line, onSize, onChanged, onRemove }: { id: string; line: Line; onSize: (h: number) => void; onChanged: () => Promise<void>; onRemove: () => void }) {
+/** One game opened: its resume point, slots, save profiles (each deletable after a confirmation) and album (screenshots delete one by one, with undo). */
+function Detail({ id, line, onSize, onChanged, onRemove, confirm }: { id: string; line: Line; onSize: (h: number) => void; onChanged: () => Promise<void>; onRemove: () => void; confirm: (r: ConfirmRequest) => void }) {
   const g = line.game;
   const ref = useRef<HTMLDivElement>(null);
-  const [data, setData] = useState<{ sram?: StoredSave; states: (StoredSaveState | undefined)[]; shots: StoredScreenshot[] } | null>(null);
-  const load = async () => {
-    const [sram, states, shots] = await Promise.all([getSram(g.id), getGameSaveStates(g.id), getScreenshots(g.id)]);
-    setData({ sram, states, shots });
-  };
+  const [data, setData] = useState<{ profiles: StoredSave[]; states: (StoredSaveState | undefined)[]; shots: StoredScreenshot[] } | null>(null);
+  const fetchAll = (gid: string) => Promise.all([listProfiles(gid), getGameSaveStates(gid), getScreenshots(gid)]).then(([profiles, states, shots]) => ({ profiles, states, shots }));
+  const load = async () => setData(await fetchAll(g.id));
   useEffect(() => {
     let live = true;
-    Promise.all([getSram(g.id), getGameSaveStates(g.id), getScreenshots(g.id)]).then(([sram, states, shots]) => live && setData({ sram, states, shots }));
+    fetchAll(g.id).then((d) => live && setData(d));
     return () => { live = false; };
   }, [g.id]);
   useEffect(() => {
@@ -255,6 +253,11 @@ function Detail({ id, line, onSize, onChanged, onRemove }: { id: string; line: L
     await onChanged();
     toast('Screenshot deleted', 'm', { label: 'Undo', run: async () => { await putInto(STORES.screenshots, s); await load(); await onChanged(); } });
   };
+  const dropProfile = (p: StoredSave) => confirm({
+    title: `Delete “${p.name}”?`, danger: true, ok: 'Delete save',
+    body: `This battery save of ${g.title} (${mb(p.sram.length)}, last played ${ago(p.timestamp)}) is deleted from this browser. Export it from the game page first to keep a copy. This can’t be undone.`,
+    run: async () => { await deleteSave(p.id); await load(); await onChanged(); await refreshSavedIds(); toast(`“${p.name}” deleted`, 'm'); },
+  });
   const when = (ts: number) => ago(ts);
   const [resume, ...slots] = data?.states ?? [];
   const size = (s: StoredSaveState) => mb(s.data.length + s.thumbnail.length);
@@ -265,7 +268,12 @@ function Detail({ id, line, onSize, onChanged, onRemove }: { id: string; line: L
         <>
           <dl className="spec">
             <div><dt>Resume point</dt><dd>{resume ? `${size(resume)} · ${when(resume.timestamp)}` : 'None'}</dd></div>
-            <div><dt>Battery save</dt><dd>{data.sram ? `${mb(data.sram.sram.length)} · ${when(data.sram.timestamp)}` : 'None'}</dd></div>
+            {data.profiles.length ? data.profiles.map((p) => (
+              <div key={p.id} className="vprofile">
+                <dt>Save · {p.name}</dt>
+                <dd>{mb(p.sram.length)} · {when(p.timestamp)}<button className="sbtn" aria-label={`Delete save “${p.name}”`} onClick={() => dropProfile(p)}>{I.close}</button></dd>
+              </div>
+            )) : <div><dt>Battery save</dt><dd>None</dd></div>}
             {slots.map((s, i) => <div key={i}><dt>Slot {i + 1}</dt><dd>{s ? `${size(s)} · ${when(s.timestamp)}` : 'Empty'}</dd></div>)}
           </dl>
           {data.shots.length > 0 && (

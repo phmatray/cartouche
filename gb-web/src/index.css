@@ -539,6 +539,10 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .vshots img{box-shadow:0 0 0 3px #0b0b0b}
 .vshots .sbtn{position:absolute;top:4px;right:4px;width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;background:var(--paper)}
 .vshots .sbtn .icon{width:16px;height:16px}
+.vprofile dd{display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0}
+.vprofile dt{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vprofile .sbtn{width:32px;height:32px;padding:0;display:flex;align-items:center;justify-content:center;flex:none}
+.vprofile .sbtn .icon{width:16px;height:16px}
 .vdetail .acts .sbtn{display:inline-flex;align-items:center;text-decoration:none}
 .artprog{display:block}
 .artprog .progress{display:block;margin:6px 0 6px;background:var(--paper-3);max-width:320px}
