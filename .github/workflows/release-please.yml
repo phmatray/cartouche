@@ -77,7 +77,7 @@ jobs:
       TAG: ${{ needs.release-please.outputs.tag_name }}
     steps:
       # The tree must be the released commit: it carries release-please's version bumps.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
@@ -97,7 +97,7 @@ jobs:
         working-directory: gb-core
         run: RUSTFLAGS="--remap-path-prefix=$HOME=~" wasm-pack build --target web --out-dir pkg
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
