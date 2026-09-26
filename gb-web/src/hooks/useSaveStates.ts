@@ -13,7 +13,7 @@ export function useSaveStates(
   gameId: string | undefined,
   emulator: {
     saveState: () => Uint8Array | null;
-    loadState: (data: Uint8Array) => boolean;
+    loadState: (data: Uint8Array, frame?: Uint8Array) => boolean;
     framebufferSnapshot: () => Uint8Array | null;
   },
 ) {
@@ -44,7 +44,7 @@ export function useSaveStates(
   const load = useCallback(async (k: SlotKey) => {
     if (!gameId) return false;
     const entry = await getSaveState(idOf(k));
-    return !!entry && loadState(entry.data);
+    return !!entry && loadState(entry.data, entry.thumbnail);
   }, [gameId, idOf, loadState]);
 
   return { states, save, load };

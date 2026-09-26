@@ -75,7 +75,7 @@ function Player({ game }: { game: GameEntry }) {
   const { canvasRef, renderFrame } = useLcdShader(5, preset);
   const { ensureStarted, feedSamples, muted, toggleMute } = useAudio();
   const saves = useSaveStates(game.id, emu);
-  const { isRewinding, startRewind, stopRewind, wrapRunFrame, bufferFill } = useRewind({ saveState, loadState, framebufferSnapshot });
+  const { isRewinding, startRewind, stopRewind, wrapRunFrame, bufferFill } = useRewind({ saveState, loadState });
   useSaveData({ gameId: game.id, romLoaded, hasBatteryRam, exportSram });
 
   const toggleFullscreen = useCallback(() => {
