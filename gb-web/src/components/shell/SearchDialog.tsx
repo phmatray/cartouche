@@ -1,24 +1,28 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useGameLibrary } from '../../hooks/useGameLibrary';
-import { byline, owned, paths, sortTitle, tagOf } from '../../lib/ui';
-import type { GameEntry } from '../../types/game';
+import { byline, folded, owned, paths, score, searchKey, sortTitle, tagOf } from '../../lib/ui';
 import { I } from '../icons';
 import { Cover } from '../library/Cover';
 
 const MAX_RESULTS = 60;
 
-/** Relevance of a game for a (lower-case) query; 0 = no match. */
-function score(g: GameEntry, q: string): number {
-  const t = g.title.toLowerCase();
-  const s = t === q ? 100 : t.startsWith(q) ? 80 : ` ${t}`.includes(` ${q}`) ? 60 : t.includes(q) ? 40
-    : `${g.developer ?? ''} ${g.year ?? ''} ${g.genre}`.toLowerCase().includes(q) ? 10 : 0;
-  return s && s + (owned(g) ? 5 : 0);
-}
-
-function highlight(s: string, q: string): ReactNode {
-  const i = q ? s.toLowerCase().indexOf(q) : -1;
-  return i < 0 ? s : <>{s.slice(0, i)}<mark>{s.slice(i, i + q.length)}</mark>{s.slice(i + q.length)}</>;
+/** `text` with the first match of each query word (from `searchKey`) marked, accents and punctuation ignored. */
+export function Hl({ text, q }: { text: string; q: string }): ReactNode {
+  const { s, at } = folded(text);
+  const on = new Array<boolean>(text.length).fill(false);
+  for (const w of q.split(' ')) {
+    const i = w ? s.indexOf(w) : -1;
+    if (i >= 0) on.fill(true, at[i], at[i + w.length - 1] + 1);
+  }
+  const out: ReactNode[] = [];
+  for (let i = 0; i < text.length;) {
+    let j = i;
+    while (j < text.length && on[j] === on[i]) j++;
+    out.push(on[i] ? <mark key={i}>{text.slice(i, j)}</mark> : text.slice(i, j));
+    i = j;
+  }
+  return out;
 }
 
 /** Full-screen search over the whole library ("/" opens it). */
@@ -36,7 +40,7 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
     if (!open && d.open) d.close();
   }, [open]);
 
-  const q = query.trim().toLowerCase();
+  const q = searchKey(query);
   const results = useMemo(() => q
     ? games.map((g) => [g, score(g, q)] as const).filter(([, n]) => n > 0)
       .sort(([a, x], [b, y]) => y - x || sortTitle(a.title).localeCompare(sortTitle(b.title))).map(([g]) => g)
@@ -81,8 +85,8 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
               return (
                 <li key={g.id}>
                   <Link to={paths.game(g.id)} role="option" aria-selected={i === sel} onClick={close}>
-                    <Cover game={g} />
-                    <span className="t">{highlight(g.title, q)}<small>{[byline(g), g.genre !== 'Unknown' ? g.genre : ''].filter(Boolean).join(' · ')}</small></span>
+                    <Cover game={g} aria-hidden />
+                    <span className="t"><Hl text={g.title} q={q} /><small>{[byline(g), g.genre !== 'Unknown' ? g.genre : ''].filter(Boolean).join(' · ')}</small></span>
                     <span className={`tag ${kind}`} style={{ margin: 0 }}>{label}</span>
                   </Link>
                 </li>

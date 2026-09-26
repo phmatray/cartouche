@@ -1,4 +1,4 @@
-import { getAllFrom, putInto, STORES, type StoredGameMeta, type StoredRom, type StoredSave, type StoredSaveState, type StoredScreenshot } from './db';
+import { asProfile, getAllFrom, putInto, STORES, type StoredGameMeta, type StoredRom, type StoredSave, type StoredSaveState, type StoredScreenshot } from './db';
 import { SETTINGS_KEYS, useSettingsStore, type SettingsValues } from '../store/settingsStore';
 
 /**
@@ -80,8 +80,9 @@ export async function readBackup(file: File): Promise<Backup> {
     app: APP, version: VERSION, exported: String(b.exported ?? ''),
     settings: b.settings && typeof b.settings === 'object' ? b.settings : {},
     roms: list<StoredRom>(b.roms, (r) => str(r.id) && r.data instanceof Uint8Array),
-    saves: list<StoredSave>(b.saves, (r) => str(r.id) && r.sram instanceof Uint8Array),
-    states: list<StoredSaveState>(b.states, (r) => str(r.id) && r.data instanceof Uint8Array),
+    // Save profiles; a backup from before profiles has one save per game, which becomes its "Main".
+    saves: list<StoredSave>(b.saves, (r) => str(r.id) && r.sram instanceof Uint8Array).map(asProfile),
+    states: list<StoredSaveState>(b.states, (r) => str(r.id) && r.data instanceof Uint8Array && (r.profile === undefined || str(r.profile))),
     meta: list<StoredGameMeta>(b.meta, (r) => str(r.id)),
     screenshots: list<StoredScreenshot>(b.screenshots, (r) => str(r.gameId) && r.png instanceof Blob),
   };

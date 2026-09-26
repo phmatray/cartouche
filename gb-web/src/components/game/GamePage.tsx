@@ -1,9 +1,10 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties, type Dispatch, type SetStateAction } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import type { GameEntry } from '../../types/game';
-import { useGameLibrary } from '../../hooks/useGameLibrary';
-import { getGameSaveStates, type StoredSaveState } from '../../lib/db';
-import { ago, assetUrl, dur, owned, paths, tagOf } from '../../lib/ui';
+import { refreshSavedIds, useGameLibrary } from '../../hooks/useGameLibrary';
+import { createProfile, deleteSave, getActiveProfileId, getGameSaveStates, getSram, listProfiles, saveSram, setActiveProfile, uniqueName, type StoredSave, type StoredSaveState } from '../../lib/db';
+import type { RomMetadata } from '../../lib/rom-utils';
+import { ago, assetUrl, bytes, download, dur, owned, paths, tagOf } from '../../lib/ui';
 import { I } from '../icons';
 import { Cover, Title } from '../library/Cover';
 import { Frame } from '../library/Heroes';
@@ -11,7 +12,7 @@ import { useInk } from '../../hooks/useInk';
 import { NotFound } from '../shell/AppShell';
 import { toast } from '../shell/actions';
 import { ConfirmDialog, type ConfirmRequest } from '../shell/ConfirmDialog';
-import { hardwareOf, useAlbum, useLinkRom, useRomHeader } from '../../hooks/useGameExtras';
+import { hardwareOf, importSav, useAlbum, useLinkRom, useRomHeader } from '../../hooks/useGameExtras';
 import { Shot } from './Shot';
 
 export function GamePage() {
@@ -34,6 +35,7 @@ function GameDetails({ game }: { game: GameEntry }) {
   const linkRom = useLinkRom(game);
   const [states, setStates] = useState<(StoredSaveState | undefined)[]>([]);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
+  const [profiles, setProfiles] = useState<StoredSave[]>([]);
   const [kind, label] = tagOf(game, savedIds);
   const need = !owned(game);
   const auto = states[0];
@@ -44,8 +46,10 @@ function GameDetails({ game }: { game: GameEntry }) {
   useEffect(() => {
     let cancelled = false;
     getGameSaveStates(game.id).then((s) => { if (!cancelled) setStates(s); }).catch(() => {});
+    listProfiles(game.id).then((p) => { if (!cancelled) setProfiles(p); }).catch(() => {});
     return () => { cancelled = true; };
   }, [game.id, savedIds]);
+  const profileName = (id?: string) => (profiles.length > 1 && id ? profiles.find((p) => p.id === id)?.name : undefined);
 
   const facts = [
     game.year, game.developer, game.genre !== 'Unknown' && game.genre,
@@ -56,11 +60,11 @@ function GameDetails({ game }: { game: GameEntry }) {
 
   const remove = () => setConfirm(game.isLocal ? {
     title: 'Remove this ROM?', danger: true, ok: 'Remove ROM & saves',
-    body: `${game.title}, its cartridge save, resume point, save slots and screenshots are deleted from this browser. This can’t be undone.`,
+    body: `${game.title}, its battery saves, resume point, save slots and screenshots are deleted from this browser. This can’t be undone.`,
     run: async () => { await deleteGame(game.id); toast(`${game.title} removed`, 'm'); navigate('/'); },
   } : {
     title: 'Erase saves?', danger: true, ok: 'Erase saves',
-    body: `The cartridge save, resume point, save slots and screenshots of ${game.title} are deleted. The game stays in the library.`,
+    body: `The battery saves, resume point, save slots and screenshots of ${game.title} are deleted. The game stays in the library.`,
     run: async () => { await eraseSaves(game.id); toast('Saves erased', 'm'); },
   });
 
@@ -154,6 +158,7 @@ function GameDetails({ game }: { game: GameEntry }) {
                   <div><dt>Status</dt><dd><span className={`tag ${kind}`} style={{ margin: 0 }}>{label}</span></dd></div>
                 </dl>
               </section>
+              <Saves game={game} header={header} setConfirm={setConfirm} />
               <section>
                 <h3>Save slots</h3>
                 <ul className="minislots">
@@ -161,7 +166,7 @@ function GameDetails({ game }: { game: GameEntry }) {
                     <li>
                       <span className="n" style={{ fontSize: 14 }}>Auto</span>
                       <span className="th">{auto.thumbnail.length ? <Frame rgba={auto.thumbnail} label="Resume point" /> : null}</span>
-                      <span className="w">Resume point<small>{ago(auto.timestamp)}</small></span>
+                      <span className="w">Resume point<small>{[ago(auto.timestamp), profileName(auto.profile)].filter(Boolean).join(' · ')}</small></span>
                       <Link className="btn line" style={btnSm} to={paths.play(game.id, '?resume=1')}>Resume</Link>
                     </li>
                   )}
@@ -169,7 +174,7 @@ function GameDetails({ game }: { game: GameEntry }) {
                     <li key={i}>
                       <span className="n">{i + 1}</span>
                       <span className="th">{s?.thumbnail.length ? <Frame rgba={s.thumbnail} label={`Slot ${i + 1}`} /> : null}</span>
-                      <span className="w">{s ? ago(s.timestamp) : 'Empty'}</span>
+                      <span className="w">{s ? ago(s.timestamp) : 'Empty'}{s && profileName(s.profile) && <small>{profileName(s.profile)}</small>}</span>
                       {s ? <Link className="btn line" style={btnSm} to={paths.play(game.id, `?slot=${i}`)}>Load</Link> : <span />}
                     </li>
                   ))}
@@ -188,5 +193,99 @@ function GameDetails({ game }: { game: GameEntry }) {
       </div>
       <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
     </main>
+  );
+}
+
+/**
+ * The game's save profiles (battery saves): which one solo play uses, and rename, duplicate,
+ * export, import, delete. The link cable page lets each player pick one.
+ */
+function Saves({ game, header, setConfirm }: { game: GameEntry; header: RomMetadata | null; setConfirm: Dispatch<SetStateAction<ConfirmRequest | null>> }) {
+  const { savedIds } = useGameLibrary(); // changes when saves are written or erased elsewhere: reload
+  const [list, setList] = useState<StoredSave[] | null>(null);
+  const [active, setActive] = useState('');
+  const [editing, setEditing] = useState<string | null>(null);
+  const [err, setErr] = useState('');
+  const reload = useCallback(async () => {
+    const [l, a] = await Promise.all([listProfiles(game.id), getActiveProfileId(game.id)]);
+    setList(l);
+    setActive(a);
+    refreshSavedIds();
+  }, [game.id]);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([listProfiles(game.id), getActiveProfileId(game.id)])
+      .then(([l, a]) => { if (!cancelled) { setList(l); setActive(a); } }).catch(() => setList([]));
+    return () => { cancelled = true; };
+  }, [game.id, savedIds]);
+  const noSave = header && header.ramSize === 'None' && !/MBC2/.test(header.cartridgeType);
+  if (noSave && !list?.length) return null;
+
+  const rename = async (p: StoredSave, name: string) => {
+    setEditing(null);
+    name = name.trim().slice(0, 40);
+    if (!name || name === p.name) return;
+    // The stored record, not the row (it may be stale): a save erased meanwhile stays erased.
+    const [cur, all] = await Promise.all([getSram(p.id), listProfiles(game.id)]);
+    if (cur) {
+      const unique = uniqueName(all.filter((x) => x.id !== p.id), name); // two saves never share a name
+      await saveSram({ ...cur, name: unique });
+      if (unique !== name) toast(`Another save is named “${name}”: renamed to “${unique}”`, 'm');
+    }
+    await reload();
+  };
+  const duplicate = async (p: StoredSave) => {
+    const [cur, all] = await Promise.all([getSram(p.id), listProfiles(game.id)]);
+    if (!cur) { await reload(); return; }
+    const c = await createProfile(game.id, uniqueName(all, `${cur.name} (copy)`), cur.sram);
+    await reload();
+    toast(`“${c.name}” created`, 'c');
+  };
+  const remove = (p: StoredSave) => setConfirm({
+    title: `Delete “${p.name}”?`, danger: true, ok: 'Delete save',
+    body: `This battery save of ${game.title} (${bytes(p.sram.length)}, last played ${ago(p.timestamp)}) is deleted from this browser. Export it first to keep a copy. This can’t be undone.`,
+    run: async () => { await deleteSave(p.id); await reload(); toast(`“${p.name}” deleted`, 'm'); },
+  });
+  const onImport = async (f: File) => {
+    const r = await importSav(game, f).catch((e) => `${f.name}: ${e instanceof Error ? e.message : e}`);
+    if (typeof r === 'string') { setErr(r); return; }
+    setErr('');
+    await reload();
+    toast(`“${r.name}” imported`, 'c');
+  };
+
+  return (
+    <section aria-labelledby="h-saves">
+      <h3 id="h-saves">Saves</h3>
+      {list && !list.length && <p className="note" style={{ margin: '0 0 14px' }}>No battery save yet. One appears here once you play; add more for other players, or import a .sav file.</p>}
+      <ul className="profiles">
+        {list?.map((p) => (
+          <li key={p.id}>
+            <div className="pn">
+              {editing === p.id ? (
+                <input className="pn-in" defaultValue={p.name} autoFocus maxLength={40} aria-label={`New name for ${p.name}`}
+                  onBlur={(e) => rename(p, e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setEditing(null); } }} />
+              ) : <b>{p.name}</b>}
+              {p.id === active && <span className="tag now">Solo</span>}
+              <small>{bytes(p.sram.length)} · last played {ago(p.timestamp)}</small>
+            </div>
+            <div className="pa">
+              {p.id !== active && <button className="btn line" style={btnSm} aria-label={`Play ${p.name} solo`} onClick={async () => { await setActiveProfile(game.id, p.id); await reload(); toast(`Solo play now uses “${p.name}”`, 'c'); }}>Use for solo</button>}
+              <button className="btn line" style={btnSm} aria-label={`Rename ${p.name}`} onClick={() => setEditing(p.id)}>Rename</button>
+              <button className="btn line" style={btnSm} aria-label={`Duplicate ${p.name}`} onClick={() => duplicate(p)}>Duplicate</button>
+              <button className="btn line" style={btnSm} aria-label={`Export ${p.name} as a .sav file`} onClick={() => download(new Blob([p.sram as BlobPart]), `${game.title} - ${p.name}.sav`)}>Export</button>
+              <button className="btn danger" style={btnSm} aria-label={`Delete ${p.name}`} onClick={() => remove(p)}>Delete</button>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <label className="btn line" style={{ ...btnSm, marginTop: 14 }} tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
+        {I.load}Import a .sav file…
+        <input type="file" accept=".sav,.srm" className="sr" tabIndex={-1} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onImport(f); }} />
+      </label>
+      {err && <p className="note" role="alert" style={{ margin: '12px 0 0', color: 'var(--warn)' }}>{err}</p>}
+    </section>
   );
 }

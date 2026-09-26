@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { clearAll, getAllFrom, STORES, type StoredRom, type StoredSave, type StoredSaveState, type StoredScreenshot } from '../../lib/db';
+import { clearAll, gameOfSave, getAllFrom, STORES, type StoredRom, type StoredSave, type StoredSaveState, type StoredScreenshot } from '../../lib/db';
 import { backupFileName, exportBackup, readBackup, restoreBackup } from '../../lib/backup';
 import { refreshSavedIds, reloadLibrary, useGameLibrary } from '../../hooks/useGameLibrary';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -28,7 +28,7 @@ async function measure(games: GameEntry[]): Promise<Usage> {
     return g;
   };
   for (const r of roms) of(r.id).rom = r.data.length;
-  for (const s of sram) { const g = of(s.id); g.saves += s.sram.length; g.nSaves++; }
+  for (const s of sram) { const g = of(gameOfSave(s.id)); g.saves += s.sram.length; g.nSaves++; }
   for (const s of states) { const g = of(gameOf(s.id)); g.saves += s.data.length + s.thumbnail.length; g.nSaves++; }
   for (const s of shots) { const g = of(s.gameId); g.shots += s.png.size; g.nShots++; }
   // Box art only counts for games that have something else stored (it is listed with them).
