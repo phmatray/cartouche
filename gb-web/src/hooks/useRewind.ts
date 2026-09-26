@@ -29,7 +29,7 @@ export function useRewind({
     if (bufferRef.current.length === 0) return;
     isRewindingRef.current = true;
     setIsRewinding(true);
-    rewindStepCounterRef.current = 0;
+    rewindStepCounterRef.current = REWIND_STEP_FRAMES - 1; // first step on the next frame, so a tap rewinds too
   }, []);
 
   const stopRewind = useCallback(() => {
