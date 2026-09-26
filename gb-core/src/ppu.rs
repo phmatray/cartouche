@@ -2,6 +2,11 @@ pub const SCREEN_WIDTH: usize = 160;
 pub const SCREEN_HEIGHT: usize = 144;
 pub const FRAMEBUFFER_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT * 4;
 
+use crate::trace::{Tracer, LAYER_BG, LAYER_OBJ, LAYER_WIN, LINE_CGB, LINE_RENDERED, NO_OBJ};
+
+/// An OBJ selected for a scanline: (x, OAM slot, y, tile, attributes), raw OAM values.
+type Sprite = (u8, usize, u8, u8, u8);
+
 pub const PALETTE_COLORS: [[u8; 4]; 4] = [
     [0xE0, 0xF8, 0xD0, 0xFF], // lightest
     [0x88, 0xC0, 0x70, 0xFF], // light
@@ -59,6 +64,11 @@ pub struct Ppu {
     pub bcps: u8,
     pub ocps: u8,
     bg_cgb_priority: [bool; SCREEN_WIDTH],
+
+    /// Per-frame layer trace; `None` (the default) in normal play. See `trace.rs`.
+    pub trace: Option<Box<Tracer>>,
+    /// Traced lines only: `[slot, colour id, attr, drawn]` of the OBJ claiming each dot.
+    line_obj: [[u8; 4]; SCREEN_WIDTH],
 }
 
 impl Ppu {
@@ -93,6 +103,15 @@ impl Ppu {
             bcps: 0,
             ocps: 0,
             bg_cgb_priority: [false; SCREEN_WIDTH],
+            trace: None,
+            line_obj: [[NO_OBJ, 0, 0, 0]; SCREEN_WIDTH],
+        }
+    }
+
+    /// Turns the per-frame layer trace on or off (off drops its buffers).
+    pub fn set_tracing(&mut self, on: bool) {
+        if on != self.trace.is_some() {
+            self.trace = on.then(Box::default);
         }
     }
 
@@ -226,6 +245,9 @@ impl Ppu {
                     if self.ly == 144 {
                         self.mode = PpuMode::VBlank;
                         self.frame_ready = true;
+                        if let Some(t) = self.trace.as_deref_mut() {
+                            t.finish_frame(&self.framebuffer, &self.oam, &self.bg_cram, &self.obj_cram, &self.vram, self.cgb_mode);
+                        }
                         self.window_line_counter = 0;
                         self.window_was_active = false;
                         vblank_irq = true;
@@ -314,11 +336,94 @@ impl Ppu {
     fn render_scanline(&mut self) {
         let line = self.ly as usize;
         if line >= SCREEN_HEIGHT { return; }
+        let traced = self.trace.is_some();
+        if traced {
+            self.line_obj = [[NO_OBJ, 0, 0, 0]; SCREEN_WIDTH];
+        }
+        let window_line = self.window_line_counter;
         if self.cgb_mode {
             self.render_scanline_cgb(line);
         } else {
             self.render_scanline_dmg(line);
         }
+        if traced {
+            self.trace_line(line, window_line);
+        }
+    }
+
+    /// Traced lines: copies the line as it stands after the BG (`window == false`) or the
+    /// window pass into the BG plane / the window plane of the frame being built.
+    fn trace_plane(&mut self, line: usize, window: bool) {
+        if let Some(t) = self.trace.as_deref_mut() {
+            let r = line * SCREEN_WIDTH * 4..(line + 1) * SCREEN_WIDTH * 4;
+            let plane = if window { &mut t.building.win } else { &mut t.building.bg };
+            plane[r.clone()].copy_from_slice(&self.framebuffer[r]);
+        }
+    }
+
+    /// Traced lines: records the line's registers, OBJ selection and per-pixel layer info.
+    fn trace_line(&mut self, line: usize, window_line: u8) {
+        let Some(mut t) = self.trace.take() else { return };
+        let window_drawn = self.window_line_counter != window_line;
+        let win_x = self.wx.saturating_sub(7) as usize;
+        let (sprites, n) = if self.lcdc & 0x02 != 0 { self.select_sprites(line) } else { ([(0, 0, 0, 0, 0); 10], 0) };
+        let b = &mut t.building;
+        for x in 0..SCREEN_WIDTH {
+            let i = line * SCREEN_WIDTH + x;
+            let p = i * 4;
+            let covered = window_drawn && x >= win_x;
+            if !covered {
+                b.win[p..p + 4].fill(0);
+            }
+            let [slot, cid, attr, drawn] = self.line_obj[x];
+            let obj = if slot == NO_OBJ {
+                [0; 4]
+            } else if self.cgb_mode {
+                self.get_obj_cram_color(attr & 0x07, cid)
+            } else {
+                self.apply_palette(if attr & 0x10 != 0 { self.obp1 } else { self.obp0 }, cid)
+            };
+            b.obj[p..p + 4].copy_from_slice(&obj);
+            let layer = if drawn != 0 { LAYER_OBJ } else if covered { LAYER_WIN } else { LAYER_BG };
+            let ids = self.bg_color_ids[x] | (self.bg_cgb_priority[x] as u8) << 2 | cid << 4;
+            b.info[p..p + 4].copy_from_slice(&[layer, slot, ids, attr]);
+        }
+        let l = b.line_mut(line);
+        l[..12].copy_from_slice(&[
+            self.lcdc,
+            self.scx,
+            self.scy,
+            self.wx,
+            self.wy,
+            if window_drawn { window_line } else { 0xFF },
+            win_x as u8,
+            self.bgp,
+            self.obp0,
+            self.obp1,
+            LINE_RENDERED | if self.cgb_mode { LINE_CGB } else { 0 } | self.vram_bank << 2,
+            n as u8,
+        ]);
+        for (k, &(x, slot, y, tile, attr)) in sprites[..n].iter().enumerate() {
+            l[12 + k * 5..17 + k * 5].copy_from_slice(&[slot as u8, y, x, tile, attr]);
+        }
+        self.trace = Some(t);
+    }
+
+    /// The first 10 OBJs (OAM order) that overlap `line`.
+    fn select_sprites(&self, line: usize) -> ([Sprite; 10], usize) {
+        let height: i16 = if self.lcdc & 0x04 != 0 { 16 } else { 8 };
+        let mut out = [(0, 0, 0, 0, 0); 10];
+        let mut n = 0;
+        for i in 0..40 {
+            let b = i * 4;
+            let top = self.oam[b] as i16 - 16;
+            if (top..top + height).contains(&(line as i16)) {
+                out[n] = (self.oam[b + 1], i, self.oam[b], self.oam[b + 2], self.oam[b + 3]);
+                n += 1;
+                if n == 10 { break; }
+            }
+        }
+        (out, n)
     }
 
     fn render_scanline_dmg(&mut self, line: usize) {
@@ -332,10 +437,12 @@ impl Ppu {
         if self.lcdc & 0x01 != 0 {
             self.render_bg_line(line);
         }
+        self.trace_plane(line, false);
 
         if self.lcdc & 0x20 != 0 && self.lcdc & 0x01 != 0 && self.ly >= self.wy {
             self.render_window_line(line);
         }
+        self.trace_plane(line, true);
 
         if self.lcdc & 0x02 != 0 {
             self.render_sprites_line(line);
@@ -422,30 +529,15 @@ impl Ppu {
 
     fn render_sprites_line(&mut self, line: usize) {
         let sprite_height: i16 = if self.lcdc & 0x04 != 0 { 16 } else { 8 };
-        let mut sprites_on_line: Vec<(u8, usize, u8, u8, u8)> = Vec::new();
-
-        for i in 0..40 {
-            let base = i * 4;
-            let sy = self.oam[base] as i16 - 16;
-            let sx = self.oam[base + 1];
-            let tile = self.oam[base + 2];
-            let flags = self.oam[base + 3];
-
-            let line_i16 = line as i16;
-            if line_i16 >= sy && line_i16 < sy + sprite_height {
-                sprites_on_line.push((sx, i, self.oam[base], tile, flags));
-                if sprites_on_line.len() >= 10 {
-                    break;
-                }
-            }
-        }
+        let (mut selected, n) = self.select_sprites(line);
+        let sprites_on_line = &mut selected[..n];
 
         // Highest priority first (DMG: lowest X, then lowest OAM index). The first opaque OBJ
         // pixel claims the dot even when it then loses to the BG, masking the OBJs behind it.
         sprites_on_line.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
         let mut claimed = [false; SCREEN_WIDTH];
 
-        for (sx, _oam_idx, sy, tile, flags) in sprites_on_line {
+        for &mut (sx, oam_idx, sy, tile, flags) in sprites_on_line {
             let screen_x_start = sx as i16 - 8;
             let flip_x = flags & 0x20 != 0;
             let flip_y = flags & 0x40 != 0;
@@ -478,6 +570,10 @@ impl Ppu {
                     continue;
                 }
                 claimed[px as usize] = true;
+                let traced = self.trace.is_some();
+                if traced {
+                    self.line_obj[px as usize] = [oam_idx as u8, color_id, flags, 0];
+                }
 
                 if bg_priority && self.bg_color_ids[px as usize] != 0 {
                     continue;
@@ -485,6 +581,9 @@ impl Ppu {
 
                 let color = self.apply_palette(palette, color_id);
                 self.set_pixel(px as usize, line, color);
+                if traced {
+                    self.line_obj[px as usize][3] = 1;
+                }
             }
         }
     }
@@ -502,7 +601,9 @@ impl Ppu {
         }
         let bgmp = self.lcdc & 0x01 != 0;
         self.render_bg_line_cgb(line);
+        self.trace_plane(line, false);
         if self.lcdc & 0x20 != 0 && self.ly >= self.wy { self.render_window_line_cgb(line); }
+        self.trace_plane(line, true);
         if self.lcdc & 0x02 != 0 { self.render_sprites_line_cgb(line, bgmp); }
     }
 
@@ -580,19 +681,10 @@ impl Ppu {
 
     fn render_sprites_line_cgb(&mut self, line: usize, bgmp: bool) {
         let sh: i16 = if self.lcdc & 0x04 != 0 { 16 } else { 8 };
-        let mut spr: Vec<(u8, usize, u8, u8, u8)> = Vec::new();
-        for i in 0..40 {
-            let b = i * 4;
-            let sy = self.oam[b] as i16 - 16;
-            let li = line as i16;
-            if li >= sy && li < sy + sh {
-                spr.push((self.oam[b + 1], i, self.oam[b], self.oam[b + 2], self.oam[b + 3]));
-                if spr.len() >= 10 { break; }
-            }
-        }
+        let (spr, n) = self.select_sprites(line);
         // Highest priority (lowest OAM index) first; see render_sprites_line.
         let mut claimed = [false; SCREEN_WIDTH];
-        for (sx, _, sy, ti, fl) in spr {
+        for &(sx, slot, sy, ti, fl) in &spr[..n] {
             let x0 = sx as i16 - 8;
             let fx = fl & 0x20 != 0;
             let fy = fl & 0x40 != 0;
@@ -612,12 +704,15 @@ impl Ppu {
                 let cid = self.get_tile_pixel_banked(ta, tr, ac, cbnk);
                 if cid == 0 || claimed[px] { continue; }
                 claimed[px] = true;
+                let traced = self.trace.is_some();
+                if traced { self.line_obj[px] = [slot as u8, cid, fl, 0]; }
                 if bgmp {
                     if self.bg_cgb_priority[px] && self.bg_color_ids[px] != 0 { continue; }
                     if obp && self.bg_color_ids[px] != 0 { continue; }
                 }
                 let color = self.get_obj_cram_color(cpal, cid);
                 self.set_pixel(px, line, color);
+                if traced { self.line_obj[px][3] = 1; }
             }
         }
     }

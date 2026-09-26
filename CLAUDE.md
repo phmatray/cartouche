@@ -12,8 +12,10 @@ cartouche/
 │   │   ├── memory.rs         # Bus: region routing, DMA/HDMA, OAM-bug hooks
 │   │   ├── cartridge.rs      # ROM + MBC1/MBC2/MBC3(RTC)/MBC5
 │   │   ├── ppu.rs / apu.rs / timer.rs / interrupts.rs / joypad.rs / serial.rs
+│   │   ├── trace.rs          # Opt-in per-frame layer trace (BG/window/OBJ planes, per-line registers) + exact motion vectors
 │   │   └── boot_rom.rs       # Original 9-byte stub; no Nintendo boot ROM or logo, ever
-│   └── tests/                # blargg.rs, acid2.rs, cgb.rs, cpu_tests.rs, homebrew.rs, link.rs
+│   ├── examples/             # render.rs (PNG of a frame), harvest.rs (trace records; refuses to write inside a git repo)
+│   └── tests/                # blargg.rs, acid2.rs, cgb.rs, cpu_tests.rs, homebrew.rs, link.rs, trace.rs
 ├── gb-web/                   # React 19 + Vite + Tailwind v4 + Zustand
 │   └── src/
 │       ├── components/       # shell/, library/, game/, player/, add/, settings/, LinkCablePage

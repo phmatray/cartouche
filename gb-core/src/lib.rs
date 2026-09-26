@@ -11,6 +11,7 @@ pub mod ppu;
 pub mod registers;
 pub mod serial;
 pub mod timer;
+pub mod trace;
 
 use wasm_bindgen::prelude::*;
 
@@ -274,5 +275,81 @@ impl Emulator {
 
     pub fn get_bgp(&self) -> u8 {
         self.gb.as_ref().map_or(0, |gb| gb.bus.ppu.bgp)
+    }
+
+    // Layer trace (see trace.rs for every buffer's layout). Off by default; the pointers below
+    // move after every finished frame, so read them again after each run_frame.
+
+    pub fn set_trace_enabled(&mut self, on: bool) {
+        if let Some(gb) = &mut self.gb {
+            gb.bus.ppu.set_tracing(on);
+        }
+    }
+
+    pub fn trace_enabled(&self) -> bool {
+        self.tracer().is_some()
+    }
+
+    /// Number of the last finished traced frame (0: none yet).
+    pub fn trace_frame(&self) -> u32 {
+        self.tracer().map_or(0, |t| t.frames)
+    }
+
+    /// Header, per-scanline records and the VBlank VRAM/OAM/palette snapshot.
+    pub fn frame_meta_ptr(&self) -> *const u8 {
+        self.tracer().map_or(std::ptr::null(), |t| t.done.meta.as_ptr())
+    }
+
+    pub fn frame_meta_len(&self) -> usize {
+        crate::trace::META_LEN
+    }
+
+    /// RGBA planes, `layer_len()` bytes each: the shown frame, BG, window, OBJ.
+    pub fn layer_final_ptr(&self) -> *const u8 {
+        self.tracer().map_or(std::ptr::null(), |t| t.done.final_.as_ptr())
+    }
+
+    pub fn layer_bg_ptr(&self) -> *const u8 {
+        self.tracer().map_or(std::ptr::null(), |t| t.done.bg.as_ptr())
+    }
+
+    pub fn layer_win_ptr(&self) -> *const u8 {
+        self.tracer().map_or(std::ptr::null(), |t| t.done.win.as_ptr())
+    }
+
+    pub fn layer_obj_ptr(&self) -> *const u8 {
+        self.tracer().map_or(std::ptr::null(), |t| t.done.obj.as_ptr())
+    }
+
+    /// 4 bytes per pixel: `[layer, OAM slot, colour ids, OBJ attr]`.
+    pub fn layer_info_ptr(&self) -> *const u8 {
+        self.tracer().map_or(std::ptr::null(), |t| t.done.info.as_ptr())
+    }
+
+    pub fn layer_len(&self) -> usize {
+        FRAMEBUFFER_SIZE
+    }
+
+    /// Computes the exact motion field of the last frame against the one before it.
+    /// `mode`: 0 shown pixel, 1 BG plane, 2 window plane, 3 OBJ plane. Then read `motion_ptr()`:
+    /// `(dx, dy)` as i8 per pixel (the pixel was at `(x + dx, y + dy)`), -128 = unknown.
+    pub fn compute_motion(&mut self, mode: u8) -> bool {
+        let Some(t) = self.gb.as_mut().and_then(|gb| gb.bus.ppu.trace.as_deref_mut()) else { return false };
+        t.compute_motion(mode);
+        true
+    }
+
+    pub fn motion_ptr(&self) -> *const i8 {
+        self.tracer().filter(|t| !t.motion.is_empty()).map_or(std::ptr::null(), |t| t.motion.as_ptr())
+    }
+
+    pub fn motion_len(&self) -> usize {
+        crate::trace::PIXELS * 2
+    }
+}
+
+impl Emulator {
+    fn tracer(&self) -> Option<&crate::trace::Tracer> {
+        self.gb.as_ref()?.bus.ppu.trace.as_deref()
     }
 }

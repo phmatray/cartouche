@@ -105,6 +105,20 @@ impl GameBoy {
         Ok(())
     }
 
+    /// Runs up to the next VBlank entry, so a traced frame is complete when it returns `true`.
+    /// Returns `false` after two frames' worth of cycles without one (LCD off).
+    pub fn run_to_vblank(&mut self) -> Result<bool, EmulatorError> {
+        self.bus.ppu.frame_ready = false;
+        let mut total = 0;
+        while !self.bus.ppu.frame_ready {
+            if total >= 2 * CYCLES_PER_FRAME {
+                return Ok(false);
+            }
+            total += self.step_instruction()?;
+        }
+        Ok(true)
+    }
+
     pub fn step_instruction(&mut self) -> Result<u32, EmulatorError> {
         self.bus.cycle_count = 0;
         self.cpu.handle_interrupts(&mut self.bus);
