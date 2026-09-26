@@ -62,6 +62,8 @@ function withLocal(list: GameEntry[], e: GameEntry): GameEntry[] {
     developer: e.developer ?? cat.developer,
     year: e.year ?? cat.year,
     romUrl: cat.romUrl,
+    coverArt: cat.coverArt || e.coverArt,
+    coverCredit: cat.coverCredit,
   } : e;
   return [...list.filter((g) => g !== cat && g.id !== e.id), merged];
 }

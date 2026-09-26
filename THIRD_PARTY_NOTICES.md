@@ -40,6 +40,13 @@ releases.
   - Assets (images, text, sound and music): [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/)
 - Changes: none. The file is redistributed exactly as released, renamed from
   `tobu.gb` to `tobutobugirl.gb`.
+- Box art: `gb-web/public/covers/tobu-tobu-girl.webp`, the official key art
+  by Tangram Games, the cover image of https://tangramgames.itch.io/tobutobugirl
+  (asset license stated there: CC BY 4.0; downloaded 2026-09-26, 630x500 PNG,
+  SHA-256 `6e740ae8314a4fcd78b60e68f6d47c14c1310c4b630ee95ea1ef8e974b57f505`).
+  Changes: cropped to a centered 500x500 square, resized to 512x512 and
+  converted to WebP. Licensed under
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 ### Tobu Tobu Girl Deluxe (Game Boy / Game Boy Color ROM)
 
@@ -57,6 +64,13 @@ releases.
   - Assets (images, text, sound and music): [Creative Commons Attribution 4.0 International (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/)
 - Changes: none. The file is redistributed exactly as released, renamed from
   `tobudx.gb` to `tobutobugirldx.gb`.
+- Box art: `gb-web/public/covers/tobu-tobu-girl-deluxe.webp`, the official key
+  art by Tangram Games, the cover image of
+  https://tangramgames.itch.io/tobu-tobu-girl-deluxe (asset license stated
+  there: CC BY 4.0; downloaded 2026-09-26, 1500x1500 PNG, SHA-256
+  `ec3c38e1731572e2a4ebb3eb89dcf44a8cb4ca76f309074b53e58b238d04969d`).
+  Changes: resized to 512x512 and converted to WebP. Licensed under
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 MIT License of Tobu Tobu Girl and Tobu Tobu Girl Deluxe:
 
@@ -101,6 +115,8 @@ SOFTWARE.
   - The GBT Player music engine included in the game: BSD 2-Clause License
     (notice reproduced below).
   - Graphics and music: [Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)](https://creativecommons.org/licenses/by-sa/4.0/).
+- Box art: none. The v1.3 repository holds no cover or key art (only a
+  screenshot), so µCity keeps the app's printed card.
 - **Corresponding source code**: the complete source code of this exact
   binary is the v1.3 tag of the author's repository,
   https://github.com/AntonioND/ucity/tree/v1.3 (commit
@@ -268,6 +284,8 @@ not part of the published build.
 
 - Source: https://github.com/libretro-thumbnails (the `Nintendo_-_Game_Boy`
   and `Nintendo_-_Game_Boy_Color` repositories).
+- Not the covers of the bundled Tobu Tobu Girl games, which ship with the app
+  (CC BY 4.0, see section 1) and load without any request to another site.
 - The box art images are the property of their respective copyright holders.
   Cartouche does **not** copy, host or redistribute any of them: the player's
   browser requests an image directly from `raw.githubusercontent.com` only

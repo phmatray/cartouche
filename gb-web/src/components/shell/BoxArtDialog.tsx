@@ -55,7 +55,7 @@ export function BoxArtDialog() {
           <div className="in">
             <h2 id="boxart-t">Show box art?</h2>
             <div id="boxart-d">
-              <p>Box art is copyrighted by the game publishers. Cartouche doesn’t host or ship any.</p>
+              <p>Box art is copyrighted by the game publishers. Cartouche doesn’t host or ship any (only the freely licensed covers of its bundled games).</p>
               <p>
                 If you agree, your browser downloads the covers of recognized games you add directly from the libretro-thumbnails
                 project on GitHub, so GitHub sees your IP address and browser details (see <a href={GITHUB_PRIVACY} target="_blank" rel="noreferrer">GitHub’s privacy statement</a>),

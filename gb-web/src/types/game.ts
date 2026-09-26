@@ -6,7 +6,10 @@ export interface GameEntry {
   description: string;
   genre: string;
   category: string;
+  /** Bundled, freely licensed box art (a path under public/, e.g. covers/x.webp); '' when there is none. */
   coverArt: string;
+  /** Attribution for coverArt (shown with the game's credits). */
+  coverCredit?: string;
   screenshots: string[];
   romUrl?: string;
   libretroName?: string;

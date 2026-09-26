@@ -23,7 +23,9 @@ export const LEGAL_SECTIONS: Array<{ title: string; body: string; links?: Array<
       'https://github.com/SimonLarsen/tobutobugirl and https://github.com/SimonLarsen/tobutobugirl-dx). ' +
       'Code under the MIT License; graphics, text, sound and music under CC BY 4.0 ' +
       '(https://creativecommons.org/licenses/by/4.0/). The release files tobu.gb and tobudx.gb are ' +
-      'renamed tobutobugirl.gb and tobutobugirldx.gb.\n\n' +
+      'renamed tobutobugirl.gb and tobutobugirldx.gb. Their box art is the official key art by Tangram ' +
+      'Games from their itch.io pages (https://tangramgames.itch.io/tobutobugirl and ' +
+      'https://tangramgames.itch.io/tobu-tobu-girl-deluxe), CC BY 4.0, cropped to a square and resized.\n\n' +
       'µCity 1.3, © 2017-2018 Antonio Niño Díaz, under the GNU GPL version 3 or later (graphics and ' +
       'music CC BY-SA 4.0, https://creativecommons.org/licenses/by-sa/4.0/; its GBT Player engine BSD 2-Clause). The full GPL text is linked below; the ' +
       'complete corresponding source is the author\'s v1.3 tag: https://github.com/AntonioND/ucity/tree/v1.3 ' +
@@ -51,7 +53,9 @@ export const LEGAL_SECTIONS: Array<{ title: string; body: string; links?: Array<
   {
     title: 'Box art',
     body:
-      'Box art is off by default and never hosted or redistributed by Cartouche. The images belong to ' +
+      'The two Tobu Tobu Girl games ship with their own covers (freely licensed, see above): they are ' +
+      'files of this app, shown without asking and without contacting any other site. Every other ' +
+      'cover is off by default and never hosted or redistributed by Cartouche. Those images belong to ' +
       'the game publishers and other copyright holders. On first launch a dialog asks "Show box art?". ' +
       'Only if you choose "Download box art" (or later turn box art on in Settings > Storage and agree) ' +
       'does your browser download the cover of each recognized ROM you added, directly from the ' +

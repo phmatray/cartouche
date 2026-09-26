@@ -24,7 +24,9 @@ cartouche/
 ```
 
 Test ROMs are downloaded by `scripts/fetch-test-roms.sh` into `gb-core/test-roms/` (gitignored).
-Never commit ROMs, boot ROM dumps, box art or Nintendo artwork; the only tracked ROMs are the
+Never commit ROMs, boot ROM dumps, box art or Nintendo artwork (the one exception: the CC BY 4.0
+key art of the bundled Tobu Tobu Girl games in `gb-web/public/covers/`, credited in
+THIRD_PARTY_NOTICES.md); the only tracked ROMs are the
 bundled ones in `gb-web/public/roms/`, each re-included by its own `.gitignore` line and listed
 with license and SHA-256 in THIRD_PARTY_NOTICES.md.
 

@@ -106,6 +106,7 @@ function GameDetails({ game }: { game: GameEntry }) {
                 {game.source && <> Source: <a href={game.source} target="_blank" rel="noreferrer">{game.source.replace(/^https?:\/\//, '')}</a>.</>}
                 {game.homepage && <> Official page: <a href={game.homepage} target="_blank" rel="noreferrer">{game.homepage.replace(/^https?:\/\//, '')}</a>.</>}
                 {game.changes && <> {game.changes}</>}
+                {game.coverCredit && <> {game.coverCredit}</>}
                 {game.romUrl && !game.isLocal && <> Full notices: <a href={assetUrl('THIRD_PARTY_NOTICES.txt')} target="_blank" rel="noreferrer">THIRD_PARTY_NOTICES.txt</a>.</>}
               </p>
             </>
