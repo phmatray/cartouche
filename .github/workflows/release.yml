@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  # The full CI (core tests, lint, build) must pass on the tagged commit before anything is published.
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  release:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: gb-core
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
+      - name: Build WASM core
+        working-directory: gb-core
+        run: RUSTFLAGS="--remap-path-prefix=$HOME=~" wasm-pack build --target web --out-dir pkg
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: gb-web/package-lock.json
+
+      # Built for the root of a domain ("/"); the Pages build uses /cartouche/.
+      - name: Build web app
+        working-directory: gb-web
+        run: |
+          npm ci
+          npm run build -- --base=/
+
+      # dist/ already holds LICENSE.txt, THIRD_PARTY_NOTICES.txt and THIRD_PARTY_LICENSES.txt (vite.config.ts).
+      - name: Package
+        run: |
+          (cd gb-web/dist && zip -r "$GITHUB_WORKSPACE/cartouche-web-${GITHUB_REF_NAME}.zip" .)
+
+      # GPL-3.0 section 6: keep µCity's corresponding source available next to every release.
+      - name: µCity v1.3 source
+        run: |
+          curl -fsSL -o ucity-1.3-source.tar.gz https://github.com/AntonioND/ucity/archive/refs/tags/v1.3.tar.gz \
+            || curl -fsSL -o ucity-1.3-source.tar.gz https://codeberg.org/SkyLyrac/ucity/archive/v1.3.tar.gz
+          tar tzf ucity-1.3-source.tar.gz | grep '/gpl-3.0.txt$' >/dev/null
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { on = 1; next }
+            on && /^## \[/ { exit }
+            on && /^\[[^]]+\]: / { next }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "No CHANGELOG.md entry for $version"; exit 1
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "cartouche-web-${GITHUB_REF_NAME}.zip" ucity-1.3-source.tar.gz \
+            --title "Cartouche $GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            --verify-tag

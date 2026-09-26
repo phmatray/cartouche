@@ -1,0 +1,49 @@
+name: Takedown request
+description: Report content in this repository or the hosted app that you believe infringes your rights.
+title: "[Takedown] "
+labels: [takedown]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for letting us know. The maintainer aims to respond within 72 hours; content that is
+        plausibly infringing is disabled first and reviewed afterwards.
+
+        **This issue is public.** Do not include private contact details you do not want published.
+        The project has no private email address. For a non-public request, use GitHub's
+        [DMCA takedown policy](https://docs.github.com/en/site-policy/content-removal-policies/dmca-takedown-policy)
+        and [notice form](https://github.com/contact/dmca) instead.
+  - type: input
+    id: rights-holder
+    attributes:
+      label: Rights holder
+      description: The person or organization that owns the rights, and your relationship to it.
+    validations:
+      required: true
+  - type: textarea
+    id: work
+    attributes:
+      label: Protected work
+      description: The copyrighted work or trademark concerned.
+    validations:
+      required: true
+  - type: textarea
+    id: location
+    attributes:
+      label: Where is the content?
+      description: Exact file paths, commit links, URLs of the hosted app, or issue/PR links.
+    validations:
+      required: true
+  - type: textarea
+    id: basis
+    attributes:
+      label: Why do you believe it infringes?
+    validations:
+      required: true
+  - type: checkboxes
+    id: good-faith
+    attributes:
+      label: Statement
+      options:
+        - label: I have a good-faith belief that the use described above is not authorized by the rights holder, its agent, or the law, and the information in this request is accurate.
+          required: true

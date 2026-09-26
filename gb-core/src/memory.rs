@@ -1,0 +1,348 @@
+use crate::apu::Apu;
+use crate::boot_rom::DMG_BOOT_ROM;
+use crate::cartridge::Cartridge;
+use crate::interrupts::{InterruptController, SERIAL_BIT, STAT_BIT, TIMER_BIT, VBLANK_BIT};
+use crate::joypad::Joypad;
+use crate::ppu::Ppu;
+use crate::serial::Serial;
+use crate::timer::Timer;
+
+pub struct MemoryBus {
+    pub cartridge: Cartridge,
+    pub ppu: Ppu,
+    pub timer: Timer,
+    pub interrupts: InterruptController,
+    pub joypad: Joypad,
+    pub apu: Apu,
+    pub serial: Serial,
+    boot_rom: [u8; 256],
+    pub boot_rom_active: bool,
+    /// 32 KB WRAM (8 banks x 4 KB); DMG uses banks 0+1 only
+    pub wram: [u8; 0x8000],
+    /// Currently mapped WRAM bank for 0xD000-0xDFFF (1-7; writing 0 selects bank 1)
+    pub wram_bank: u8,
+    pub hram: [u8; 0x7F],
+    pub cycle_count: u32,
+    // OAM DMA state
+    pub(crate) dma_active: bool,
+    pub(crate) dma_cycles_remaining: u8,
+    /// Whether the ROM is CGB compatible
+    pub cgb_mode: bool,
+    /// KEY1 speed-switch register (bit 0 = switch armed)
+    pub(crate) key1: u8,
+    /// Whether the CPU is running at double speed (CGB only)
+    pub double_speed: bool,
+    // CGB HDMA/GDMA
+    pub hdma5: u8,
+    pub(crate) hdma_active: bool,
+    pub(crate) hdma_source: u16,
+    pub(crate) hdma_dest: u16,
+    pub(crate) hdma_remaining: u8,
+}
+
+impl MemoryBus {
+    pub fn new(cartridge: Cartridge, cgb_mode: bool) -> Self {
+        let mut ppu = Ppu::new();
+        ppu.cgb_mode = cgb_mode;
+        Self {
+            cartridge,
+            ppu,
+            timer: Timer::new(),
+            interrupts: InterruptController::new(),
+            joypad: Joypad::new(),
+            apu: Apu::new(),
+            serial: Serial::new(),
+            boot_rom: DMG_BOOT_ROM,
+            boot_rom_active: true,
+            wram: [0; 0x8000],
+            wram_bank: 1,
+            hram: [0; 0x7F],
+            cycle_count: 0,
+            dma_active: false,
+            dma_cycles_remaining: 0,
+            cgb_mode,
+            key1: 0,
+            double_speed: false,
+            hdma5: 0xFF,
+            hdma_active: false,
+            hdma_source: 0,
+            hdma_dest: 0,
+            hdma_remaining: 0,
+        }
+    }
+
+    fn wram_read(&self, addr: u16) -> u8 {
+        let idx = if addr < 0xD000 {
+            (addr - 0xC000) as usize
+        } else {
+            (self.wram_bank as usize) * 0x1000 + (addr - 0xD000) as usize
+        };
+        self.wram[idx]
+    }
+
+    fn wram_write(&mut self, addr: u16, value: u8) {
+        let idx = if addr < 0xD000 {
+            (addr - 0xC000) as usize
+        } else {
+            (self.wram_bank as usize) * 0x1000 + (addr - 0xD000) as usize
+        };
+        self.wram[idx] = value;
+    }
+
+    pub fn read_byte(&self, addr: u16) -> u8 {
+        if self.dma_active && !(0xFF80..=0xFFFE).contains(&addr) {
+            return 0xFF;
+        }
+        match addr {
+            0x0000..=0x7FFF => {
+                if self.boot_rom_active && addr <= 0x00FF {
+                    self.boot_rom[addr as usize]
+                } else {
+                    self.cartridge.read_rom(addr)
+                }
+            }
+            0x8000..=0x9FFF => self.ppu.read_vram(addr - 0x8000),
+            0xA000..=0xBFFF => self.cartridge.read_ram(addr - 0xA000),
+            0xC000..=0xDFFF => self.wram_read(addr),
+            0xE000..=0xFDFF => self.wram_read(addr - 0x2000),
+            0xFE00..=0xFE9F => self.ppu.read_oam(addr - 0xFE00),
+            0xFEA0..=0xFEFF => 0xFF,
+            0xFF00 => self.joypad.read(),
+            0xFF01 | 0xFF02 => self.serial.read(addr),
+            0xFF04..=0xFF07 => self.timer.read(addr),
+            0xFF0F => self.interrupts.interrupt_flag | 0xE0, // bits 5-7 unused, read as 1
+            0xFF10..=0xFF3F => self.apu.read_register(addr),
+            0xFF40..=0xFF4B => self.ppu.read_register(addr),
+            0xFF4D => {
+                if self.cgb_mode {
+                    ((self.double_speed as u8) << 7) | (self.key1 & 0x01) | 0x7E
+                } else {
+                    0xFF
+                }
+            }
+            0xFF4F => if self.cgb_mode { self.ppu.read_register(addr) } else { 0xFF },
+            // HDMA registers — 0xFF51-0xFF54 are write-only, return 0xFF on read
+            0xFF51..=0xFF54 => 0xFF,
+            0xFF55 => {
+                if self.cgb_mode { self.hdma5 } else { 0xFF }
+            }
+            0xFF68..=0xFF6B => {
+                if self.cgb_mode { self.ppu.read_register(addr) } else { 0xFF }
+            }
+            0xFF70 => {
+                if self.cgb_mode { self.wram_bank | 0xF8 } else { 0xFF }
+            }
+            0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize],
+            0xFFFF => self.interrupts.interrupt_enable,
+            _ => 0xFF,
+        }
+    }
+
+    pub fn write_byte(&mut self, addr: u16, value: u8) {
+        match addr {
+            0x0000..=0x7FFF => self.cartridge.write_rom(addr, value),
+            0x8000..=0x9FFF => self.ppu.write_vram(addr - 0x8000, value),
+            0xA000..=0xBFFF => self.cartridge.write_ram(addr - 0xA000, value),
+            0xC000..=0xDFFF => self.wram_write(addr, value),
+            0xE000..=0xFDFF => self.wram_write(addr - 0x2000, value),
+            0xFE00..=0xFE9F => self.ppu.write_oam(addr - 0xFE00, value),
+            0xFEA0..=0xFEFF => {}
+            0xFF00 => self.joypad.write(value),
+            0xFF01 | 0xFF02 => self.serial.write(addr, value),
+            0xFF04..=0xFF07 => self.timer.write(addr, value),
+            0xFF0F => self.interrupts.interrupt_flag = value & 0x1F,
+            0xFF10..=0xFF3F => self.apu.write_register(addr, value),
+            0xFF40..=0xFF4B => {
+                if addr == 0xFF46 {
+                    self.dma_transfer(value);
+                    self.dma_active = true;
+                    self.dma_cycles_remaining = 160;
+                } else {
+                    self.ppu.write_register(addr, value);
+                }
+            }
+            0xFF4D => {
+                if self.cgb_mode {
+                    self.key1 = (self.key1 & !0x01) | (value & 0x01);
+                }
+            }
+            0xFF4F => {
+                if self.cgb_mode {
+                    self.ppu.write_register(addr, value);
+                }
+            }
+            0xFF50 => {
+                if self.boot_rom_active && value != 0 {
+                    self.boot_rom_active = false;
+                }
+            }
+            // HDMA1-4 write straight into the transfer's address counters, which advance as
+            // blocks are copied: restarting via HDMA5 without rewriting them resumes where the
+            // previous (cancelled) transfer stopped.
+            0xFF51 => self.hdma_source = (self.hdma_source & 0x00F0) | (value as u16) << 8,
+            0xFF52 => self.hdma_source = (self.hdma_source & 0xFF00) | (value as u16 & 0xF0),
+            0xFF53 => self.hdma_dest = (self.hdma_dest & 0x00F0) | ((value as u16 & 0x1F) << 8),
+            0xFF54 => self.hdma_dest = (self.hdma_dest & 0x1F00) | (value as u16 & 0xF0),
+            0xFF55 => self.write_hdma5(value),
+            0xFF68..=0xFF6B => {
+                if self.cgb_mode { self.ppu.write_register(addr, value); }
+            }
+            0xFF70 => {
+                if self.cgb_mode {
+                    let bank = value & 0x07;
+                    self.wram_bank = if bank == 0 { 1 } else { bank };
+                }
+            }
+            0xFF80..=0xFFFE => self.hram[(addr - 0xFF80) as usize] = value,
+            0xFFFF => self.interrupts.interrupt_enable = value,
+            _ => {}
+        }
+    }
+
+    /// Attempt a CGB speed switch (triggered by STOP with KEY1 bit 0 armed).
+    pub fn try_speed_switch(&mut self) -> bool {
+        if !self.cgb_mode || self.key1 & 0x01 == 0 {
+            return false;
+        }
+        self.double_speed = !self.double_speed;
+        self.key1 = 0;
+        true
+    }
+
+    pub fn serial_output(&self) -> &[u8] {
+        self.serial.serial_output()
+    }
+
+    pub fn clear_serial_output(&mut self) {
+        self.serial.clear_serial_output();
+    }
+
+    fn tick_components(&mut self) {
+        let ppu_step = if self.double_speed { 2 } else { 4 };
+        let (vblank_irq, stat_irq, hblank_entry) = self.ppu.step(ppu_step);
+        if vblank_irq {
+            self.interrupts.request(VBLANK_BIT);
+        }
+        if stat_irq {
+            self.interrupts.request(STAT_BIT);
+        }
+        if hblank_entry && self.hdma_active {
+            self.hdma_step();
+            self.dma_stall();
+        }
+        if self.timer.step(4) {
+            self.interrupts.request(TIMER_BIT);
+        }
+        if self.serial.tick(4) {
+            self.interrupts.request(SERIAL_BIT);
+        }
+        self.apu.cgb_mode = self.cgb_mode;
+        self.apu.step(ppu_step);
+        self.cycle_count += ppu_step;
+
+        if self.dma_active {
+            if self.dma_cycles_remaining > 0 {
+                self.dma_cycles_remaining -= 1;
+            } else {
+                self.dma_active = false;
+            }
+        }
+    }
+
+    pub fn cycle_tick(&mut self) {
+        self.tick_components();
+    }
+
+    pub fn cycle_read(&mut self, addr: u16) -> u8 {
+        self.tick_components();
+        if (0xFE00..=0xFEFF).contains(&addr) { self.ppu.oam_bug_read(); }
+        self.read_byte(addr)
+    }
+
+    /// Read whose address register is incremented/decremented in the same
+    /// M-cycle (LD A,(HL+/-), POP).
+    pub fn cycle_read_inc(&mut self, addr: u16) -> u8 {
+        self.tick_components();
+        if (0xFE00..=0xFEFF).contains(&addr) { self.ppu.oam_bug_read_inc(); }
+        self.read_byte(addr)
+    }
+
+    pub fn cycle_write(&mut self, addr: u16, value: u8) {
+        self.tick_components();
+        if (0xFE00..=0xFEFF).contains(&addr) { self.ppu.oam_bug_write(); }
+        self.write_byte(addr, value);
+    }
+
+    /// Internal M-cycle in which the 16-bit IDU increments/decrements `addr`
+    /// (INC/DEC rr, the first cycle of PUSH/CALL/RST).
+    pub fn cycle_idu(&mut self, addr: u16) {
+        self.tick_components();
+        if (0xFE00..=0xFEFF).contains(&addr) { self.ppu.oam_bug_write(); }
+    }
+
+    fn dma_transfer(&mut self, value: u8) {
+        let source = (value as u16) << 8;
+        for i in 0..0xA0u16 {
+            let byte = self.read_byte(source + i);
+            self.ppu.write_oam(i, byte);
+        }
+    }
+
+    /// Handle writes to HDMA5 (0xFF55) — triggers GDMA or starts HDMA.
+    fn write_hdma5(&mut self, value: u8) {
+        if !self.cgb_mode {
+            return;
+        }
+        if self.hdma_active && value & 0x80 == 0 {
+            // Writing bit 7 = 0 during an HBlank DMA cancels it; HDMA5 then reads bit 7 = 1
+            // with the remaining length. (Writing bit 7 = 1 restarts it with the new length.)
+            self.hdma_active = false;
+            self.hdma5 = 0x80 | (self.hdma_remaining.wrapping_sub(1) & 0x7F);
+            return;
+        }
+        self.hdma_remaining = (value & 0x7F) + 1;
+        // While a transfer is pending HDMA5 reads bit 7 = 0 plus the remaining length.
+        self.hdma5 = value & 0x7F;
+
+        if value & 0x80 == 0 {
+            // GDMA: transfer all blocks immediately; the CPU is stalled meanwhile.
+            while self.hdma_remaining > 0 {
+                self.hdma_step();
+                self.dma_stall();
+            }
+        } else {
+            // HDMA: one 16-byte block per HBlank, the first one right away if the PPU is
+            // already in HBlank (which includes the LCD being off).
+            self.hdma_active = true;
+            if self.ppu.mode == crate::ppu::PpuMode::HBlank {
+                self.hdma_step();
+                self.dma_stall();
+            }
+        }
+    }
+
+    /// The CPU is stalled while a 16-byte block is copied: 8 M-cycles at normal speed,
+    /// 16 at double speed (the same wall-clock time).
+    fn dma_stall(&mut self) {
+        for _ in 0..if self.double_speed { 16 } else { 8 } {
+            self.tick_components();
+        }
+    }
+
+    /// Transfer one 16-byte HDMA block from source to VRAM.
+    fn hdma_step(&mut self) {
+        for i in 0..16u16 {
+            let byte = self.read_byte(self.hdma_source.wrapping_add(i));
+            self.ppu.write_vram((self.hdma_dest + i) & 0x1FFF, byte);
+        }
+        self.hdma_source = self.hdma_source.wrapping_add(16);
+        self.hdma_dest = (self.hdma_dest + 16) & 0x1FF0;
+        self.hdma_remaining -= 1;
+        if self.hdma_remaining == 0 {
+            self.hdma_active = false;
+            self.hdma5 = 0xFF; // inactive, no blocks remaining
+        } else {
+            self.hdma5 = (self.hdma_remaining - 1) & 0x7F; // active (bit 7 = 0)
+        }
+    }
+}

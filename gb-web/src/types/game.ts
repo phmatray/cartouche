@@ -1,0 +1,56 @@
+export type RegionFilter = 'US' | 'EU' | 'JP';
+
+export interface GameEntry {
+  id: string;
+  title: string;
+  description: string;
+  genre: string;
+  category: string;
+  coverArt: string;
+  screenshots: string[];
+  romUrl?: string;
+  libretroName?: string;
+  romHeaderTitle?: string;
+  sha1?: string;
+  developer?: string;
+  year?: string;
+  /** License of the game itself (curated homebrew entries). */
+  license?: string;
+  /** Official page where the author distributes the game. */
+  homepage?: string;
+  /** Attribution for bundled homebrew (CC BY needs the notice, license link, source and changes). */
+  copyright?: string;
+  licenseUrl?: string;
+  source?: string;
+  changes?: string;
+  /** Test cartridges: what a pass looks like, shown under the box. */
+  hint?: string;
+  isLocal: boolean;
+  isFavorite?: boolean;
+  lastPlayed?: number;
+  totalPlayTime?: number;
+  sessions?: number;
+  importedAt?: number;
+  regions?: RegionFilter[];
+  // ROM header metadata (populated after loading)
+  region?: string;
+  cartridgeType?: string;
+  romSize?: string;
+  ramSize?: string;
+  publisher?: string;
+  cgbFlag?: string;
+  sgbFlag?: string;
+  players?: number;
+  compatibility?: string;
+  language?: string;
+  saveType?: string;
+  platform?: 'gb' | 'gbc';
+  coverTitle?: string;
+}
+
+export interface LocalGameEntry extends GameEntry {
+  isLocal: true;
+  romData: Uint8Array;
+}
+
+export type GameLibrary = Record<string, GameEntry[]>;

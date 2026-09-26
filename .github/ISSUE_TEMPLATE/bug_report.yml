@@ -1,0 +1,55 @@
+name: Bug report
+description: Something does not work or a game runs incorrectly.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not attach ROMs, BIOS files, save files of commercial games, or links to them.**
+        Issues containing such material or links are deleted. Identify a game by its title,
+        region, revision and the SHA-1 of your own dump instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Load ...
+        2. Press ...
+        3. See ...
+    validations:
+      required: true
+  - type: input
+    id: game
+    attributes:
+      label: Game (if relevant)
+      description: Title, region and revision, e.g. "Tobu Tobu Girl" or "Some Game (USA) (Rev 1)".
+  - type: input
+    id: sha1
+    attributes:
+      label: SHA-1 of your ROM file (if relevant)
+      description: Shown on the game page. Never upload the file itself.
+  - type: input
+    id: env
+    attributes:
+      label: Browser and device
+      placeholder: Firefox 131 on Windows 11 / Safari on iPhone 15
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Cartouche version or commit
+  - type: checkboxes
+    id: no-roms
+    attributes:
+      label: Confirmation
+      options:
+        - label: This issue contains no ROMs, BIOS files, copyrighted game assets, or links to them.
+          required: true

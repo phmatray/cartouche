@@ -1,0 +1,77 @@
+name: Deploy to GitHub Pages
+
+# Deploys main only after CI passed on it. Before the first run, set the repository's
+# Settings > Pages > Source to "GitHub Actions" (see CONTRIBUTING.md, "Releasing").
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    # Only a successful CI run of a push to main (not a pull request from a branch named main).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: gb-core
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
+      - name: Build WASM core
+        working-directory: gb-core
+        run: RUSTFLAGS="--remap-path-prefix=$HOME=~" wasm-pack build --target web --out-dir pkg
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: gb-web/package-lock.json
+
+      - name: Build web app for /cartouche/
+        working-directory: gb-web
+        run: |
+          npm ci
+          # vite.config.ts builds for /cartouche/ and writes dist/404.html (SPA fallback), sw.js
+          # and the license files (LICENSE.txt, THIRD_PARTY_NOTICES.txt, THIRD_PARTY_LICENSES.txt)
+          npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: gb-web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

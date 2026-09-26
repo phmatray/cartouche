@@ -1,0 +1,51 @@
+# Rust
+gb-core/target/
+gb-core/pkg/
+
+# Node
+gb-web/node_modules/
+gb-web/dist/
+
+# IDE and local agent/tool settings
+.claude/
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Worktrees
+.worktrees/
+
+# Test ROMs
+# no trailing slash: also matches the symlink worktrees use
+gb-core/test-roms
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Never commit game data: ROMs, saves, save states.
+# Only explicitly licensed homebrew may be re-included with a negation rule.
+*.gb
+*.gbc
+*.sgb
+*.sav
+*.srm
+*.state
+*.zip
+
+# Screenshots (gb-core/examples/render.rs output) can show commercial games: keep them local
+screenshots/
+gb-core/*.png
+
+# Design tooling artifacts (mocks, reviews) can contain third-party box art or trademarks
+.impeccable/
+logs/
+
+# The bundled ROMs, one line each (licenses, sources and SHA-256 in THIRD_PARTY_NOTICES.md).
+!gb-web/public/roms/tobutobugirl.gb
+!gb-web/public/roms/tobutobugirldx.gb
+!gb-web/public/roms/ucity.gbc
+!gb-web/public/roms/cgb-acid2.gbc
+!gb-web/public/roms/dmg-acid2.gb
+!gb-web/public/roms/cpu_instrs.gb

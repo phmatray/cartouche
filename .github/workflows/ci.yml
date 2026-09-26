@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # release.yml runs the whole suite before publishing a tag.
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: Core tests (Rust)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: gb-core
+
+      # Third-party test ROMs are downloaded, never committed.
+      - name: Cache test ROMs
+        uses: actions/cache@v4
+        with:
+          path: gb-core/test-roms
+          key: test-roms-${{ hashFiles('scripts/fetch-test-roms.sh') }}
+
+      - name: Fetch test ROMs
+        run: |
+          if [ ! -f gb-core/test-roms/cpu_instrs/cpu_instrs.gb ]; then
+            ./scripts/fetch-test-roms.sh
+          fi
+
+      # --no-fail-fast: every test binary reports, even when an earlier one fails.
+      # CARTOUCHE_REQUIRE_ROMS makes a missing homebrew/CGB test ROM a failure, not a skip.
+      - name: cargo test --release
+        working-directory: gb-core
+        env:
+          CARTOUCHE_REQUIRE_ROMS: "1"
+        run: cargo test --release --no-fail-fast
+
+  web:
+    name: Web app (WASM + lint + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: gb-core
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
+      # The remap keeps local paths (panic locations of registry crates) out of the binary.
+      - name: Build WASM core
+        working-directory: gb-core
+        run: RUSTFLAGS="--remap-path-prefix=$HOME=~" wasm-pack build --target web --out-dir pkg
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: gb-web/package-lock.json
+
+      - name: Install
+        working-directory: gb-web
+        run: npm ci
+
+      - name: Lint
+        working-directory: gb-web
+        run: npm run lint
+
+      - name: Build
+        working-directory: gb-web
+        run: npm run build
+
+      - name: Check that no unexpected ROM is bundled
+        run: |
+          found=$(find gb-web/dist gb-web/public -type f \( -iname '*.gb' -o -iname '*.gbc' -o -iname '*.sgb' \) | grep -Ev 'roms/(tobutobugirl\.gb|tobutobugirldx\.gb|ucity\.gbc|cgb-acid2\.gbc|dmg-acid2\.gb|cpu_instrs\.gb)$' || true)
+          if [ -n "$found" ]; then
+            echo "Unexpected ROM files:"; echo "$found"; exit 1
+          fi
+
+      # The notices say these files are unmodified: pin them to the SHA-256 listed in THIRD_PARTY_NOTICES.md.
+      - name: Check that the bundled ROMs are the unmodified releases
+        run: |
+          for dir in gb-web/public/roms gb-web/dist/roms; do
+            (cd "$dir" && shasum -a 256 -c --strict - <<'EOF'
+          5d3871cae77db2287807e8914fd21f76203e73aa3fec20955489d45cb4571d8f  tobutobugirl.gb
+          0a0e8018dbbc8d7f8cd99f05e7cdc7b4cc9e358ecfe9377ebfb2291a84c6e310  tobutobugirldx.gb
+          9422ee2ca7b7ea1d46b58b2a429fff3f354dfd3e732dee1e7ae6220f148ce6e0  ucity.gbc
+          197fb0bcec544f0400527fc707e0a94f55435974986e6986b424ace5de81720e  cgb-acid2.gbc
+          464e14b7d42e7feea0b7ede42be7071dc88913f75b9ffa444299424b63d1dff1  dmg-acid2.gb
+          8c5e12f41e0ba5bbca796944f92ffe6de28809198682c4332e38d1b3cf56fcf2  cpu_instrs.gb
+          EOF
+            ) || exit 1
+          done
+
+      - name: Check that license notices ship and no local path leaks
+        run: |
+          for f in LICENSE.txt THIRD_PARTY_NOTICES.txt THIRD_PARTY_LICENSES.txt licenses/GPL-3.0-ucity.txt licenses/OFL-Archivo.txt; do
+            test -s "gb-web/dist/$f" || { echo "missing dist/$f"; exit 1; }
+          done
+          if grep -r -a -l -e '/Users/' -e '/home/' gb-web/dist; then
+            echo "Local file system paths found in the build output"; exit 1
+          fi
