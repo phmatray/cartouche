@@ -82,7 +82,7 @@ function interrupt() { active?.skipTransition(); committed(); }
 function land(to: string, back: HTMLElement | null, had: Element | null, tries = 10) {
   if (had?.isConnected && had.closest('main') && document.activeElement === had) return;
   const page = pageOf(to);
-  const el = page === 'player' ? document.querySelector<HTMLElement>('.pl canvas.lcd')
+  const el = page === 'player' ? document.querySelector<HTMLElement>('.pl .stage canvas.lcd')
     : (page === 'lib' && back ? back.closest<HTMLElement>('a') ?? back.closest('.lrow')?.querySelector<HTMLElement>('a.t') : null)
       ?? document.querySelector<HTMLElement>('main h1');
   if (!el) { if (tries) requestAnimationFrame(() => land(to, back, had, tries - 1)); return; }

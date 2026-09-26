@@ -824,10 +824,10 @@ html[data-vt=eject]::view-transition-old(deck),html[data-vt=eject]::view-transit
 @keyframes vt-from-below{from{opacity:0;transform:translateY(100%)}}
 
 /* Landing points that take focus after a route change (not controls: no ring). */
-main h1[tabindex="-1"]:focus,.pl canvas.lcd:focus{outline:none}
+main h1[tabindex="-1"]:focus,.pl .stage canvas.lcd:focus{outline:none}
 /* The LCD stays dark until the first frame, which then fades in (during or right after the landing). */
-.pl canvas.lcd{opacity:0;transition:opacity .25s linear}
-.pl canvas.lcd.lit{opacity:1}
+.pl .stage canvas.lcd{opacity:0;transition:opacity .25s linear}
+.pl .stage canvas.lcd.lit{opacity:1}
 
 /* ---------- Cartouche additions (not in the prototype) ---------- */
 html{background:var(--band)}
