@@ -15,6 +15,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  no-game-data:
+    name: No game data tracked
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: ./scripts/check-no-game-data.sh
+
   core:
     name: Core tests (Rust)
     runs-on: ubuntu-latest
