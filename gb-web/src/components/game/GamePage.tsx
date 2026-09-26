@@ -16,6 +16,7 @@ import { hardwareOf, importSav, useAlbum, useLinkRom, useRomHeader } from '../..
 import { Shot } from './Shot';
 import { TagLinks } from '../library/TagLinks';
 import { genreLabel } from '../../lib/search';
+import { fileAccept } from '../../lib/pwa';
 
 export function GamePage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -75,7 +76,7 @@ function GameDetails({ game }: { game: GameEntry }) {
               {need ? (
                 <label className="btn lg play" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
                   {I.cart}Load your ROM
-                  <input type="file" accept=".gb,.gbc" className="sr" tabIndex={-1}
+                  <input type="file" accept={fileAccept('.gb,.gbc')} className="sr" tabIndex={-1}
                     onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f && await linkRom(f)) navigate(paths.play(game.id)); }} />
                 </label>
               ) : (
@@ -277,7 +278,7 @@ function Saves({ game, header, setConfirm }: { game: GameEntry; header: RomMetad
       <label className="btn line" style={{ ...btnSm, marginTop: 14 }} tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
         {I.load}Import a .sav file…
-        <input type="file" accept=".sav,.srm" className="sr" tabIndex={-1} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onImport(f); }} />
+        <input type="file" accept={fileAccept('.sav,.srm')} className="sr" tabIndex={-1} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onImport(f); }} />
       </label>
       {err && <p className="note" role="alert" style={{ margin: '12px 0 0', color: 'var(--warn)' }}>{err}</p>}
     </section>

@@ -7,7 +7,7 @@ import { toast } from '../shell/actions';
 import { ConfirmDialog, type ConfirmRequest } from '../shell/ConfirmDialog';
 import { askBoxArt, boxArtBytes, boxArtPerGame, deleteBoxArt, fetchBoxArtFor, needsDownload, NO_COVERS, useBoxArtProgress } from '../../lib/cover-art';
 import { mb, owned } from '../../lib/ui';
-import { isInstalled, isIos } from '../../lib/pwa';
+import { isInstalled, isIos, fileAccept } from '../../lib/pwa';
 import type { GameEntry } from '../../types/game';
 import { Row, SwitchRow } from './parts';
 import { PerGame, type GameUsage } from './PerGame';
@@ -194,7 +194,7 @@ export function StorageTab() {
         <label className="btn line" style={{ color: 'var(--ink)' }} tabIndex={0}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
           Import backup
-          <input type="file" accept=".cartouche,.cartshelf,application/json" className="sr" tabIndex={-1}
+          <input type="file" accept={fileAccept('.cartouche,.cartshelf,application/json')} className="sr" tabIndex={-1}
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) doImport(f); }} />
         </label>
       </Row>

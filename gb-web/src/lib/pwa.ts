@@ -47,6 +47,12 @@ export const isIos = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navi
 export const isIosSafari = () =>
   isIos() && /Safari\//.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS|OPiOS|FBAN|FBAV|Instagram|Line\/|GSA\//.test(navigator.userAgent);
 
+/**
+ * `accept` for a file input. iOS has no file type for .gb/.gbc/.sav/.cartouche, so a filter by
+ * extension greys those files out in the picker: there, accept anything and let the import check it.
+ */
+export const fileAccept = (extensions: string) => (isIos() ? undefined : extensions);
+
 export const device = () => (/iPhone|iPod/.test(navigator.userAgent) ? 'iPhone' : 'iPad');
 
 /** Shows the browser's install prompt. false when the browser offers none (then it's in its menu, or already installed). */

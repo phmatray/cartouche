@@ -12,6 +12,7 @@ import { Item } from './library/GameItem';
 import { Cover, NoArt } from './library/Cover';
 import { I } from './icons';
 import { toast } from './shell/actions';
+import { fileAccept } from '../lib/pwa';
 
 // Fixed two-player keys: player 1 on the right of the keyboard, player 2 on the left.
 // Values are the core's button numbers (A 0, B 1, Select 2, Start 3, Right 4, Left 5, Up 6, Down 7).
@@ -275,7 +276,7 @@ export function LinkCablePage() {
             : <>A new game, saved as <b>{c.name}</b></>}
         </small>
         {savErr[p] && <small className="bad" role="alert">{savErr[p]}</small>}
-        <input ref={(el) => { savInput.current[p] = el; }} type="file" accept=".sav,.srm" className="sr" tabIndex={-1} aria-hidden="true"
+        <input ref={(el) => { savInput.current[p] = el; }} type="file" accept={fileAccept('.sav,.srm')} className="sr" tabIndex={-1} aria-hidden="true"
           onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) onSav(p, file); }} />
       </div>
     );
@@ -291,7 +292,7 @@ export function LinkCablePage() {
         </div>
         {cart(p, f)}
         {saveChooser(p)}
-        <input ref={(el) => { fileInput.current[p] = el; }} type="file" accept=".gb,.gbc,.rom,.bin" className="sr" tabIndex={-1} aria-hidden="true"
+        <input ref={(el) => { fileInput.current[p] = el; }} type="file" accept={fileAccept('.gb,.gbc,.rom,.bin')} className="sr" tabIndex={-1} aria-hidden="true"
           onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (!file) return; setFiles((s) => ({ ...s, [p]: file })); setPick((s) => ({ ...s, [p]: FILE })); }} />
       </section>
     );

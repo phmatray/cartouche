@@ -25,6 +25,7 @@ import { Toasts } from '../shell/Toasts';
 import { ConfirmDialog, type ConfirmRequest } from '../shell/ConfirmDialog';
 import { useAlbum, useLinkRom, useRomHeader } from '../../hooks/useGameExtras';
 import { Manual, type Tab } from './Manual';
+import { fileAccept } from '../../lib/pwa';
 
 const FPS = 4194304 / 70224; // 59.73 Hz, the Game Boy's real frame rate
 const SPEEDS = [0.5, 1, 2, 4];
@@ -323,7 +324,7 @@ function Player({ game }: { game: GameEntry }) {
                   <p>{game.title} isn’t included. Load your own .gb file to play; it stays in this browser.</p>
                   <label className="btn y" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
                     {I.cart}Load your ROM
-                    <input type="file" accept=".gb,.gbc" className="sr" tabIndex={-1}
+                    <input type="file" accept={fileAccept('.gb,.gbc')} className="sr" tabIndex={-1}
                       onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; const data = f && await linkRom(f); if (data) boot(data); }} />
                   </label>
                 </div>

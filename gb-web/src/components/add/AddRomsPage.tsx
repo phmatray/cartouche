@@ -6,6 +6,7 @@ import { I } from '../icons';
 import { Cover } from '../library/Cover';
 import { StorageNotice } from '../library/LibraryPage';
 import { queueImport, toast, usePendingImport } from '../shell/actions';
+import { fileAccept } from '../../lib/pwa';
 
 type St = ImportStatus | 'work';
 interface Row { key: string; file: File; st: St; id?: string; title?: string; sha1?: string }
@@ -82,7 +83,7 @@ export function AddRomsPage() {
         <div className="acts">
           <label className="btn y" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
             {I.plus}Choose files
-            <input type="file" multiple accept=".gb,.gbc,.rom,.bin" className="sr" tabIndex={-1}
+            <input type="file" multiple accept={fileAccept('.gb,.gbc,.rom,.bin')} className="sr" tabIndex={-1}
               onChange={(e) => { queueImport([...(e.target.files ?? [])]); e.target.value = ''; }} />
           </label>
         </div>
