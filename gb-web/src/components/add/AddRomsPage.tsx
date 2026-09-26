@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { renameGame, useGameLibrary } from '../../hooks/useGameLibrary';
-import { cancelImport, importAnyway, patchRow, queueImport, useImports, type ImportRow, type RowState } from '../../lib/import-queue';
+import { cancelImport, importAnyway, patchRow, queueImport, useImports, type Full, type ImportRow, type RowState } from '../../lib/import-queue';
 import { fileAccept, useInstall } from '../../lib/pwa';
 import { paths } from '../../lib/ui';
 import type { GameEntry } from '../../types/game';
@@ -11,7 +11,7 @@ import { StorageNotice } from '../library/LibraryPage';
 import { startInstall, toast } from '../shell/actions';
 
 const LABEL: Record<RowState, string> = { work: 'Checking…', ok: 'Added', dup: 'Already in library', unk: 'Added, not recognized', bad: 'Skipped', stop: 'Not imported' };
-const size = (n: number) => (n > 1e6 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+const size = (n: number) => (n > 1e9 ? `${(n / 2 ** 30).toFixed(1)} GB` : n > 1e6 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 const num = (n: number) => n.toLocaleString('en-US');
 
 export function AddRomsPage() {
@@ -96,7 +96,7 @@ const Row = memo(function Row({ r, g, onRename }: { r: ImportRow; g?: GameEntry;
     <div className="rrow">
       {g ? <Cover game={g} /> : <div className="noart"><b>?</b></div>}
       <div className="t">{r.title || g?.title || r.name}
-        <small>{r.from ? `${r.from} › ` : ''}{r.name} · {size(r.size)}{r.sha1 ? ` · SHA-1 ${r.sha1.slice(0, 8)}…` : ''}{r.st === 'bad' ? ` · ${r.note ?? 'damaged or not a Game Boy ROM'}` : ''}</small>
+        <small>{r.from && <span className="from">{r.from} › </span>}{r.name} · {size(r.size)}{r.sha1 ? ` · SHA-1 ${r.sha1.slice(0, 8)}…` : ''}{r.st === 'bad' ? ` · ${r.note ?? 'damaged or not a Game Boy ROM'}` : ''}</small>
       </div>
       <span className={`st ${r.st}`}><i />{LABEL[r.st]}</span>
       <span className="act">
@@ -109,7 +109,7 @@ const Row = memo(function Row({ r, g, onRename }: { r: ImportRow; g?: GameEntry;
 });
 
 /** The disk (or the browser's share of it) is full: the import stopped between two ROMs, nothing half-stored. */
-function FullNotice({ usage, quota }: { usage: number; quota: number }) {
+function FullNotice({ usage, quota, other }: Full) {
   const canInstall = useInstall((s) => s.can) !== null;
   const canKeep = typeof navigator.storage?.persist === 'function';
   const keep = async () => {
@@ -118,10 +118,10 @@ function FullNotice({ usage, quota }: { usage: number; quota: number }) {
   };
   return (
     <section className="fullnote paper" role="alert" aria-labelledby="h-full">
-      <h2 id="h-full">Storage is full</h2>
+      <h2 id="h-full">{other ? 'Couldn’t save to this browser’s storage' : 'Storage is full'}</h2>
       <p>
         The import stopped. Every ROM added before that is safe; the rest wasn’t imported.
-        {quota > 0 && ` Cartouche is using ${size(usage)} of the ${size(quota)} this browser allows it.`}
+        {quota > 0 && usage / quota > 0.9 && ` Cartouche is using ${size(usage)} of the ${size(quota)} this browser allows it.`}
       </p>
       <p>Free up space on this device{canInstall ? ', install the app' : ''} and keep its storage, then add the same files again: the ones already in your library are skipped as duplicates.</p>
       <div className="acts">

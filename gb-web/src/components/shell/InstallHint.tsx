@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { device, isInstalled, isIosSafari } from '../../lib/pwa';
+import { device, isInstalled, isIosBrowser, isIosSafari } from '../../lib/pwa';
 import { trapTab } from '../../lib/ui';
 import { useSettingsStore } from '../../store/settingsStore';
 import { I } from '../icons';
-import { toast, useInstallSheet } from './actions';
-
-const SEEN = 'cartouche-ios-install-hint';
+import { HINT_SEEN as SEEN, toast, useInstallSheet } from './actions';
 
 /** The Share › Add to Home Screen step: on iPhone and iPad, Safari has no install button. */
 export const IosStep = ({ safari }: { safari?: boolean }) => (
@@ -22,7 +20,8 @@ export function InstallHint() {
     try { return isIosSafari() && !isInstalled() && !localStorage.getItem(SEEN); } catch { return false; }
   });
   const [open, setOpen] = useState(true);
-  const visible = show && open && answered;
+  const sheetUsed = useInstallSheet((s) => s.used);
+  const visible = show && open && answered && !sheetUsed;
   useEffect(() => { if (visible) try { localStorage.setItem(SEEN, '1'); } catch { /* storage blocked */ } }, [visible]);
   if (!visible) return null;
   return (
@@ -39,8 +38,8 @@ export function InstallHint() {
 }
 
 /**
- * "Install the app" on iPhone and iPad (opened from the menu): Safari's two taps. Other iOS browsers and
- * in-app browsers can't add to the Home Screen, so the page has to be opened in Safari first.
+ * "Install the app" on iPhone and iPad (opened from the menu): Share, then Add to Home Screen, in Safari or
+ * (iOS 16.4+) Chrome, Edge and Firefox. In-app browsers can't, so the page has to be opened in Safari first.
  */
 export function InstallSheet() {
   const open = useInstallSheet((s) => s.open);
@@ -51,7 +50,7 @@ export function InstallSheet() {
     if (!open && d?.open) d.close();
   }, [open]);
   const close = () => useInstallSheet.setState({ open: false });
-  const safari = isIosSafari();
+  const safari = isIosSafari(), browser = isIosBrowser();
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(new URL(import.meta.env.BASE_URL, location.href).href);
@@ -70,14 +69,16 @@ export function InstallSheet() {
             <h2 id="isheet-t">Install on your {device()}</h2>
             {safari ? (
               <p><IosStep safari /><small>On recent iOS, Share is in the ⋯ menu. Cartouche then opens full screen from its icon, plays offline and keeps your saves.</small></p>
+            ) : browser ? (
+              <p><IosStep safari /><small>Share is in the address bar or the browser’s menu. Cartouche then opens full screen from its icon, plays offline and keeps your saves.</small></p>
             ) : (
               <>
-                <p><b>Open this page in Safari first.</b> On iPhone and iPad, only Safari can add an app to the Home Screen.</p>
+                <p><b>Open this page in Safari first.</b> This browser can’t add an app to the Home Screen.</p>
                 <p><IosStep /><small>It then opens full screen from its icon, plays offline and keeps your saves.</small></p>
               </>
             )}
             <div className="acts">
-              {!safari && <button className="btn line" onClick={copy}>{I.link}Copy link</button>}
+              {!safari && !browser && <button className="btn line" onClick={copy}>{I.link}Copy link</button>}
               <button className="btn k" onClick={close} autoFocus>Got it</button>
             </div>
           </div>

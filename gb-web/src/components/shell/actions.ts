@@ -2,10 +2,16 @@ import { create } from 'zustand';
 import { promptInstall, useInstall } from '../../lib/pwa';
 
 /** "Install the app" (menu, first-launch hero): the browser's own dialog, else the iPhone/iPad steps. */
-export const useInstallSheet = create<{ open: boolean }>(() => ({ open: false }));
+/** The one-time iPhone/iPad install hint's "seen" key. */
+export const HINT_SEEN = 'cartouche-ios-install-hint';
+/** used: the sheet was opened once, so the one-time install hint steps aside for good. */
+export const useInstallSheet = create<{ open: boolean; used: boolean }>(() => ({ open: false, used: false }));
 export function startInstall() {
   if (useInstall.getState().can === 'prompt') promptInstall().catch(() => {});
-  else useInstallSheet.setState({ open: true });
+  else {
+    useInstallSheet.setState({ open: true, used: true });
+    try { localStorage.setItem(HINT_SEEN, '1'); } catch { /* storage blocked */ }
+  }
 }
 
 export type Tone = '' | 'm' | 'c';

@@ -16,8 +16,8 @@ export interface ImportRow {
   note?: string; id?: string; title?: string; sha1?: string;
   read?: () => Promise<Uint8Array>;
 }
-/** Storage ran out: what the browser reported (bytes; 0 when it doesn't say). */
-export interface Full { usage: number; quota: number }
+/** Storage ran out (or failed some other way: `other`): what the browser reported (bytes; 0 when it doesn't say). */
+export interface Full { usage: number; quota: number; other?: boolean }
 interface State { rows: ImportRow[]; ignored: number; full: Full | null }
 export const useImports = create<State>(() => ({ rows: [], ignored: 0, full: null }));
 
@@ -39,7 +39,6 @@ export function patchRow(key: string, p: Partial<ImportRow>, now = false) {
 }
 
 const asRow = (o: ImportOutcome): Partial<ImportRow> => ({ st: o.status, id: o.id, title: o.title, sha1: o.sha1 });
-const isQuota = (e: unknown) => e instanceof DOMException && e.name === 'QuotaExceededError';
 /** Folders, macOS metadata (__MACOSX/, ._ files, .DS_Store) and other hidden files: not listed, just counted. */
 const HIDDEN = /(^|\/)(__MACOSX\/|\.)/;
 let seq = 0;
@@ -91,11 +90,16 @@ export function queueImport(files: File[]) {
       if (r.st !== 'work') continue;
       current = r.key;
       let out: Partial<ImportRow>;
+      let data: Uint8Array | undefined;
       try {
-        out = !isRomFile(r.name) || r.size > MAX_ROM_SIZE ? { st: 'bad' } : asRow(await importRom(r.name, await r.read!()));
+        if (isRomFile(r.name) && r.size <= MAX_ROM_SIZE) data = await r.read!();
+        out = { st: 'bad' };
       } catch (e) {
-        if (isQuota(e)) { await storageFull(); break; }
         out = { st: 'bad', note: e instanceof ZipError ? e.message.toLowerCase() : 'couldn’t be read' };
+      }
+      if (data) {
+        // A file that was read but couldn't be stored: the storage is failing, so every next ROM would too.
+        try { out = asRow(await importRom(r.name, data)); } catch (e) { await storageFull(e); break; }
       }
       if (out.st === 'ok' || out.st === 'unk') added++;
       patchRow(r.key, out, my !== gen); // stopped meanwhile: show it at once
@@ -114,21 +118,24 @@ export function cancelImport() {
   stopWaiting();
 }
 
-async function storageFull() {
+async function storageFull(e: unknown) {
   const est = await navigator.storage?.estimate?.().catch(() => undefined);
   cancelImport();
-  useImports.setState({ full: { usage: est?.usage ?? 0, quota: est?.quota ?? 0 } });
+  const other = !(e instanceof DOMException && e.name === 'QuotaExceededError');
+  useImports.setState({ full: { usage: est?.usage ?? 0, quota: est?.quota ?? 0, other } });
 }
 
 /** A duplicate stored again as a second copy. */
 export async function importAnyway(r: ImportRow) {
   if (!r.read) return;
   patchRow(r.key, { st: 'work' }, true);
+  const data = await r.read().catch(() => null);
+  if (!data) { patchRow(r.key, { st: 'dup' }, true); toast('Couldn’t read the file again', 'm'); return; }
   try {
-    patchRow(r.key, asRow(await importRom(r.name, await r.read(), true)), true);
+    patchRow(r.key, asRow(await importRom(r.name, data, true)), true);
     toast('Imported as a second copy', 'c');
   } catch (e) {
     patchRow(r.key, { st: 'dup' }, true);
-    if (isQuota(e)) await storageFull();
+    await storageFull(e);
   }
 }

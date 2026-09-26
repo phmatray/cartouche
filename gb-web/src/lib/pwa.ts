@@ -64,6 +64,12 @@ export const isIosSafari = () =>
  */
 export const fileAccept = (extensions: string) => (isIos() ? undefined : extensions);
 
+/** Chrome, Edge or Firefox on iOS 16.4 or later: they add to the Home Screen from their own Share menu. */
+export const isIosBrowser = () => {
+  const v = /OS (\d+)_(\d+)/.exec(navigator.userAgent);
+  return isIos() && /CriOS|FxiOS|EdgiOS/.test(navigator.userAgent) && !!v && +v[1] * 100 + +v[2] >= 1604;
+};
+
 export const device = () => (/iPhone|iPod/.test(navigator.userAgent) ? 'iPhone' : 'iPad');
 
 /** Shows the browser's install prompt. false when the browser offers none (then it's in its menu, or already installed). */

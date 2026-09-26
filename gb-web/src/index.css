@@ -608,7 +608,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .sumline{display:flex;flex-wrap:wrap;gap:8px 22px;font:700 14px var(--font);margin-top:14px}
 .sumline span{color:var(--mute)}
 .sumline b{color:var(--paper)}
-@media (max-width:760px){.drop{grid-template-columns:1fr;padding:32px 20px;gap:20px}.drop .ic{width:64px;height:64px}.rrow{grid-template-columns:48px minmax(0,1fr) auto}.rrow .act{grid-column:2/-1;text-align:left}.rrow .cv{width:48px;height:48px}}
+@media (max-width:760px){.drop{grid-template-columns:1fr;padding:32px 20px;gap:20px}.drop .ic{width:64px;height:64px}.rrow{grid-template-columns:48px minmax(0,1fr) auto}.rrow .act{grid-column:2/-1;text-align:left}.rrow .cv{width:48px;height:48px}.rrow .from{display:none}.rrow .t small{white-space:normal;overflow-wrap:anywhere}}
 
 /* ---------- link cable ---------- */
 .lc{display:grid;grid-template-columns:minmax(0,1fr) 120px minmax(0,1fr);gap:0;align-items:stretch}
