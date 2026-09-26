@@ -6,8 +6,7 @@ import type { RomMetadata } from '../../lib/rom-utils';
 import type { useEmulator } from '../../hooks/useEmulator';
 import type { SlotKey } from '../../hooks/useSaveStates';
 import { useSettingsStore, type ScreenSize } from '../../store/settingsStore';
-import { LcdEngine } from '../../shaders/lcd-engine';
-import { PRESETS } from '../../shaders/presets';
+import { ScreenFilters } from '../settings/ScreenFilters';
 import { ago, dur, paths } from '../../lib/ui';
 import { I } from '../icons';
 import { Frame } from '../library/Heroes';
@@ -23,7 +22,7 @@ const TABS: [Tab, string, string][] = [['controls', 'Controls', 'p. 4'], ['saves
 interface ManualProps {
   game: GameEntry;
   header: RomMetadata | null;
-  /** A Color cartridge shown in colour (Settings › Display › Color), so the green presets don't apply. */
+  /** The core runs the cartridge in Color mode: palettes don't apply, colour correction does. */
   inColor?: boolean;
   tab: Tab;
   onTab: (t: Tab) => void;
@@ -43,7 +42,7 @@ export function Manual(p: ManualProps) {
   const page: Record<Tab, () => ReactNode> = {
     controls: () => <ControlsPage />,
     saves: () => <SavesPage {...p} />,
-    screen: () => <ScreenPage snapshot={p.emu.framebufferSnapshot} romLoaded={p.romLoaded} inColor={!!p.inColor} />,
+    screen: () => <ScreenPage snapshot={p.emu.framebufferSnapshot} romLoaded={p.romLoaded} inColor={!!p.inColor} gameId={p.game.id} />,
     album: () => <AlbumPage {...p} />,
     game: () => <GamePageTab {...p} />,
   };
@@ -135,30 +134,8 @@ function SavesPage({ header, states, romLoaded, onSave, onLoad }: ManualProps) {
   );
 }
 
-/** One shader preset rendering the current frame, on its own small WebGL canvas. */
-export function PresetPreview({ name, frame }: { name: string; frame: Uint8ClampedArray | null }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  const engine = useRef<LcdEngine | null>(null);
-  const grid = useSettingsStore((s) => s.pixelGrid);
-  useEffect(() => {
-    const e = new LcdEngine(ref.current!);
-    if (!e.init(320, 288)) return;
-    e.setPreset((PRESETS.find((p) => p.name === name) ?? PRESETS[0]).source);
-    engine.current = e;
-    return () => { e.destroy(); engine.current = null; };
-  }, [name]);
-  useEffect(() => {
-    const e = engine.current;
-    if (!e) return;
-    e.grid = grid ? 1 : 0;
-    if (frame) { e.renderFrame(frame); e.renderFrame(frame); } // twice: the LCD ghosting blends with the previous frame
-    else e.clear();
-  }, [frame, grid]);
-  return <canvas ref={ref} className="lcd" width={320} height={288} aria-hidden="true" />;
-}
-
-function ScreenPage({ snapshot, romLoaded, inColor }: { snapshot: () => Uint8Array | null; romLoaded: boolean; inColor: boolean }) {
-  const { shaderPreset, setShaderPreset, screenSize, setScreenSize, pixelGrid, setPixelGrid } = useSettingsStore();
+function ScreenPage({ snapshot, romLoaded, inColor, gameId }: { snapshot: () => Uint8Array | null; romLoaded: boolean; inColor: boolean; gameId: string }) {
+  const { screenSize, setScreenSize } = useSettingsStore();
   const grab = useRef(() => null as Uint8ClampedArray | null);
   useEffect(() => { grab.current = () => { const s = romLoaded ? snapshot() : null; return s ? new Uint8ClampedArray(s) : null; }; });
   const [frame, setFrame] = useState<Uint8ClampedArray | null>(() => { const s = romLoaded ? snapshot() : null; return s ? new Uint8ClampedArray(s) : null; });
@@ -169,24 +146,14 @@ function ScreenPage({ snapshot, romLoaded, inColor }: { snapshot: () => Uint8Arr
   return (
     <>
       <h2>Screen</h2>
-      <p>Pick the handheld you remember. Applies to every game; it is kept as your default.</p>
+      <p>Pick the handheld you remember, then fine-tune it. {inColor ? 'Game Boy Color' : 'Original Game Boy'} games share these settings unless one has its own.</p>
       {inColor && (
-        <div className="notice"><span className="ic">i</span><span>This is a Game Boy Color game, always shown in its own colors. The styles below apply to original Game Boy games.</span></div>
+        <div className="notice"><span className="ic">i</span><span>This is a Game Boy Color game: it keeps its own colors, so palettes don’t apply. Color correction does.</span></div>
       )}
-      <div className="presets">
-        {PRESETS.map((p) => (
-          <button key={p.name} className="preset" aria-pressed={shaderPreset === p.name} onClick={() => setShaderPreset(p.name)}>
-            <PresetPreview name={p.name} frame={frame} /><b>{p.label}</b><small>{p.description}</small>
-          </button>
-        ))}
-      </div>
+      <ScreenFilters kind={inColor ? 'cgb' : 'dmg'} gameId={gameId} frame={frame} />
       <h3>Size</h3>
       <div className="seg" role="group" aria-label="Scale">
         {(['fit', '2', '3', '4'] as ScreenSize[]).map((s) => <button key={s} aria-pressed={screenSize === s} onClick={() => setScreenSize(s)}>{s === 'fit' ? 'Fit' : `${s}×`}</button>)}
-      </div>
-      <div className="row">
-        <span>Pixel grid<small>Shows the LCD’s dot matrix on DMG, Pocket and Light</small></span>
-        <button className="switch" role="switch" aria-checked={pixelGrid} aria-label="Pixel grid" onClick={() => setPixelGrid(!pixelGrid)} />
       </div>
     </>
   );

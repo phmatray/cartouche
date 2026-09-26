@@ -1,6 +1,7 @@
+import { useMemo } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { PresetName } from '../shaders/lcd-engine';
+import { DEFAULT_DISPLAY, normalizeDisplay, presetOf, sameFilters, type DisplayConfig, type Filters, type PresetName, type ScreenKind } from '../shaders/filters';
 
 export type GameBoyButton = 'A' | 'B' | 'Select' | 'Start' | 'Right' | 'Left' | 'Up' | 'Down';
 
@@ -23,11 +24,12 @@ export interface SettingsState {
   keybindings: Record<GameBoyButton, string>;
 
   // Display
-  shaderPreset: PresetName;
+  /** Screen preset + filters every game starts with: one for original Game Boy games, one for Color games. */
+  display: Record<ScreenKind, DisplayConfig>;
+  /** "Use these settings for this game only", by game id. */
+  gameDisplay: Record<string, DisplayConfig>;
   /** Player screen size: fit the stage, or a fixed integer scale. */
   screenSize: ScreenSize;
-  /** Dot-matrix grid drawn by the DMG, Pocket and Light shaders. */
-  pixelGrid: boolean;
 
   // Audio
   masterVolume: number;
@@ -53,9 +55,11 @@ export interface SettingsState {
 
   // Actions
   updateKeybinding: (button: GameBoyButton, key: string) => void;
-  setShaderPreset: (preset: PresetName) => void;
+  /** Store a screen config: the game's own when it has one, else the default for its kind. */
+  setDisplay: (kind: ScreenKind, gameId: string | undefined, cfg: DisplayConfig) => void;
+  /** Give a game its own screen config, or (null) back to the default. */
+  setGameDisplay: (gameId: string, cfg: DisplayConfig | null) => void;
   setScreenSize: (size: ScreenSize) => void;
-  setPixelGrid: (on: boolean) => void;
   setMasterVolume: (vol: number) => void;
   toggleChannelMute: (channel: keyof ChannelMutes) => void;
   setDefaultSpeed: (speed: number) => void;
@@ -83,9 +87,9 @@ const DEFAULT_KEYBINDINGS: Record<GameBoyButton, string> = {
 
 const DEFAULT_STATE = {
   keybindings: DEFAULT_KEYBINDINGS,
-  shaderPreset: 'dmg-classic' as PresetName,
+  display: DEFAULT_DISPLAY,
+  gameDisplay: {} as Record<string, DisplayConfig>,
   screenSize: 'fit' as ScreenSize,
-  pixelGrid: true,
   masterVolume: 50,
   channelMutes: { pulse1: false, pulse2: false, wave: false, noise: false },
   defaultSpeed: 1,
@@ -114,9 +118,17 @@ export const useSettingsStore = create<SettingsState>()(
           keybindings: { ...state.keybindings, [button]: key },
         })),
 
-      setShaderPreset: (preset) => set({ shaderPreset: preset }),
+      setDisplay: (kind, gameId, cfg) =>
+        set((s) => (gameId !== undefined && gameId in s.gameDisplay
+          ? { gameDisplay: { ...s.gameDisplay, [gameId]: cfg } }
+          : { display: { ...s.display, [kind]: cfg } })),
+      setGameDisplay: (gameId, cfg) =>
+        set((s) => {
+          const gameDisplay = { ...s.gameDisplay };
+          if (cfg) gameDisplay[gameId] = cfg; else delete gameDisplay[gameId];
+          return { gameDisplay };
+        }),
       setScreenSize: (screenSize) => set({ screenSize }),
-      setPixelGrid: (pixelGrid) => set({ pixelGrid }),
       setMasterVolume: (vol) => set({ masterVolume: vol }),
 
       toggleChannelMute: (channel) =>
@@ -140,16 +152,43 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'gb-settings',
-      version: 3,
+      version: 4,
       migrate: (state, version) => {
         let s = state as SettingsValues;
         // v2: box art became opt-in; an earlier default of "on" was never the player's choice.
         if (version < 2) s = { ...s, showBoxArt: false };
         // v3: the "Show box art?" question. Box art still on means the player already turned it on themselves.
         if (version < 3) s = { ...s, boxArtAnswer: s.showBoxArt ? { consent: true, at: Date.now() } : null };
+        // v4: the four screen styles became presets of the filter chain; Color games get their own default.
+        if (version < 4) {
+          const { shaderPreset, pixelGrid, ...rest } = s as SettingsValues & { shaderPreset?: string; pixelGrid?: boolean };
+          const preset = presetOf(shaderPreset) ?? presetOf(DEFAULT_DISPLAY.dmg.preset)!;
+          const filters = pixelGrid === false ? { ...preset.filters, grid: 0 } : preset.filters;
+          s = { ...rest, display: { dmg: { preset: preset.name, filters }, cgb: DEFAULT_DISPLAY.cgb }, gameDisplay: {} };
+        }
         return s;
       },
       partialize: (state) => Object.fromEntries(SETTINGS_KEYS.map((k) => [k, state[k]])) as SettingsValues,
     }
   )
 );
+
+/** The screen config a game uses (or the default for its kind with no game), plus the actions the controls need. */
+export function useDisplay(kind: ScreenKind, gameId?: string) {
+  const own = useSettingsStore((s) => (gameId !== undefined ? s.gameDisplay[gameId] : undefined));
+  const base = useSettingsStore((s) => s.display?.[kind]);
+  const raw = own ?? base;
+  const setDisplay = useSettingsStore((s) => s.setDisplay);
+  const setGameDisplay = useSettingsStore((s) => s.setGameDisplay);
+  const cfg = useMemo(() => normalizeDisplay(raw, kind), [raw, kind]);
+  const preset = presetOf(cfg.preset)!;
+  return {
+    cfg,
+    custom: !sameFilters(cfg.filters, preset.filters),
+    perGame: own !== undefined,
+    choose: (name: PresetName) => setDisplay(kind, gameId, { preset: name, filters: presetOf(name)!.filters }),
+    tweak: (patch: Partial<Filters>) => setDisplay(kind, gameId, { ...cfg, filters: { ...cfg.filters, ...patch } }),
+    reset: () => setDisplay(kind, gameId, { ...cfg, filters: preset.filters }),
+    setPerGame: (on: boolean) => { if (gameId !== undefined) setGameDisplay(gameId, on ? cfg : null); },
+  };
+}

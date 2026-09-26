@@ -22,3 +22,15 @@ export function Seg<T extends string | number>({ label, value, options, set }: {
 export function Row({ label, sub, children }: { label: string; sub?: ReactNode; children: ReactNode }) {
   return <div className="row"><span>{label}{sub && <small>{sub}</small>}</span>{children}</div>;
 }
+
+/** A settings line with a slider and its value. */
+export function Slider({ label, sub, value, min, max, set }: { label: string; sub?: ReactNode; value: number; min: number; max: number; set: (v: number) => void }) {
+  return (
+    <Row label={label} sub={sub}>
+      <span className="range">
+        <input type="range" min={min} max={max} value={value} aria-label={label} onChange={(e) => set(+e.target.value)} />
+        <output>{min < 0 && value > 0 ? '+' : ''}{value}%</output>
+      </span>
+    </Row>
+  );
+}

@@ -10,8 +10,8 @@ import { useRewind } from '../../hooks/useRewind';
 import { useSaveData } from '../../hooks/useSaveData';
 import { useSaveStates, type SlotKey } from '../../hooks/useSaveStates';
 import { useAnimationFrame } from '../../hooks/useAnimationFrame';
-import { CHANNEL_KEYS, useSettingsStore } from '../../store/settingsStore';
-import { PRESETS } from '../../shaders/presets';
+import { CHANNEL_KEYS, useDisplay, useSettingsStore } from '../../store/settingsStore';
+import { presetOf } from '../../shaders/filters';
 import { BUTTON_NUMBERS } from '../../utils/keybindings';
 import { getSram } from '../../lib/db';
 import { ago, owned, paths, tagOf } from '../../lib/ui';
@@ -51,7 +51,6 @@ function Player({ game }: { game: GameEntry }) {
   const keybindings = useSettingsStore((s) => s.keybindings);
   const rewindSeconds = useSettingsStore((s) => s.rewindBufferSeconds);
   const screenSize = useSettingsStore((s) => s.screenSize);
-  const chosenPreset = useSettingsStore((s) => s.shaderPreset);
   const channelMutes = useSettingsStore((s) => s.channelMutes);
   const touchSize = useSettingsStore((s) => s.touchSize);
   const [speed, setSpeed] = useState(() => useSettingsStore.getState().defaultSpeed);
@@ -68,11 +67,11 @@ function Player({ game }: { game: GameEntry }) {
   const album = useAlbum(game.id);
   const linkRom = useLinkRom(game);
 
-  // A cartridge the core runs in Game Boy Color mode is always shown in its own colours: a green
-  // preset would collapse its palette (the core decides, from header byte 0x143 bit 7).
+  // A cartridge the core runs in Game Boy Color mode keeps its own colours: DMG palettes never apply to it,
+  // and it has its own default screen settings (the core decides, from header byte 0x143 bit 7).
   const inColor = romLoaded && isCgb;
-  const preset = inColor ? 'clean' : chosenPreset;
-  const { canvasRef, renderFrame } = useLcdShader(5, preset);
+  const display = useDisplay(inColor ? 'cgb' : 'dmg', game.id);
+  const { canvasRef, renderFrame } = useLcdShader(display.cfg.filters, inColor);
   const { ensureStarted, feedSamples, muted, toggleMute } = useAudio();
   const saves = useSaveStates(game.id, emu);
   const { isRewinding, startRewind, stopRewind, wrapRunFrame, bufferFill } = useRewind({ saveState, loadState, framebufferSnapshot });
@@ -246,7 +245,6 @@ function Player({ game }: { game: GameEntry }) {
   const auto = saves.states[0];
   const [kind, label] = tagOf(game, savedIds);
   const status = needsRom ? label : savedJustNow ? 'Saved just now' : auto ? `Resume point ${ago(auto.timestamp)}` : label;
-  const presetInfo = PRESETS.find((p) => p.name === preset) ?? PRESETS[0];
   const screenStyle: CSSProperties | undefined = screenSize === 'fit' ? undefined : { width: 160 * +screenSize + 24, maxWidth: '100%' };
   const disabled = !romLoaded;
   const noStore = disabled || storageError; // save slots and the album need IndexedDB
@@ -307,7 +305,7 @@ function Player({ game }: { game: GameEntry }) {
             </div>
           </div>
           <div className="cap">
-            <span>{inColor ? 'Color' : presetInfo.label}</span><i /><span>{speed === 0.5 ? '½' : speed}× speed</span><i /><span>Rewind {Math.round(bufferFill * rewindSeconds)} s ready</span>
+            <span>{display.custom ? 'Custom' : presetOf(display.cfg.preset)!.label}</span><i /><span>{speed === 0.5 ? '½' : speed}× speed</span><i /><span>Rewind {Math.round(bufferFill * rewindSeconds)} s ready</span>
           </div>
         </div>
 
