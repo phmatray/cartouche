@@ -1,8 +1,9 @@
-import { useEffect, useRef, type KeyboardEvent } from 'react';
+import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router';
 import { useGameLibrary } from '../../hooks/useGameLibrary';
 import { answerBoxArt, fetchBoxArtFor, NO_COVERS, useBoxArtPrompt } from '../../lib/cover-art';
 import { toast } from './actions';
+import { trapTab } from '../../lib/ui';
 import { useSettingsStore } from '../../store/settingsStore';
 
 const GITHUB_PRIVACY = 'https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement';
@@ -36,13 +37,6 @@ export function BoxArtDialog() {
     const n = await fetchBoxArtFor(games.filter((g) => g.isLocal));
     toast(n ? `Box art ready for ${n} game${n === 1 ? '' : 's'}` : NO_COVERS, 'c');
   };
-  // Keep Tab inside the dialog (a modal <dialog> otherwise lets focus leave for the browser's own UI).
-  const trap = (e: KeyboardEvent) => {
-    if (e.key !== 'Tab') return;
-    const f = [...ref.current!.querySelectorAll<HTMLElement>('a[href],button')];
-    const edge = e.shiftKey ? f[0] : f[f.length - 1];
-    if (document.activeElement === edge) { e.preventDefault(); (e.shiftKey ? f[f.length - 1] : f[0]).focus(); }
-  };
   // Closed some other way (Escape): the same as "Continue without".
   const onClose = () => {
     if (useBoxArtPrompt.getState().open || useSettingsStore.getState().boxArtAnswer === null) answerBoxArt(false);
@@ -50,7 +44,7 @@ export function BoxArtDialog() {
   };
 
   return (
-    <dialog ref={ref} className="mdlg artdlg" aria-labelledby="boxart-t" aria-describedby="boxart-d" onClose={onClose} onKeyDown={trap}>
+    <dialog ref={ref} className="mdlg artdlg" aria-labelledby="boxart-t" aria-describedby="boxart-d" onClose={onClose} onKeyDown={trapTab}>
       {open && (
         <>
           <span className="bar" aria-hidden="true"><i /><i /><i /></span>

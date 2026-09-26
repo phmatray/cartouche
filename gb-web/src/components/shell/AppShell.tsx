@@ -105,7 +105,7 @@ export function AppShell() {
           <a href="#shortcuts" onClick={(e) => { e.preventDefault(); setShortcuts(true); }}>Keyboard shortcuts</a>
           <Link to="/legal">Legal</Link>
           <a href={REPO_URL} target="_blank" rel="noopener">Source on GitHub</a>
-          <span className="sp">Box art: libretro-thumbnails</span>
+          <span className="sp">Box art: libretro-thumbnails · Tobu Tobu Girl art: Tangram Games (CC BY 4.0)</span>
         </div>
       </footer>
 
@@ -128,7 +128,7 @@ function ArtProgress() {
       {of > 0 && (
         <>
           <span className="meter" role="progressbar" aria-label="Fetching box art" aria-valuemin={0} aria-valuemax={of} aria-valuenow={n}><i style={{ width: `${(n / of) * 100}%` }} /></span>
-          <span className="cnt">Fetching box art · {n} of {of}</span>
+          <span className="wrap"><span className="cnt">Fetching box art · {n} of {of}</span></span>
         </>
       )}
     </div>

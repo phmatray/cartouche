@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from 'react';
 import type { GameEntry } from '../types/game';
 
 /** Route builders: /game/:id is the game page, /game/:id/play the player. */
@@ -66,3 +67,12 @@ export const byline = (g: GameEntry) => [g.developer, g.year].filter(Boolean).jo
 
 /** Scroll behavior that respects prefers-reduced-motion. */
 export const motion = (): ScrollBehavior => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
+
+/** onKeyDown for a modal <dialog>: keep Tab inside it (it otherwise lets focus leave for the page body or the browser's own UI). */
+export function trapTab(e: KeyboardEvent<HTMLElement>) {
+  if (e.key !== 'Tab') return;
+  const f = [...e.currentTarget.querySelectorAll<HTMLElement>('a[href],button:not([disabled])')];
+  if (!f.length) return;
+  const edge = e.shiftKey ? f[0] : f[f.length - 1];
+  if (document.activeElement === edge) { e.preventDefault(); (e.shiftKey ? f[f.length - 1] : f[0]).focus(); }
+}

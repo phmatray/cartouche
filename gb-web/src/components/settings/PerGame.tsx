@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
 import { Link } from 'react-router';
 import { getGameSaveStates, getScreenshots, getSram, putInto, deleteScreenshot, STORES, type StoredSave, type StoredSaveState, type StoredScreenshot } from '../../lib/db';
 import { refreshSavedIds, titleKey, useGameLibrary } from '../../hooks/useGameLibrary';
@@ -34,6 +34,12 @@ export function PerGame({ usage, onChanged, confirm }: { usage: Map<string, Game
   const [never, setNever] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState<string | null>(null);
+  const search = useRef<HTMLInputElement>(null);
+  const none = useRef<HTMLParagraphElement>(null);
+  // After a delete the removed rows (or the now disabled "Delete selected") took focus with them:
+  // once the list has re-rendered, land on the search field, or on "No ROMs…" when nothing is left.
+  const [refocus, setRefocus] = useState(0);
+  useEffect(() => { if (refocus) (search.current ?? none.current)?.focus(); }, [refocus]);
 
   const all = useMemo<Line[]>(() => {
     if (!usage) return [];
@@ -65,6 +71,7 @@ export function PerGame({ usage, onChanged, confirm }: { usage: Map<string, Game
     const roms = list.filter((l) => l.game.isLocal);
     const freed = list.reduce((s, l) => s + (l.game.isLocal ? l.total : l.u.saves + l.u.shots + l.u.art), 0);
     const nSaves = list.reduce((s, l) => s + l.u.nSaves, 0), nShots = list.reduce((s, l) => s + l.u.nShots, 0);
+    const art = list.reduce((s, l) => s + l.u.art, 0), nArt = list.filter((l) => l.u.art > 0).length;
     const kept = list.length - roms.length;
     const names = list.slice(0, 6).map((l) => l.game.title).join(', ') + (list.length > 6 ? ` and ${list.length - 6} more` : '');
     confirm({
@@ -72,7 +79,7 @@ export function PerGame({ usage, onChanged, confirm }: { usage: Map<string, Game
       body: (
         <>
           {names}. From this browser: {roms.length ? `${plural(roms.length, 'ROM')} (${mb(roms.reduce((s, l) => s + l.u.rom, 0))}), ` : ''}
-          {plural(nSaves, 'save')} (cartridge saves, resume points and slots), {plural(nShots, 'screenshot')} and their downloaded box art.
+          {plural(nSaves, 'save')} (cartridge saves, resume points and slots){nArt ? `, ${plural(nShots, 'screenshot')} and ${plural(nArt, 'downloaded cover')} (${mb(art)})` : ` and ${plural(nShots, 'screenshot')}`}.
           {kept ? ` ${plural(kept, 'bundled game')} stay${kept === 1 ? 's' : ''} in the library, without ${kept === 1 ? 'its' : 'their'} saves.` : ''}
           {' '}Frees about <b>{mb(freed)}</b>. This can’t be undone: export a backup first if you might want them back.
         </>
@@ -84,12 +91,13 @@ export function PerGame({ usage, onChanged, confirm }: { usage: Map<string, Game
         await onChanged();
         await refreshSavedIds();
         toast(`Deleted ${plural(list.length, 'game')} · ${mb(freed)} freed`, 'm');
+        setRefocus((n) => n + 1);
       },
     });
   };
 
   if (!usage) return <p className="empty-inline">Measuring…</p>;
-  if (!all.length) return <p className="empty-inline">No ROMs or saves stored yet.</p>;
+  if (!all.length) return <p className="empty-inline" ref={none} tabIndex={-1}>No ROMs or saves stored yet.</p>;
 
   return (
     <div className="pg">
@@ -105,7 +113,7 @@ export function PerGame({ usage, onChanged, confirm }: { usage: Map<string, Game
       </p>
 
       <div className="pg-tools">
-        <input className="field" type="search" placeholder="Search your games" aria-label="Search stored games" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input ref={search} className="field" type="search" placeholder="Search your games" aria-label="Search stored games" value={q} onChange={(e) => setQ(e.target.value)} />
         <label className="sel">Sort
           <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
             <option value="size">Size, largest first</option>
@@ -140,7 +148,11 @@ function Rows({ rows, picked, toggle, open, setOpen, onChanged, remove }: {
   const [scroll, setScroll] = useState(0);
   const [viewH, setViewH] = useState(540);
   const [detailH, setDetailH] = useState(0);
-  const focusNext = useRef<number | null>(null);
+  const focusNext = useRef<string | null>(null);
+  // Roving tabindex: only the current row's checkbox and name are Tab stops, and that row always stays
+  // rendered (even scrolled out of the window) so focus on it is never dropped.
+  const [cur, setCur] = useState<string | null>(null);
+  const act = Math.max(0, rows.findIndex((l) => l.game.id === cur));
   const openIdx = rows.findIndex((l) => l.game.id === open);
   const extra = openIdx >= 0 ? detailH : 0;
   const topOf = (i: number) => i * ROW + (openIdx >= 0 && i > openIdx ? extra : 0);
@@ -148,6 +160,8 @@ function Rows({ rows, picked, toggle, open, setOpen, onChanged, remove }: {
   const start = Math.max(0, indexAt(scroll) - OVERSCAN);
   const end = Math.min(rows.length, indexAt(scroll + viewH) + OVERSCAN + 1);
   const height = rows.length * ROW + extra;
+  const shown = rows.slice(start, end).map((l, k) => [start + k, l] as const);
+  if (act < start || act >= end) shown.push([act, rows[act]]);
 
   useEffect(() => {
     const el = box.current;
@@ -158,39 +172,43 @@ function Rows({ rows, picked, toggle, open, setOpen, onChanged, remove }: {
   }, []);
   // Arrow keys: the row asked for is rendered first (scrolled into the window), then focused.
   useEffect(() => {
-    const i = focusNext.current;
-    if (i === null) return;
-    const b = box.current?.querySelector<HTMLElement>(`[data-i="${i}"]`);
+    const sel = focusNext.current;
+    if (sel === null) return;
+    const b = box.current?.querySelector<HTMLElement>(sel);
     if (b) { focusNext.current = null; b.focus(); }
   });
+  const rowOf = (t: HTMLElement) => Number(t.closest<HTMLElement>('[data-row]')?.dataset.row ?? NaN);
+  const onFocus = (e: FocusEvent) => { const i = rowOf(e.target as HTMLElement); if (!Number.isNaN(i) && rows[i]) setCur(rows[i].game.id); };
   const onKey = (e: KeyboardEvent) => {
     const t = e.target as HTMLElement;
-    const i = Number(t.closest<HTMLElement>('[data-row]')?.dataset.row);
-    if (Number.isNaN(i)) return;
+    const kind = t.matches('.vname') ? 'n' : t.matches('.vline input') ? 'c' : null;
+    const i = rowOf(t);
+    if (!kind || Number.isNaN(i)) return;
     const next = e.key === 'ArrowDown' ? i + 1 : e.key === 'ArrowUp' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? rows.length - 1 : -1;
-    if (next < 0 || next >= rows.length || !t.matches('.vname')) return;
+    if (next < 0 || next >= rows.length) return;
     e.preventDefault();
     const el = box.current!;
     const y = topOf(next);
     if (y < el.scrollTop) el.scrollTop = y;
     else if (y + ROW > el.scrollTop + el.clientHeight) el.scrollTop = y + ROW - el.clientHeight;
     setScroll(el.scrollTop);
-    focusNext.current = next;
-    el.querySelector<HTMLElement>(`[data-i="${next}"]`)?.focus();
+    setCur(rows[next].game.id);
+    focusNext.current = `[data-f="${kind}${next}"]`;
+    el.querySelector<HTMLElement>(focusNext.current)?.focus();
   };
 
   return (
     <>
       <div className="vhead" aria-hidden="true"><span /><span>Game</span><span>ROM</span><span>Saves</span><span>Screenshots</span><span>Box art</span><span>Total</span></div>
-      <div className="vlist" ref={box} onScroll={(e) => setScroll(e.currentTarget.scrollTop)} onKeyDown={onKey}>
+      <div className="vlist" ref={box} onScroll={(e) => setScroll(e.currentTarget.scrollTop)} onKeyDown={onKey} onFocus={onFocus}>
         <div role="list" aria-label="Stored games" style={{ height, position: 'relative' }}>
-          {rows.slice(start, end).map((l, k) => {
-            const i = start + k, g = l.game, u = l.u, isOpen = g.id === open;
+          {shown.map(([i, l]) => {
+            const g = l.game, u = l.u, isOpen = g.id === open, tab = i === act ? 0 : -1;
             return (
               <div key={g.id} role="listitem" aria-setsize={rows.length} aria-posinset={i + 1} data-row={i} className={`vrow${isOpen ? ' open' : ''}`} style={{ top: topOf(i) }}>
                 <div className="vline">
-                  <label className="ck"><input type="checkbox" checked={picked.has(g.id)} onChange={() => toggle(g.id)} aria-label={`Select ${g.title}`} /></label>
-                  <button className="vname" data-i={i} aria-expanded={isOpen} aria-controls={isOpen ? `pgd-${i}` : undefined} onClick={() => setOpen(isOpen ? null : g.id)}>
+                  <label className="ck"><input type="checkbox" data-f={`c${i}`} tabIndex={tab} checked={picked.has(g.id)} onChange={() => toggle(g.id)} aria-label={`Select ${g.title}`} /></label>
+                  <button className="vname" data-f={`n${i}`} tabIndex={tab} aria-expanded={isOpen} aria-controls={isOpen ? `pgd-${i}` : undefined} onClick={() => setOpen(isOpen ? null : g.id)}>
                     {I.next}
                     <span><b>{g.title}</b><small><span className="m">{g.isLocal ? mb(u.rom) : 'Bundled'} · {plural(u.nSaves, 'save')} · </span>{g.lastPlayed ? `Played ${ago(g.lastPlayed)}` : 'Never played'}</small></span>
                   </button>
