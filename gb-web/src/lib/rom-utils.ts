@@ -10,6 +10,19 @@ export function isGameBoyRom(data: Uint8Array): boolean {
 }
 
 /**
+ * Why a .sav file can't be this cartridge's battery save, or null when its size fits: exactly the
+ * cartridge RAM (header 0x149; MBC2's built-in 512 bytes), plus 44 or 48 bytes of clock on an MBC3 with a timer.
+ */
+export function savSizeError(rom: Uint8Array, size: number): string | null {
+  const type = rom[0x147];
+  const ram = type === 0x05 || type === 0x06 ? 512 : ({ 1: 2048, 2: 8192, 3: 32768, 4: 131072, 5: 65536 } as Record<number, number>)[rom[0x149]] ?? 0;
+  const kb = (n: number) => (n >= 1024 ? `${n / 1024} KB` : `${n} bytes`);
+  if (!ram) return 'This cartridge has no save memory, so it has no .sav file.';
+  const ok = [ram, ...(type === 0x0f || type === 0x10 ? [ram + 44, ram + 48] : [])];
+  return ok.includes(size) ? null : `This file is ${size.toLocaleString('en-US')} bytes; this cartridge’s save is ${kb(ram)} (${ram.toLocaleString('en-US')} bytes). It’s probably from another game.`;
+}
+
+/**
  * Extract the game title from a Game Boy ROM header.
  * Title is at bytes 0x0134-0x0143 (up to 16 ASCII chars, null-padded).
  */

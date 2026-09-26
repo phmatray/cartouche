@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { create } from 'zustand';
 import type { GameEntry, GameLibrary } from '../types/game';
-import { getAllRoms, saveRom, deleteRom, getRom, getAllGameMeta, getGameMeta, setGameMeta, deleteSave, deleteSaveState, deleteScreenshots, getSavedGameIds, resumeStateId, slotStateId, SLOT_COUNT } from '../lib/db';
+import { getAllRoms, saveRom, deleteRom, getRom, getAllGameMeta, getGameMeta, setGameMeta, deleteSave, deleteSaveState, deleteScreenshots, getSavedGameIds, listProfiles, resumeStateId, slotStateId, SLOT_COUNT } from '../lib/db';
 import { parseRomTitle, computeSha1, isGameBoyRom } from '../lib/rom-utils';
 import { lookupByHash, type GameDbEntry } from '../lib/gamedb';
 import { parseRegion } from '../lib/catalog-utils';
@@ -183,7 +183,7 @@ export function useGameLibrary() {
   /** Erase a game's cartridge save, resume point, slots and album; the game stays on the shelf. */
   const eraseSaves = useCallback(async (gameId: string) => {
     await Promise.all([
-      deleteSave(gameId),
+      listProfiles(gameId).then((ps) => Promise.all(ps.map((p) => deleteSave(p.id)))),
       deleteSaveState(resumeStateId(gameId)),
       ...Array.from({ length: SLOT_COUNT }, (_, i) => deleteSaveState(slotStateId(gameId, i))),
       deleteScreenshots(gameId),

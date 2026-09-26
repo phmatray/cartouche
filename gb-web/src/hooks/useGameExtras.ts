@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { GameEntry } from '../types/game';
-import { addScreenshot, getScreenshots, type StoredScreenshot } from '../lib/db';
-import { computeSha1, isGameBoyRom, parseRomHeader, type RomMetadata } from '../lib/rom-utils';
+import { addScreenshot, createProfile, getScreenshots, listProfiles, uniqueName, type StoredSave, type StoredScreenshot } from '../lib/db';
+import { computeSha1, isGameBoyRom, parseRomHeader, savSizeError, type RomMetadata } from '../lib/rom-utils';
 import { lookupByHash } from '../lib/gamedb';
 import { owned } from '../lib/ui';
 import { toast } from '../components/shell/actions';
@@ -37,7 +37,19 @@ export function useRomHeader(game: GameEntry | undefined) {
     fetchRom(game).then((d) => { if (!cancelled) setHeader({ id: game.id, meta: parseRomHeader(d) }); }).catch(() => {});
     return () => { cancelled = true; };
   }, [game]);
-  return header?.id === game?.id ? header!.meta : null;
+  return header && header.id === game?.id ? header.meta : null;
+}
+
+/**
+ * A .sav file as a new save profile of the game, named after the file. Its size is checked against the
+ * cartridge's save memory (ROM header). Resolves to the profile, or to the reason it was refused.
+ */
+export async function importSav(game: GameEntry, file: File): Promise<StoredSave | string> {
+  const [rom, data] = await Promise.all([fetchRom(game), file.arrayBuffer().then((b) => new Uint8Array(b))]);
+  const err = savSizeError(rom, data.length);
+  if (err) return `${file.name}: ${err}`;
+  const name = uniqueName(await listProfiles(game.id), file.name.replace(/\.[^.]+$/, '').slice(0, 40) || 'Imported');
+  return createProfile(game.id, name, data);
 }
 
 /** "Game Boy", "Game Boy Color" or both, from the header's CGB flag. */

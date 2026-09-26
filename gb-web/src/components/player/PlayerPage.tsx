@@ -13,7 +13,7 @@ import { useAnimationFrame } from '../../hooks/useAnimationFrame';
 import { CHANNEL_KEYS, useSettingsStore } from '../../store/settingsStore';
 import { PRESETS } from '../../shaders/presets';
 import { BUTTON_NUMBERS } from '../../utils/keybindings';
-import { getSram } from '../../lib/db';
+import { getActiveProfileId, getSram } from '../../lib/db';
 import { ago, owned, paths, tagOf } from '../../lib/ui';
 import { I } from '../icons';
 import { Title } from '../library/Cover';
@@ -74,9 +74,10 @@ function Player({ game }: { game: GameEntry }) {
   const preset = inColor ? 'clean' : chosenPreset;
   const { canvasRef, renderFrame } = useLcdShader(5, preset);
   const { ensureStarted, feedSamples, muted, toggleMute } = useAudio();
-  const saves = useSaveStates(game.id, emu);
+  const saveTo = useRef<string | null>(null); // the save profile played solo (the game's active one)
+  const saves = useSaveStates(game.id, emu, saveTo);
   const { isRewinding, startRewind, stopRewind, wrapRunFrame, bufferFill } = useRewind({ saveState, loadState, framebufferSnapshot });
-  useSaveData({ gameId: game.id, romLoaded, hasBatteryRam, exportSram });
+  useSaveData({ saveTo, romLoaded, hasBatteryRam, exportSram });
 
   const toggleFullscreen = useCallback(() => {
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -116,8 +117,10 @@ function Player({ game }: { game: GameEntry }) {
     if (!loadRom(data)) { setBadRom(true); return; }
     setNeedsRom(false);
     if (hasBatteryRam()) {
-      const sram = await getSram(game.id).catch(() => undefined);
+      const id = await getActiveProfileId(game.id).catch(() => game.id);
+      const sram = await getSram(id).catch(() => undefined);
       if (sram) importSram(sram.sram);
+      saveTo.current = id;
     }
     const slot = q.get('slot');
     const from: SlotKey | null = q.get('resume') ? 'auto' : slot !== null ? +slot : null;

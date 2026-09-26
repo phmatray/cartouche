@@ -1,5 +1,5 @@
 const DB_NAME = 'gb-emulator';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const ROM_STORE = 'roms';
 const SAVE_STORE = 'saves';
 const SAVESTATE_STORE = 'savestates';
@@ -9,10 +9,18 @@ const SCREENSHOT_STORE = 'screenshots';
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (ev) => {
       const db = req.result;
       if (!db.objectStoreNames.contains(ROM_STORE)) db.createObjectStore(ROM_STORE, { keyPath: 'id' });
-      if (!db.objectStoreNames.contains(SAVE_STORE)) db.createObjectStore(SAVE_STORE, { keyPath: 'id' });
+      const saves = db.objectStoreNames.contains(SAVE_STORE) ? req.transaction!.objectStore(SAVE_STORE) : db.createObjectStore(SAVE_STORE, { keyPath: 'id' });
+      // v5: save profiles. The one battery save a game had (keyed by the game id) becomes its "Main" profile.
+      if (!saves.indexNames.contains('gameId')) saves.createIndex('gameId', 'gameId');
+      if (ev.oldVersion < 5) saves.openCursor().onsuccess = (e) => {
+        const c = (e.target as IDBRequest<IDBCursorWithValue | null>).result;
+        if (!c) return;
+        if (!c.value.gameId) c.update(asProfile(c.value));
+        c.continue();
+      };
       if (!db.objectStoreNames.contains(SAVESTATE_STORE)) db.createObjectStore(SAVESTATE_STORE, { keyPath: 'id' });
       if (!db.objectStoreNames.contains(GAME_META_STORE)) db.createObjectStore(GAME_META_STORE, { keyPath: 'id' });
       // v4: album. Existing stores are kept as they are; only the new one is added.
@@ -38,17 +46,60 @@ export function getRom(id: string): Promise<StoredRom | undefined> { return txOp
 export function getAllRoms(): Promise<StoredRom[]> { return txOp(ROM_STORE, 'readonly', (s) => s.getAll()); }
 export function deleteRom(id: string): Promise<void> { return txOp(ROM_STORE, 'readwrite', (s) => s.delete(id)).then(() => {}); }
 
-export interface StoredSave { id: string; sram: Uint8Array; timestamp: number; }
+/**
+ * A save profile: one named battery save (cartridge SRAM) of a game. A game can have several
+ * ("Main", "Léa's game"…). The game's first one is keyed by the game id itself (the layout before
+ * profiles); the others by `${gameId}~${suffix}`. `timestamp` is the last write (last played).
+ */
+export interface StoredSave { id: string; gameId: string; name: string; sram: Uint8Array; timestamp: number; created?: number; }
+export const gameOfSave = (id: string) => id.split('~')[0];
+/** Fill in what a save written before profiles (or read from an old backup) lacks. */
+export const asProfile = (s: Omit<StoredSave, 'gameId' | 'name'> & Partial<StoredSave>): StoredSave => ({ ...s, gameId: s.gameId || gameOfSave(s.id), name: s.name || 'Main' });
 export function saveSram(save: StoredSave): Promise<void> { return txOp(SAVE_STORE, 'readwrite', (s) => s.put(save)).then(() => {}); }
-export function getSram(id: string): Promise<StoredSave | undefined> { return txOp(SAVE_STORE, 'readonly', (s) => s.get(id)); }
+export function getSram(id: string): Promise<StoredSave | undefined> { return txOp<StoredSave | undefined>(SAVE_STORE, 'readonly', (s) => s.get(id)).then((r) => r && asProfile(r)); }
 export function deleteSave(id: string): Promise<void> { return txOp(SAVE_STORE, 'readwrite', (s) => s.delete(id)).then(() => {}); }
 
-export interface StoredSaveState { id: string; data: Uint8Array; thumbnail: Uint8Array; timestamp: number; }
+/** Every save profile of a game: Main first, then by creation. (Settings › Storage can use this.) */
+export async function listProfiles(gameId: string): Promise<StoredSave[]> {
+  const list: StoredSave[] = await txOp(SAVE_STORE, 'readonly', (s) => s.index('gameId').getAll(gameId));
+  return list.map(asProfile).sort((a, b) => +(b.id === gameId) - +(a.id === gameId) || (a.created ?? a.timestamp) - (b.created ?? b.timestamp));
+}
+export const newProfileId = (gameId: string) => `${gameId}~${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+/** `base`, or `base 2`, `base 3`… when a profile of the game already has that name. */
+export function uniqueName(list: StoredSave[], base: string) {
+  let name = base;
+  for (let n = 2; list.some((p) => p.name === name); n++) name = `${base} ${n}`;
+  return name;
+}
+/** Store a new profile (a copy, an imported .sav). */
+export async function createProfile(gameId: string, name: string, sram: Uint8Array): Promise<StoredSave> {
+  const now = Date.now();
+  const p: StoredSave = { id: newProfileId(gameId), gameId, name, sram, timestamp: now, created: now };
+  await saveSram(p);
+  return p;
+}
+/** Write a running game's SRAM to its profile, creating it (named `name`) on the first write. */
+export async function writeProfileSram(id: string, sram: Uint8Array, name = 'Main'): Promise<void> {
+  const old = await getSram(id);
+  const now = Date.now();
+  await saveSram(old ? { ...old, sram, timestamp: now } : { id, gameId: gameOfSave(id), name, sram, timestamp: now, created: now });
+}
+/** The profile solo play uses: the one chosen on the game page, else Main, else the first. May not exist yet (never saved). */
+export async function getActiveProfileId(gameId: string): Promise<string> {
+  const [meta, list] = await Promise.all([getGameMeta(gameId), listProfiles(gameId)]);
+  return list.find((p) => p.id === meta?.activeSave)?.id ?? list[0]?.id ?? gameId;
+}
+export async function setActiveProfile(gameId: string, id: string): Promise<void> {
+  await setGameMeta({ ...(await getGameMeta(gameId)), id: gameId, activeSave: id });
+}
+
+/** `profile`: the save profile the game was writing to when the state was taken (the state holds its SRAM). */
+export interface StoredSaveState { id: string; data: Uint8Array; thumbnail: Uint8Array; timestamp: number; profile?: string; }
 export function saveSaveState(state: StoredSaveState): Promise<void> { return txOp(SAVESTATE_STORE, 'readwrite', (s) => s.put(state)).then(() => {}); }
 export function getSaveState(id: string): Promise<StoredSaveState | undefined> { return txOp(SAVESTATE_STORE, 'readonly', (s) => s.get(id)); }
 export function deleteSaveState(id: string): Promise<void> { return txOp(SAVESTATE_STORE, 'readwrite', (s) => s.delete(id)).then(() => {}); }
 
-export interface StoredGameMeta { id: string; isFavorite?: boolean; totalPlayTime?: number; lastPlayed?: number; importedAt?: number; sessions?: number; }
+export interface StoredGameMeta { id: string; isFavorite?: boolean; totalPlayTime?: number; lastPlayed?: number; importedAt?: number; sessions?: number; activeSave?: string; }
 export type GameMeta = StoredGameMeta;
 export function getGameMeta(id: string): Promise<StoredGameMeta | undefined> { return txOp(GAME_META_STORE, 'readonly', (s) => s.get(id)); }
 export function setGameMeta(meta: StoredGameMeta): Promise<void> { return txOp(GAME_META_STORE, 'readwrite', (s) => s.put(meta)).then(() => {}); }
@@ -65,7 +116,7 @@ const SAVESTATE_SUFFIX = /-(slot-\d+|auto)$/;
 /** Ids of games with a cartridge save, a save slot or a resume point. */
 export async function getSavedGameIds(): Promise<Set<string>> {
   const [sram, states] = await Promise.all([allKeys(SAVE_STORE), allKeys(SAVESTATE_STORE)]);
-  return new Set([...sram.map(String), ...states.map((k) => String(k).replace(SAVESTATE_SUFFIX, ''))]);
+  return new Set([...sram.map((k) => gameOfSave(String(k))), ...states.map((k) => String(k).replace(SAVESTATE_SUFFIX, ''))]);
 }
 
 /** The most recent resume point or save slot for a game (its thumbnail is the last frame, RGBA 160×144). */

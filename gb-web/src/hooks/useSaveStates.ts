@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect } from 'react';
-import { getGameSaveStates, getSaveState, saveSaveState, resumeStateId, slotStateId, type StoredSaveState } from '../lib/db';
+import { useState, useCallback, useEffect, type RefObject } from 'react';
+import { getGameSaveStates, getSaveState, getSram, saveSaveState, resumeStateId, setActiveProfile, slotStateId, type StoredSaveState } from '../lib/db';
 import { refreshSavedIds } from './useGameLibrary';
+import { toast } from '../components/shell/actions';
 
 /** 'auto' is the resume point written when leaving; numbers are the 5 slots. */
 export type SlotKey = 'auto' | number;
@@ -8,6 +9,8 @@ export type SlotKey = 'auto' | number;
 /**
  * Resume point + 5 save slots of a game, with their thumbnails.
  * `states[0]` is the resume point, `states[1..5]` the slots (undefined when empty).
+ * `profileRef`: the save profile being played; each state records it, and loading a state taken in
+ * another profile switches the battery save back to that one (the state holds that profile's SRAM).
  */
 export function useSaveStates(
   gameId: string | undefined,
@@ -16,6 +19,7 @@ export function useSaveStates(
     loadState: (data: Uint8Array) => boolean;
     framebufferSnapshot: () => Uint8Array | null;
   },
+  profileRef?: RefObject<string | null>,
 ) {
   const [states, setStates] = useState<(StoredSaveState | undefined)[]>([]);
   const { saveState, loadState, framebufferSnapshot } = emulator;
@@ -36,16 +40,25 @@ export function useSaveStates(
     const data = saveState();
     if (!data) return false;
     const thumbnail = framebufferSnapshot();
-    await saveSaveState({ id: idOf(k), data: new Uint8Array(data), thumbnail: new Uint8Array(thumbnail ?? []), timestamp: Date.now() });
+    await saveSaveState({ id: idOf(k), data: new Uint8Array(data), thumbnail: new Uint8Array(thumbnail ?? []), timestamp: Date.now(), profile: profileRef?.current ?? undefined });
     await Promise.all([reload(), refreshSavedIds()]);
     return true;
-  }, [gameId, idOf, saveState, framebufferSnapshot, reload]);
+  }, [gameId, idOf, saveState, framebufferSnapshot, reload, profileRef]);
 
   const load = useCallback(async (k: SlotKey) => {
     if (!gameId) return false;
     const entry = await getSaveState(idOf(k));
-    return !!entry && loadState(entry.data);
-  }, [gameId, idOf, loadState]);
+    if (!entry) return false;
+    // Look the profile up before loading: once the state is in, a battery write must already go to the right profile.
+    const other = profileRef?.current && entry.profile && entry.profile !== profileRef.current ? await getSram(entry.profile).catch(() => undefined) : undefined;
+    if (!loadState(entry.data)) return false;
+    if (other && profileRef) {
+      profileRef.current = other.id;
+      setActiveProfile(gameId, other.id).catch(() => {});
+      toast(`This save belongs to “${other.name}”: saving there now`, 'c');
+    }
+    return true;
+  }, [gameId, idOf, loadState, profileRef]);
 
   return { states, save, load };
 }

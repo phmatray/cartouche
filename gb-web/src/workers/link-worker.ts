@@ -6,7 +6,9 @@
 export type LinkPlayerIndex = 1 | 2;
 
 export type ToLinkWorkerMsg =
-  | { type: 'loadRom'; player: LinkPlayerIndex; data: ArrayBuffer }
+  // sram: the player's battery save to start from; state: a save state to start from instead.
+  | { type: 'loadRom'; player: LinkPlayerIndex; data: ArrayBuffer; sram?: ArrayBuffer; state?: ArrayBuffer }
+  | { type: 'exportSram' }
   | { type: 'runFrame' }
   | { type: 'setInput'; player: LinkPlayerIndex; buttons: number };
 
@@ -14,6 +16,7 @@ export type FromLinkWorkerMsg =
   | { type: 'ready' }
   | { type: 'romLoaded'; player: LinkPlayerIndex; success: boolean; error?: string }
   | { type: 'frame'; framebuffers: [ArrayBuffer | null, ArrayBuffer | null] }
+  | { type: 'sram'; data: [ArrayBuffer | null, ArrayBuffer | null] }
   | { type: 'error'; message: string };
 
 type Emulator = import('gb-core').Emulator;
@@ -59,11 +62,20 @@ function copyFramebuffer(emu: Emulator): ArrayBuffer {
     case 'loadRom': {
       const i = msg.player - 1;
       const emu = emus[i]!;
-      const success = emu.load_rom(new Uint8Array(msg.data));
+      let success = emu.load_rom(new Uint8Array(msg.data));
+      if (success && msg.sram) emu.import_sram(new Uint8Array(msg.sram));
+      if (success && msg.state) success = emu.load_state(new Uint8Array(msg.state));
       loaded[i] = success;
+      prevButtons[i] = 0;
       post(success
         ? { type: 'romLoaded', player: msg.player, success }
         : { type: 'romLoaded', player: msg.player, success, error: emu.get_error() ?? 'Unknown error' });
+      break;
+    }
+
+    case 'exportSram': {
+      const data = [0, 1].map((i) => (loaded[i] && emus[i]!.has_battery_ram() ? emus[i]!.export_sram().buffer as ArrayBuffer : null)) as [ArrayBuffer | null, ArrayBuffer | null];
+      post({ type: 'sram', data }, data.filter((b): b is ArrayBuffer => b !== null));
       break;
     }
 

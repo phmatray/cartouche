@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useLinkCable, type LinkPlayer } from '../hooks/useLinkCable';
-import { fetchRom, useGameLibrary } from '../hooks/useGameLibrary';
-import { linkReady as isLinkReady, owned, PLATFORM, sortTitle } from '../lib/ui';
+import { fetchRom, refreshSavedIds, useGameLibrary } from '../hooks/useGameLibrary';
+import { importSav, useRomHeader } from '../hooks/useGameExtras';
+import { createProfile, getActiveProfileId, getGameSaveStates, getSaveState, getSram, listProfiles, newProfileId, resumeStateId, slotStateId, uniqueName, writeProfileSram, type StoredSave, type StoredSaveState } from '../lib/db';
+import { useSettingsStore } from '../store/settingsStore';
+import { ago, bytes, linkReady as isLinkReady, owned, PLATFORM, sortTitle } from '../lib/ui';
 import type { GameEntry } from '../types/game';
 import { CartridgePicker } from './CartridgePicker';
 import { Item } from './library/GameItem';
@@ -19,10 +22,42 @@ const KEYS: Record<LinkPlayer, Record<string, number>> = {
 const LEGEND: Record<LinkPlayer, string> = { 1: 'Arrows · Z · X · Enter · Shift', 2: 'W A S D · N · M · T · Y' };
 const FILE = '__file';
 
+/**
+ * A player's battery save: the profile its console writes to (`profile`, which may not exist yet: a new
+ * game is created on the first write, named `name`), started from that save or from a save state (`slot`).
+ */
+interface Choice { game: string; profile: string; name: string; slot: 'auto' | number | null }
+interface GameSaves { profiles: StoredSave[]; active: string; states: (StoredSaveState | undefined)[] }
+async function savesOf(g: string): Promise<GameSaves> {
+  const [profiles, active, states] = await Promise.all([listProfiles(g), getActiveProfileId(g), getGameSaveStates(g)]);
+  return { profiles, active, states };
+}
+const slotLabel = (k: 'auto' | number) => (k === 'auto' ? 'the resume point' : `save slot ${k + 1}`);
+
 export function LinkCablePage() {
   const { games, savedIds, loading } = useGameLibrary();
   const [q] = useSearchParams();
-  const link = useLinkCable();
+  // Where each console's battery save goes, fixed when the cable connects.
+  const targets = useRef<Record<LinkPlayer, Choice | null>>({ 1: null, 2: null });
+  const [linked, setLinked] = useState<Record<LinkPlayer, Choice | null>>({ 1: null, 2: null }); // the same, for display
+  const [wrote, setWrote] = useState<Record<LinkPlayer, number>>({ 1: 0, 2: 0 });
+  const [data, setData] = useState<Record<string, GameSaves>>({});
+  const refresh = useCallback(async (g: string) => {
+    const v = await savesOf(g);
+    setData((d) => ({ ...d, [g]: v }));
+  }, []);
+  const onSram = useCallback((saves: [Uint8Array | null, Uint8Array | null]) => {
+    for (const p of [1, 2] as LinkPlayer[]) {
+      const t = targets.current[p], sram = saves[p - 1];
+      if (!t || !sram?.length) continue;
+      writeProfileSram(t.profile, sram, t.name).then(() => {
+        setWrote((w) => ({ ...w, [p]: Date.now() }));
+        refresh(t.game).catch(() => {});
+        refreshSavedIds();
+      }).catch(() => toast(`Couldn’t save Player ${p}’s game`, 'm'));
+    }
+  }, [refresh]);
+  const link = useLinkCable(onSram);
   const { state } = link;
   const playable = useMemo(() => games.filter(owned).sort((a, b) => +isLinkReady(b) - +isLinkReady(a) || sortTitle(a.title).localeCompare(sortTitle(b.title))), [games]);
   const linkReady = playable.filter(isLinkReady);
@@ -35,6 +70,71 @@ export function LinkCablePage() {
   const sel1 = pick[1] || first;
   const sel: Record<LinkPlayer, string> = { 1: sel1, 2: same ? sel1 : pick[2] || first };
   const fileOf = (p: LinkPlayer) => (same && p === 2 ? files[1] : files[p]);
+  const gameOf = (p: LinkPlayer) => (sel[p] === FILE ? undefined : playable.find((x) => x.id === sel[p]));
+  const header1 = useRomHeader(gameOf(1)), header2 = useRomHeader(gameOf(2));
+  const [chosen, setChosen] = useState<Record<LinkPlayer, Choice | null>>({ 1: null, 2: null });
+  const [savErr, setSavErr] = useState<Record<LinkPlayer, string>>({ 1: '', 2: '' });
+  const savInput = useRef<Record<LinkPlayer, HTMLInputElement | null>>({ 1: null, 2: null });
+  const [s1, s2] = [sel[1], sel[2]];
+  useEffect(() => {
+    for (const g of new Set([s1, s2])) {
+      if (g && g !== FILE && !data[g]) savesOf(g).then((v) => setData((d) => ({ ...d, [g]: v }))).catch(() => {}); // storage blocked: no chooser
+    }
+  }, [s1, s2, data]);
+
+  /** Player 1 plays the game's solo save; Player 2 its own "Player 2" save (created on the first write), never Player 1's. */
+  const choiceOf = (p: LinkPlayer): Choice | null => {
+    const g = sel[p], d = data[g];
+    if (chosen[p]?.game === g) return chosen[p];
+    if (!d || g === FILE) return null;
+    if (p === 1) return { game: g, profile: d.active, name: d.profiles.find((x) => x.id === d.active)?.name ?? 'Main', slot: null };
+    const taken = sel[1] === g ? choiceOf(1)?.profile : undefined;
+    const mine = d.profiles.find((x) => x.id !== taken && (x.id === `${g}~p2` || x.name === 'Player 2'));
+    if (mine) return { game: g, profile: mine.id, name: mine.name, slot: null };
+    let id = `${g}~p2`;
+    for (let n = 2; id === taken || d.profiles.some((x) => x.id === id); n++) id = `${g}~p2-${n}`;
+    return { game: g, profile: id, name: uniqueName(d.profiles, 'Player 2'), slot: null };
+  };
+  const choice: Record<LinkPlayer, Choice | null> = { 1: choiceOf(1), 2: choiceOf(2) };
+  const clash = !!choice[1] && !!choice[2] && choice[1].game === choice[2].game && choice[1].profile === choice[2].profile;
+  const nameOf = (c: Choice) => data[c.game]?.profiles.find((x) => x.id === c.profile)?.name ?? c.name;
+
+  const pickSave = (p: LinkPlayer, v: string) => {
+    const g = sel[p], d = data[g];
+    if (!d) return;
+    setSavErr((e) => ({ ...e, [p]: '' }));
+    if (v === 'import') { savInput.current[p]?.click(); return; }
+    if (v === 'new') { setChosen((c) => ({ ...c, [p]: { game: g, profile: newProfileId(g), name: uniqueName(d.profiles, `Player ${p}`), slot: null } })); return; }
+    if (v.startsWith('slot:')) {
+      const k = v === 'slot:auto' ? 'auto' : +v.slice(5);
+      const st = d.states[k === 'auto' ? 0 : k + 1];
+      const profile = st?.profile ?? g; // states from before profiles belong to Main
+      setChosen((c) => ({ ...c, [p]: { game: g, profile, name: d.profiles.find((x) => x.id === profile)?.name ?? 'Main', slot: k } }));
+      return;
+    }
+    const id = v.slice(2), c = choice[p];
+    setChosen((s) => ({ ...s, [p]: { game: g, profile: id, name: d.profiles.find((x) => x.id === id)?.name ?? c?.name ?? 'Main', slot: null } }));
+  };
+  const onSav = async (p: LinkPlayer, f: File) => {
+    const g = gameOf(p);
+    if (!g) return;
+    const r = await importSav(g, f).catch((e) => `${f.name}: ${e instanceof Error ? e.message : e}`);
+    if (typeof r === 'string') { setSavErr((e) => ({ ...e, [p]: r })); return; }
+    await refresh(g.id);
+    setChosen((c) => ({ ...c, [p]: { game: g.id, profile: r.id, name: r.name, slot: null } }));
+    toast(`“${r.name}” imported for Player ${p}`, 'c');
+  };
+  /** Both players on one save: Player 2 gets a copy of it (a new, separate save). */
+  const copyForP2 = async () => {
+    const c = choice[2], d = c && data[c.game];
+    if (!c || !d) return;
+    const src = d.profiles.find((x) => x.id === c.profile);
+    const name = uniqueName(d.profiles, `${nameOf(c)} (copy)`);
+    const id = src ? (await createProfile(c.game, name, src.sram)).id : newProfileId(c.game);
+    await refresh(c.game);
+    setChosen((s) => ({ ...s, 2: { ...c, profile: id, name } }));
+    toast(`Player 2 now plays “${name}”`, 'c');
+  };
 
   useEffect(() => { document.title = 'Link cable · Cartouche'; }, []);
 
@@ -49,18 +149,43 @@ export function LinkCablePage() {
     return g ? fetchRom(g) : null;
   };
   const connect = async () => {
-    if (state.isRunning) { link.stop(); toast('Cable disconnected', 'c'); return; }
+    if (state.isRunning) { link.flush(); link.stop(); toast('Cable disconnected. Both games saved.', 'c'); return; }
+    if (clash) return;
     try {
       const [a, b] = await Promise.all([romFor(1), romFor(2)]);
       if (!a || !b) { toast('Pick a game for both players', 'm'); return; }
-      link.loadRom(1, a);
-      link.loadRom(2, b);
+      const from = async (c: Choice | null) => {
+        if (!c) return {};
+        if (c.slot === null) return { sram: (await getSram(c.profile))?.sram };
+        const st = await getSaveState(c.slot === 'auto' ? resumeStateId(c.game) : slotStateId(c.game, c.slot));
+        if (!st) throw new Error(`${slotLabel(c.slot)} is gone`);
+        return { state: st.data };
+      };
+      const [f1, f2] = await Promise.all([from(choice[1]), from(choice[2])]);
+      targets.current = { 1: choice[1], 2: choice[2] };
+      setLinked(targets.current);
+      setWrote({ 1: 0, 2: 0 });
+      link.loadRom(1, a, f1);
+      link.loadRom(2, b, f2);
       link.start(); // the workers handle messages in order: each ROM is loaded before the first frame runs
       toast('Cable connected. Both players are running.', 'c');
     } catch (e) {
       toast(`Couldn’t load the ROM: ${e instanceof Error ? e.message : e}`, 'm');
     }
   };
+
+  // Battery saves while linked: at the Settings interval (like solo play) and when the tab is hidden or closed.
+  const autoSave = useSettingsStore((s) => s.autoSaveEnabled);
+  const autoSeconds = useSettingsStore((s) => s.autoSaveIntervalSeconds);
+  const { flush } = link;
+  useEffect(() => {
+    if (!state.isRunning) return;
+    const t = autoSave ? window.setInterval(flush, autoSeconds * 1000) : 0;
+    const onHide = () => { if (document.visibilityState === 'hidden') flush(); };
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', flush);
+    return () => { window.clearInterval(t); document.removeEventListener('visibilitychange', onHide); window.removeEventListener('pagehide', flush); };
+  }, [state.isRunning, autoSave, autoSeconds, flush]);
 
   // Both players' keys, only while the cable is connected.
   const { setInput } = link;
@@ -109,6 +234,45 @@ export function LinkCablePage() {
       </div>
     );
   };
+  /** The battery save a player plays: its game's profiles, a new game, a .sav file, or a save state. */
+  const saveChooser = (p: LinkPlayer) => {
+    const g = gameOf(p), c = choice[p], d = g && data[g.id], h = p === 1 ? header1 : header2;
+    if (sel[p] === FILE) return fileOf(p) ? <div className="svp"><small>A ROM file outside your library: its save isn’t kept.</small></div> : null;
+    if (!g || !c || !d) return null;
+    if (h && h.ramSize === 'None' && !/MBC2/.test(h.cartridgeType)) return <div className="svp"><small>This cartridge has no battery save.</small></div>;
+    const known = d.profiles.find((x) => x.id === c.profile);
+    const t = linked[p];
+    const live = state.isRunning || !!wrote[p];
+    return (
+      <div className="svp">
+        <label className="sel"><span>Save</span>
+          <select value={c.slot !== null ? `slot:${c.slot}` : `p:${c.profile}`} disabled={state.isRunning} aria-describedby={`svp-s${p}`}
+            aria-label={`Player ${p} save`} onChange={(e) => pickSave(p, e.target.value)}>
+            <optgroup label="Games">
+              {d.profiles.map((x) => <option key={x.id} value={`p:${x.id}`}>{x.name} · {ago(x.timestamp)} · {bytes(x.sram.length)}</option>)}
+              {!known && c.slot === null && <option value={`p:${c.profile}`}>{c.name} · new game</option>}
+            </optgroup>
+            <option value="new">New game (empty save)</option>
+            <option value="import">Import a .sav file…</option>
+            {d.states.some(Boolean) && (
+              <optgroup label="Start from a save state">
+                {d.states.map((st, i) => st && <option key={i} value={i ? `slot:${i - 1}` : 'slot:auto'}>{i ? `Save slot ${i}` : 'Resume point'} · {ago(st.timestamp)}</option>)}
+              </optgroup>
+            )}
+          </select>
+        </label>
+        <small id={`svp-s${p}`} aria-live="polite">
+          {live && t ? <>Saving to <b>{nameOf(t)}</b>{wrote[p] ? `, saved ${ago(wrote[p])}` : ''}</>
+            : c.slot !== null ? <>Starts from {slotLabel(c.slot)}, then saves to <b>{nameOf(c)}</b>{known ? '' : ' (new)'}</>
+            : known ? <>Continues <b>{known.name}</b> and saves back to it</>
+            : <>A new game, saved as <b>{c.name}</b></>}
+        </small>
+        {savErr[p] && <small className="bad" role="alert">{savErr[p]}</small>}
+        <input ref={(el) => { savInput.current[p] = el; }} type="file" accept=".sav,.srm" className="sr" tabIndex={-1} aria-hidden="true"
+          onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) onSav(p, file); }} />
+      </div>
+    );
+  };
   const panel = (p: LinkPlayer) => {
     const f = fileOf(p);
     return (
@@ -119,6 +283,7 @@ export function LinkCablePage() {
           <canvas ref={p === 1 ? link.p1CanvasRef : link.p2CanvasRef} className="lcd" width={160} height={144} aria-label={`Player ${p} screen`} />
         </div>
         {cart(p, f)}
+        {saveChooser(p)}
         <input ref={(el) => { fileInput.current[p] = el; }} type="file" accept=".gb,.gbc,.rom,.bin" className="sr" tabIndex={-1} aria-hidden="true"
           onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (!file) return; setFiles((s) => ({ ...s, [p]: file })); setPick((s) => ({ ...s, [p]: FILE })); }} />
       </section>
@@ -136,6 +301,12 @@ export function LinkCablePage() {
         <div className={`cable${state.isRunning ? ' on' : ''}`} aria-live="polite"><i /><span>{state.isRunning ? 'Linked' : ready ? 'Idle' : 'Starting…'}</span><i /></div>
         {panel(2)}
       </div>
+      {clash && !state.isRunning && (
+        <div className="svp-warn" role="alert" style={{ marginTop: 16 }}>
+          <p>Both players would play and save <b>{nameOf(choice[1]!)}</b>: the two consoles would overwrite each other’s progress. Each player needs a save of their own.</p>
+          <button className="btn p" onClick={copyForP2}>Use a copy for Player 2</button>
+        </div>
+      )}
       {state.error && <p className="note" role="alert">{state.error}</p>}
       <div className="lc-bar">
         <div className="row" style={{ border: 0, padding: 0, gap: 14, color: 'var(--paper)' }}>
@@ -143,7 +314,7 @@ export function LinkCablePage() {
           Same game for both players
         </div>
         <div className="acts">
-          <button className="btn y lg" disabled={!ready || loading || (!playable.length && !files[1])} onClick={connect}>
+          <button className="btn y lg" disabled={!ready || loading || (!playable.length && !files[1]) || (clash && !state.isRunning)} onClick={connect}>
             {state.isRunning ? <>{I.close}Disconnect</> : <>{I.link}Connect &amp; start</>}
           </button>
         </div>

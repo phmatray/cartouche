@@ -97,5 +97,17 @@ export const PLATFORM = { gb: 'Game Boy', gbc: 'Game Boy Color' } as const;
 export const byline = (g: GameEntry) => [g.developer, g.year].filter(Boolean).join(' · ');
 
 
+/** "32 KB", "512 bytes". */
+export const bytes = (n: number) => (n >= 1024 ? `${Math.round(n / 102.4) / 10} KB` : `${n} bytes`);
+
+/** Save a Blob as a file. */
+export function download(blob: Blob, name: string) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
 /** Scroll behavior that respects prefers-reduced-motion. */
 export const motion = (): ScrollBehavior => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
