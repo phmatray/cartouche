@@ -60,7 +60,7 @@ jobs:
           # and the license files (LICENSE.txt, THIRD_PARTY_NOTICES.txt, THIRD_PARTY_LICENSES.txt)
           npm run build
 
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
 
       - uses: actions/upload-pages-artifact@v3
         with:
