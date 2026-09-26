@@ -38,12 +38,16 @@ export function AddRomsPage() {
       if (added) toast(`${added} ROM${added > 1 ? 's' : ''} added to your library`, 'c');
     });
   }, [patch]);
-  const pending = usePendingImport((s) => s.files);
+  // Drain the queue: what was dropped before this page opened, then every later drop, as it arrives.
   useEffect(() => {
-    if (!pending.length) return;
-    usePendingImport.setState({ files: [] });
-    run(pending);
-  }, [pending, run]);
+    const take = ({ files }: { files: File[] }) => {
+      if (!files.length) return;
+      usePendingImport.setState({ files: [] });
+      run(files);
+    };
+    take(usePendingImport.getState());
+    return usePendingImport.subscribe(take);
+  }, [run]);
 
   const force = async (r: Row) => {
     patch(r.key, { st: 'work' });
