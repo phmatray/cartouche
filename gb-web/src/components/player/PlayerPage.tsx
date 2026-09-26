@@ -176,28 +176,37 @@ function Player({ game }: { game: GameEntry }) {
 
   // ---- resume point + play time, written when leaving (route change, tab hidden, page closed) ----
   const saveAuto = saves.save;
-  const leave = useCallback((final: boolean) => {
+  // Play time is flushed with every resume-point save (not only on leave): a pagehide write
+  // can be cut off by the unload, so a reload or closed tab would otherwise lose the session.
+  const sessionCounted = useRef(false);
+  useEffect(() => { sessionCounted.current = false; }, [game.id]);
+  const leave = useCallback(() => {
     if (dirty.current && useSettingsStore.getState().resumePoints) { dirty.current = false; saveAuto('auto'); }
-    if (final && played.current >= 1) { recordSession(game.id, Math.round(played.current)); played.current = 0; }
+    const seconds = Math.floor(played.current);
+    if (seconds >= 1) {
+      played.current -= seconds;
+      recordSession(game.id, seconds, !sessionCounted.current);
+      sessionCounted.current = true;
+    }
   }, [saveAuto, game.id]);
   const leaveRef = useRef(leave);
   useEffect(() => { leaveRef.current = leave; }, [leave]);
   // Also every 30 s while running, so a crash or a killed tab loses at most that much.
   useEffect(() => {
     if (!isRunning) return;
-    const t = setInterval(() => leaveRef.current(false), 30_000);
+    const t = setInterval(() => leaveRef.current(), 30_000);
     return () => clearInterval(t);
   }, [isRunning]);
   useEffect(() => {
-    const onHide = () => { if (document.visibilityState === 'hidden') leaveRef.current(false); };
-    const onPageHide = () => leaveRef.current(true);
+    const onHide = () => { if (document.visibilityState === 'hidden') leaveRef.current(); };
+    const onPageHide = () => leaveRef.current();
     document.addEventListener('visibilitychange', onHide);
     window.addEventListener('pagehide', onPageHide);
     return () => {
       document.removeEventListener('visibilitychange', onHide);
       window.removeEventListener('pagehide', onPageHide);
       const wasDirty = dirty.current && useSettingsStore.getState().resumePoints;
-      leaveRef.current(true);
+      leaveRef.current();
       if (wasDirty) toast(`Resume point saved for ${game.title}`, 'm');
     };
   }, [game.title]);

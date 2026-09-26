@@ -156,10 +156,10 @@ export async function refreshSavedIds() {
   useLibraryStore.setState({ savedIds: await getSavedGameIds() });
 }
 
-/** Add one play session (seconds actually run) to a game's stats. */
-export async function recordSession(gameId: string, seconds: number) {
+/** Add seconds actually run to a game's stats; `newSession` also counts one more session. */
+export async function recordSession(gameId: string, seconds: number, newSession = true) {
   const meta = (await getGameMeta(gameId)) ?? { id: gameId };
-  const updated = { ...meta, totalPlayTime: (meta.totalPlayTime ?? 0) + seconds, sessions: (meta.sessions ?? 0) + 1, lastPlayed: Date.now() };
+  const updated = { ...meta, totalPlayTime: (meta.totalPlayTime ?? 0) + seconds, sessions: (meta.sessions ?? 0) + (newSession ? 1 : 0), lastPlayed: Date.now() };
   await setGameMeta(updated);
   setGames((prev) => prev.map((g) => g.id === gameId ? { ...g, totalPlayTime: updated.totalPlayTime, sessions: updated.sessions, lastPlayed: updated.lastPlayed } : g));
 }
