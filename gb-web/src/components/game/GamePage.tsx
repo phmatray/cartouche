@@ -15,6 +15,7 @@ import { ConfirmDialog, type ConfirmRequest } from '../shell/ConfirmDialog';
 import { hardwareOf, importSav, useAlbum, useLinkRom, useRomHeader } from '../../hooks/useGameExtras';
 import { Shot } from './Shot';
 import { TagLinks } from '../library/TagLinks';
+import { genreLabel } from '../../lib/search';
 
 export function GamePage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -67,7 +68,7 @@ function GameDetails({ game }: { game: GameEntry }) {
         <div className="wrap hero">
           <div className="box"><Cover game={game} className="boxart" /></div>
           <div className="info">
-            <nav className="crumbs" aria-label="Breadcrumb"><Link to="/">Library</Link>{I.next}<span>{game.genre !== 'Unknown' ? game.genre : 'Game'}</span></nav>
+            <nav className="crumbs" aria-label="Breadcrumb"><Link to="/">Library</Link>{I.next}<span>{genreLabel(game) || 'Game'}</span></nav>
             <h1 className="hero-t"><Title text={game.title} /></h1>
             <div className="facts"><TagLinks game={game} keys={['year', 'developer', 'publisher', 'genre', 'players', 'region', 'platform', 'is']} className="fact" /></div>
             <div className="acts">

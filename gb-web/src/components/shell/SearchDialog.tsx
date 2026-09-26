@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNod
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useGameLibrary, useSearchIndex } from '../../hooks/useGameLibrary';
 import { byline, folded, owned, paths, searchKey, spatialNext, tagOf } from '../../lib/ui';
-import { facetCounts, facetKey, facetLabel, formatQuery, normValue, parseQuery, search, suggest, valueLabel, withoutEach, type Filter, type Key, type Query } from '../../lib/search';
+import { addFilters, facetCounts, facetKey, facetLabel, formatQuery, genreLabel, normValue, parseQuery, search, suggest, valueLabel, withoutEach, type Filter, type Key, type Query } from '../../lib/search';
 import { I } from '../icons';
 import { Cover } from '../library/Cover';
 
@@ -44,7 +44,7 @@ export function SearchDialog() {
   const location = useLocation();
   const navigate = useNavigate();
   const index = useSearchIndex();
-  const { savedIds } = useGameLibrary();
+  const { savedIds, loading } = useGameLibrary();
   const urlQ = new URLSearchParams(location.search).get('q');
   const open = urlQ !== null;
 
@@ -57,15 +57,19 @@ export function SearchDialog() {
 
   const partial = partialOf(input);
   const pending = !!facetKey(partial.match(/^-?([a-z]+):/i)?.[1] ?? ''); // `genre:rp` waits for its value; words (and `foo:bar`) search as you type
-  const typed = parseQuery(pending ? input.slice(0, -partial.length) : input);
-  const query: Query = { text: typed.text, filters: [...filters, ...typed.filters.filter((x) => !filters.some((y) => sameFilter(x, y)))] };
+  const known = loading ? undefined : index; // typed values no game has stay text (not before the library is in)
+  const typed = parseQuery(pending ? input.slice(0, -partial.length) : input, known);
+  const query: Query = { text: typed.text, filters: addFilters(filters, typed.filters) };
   const formatted = formatQuery(query);
 
-  // URL → state: on a navigation (back/forward, a tag link, reload) that isn't the query already shown.
+  // URL → state: on a navigation (back/forward, a tag link, reload) that isn't the query already shown,
+  // nor our own pick landing (`ownQ`: keys typed right after a pick must not be reset by it).
   const [seenKey, setSeenKey] = useState<string | null>(null);
+  const [ownQ, setOwnQ] = useState<string | null>(null);
   if (open && location.key !== seenKey) {
     setSeenKey(location.key);
-    if (urlQ !== formatted) {
+    if (ownQ !== null) setOwnQ(null);
+    if (urlQ !== formatted && urlQ !== ownQ) {
       const p = parseQuery(urlQ);
       setFilters(p.filters);
       setInput(p.text);
@@ -92,7 +96,9 @@ export function SearchDialog() {
     setFilters(next);
     setInput(text ? `${text} ` : '');
     setIdx(0);
-    navigate(paths.search(formatQuery({ text, filters: next })).slice(1), { state: location.state }); // one history entry per pick
+    const target = formatQuery({ text, filters: next });
+    setOwnQ(target);
+    navigate(paths.search(target).slice(1), { state: location.state }); // one history entry per pick
   };
   const toggle = (x: Filter) => {
     const on = query.filters.some((y) => sameFilter(x, y));
@@ -131,8 +137,8 @@ export function SearchDialog() {
   const onInput = (v: string) => {
     setIdx(0);
     setSugIdx(0);
-    const p = /\s$/.test(v) ? parseQuery(v) : null;
-    if (p?.filters.length) apply([...filters, ...p.filters.filter((x) => !filters.some((y) => sameFilter(x, y)))], p.text);
+    const p = /\s$/.test(v) ? parseQuery(v, known) : null;
+    if (p?.filters.length) apply(addFilters(filters, p.filters), p.text);
     else setInput(v);
   };
 
@@ -172,7 +178,7 @@ export function SearchDialog() {
     }
     // Everywhere else in the overlay the arrows move focus on screen (TV remote, gamepad-as-keyboard).
     if (!e.key.startsWith('Arrow') || e.altKey || e.ctrlKey || e.metaKey) return;
-    if (t.tagName === 'INPUT' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || (t as HTMLInputElement).type === 'number')) return;
+    if (t.tagName === 'INPUT' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
     // Into the open sheet: its search field, then its first value (not the Done button, nor a "Not").
     const into = (t.dataset.facet && panel === t.dataset.facet) || t.classList.contains('fwithin') ? ref.current?.querySelector<HTMLElement>(t.dataset.facet ? '.fwithin, .fv' : '.fv') : null;
     if (into && e.key === 'ArrowDown') { e.preventDefault(); into.focus(); return; }
@@ -212,7 +218,7 @@ export function SearchDialog() {
 
           <div className="fbar">
             <div className="chips" role="group" aria-label="Filters">
-              {BAR.filter((k) => index.items.some((it) => it.v[k].length)).map((k) => {
+              {BAR.filter((k) => query.filters.some((x) => x.key === k || (k === 'decade' && x.key === 'year')) || index.items.some((it) => it.v[k].length)).map((k) => {
                 const n = query.filters.filter((x) => x.key === k || (k === 'decade' && x.key === 'year')).length;
                 return (
                   <button key={k} className="chip" data-facet={k} aria-expanded={panel === k} aria-controls="fpanel"
@@ -226,7 +232,7 @@ export function SearchDialog() {
           </div>
 
           {query.filters.length > 0 && (
-            <div className="active" role="group" aria-label="Active filters">
+            <div className="factive" role="group" aria-label="Active filters">
               {query.filters.map((x) => (
                 <button key={`${x.neg}${x.key}${x.value}`} className={`fchip${x.neg ? ' neg' : ''}`} aria-label={`Remove ${chipText(x, index.labels)}`}
                   onClick={() => apply(query.filters.filter((y) => y !== x))}>
@@ -240,16 +246,16 @@ export function SearchDialog() {
           <div className="shint" id="shelp">
             <span><kbd>↑</kbd> <kbd>↓</kbd> to move</span><span><kbd>Enter</kbd> to open</span><span><kbd>Esc</kbd> to close</span>
             <span className="syn">Type <code>genre:</code> <code>players:2</code> <code>-region:jp</code> <code>year:1990..1995</code> to filter</span>
-            <span className="cnt" role="status">{any ? `${results.length.toLocaleString('en-US')} result${results.length === 1 ? '' : 's'}${results.length > MAX_RESULTS ? `, first ${MAX_RESULTS} shown` : ''}` : 'Recently played'}</span>
+            <span className="cnt" role="status">{loading ? 'Loading your library…' : any ? `${results.length.toLocaleString('en-US')} result${results.length === 1 ? '' : 's'}${results.length > MAX_RESULTS ? `, first ${MAX_RESULTS} shown` : ''}` : 'Recently played'}</span>
           </div>
-          <ul className="sres" id="sres" role="listbox" aria-label="Results">
-            {shown.length ? shown.map((g, i) => {
+          <ul className="sres" id="sres" role="listbox" aria-label="Results" aria-busy={loading}>
+            {loading ? null : shown.length ? shown.map((g, i) => {
               const [kind, label] = tagOf(g, savedIds);
               return (
                 <li key={g.id}>
                   <Link to={paths.game(g.id)} role="option" aria-selected={i === sel}>
                     <Cover game={g} aria-hidden />
-                    <span className="t"><Hl text={g.title} q={q} /><small>{[byline(g), g.genre !== 'Unknown' ? g.genre : ''].filter(Boolean).join(' · ')}</small></span>
+                    <span className="t"><Hl text={g.title} q={q} /><small>{[byline(g), genreLabel(g)].filter(Boolean).join(' · ')}</small></span>
                     <span className={`tag ${kind}`} style={{ margin: 0 }}>{label}</span>
                   </Link>
                 </li>
@@ -311,8 +317,8 @@ function FacetSheet({ k, query, within, setWithin, toggle, apply, onDone }: {
       )}
       {k === 'decade' && (
         <div className="years">
-          <label>From <input type="number" inputMode="numeric" min={1989} max={2030} placeholder="1989" defaultValue={year[0] ?? ''} onBlur={(e) => setYear(e.target.value, year[1] ?? year[0] ?? '')} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} /></label>
-          <label>To <input type="number" inputMode="numeric" min={1989} max={2030} placeholder="2003" defaultValue={year[1] ?? year[0] ?? ''} onBlur={(e) => setYear(year[0] ?? '', e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} /></label>
+          <label>From <input type="text" inputMode="numeric" pattern="\d{4}" maxLength={4} placeholder="1989" defaultValue={year[0] ?? ''} onBlur={(e) => setYear(e.target.value, year[1] ?? year[0] ?? '')} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} /></label>
+          <label>To <input type="text" inputMode="numeric" pattern="\d{4}" maxLength={4} placeholder="2003" defaultValue={year[1] ?? year[0] ?? ''} onBlur={(e) => setYear(year[0] ?? '', e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} /></label>
         </div>
       )}
       {list.length ? (

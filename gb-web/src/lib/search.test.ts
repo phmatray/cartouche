@@ -10,7 +10,7 @@ const GAMES = [
   game('Pokemon Gold', { genre: 'Rpg', developer: 'Game Freak/Creatures', publisher: 'Nintendo', year: '2000', region: 'Japan', players: 2, platform: 'gbc', compatibility: 'dual', saveType: 'battery' }),
   game('Kirby', { genre: 'Action', developer: 'HAL Laboratory, Inc.', year: '1992', region: 'Europe', players: 1, platform: 'gb' }),
   game('Tetris', { genre: 'Puzzle', developer: 'Nintendo', year: '1989', region: 'World', players: 2, platform: 'gb', lastPlayed: 1000 }),
-  game('Homebrew', { genre: 'Platformer', category: 'Homebrew Highlights', year: '2017', isLocal: false, romUrl: 'roms/x.gb' }),
+  game('Homebrew', { genre: 'Platformer', category: 'Homebrew Highlights', license: 'MIT', year: '2017', isLocal: false, romUrl: 'roms/x.gb' }),
   game('Unknown dump', { isLocal: false }),
 ];
 const index = buildIndex(GAMES, { saved: new Set(['Pokemon Gold']), art: false, now: 2000 });
@@ -81,6 +81,23 @@ test('faceted counts ignore the facet’s own filters', () => {
   assert.equal(genres.puzzle, 1);
   assert.equal(facetCounts(index, q, 'genre'), facetCounts(index, parseQuery('genre:rpg'), 'genre')); // memoized
   assert.deepEqual(withoutEach(index, parseQuery('genre:rpg region:eu')).map((x) => x.count), [2, 2]);
+});
+
+test('a value’s count is what picking it gives; shared credits split', () => {
+  for (const key of ['developer', 'publisher', 'genre', 'region', 'players', 'is'] as const) {
+    for (const v of facetCounts(index, parseQuery(''), key)) assert.equal(search(index, { text: '', filters: [{ key, value: v.value }] }).length, v.count, `${key}:${v.value}`);
+  }
+  assert.deepEqual(titles('dev:creatures'), ['Pokemon Gold']);
+  assert.deepEqual(titles('dev:nintendo'), ['Tetris', 'Zelda']);
+});
+
+test('invalid values stay text; ranges swap; the later of include/exclude wins', () => {
+  assert.deepEqual(parseQuery('genre:xyz zelda', index), { text: 'genre:xyz zelda', filters: [] });
+  assert.deepEqual(parseQuery('genre:rpg', index).filters, [{ key: 'genre', value: 'rpg' }]);
+  assert.deepEqual(parseQuery('year:2001..1998').filters, [{ key: 'year', value: '1998..2001' }]);
+  assert.deepEqual(parseQuery('genre:rpg -genre:rpg').filters, [{ key: 'genre', value: 'rpg', neg: true }]);
+  const shmup = buildIndex([game('S', { genre: "Shoot'em up" })], { saved: new Set(), art: false });
+  assert.deepEqual(shmup.items[0].v.genre, ['shmup']);
 });
 
 test('suggests keys and values with counts', () => {

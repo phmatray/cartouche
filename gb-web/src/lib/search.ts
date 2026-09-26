@@ -41,8 +41,8 @@ const CLOSED: Partial<Record<Key, Record<string, string>>> = {
 const SYN: Partial<Record<Key, Record<string, string>>> = {
   genre: {
     'role playing': 'rpg', roleplaying: 'rpg', 'role playing game': 'rpg', rpgs: 'rpg', jrpg: 'rpg',
-    'shoot em up': 'shmup', shootemup: 'shmup', shmups: 'shmup', shooter: 'shooting', simulation: 'sim',
-    'beat em up': 'brawler', beatemup: 'brawler', platform: 'platformer', platforms: 'platformer', music: 'rhythm',
+    'shoot em up': 'shmup', 'shootem up': 'shmup', shootemup: 'shmup', shmups: 'shmup', shooter: 'shooting', simulation: 'sim',
+    'beat em up': 'brawler', 'beatem up': 'brawler', beatemup: 'brawler', platform: 'platformer', platforms: 'platformer', music: 'rhythm',
     'not a game': 'notagame', 'mini games': 'minigames', minigame: 'minigames', party: 'minigames',
     race: 'racing', sport: 'sports', fighter: 'fighting', fight: 'fighting', puzzles: 'puzzle', strategy: 'strategy',
   },
@@ -68,6 +68,10 @@ const nameKey = (s: string) => {
   const k = f(s).replace(/\b(inc|ltd|co|corp|corporation|company|limited|kk|llc|gmbh|sa|the)\b/g, ' ').replace(/ +/g, ' ').trim();
   return NAME_SYN[k] ?? k;
 };
+/** Each studio of a shared credit ('Game Freak/Creatures', 'HAL Laboratory, Inc.') as [value, label]. */
+const credits = (s?: string) => (s ?? '').split(/\s*[/,&]\s*/).map((p) => [nameKey(p), p.trim()] as const).filter(([k]) => k);
+/** Catalog homebrew (it carries a license), not the test cartridges. */
+const isHomebrew = (g: GameEntry) => !!g.license && !/test/i.test(g.category);
 
 /** Canonical value of `raw` for facet `key`, or '' when it isn't a value of that facet. */
 export function normValue(key: Key, raw: string): string {
@@ -75,6 +79,7 @@ export function normValue(key: Key, raw: string): string {
   if (key === 'year') {
     const m = raw.trim().match(/^(\d{4})?\s*(?:(\.\.|-)\s*(\d{4})?)?$/);
     if (!m || (!m[1] && !m[3])) return '';
+    if (m[1] && m[3] && m[1] > m[3]) [m[1], m[3]] = [m[3], m[1]];
     return m[2] ? `${m[1] ?? ''}..${m[3] ?? ''}` : m[1];
   }
   let v = raw.trim().toLowerCase();
@@ -129,17 +134,21 @@ function languagesOf(g: GameEntry, regions: string[]): string[] {
   return regions.some((r) => r === 'us' || r === 'eu') ? ['en'] : [];
 }
 
-function genresOf(genre: string): string[] {
-  if (!genre || genre === 'Unknown' || genre === 'Test') return [];
-  const whole = normValue('genre', genre);
-  const words = whole.split(' ');
-  return [...new Set([whole, ...(words.length > 1 ? words.map((w) => normValue('genre', w)) : [])])];
+const genreKey = (genre: string) => (!genre || genre === 'Unknown' || genre === 'Test' ? '' : normValue('genre', genre));
+/** A game's genre as it reads on a tag ('Rpg' → 'RPG'), '' when unknown. */
+export const genreLabel = (g: GameEntry) => { const k = genreKey(g.genre); return k ? valueLabel('genre', k) : ''; };
+// Genres a word of a longer one may stand for ('Action RPG' is also Action and RPG; "Shoot'em up" isn't Up).
+const GENRES = new Set([...Object.values(SYN.genre!), 'action', 'adventure']);
+function genresOf(genre: string, pool: Set<string>): string[] {
+  const whole = genreKey(genre);
+  return whole ? [...new Set([whole, ...whole.split(' ').map((w) => normValue('genre', w)).filter((w) => pool.has(w))])] : [];
 }
 
 export function buildIndex(games: GameEntry[], ctx: IndexContext): SearchIndex {
   const now = ctx.now ?? Date.now();
   const labels = new Map<string, string>();
   const label = (k: Key, v: string, l: string) => { if (v && !labels.has(`${k}\0${v}`)) labels.set(`${k}\0${v}`, l); return v; };
+  const genres = new Set([...GENRES, ...games.map((g) => genreKey(g.genre))]);
   const items = games.map((g): Indexed => {
     const year = /^\d{4}$/.test(g.year ?? '') ? Number(g.year) : 0;
     const region = regionsOf(g);
@@ -152,10 +161,8 @@ export function buildIndex(games: GameEntry[], ctx: IndexContext): SearchIndex {
     else if (now - g.lastPlayed < RECENT_MS) is.push('recent');
     if (g.coverArt || (ctx.art && g.libretroName)) is.push('art'); // ponytail: "has box art" = could show one, not "the download succeeded"
     if (g.isLocal) is.push('mine');
-    if (/homebrew/i.test(g.category)) is.push('homebrew');
-    const dev = g.developer ? label('developer', nameKey(g.developer), g.developer) : '';
-    const pub = g.publisher ? label('publisher', nameKey(g.publisher), g.publisher) : '';
-    const genre = genresOf(g.genre);
+    if (isHomebrew(g)) is.push('homebrew');
+    const genre = genresOf(g.genre, genres);
     if (genre[0]) label('genre', genre[0], GENRE_LABEL[genre[0]] ?? g.genre);
     return {
       g, ...searchFields(g), year,
@@ -166,8 +173,8 @@ export function buildIndex(games: GameEntry[], ctx: IndexContext): SearchIndex {
         platform: g.platform ? [g.platform, ...(g.compatibility === 'dual' ? ['dual'] : [])] : [],
         decade: year ? [`${year - (year % 10)}s`] : [],
         year: year ? [String(year)] : [],
-        developer: dev ? [dev] : [],
-        publisher: pub ? [pub] : [],
+        developer: credits(g.developer).map(([v, l]) => label('developer', v, l)),
+        publisher: credits(g.publisher).map(([v, l]) => label('publisher', v, l)),
         language: languagesOf(g, region),
         save: g.saveType ? [g.saveType] : [],
         is,
@@ -190,9 +197,26 @@ export function indexFor(games: GameEntry[], saved: Set<string>, art: boolean): 
 
 const TOKEN = /(-?)([a-z]+):("([^"]*)"?|[^\s"]*)|"([^"]*)"?|(\S+)/gi;
 
-/** Parse the typed syntax. Never throws: whatever isn't a valid filter is free text (an empty `genre:` is dropped). */
-export function parseQuery(input: string): Query {
-  const filters: Filter[] = [];
+/** `base` plus `more`, a later filter on the same value replacing the earlier one (include and exclude are exclusive). */
+export const addFilters = (base: Filter[], more: Filter[]) =>
+  more.reduce((acc, x) => [...acc.filter((y) => y.key !== x.key || y.value !== x.value), x], base);
+
+const knownMemo = new WeakMap<SearchIndex, Map<Key, Set<string>>>();
+function known(index: SearchIndex, key: Key): Set<string> {
+  let m = knownMemo.get(index);
+  if (!m) knownMemo.set(index, (m = new Map()));
+  let s = m.get(key);
+  if (!s) m.set(key, (s = new Set(index.items.flatMap((it) => it.v[key]))));
+  return s;
+}
+const OPEN = new Set<Key>(['genre', 'developer', 'publisher']);
+
+/**
+ * Parse the typed syntax. Never throws: whatever isn't a valid filter is free text (an empty `genre:` is dropped).
+ * With an `index`, an open-facet value no game has (`genre:xyz`) is free text too.
+ */
+export function parseQuery(input: string, index?: SearchIndex): Query {
+  let filters: Filter[] = [];
   const text: string[] = [];
   for (const m of input.matchAll(TOKEN)) {
     const [whole, neg, rawKey, rawVal, quoted, phrase, word] = m;
@@ -201,8 +225,8 @@ export function parseQuery(input: string): Query {
       const raw = quoted ?? rawVal;
       if (key && !raw) continue; // still typing the value
       const values = key ? (key === 'developer' || key === 'publisher' || quoted !== undefined ? [raw] : raw.split(',')).map((v) => normValue(key, v)) : [];
-      if (key && values.length && values.every(Boolean)) {
-        for (const value of values) if (!filters.some((x) => x.key === key && x.value === value && !!x.neg === !!neg)) filters.push({ key, value, ...(neg ? { neg: true } : {}) });
+      if (key && values.length && values.every((v) => v && (!index || !OPEN.has(key) || known(index, key).has(v)))) {
+        filters = addFilters(filters, values.map((value) => ({ key, value, ...(neg ? { neg: true } : {}) })));
         continue;
       }
       text.push(whole.replace(/["]/g, ''));
@@ -225,9 +249,7 @@ function hit(it: Indexed, x: Filter): boolean {
     const [a, b = a] = x.value.split('..');
     return !!it.year && it.year >= (Number(a) || 0) && it.year <= (Number(b) || 9999);
   }
-  const vs = it.v[x.key];
-  if (x.key === 'developer' || x.key === 'publisher') return vs.some((v) => v === x.value || ` ${v} `.includes(` ${x.value} `));
-  return vs.includes(x.value);
+  return it.v[x.key].includes(x.value);
 }
 
 /** A predicate for the filters: OR within a facet, AND across facets, negated ones excluded. `skip` ignores one facet (for its own counts). */
@@ -293,16 +315,17 @@ export function gameTags(g: GameEntry): { key: Key; label: string; filter: Filte
   const out: { key: Key; label: string; filter: Filter }[] = [];
   const add = (key: Key, value: string, label: string) => { if (value) out.push({ key, label, filter: { key, value } }); };
   if (/^\d{4}$/.test(g.year ?? '')) add('year', g.year!, g.year!);
-  if (g.developer) add('developer', nameKey(g.developer), g.developer);
-  if (g.publisher && nameKey(g.publisher) !== nameKey(g.developer ?? '')) add('publisher', nameKey(g.publisher), g.publisher);
-  const genre = genresOf(g.genre)[0];
+  const devs = credits(g.developer);
+  for (const [v, l] of devs) add('developer', v, l);
+  for (const [v, l] of credits(g.publisher)) if (!devs.some(([d]) => d === v)) add('publisher', v, l);
+  const genre = genreKey(g.genre);
   if (genre) add('genre', genre, GENRE_LABEL[genre] ?? g.genre);
   if (g.players) add('players', g.players > 1 ? '2+' : '1', g.players > 1 ? `1–${g.players} players · link cable` : '1 player');
   const regions = regionsOf(g);
   if (regions.includes('world')) add('region', 'world', 'World');
   else for (const r of regions) add('region', r, valueLabel('region', r));
   if (g.platform) add('platform', g.compatibility === 'dual' ? 'dual' : g.platform, g.compatibility === 'dual' ? 'Game Boy & Color' : valueLabel('platform', g.platform));
-  if (/homebrew/i.test(g.category)) add('is', 'homebrew', 'Homebrew');
+  if (isHomebrew(g)) add('is', 'homebrew', 'Homebrew');
   return out;
 }
 
