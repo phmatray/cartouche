@@ -19,7 +19,7 @@ jobs:
     name: Core tests (Rust)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -31,7 +31,7 @@ jobs:
 
       # Third-party test ROMs are downloaded, never committed.
       - name: Cache test ROMs
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: gb-core/test-roms
           key: test-roms-${{ hashFiles('scripts/fetch-test-roms.sh') }}
@@ -54,7 +54,7 @@ jobs:
     name: Web app (WASM + lint + build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -73,7 +73,7 @@ jobs:
         working-directory: gb-core
         run: RUSTFLAGS="--remap-path-prefix=$HOME=~" wasm-pack build --target web --out-dir pkg
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
