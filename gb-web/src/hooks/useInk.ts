@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { GameEntry } from '../types/game';
-import { fallbackInk, sampleInk } from '../lib/cover-art';
+import { cachedInk, fallbackInk, sampleInk } from '../lib/cover-art';
 import { useCoverArt } from './useCoverArt';
 
 /** The game's flood ink, sampled from its box art (deterministic fallback while loading or without art). */
@@ -13,5 +13,5 @@ export function useInk(game: GameEntry): string {
     sampleInk(coverUrl).then((ink) => { if (!cancelled) setSample({ url: coverUrl, ink }); }).catch(() => {});
     return () => { cancelled = true; };
   }, [coverUrl]);
-  return (sample?.url === coverUrl && sample.ink) || fallbackInk(game.id);
+  return (sample?.url === coverUrl && sample.ink) || (coverUrl && cachedInk(coverUrl)) || fallbackInk(game.id);
 }

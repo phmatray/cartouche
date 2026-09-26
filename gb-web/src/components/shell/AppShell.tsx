@@ -34,10 +34,9 @@ export function AppShell() {
   const [shortcuts, setShortcuts] = useState(false);
   const [dropping, setDropping] = useState(false);
 
-  // Close the mobile menu and go back to the top on navigation.
+  // Close the mobile menu on navigation. Scroll: <ScrollRestoration> (top on a new page, restored on back).
   const [lastPath, setLastPath] = useState(pathname);
   if (lastPath !== pathname) { setLastPath(pathname); setMenu(false); }
-  useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
 
   // The overlay is open while the URL has ?q= (over whatever page is showing).
   const openSearch = () => navigate(paths.search('').slice(1), { state: searchState() });
@@ -100,7 +99,8 @@ export function AppShell() {
         <NavLink to="/add">Add ROMs{I.next}</NavLink>
       </nav>
 
-      <div className="route" key={pathname}><Outlet /></div>
+      {/* A new page remounts (fresh state); a settings section is the same page, so focus stays in its table of contents. */}
+      <div className="route" key={pathname.startsWith('/settings') ? '/settings' : pathname}><Outlet /></div>
 
       <footer className="foot">
         <div className="wrap">

@@ -27,6 +27,18 @@ const COMPARE: Record<Sort, (a: GameEntry, b: GameEntry) => number> = {
   year: (a, b) => (Number(a.year) || 9999) - (Number(b.year) || 9999) || byName(a, b),
 };
 
+/**
+ * State kept for the tab's session (first option by default), so coming back from a game finds the
+ * shelf as it was left: same filter, sort and view, and the box back in its slot.
+ */
+function useKept<T extends string>(key: string, options: readonly T[]) {
+  const [value, set] = useState<T>(() => {
+    try { const v = sessionStorage.getItem(key) as T; return options.includes(v) ? v : options[0]; } catch { return options[0]; }
+  });
+  const keep = (v: T) => { set(v); try { sessionStorage.setItem(key, v); } catch { /* storage blocked: kept for this visit only */ } };
+  return [value, keep] as const;
+}
+
 /** Arrow keys move focus between boxes (TV / gamepad-style spatial navigation). */
 function useSpatialFocus() {
   useEffect(() => {
@@ -61,9 +73,9 @@ function useSpatialFocus() {
 export function LibraryPage() {
   const { games, savedIds, loading, storageError, toggleFavorite } = useGameLibrary();
   const index = useSearchIndex();
-  const [filter, setFilter] = useState<Filter>('all');
-  const [sort, setSort] = useState<Sort>('name');
-  const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [filter, setFilter] = useKept<Filter>('lib.filter', Object.keys(FILTERS) as Filter[]);
+  const [sort, setSort] = useKept<Sort>('lib.sort', SORTS.map(([s]) => s));
+  const [view, setView] = useKept('lib.view', ['grid', 'list'] as const);
   const [letter, setLetter] = useState<string | null>(null);
   const catalogRef = useRef<HTMLElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);

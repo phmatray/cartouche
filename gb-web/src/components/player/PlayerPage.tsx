@@ -15,6 +15,7 @@ import { presetOf } from '../../shaders/filters';
 import { BUTTON_NUMBERS } from '../../utils/keybindings';
 import { getActiveProfileId, getSram } from '../../lib/db';
 import { ago, owned, paths, tagOf } from '../../lib/ui';
+import { settled } from '../../lib/transitions';
 import { I } from '../icons';
 import { Title } from '../library/Cover';
 import { useInk } from '../../hooks/useInk';
@@ -61,6 +62,7 @@ function Player({ game }: { game: GameEntry }) {
   const [savedJustNow, setSavedJustNow] = useState(false);
   const [badRom, setBadRom] = useState(false);
   const [idle, setIdle] = useState(false);
+  const [lit, setLit] = useState(false); // the first frame is on the LCD (it fades in over the dark screen)
   const rootRef = useRef<HTMLDivElement>(null);
   const ink = useInk(game);
   const header = useRomHeader(game);
@@ -78,7 +80,7 @@ function Player({ game }: { game: GameEntry }) {
   const loadAndShow = useCallback((data: Uint8Array, frame?: Uint8Array | Uint8ClampedArray) => {
     if (!loadState(data, frame)) return false;
     const fb = framebufferSnapshot();
-    if (fb) renderFrame(new Uint8ClampedArray(fb.buffer, fb.byteOffset, fb.length), true);
+    if (fb) { renderFrame(new Uint8ClampedArray(fb.buffer, fb.byteOffset, fb.length), true); setLit(true); }
     return true;
   }, [loadState, framebufferSnapshot, renderFrame]);
   const saves = useSaveStates(game.id, { ...emu, loadState: loadAndShow }, saveTo);
@@ -117,7 +119,8 @@ function Player({ game }: { game: GameEntry }) {
   // and suspends the sound again after a call or a trip to the Home Screen.
   useEffect(() => {
     const start = () => { ensureStarted().catch(() => {}); };
-    start();
+    // After the landing: creating the AudioContext blocks the main thread (the click still counts as the gesture).
+    settled().then(start);
     const events = ['pointerdown', 'touchend', 'keydown'];
     events.forEach((e) => window.addEventListener(e, start));
     return () => events.forEach((e) => window.removeEventListener(e, start));
@@ -172,7 +175,7 @@ function Player({ game }: { game: GameEntry }) {
     if (isRewinding) n = 1; // rewind runs at its own pace, whatever the speed
     let fb: Uint8ClampedArray | null = null;
     for (let i = 0; i < n; i++) fb = wrapRunFrame(runOne) ?? fb;
-    if (fb) renderFrame(fb);
+    if (fb) { renderFrame(fb); setLit(true); }
     if (n) { played.current += dt; dirty.current = true; }
   }, [wrapRunFrame, runOne, renderFrame, isRewinding]);
   const looping = romLoaded && (isRunning || isRewinding);
@@ -304,7 +307,7 @@ function Player({ game }: { game: GameEntry }) {
           <div className={`rw${isRewinding ? ' on' : ''}`}>{I.rew}Rewinding<span className="meter"><i style={{ width: `${bufferFill * 100}%` }} /></span></div>
           <div className="screen" style={screenStyle}>
             <div className="frame">
-              <canvas key={canvasKey} ref={canvasRef} className="lcd" width={800} height={720} aria-label={`${game.title} screen`} />
+              <canvas key={canvasKey} ref={canvasRef} className={`lcd${lit ? ' lit' : ''}`} width={800} height={720} aria-label={`${game.title} screen`} />
               {badRom ? (
                 <div className="overlay">
                   <b>This file can’t be played</b>

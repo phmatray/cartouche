@@ -200,6 +200,8 @@ export function answerBoxArt(consent: boolean) {
 }
 
 const inkCache = new Map<string, string | null>();
+/** The ink of a cover already sampled (a page opened from its box starts in the right colour). */
+export const cachedInk = (url: string) => inkCache.get(url) ?? null;
 
 /**
  * The game's "flood" ink: the dominant saturated hue of its box art, laid down at a fixed
