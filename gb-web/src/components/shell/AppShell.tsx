@@ -2,11 +2,13 @@ import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useGameLibrary } from '../../hooks/useGameLibrary';
 import { useBoxArtProgress } from '../../lib/cover-art';
+import { queueImport, useImports } from '../../lib/import-queue';
+import { useInstall } from '../../lib/pwa';
 import { paths, searchState } from '../../lib/ui';
 import { I, REPO_URL } from '../icons';
-import { queueImport } from './actions';
+import { startInstall } from './actions';
 import { BoxArtDialog } from './BoxArtDialog';
-import { InstallHint } from './InstallHint';
+import { InstallHint, InstallSheet } from './InstallHint';
 import { SearchDialog } from './SearchDialog';
 import { ShortcutsDialog } from './Shortcuts';
 import { Toasts } from './Toasts';
@@ -33,6 +35,7 @@ export function AppShell() {
   const [menu, setMenu] = useState(false);
   const [shortcuts, setShortcuts] = useState(false);
   const [dropping, setDropping] = useState(false);
+  const canInstall = useInstall((s) => s.can) !== null;
 
   // Close the mobile menu on navigation. Scroll: <ScrollRestoration> (top on a new page, restored on back).
   const [lastPath, setLastPath] = useState(pathname);
@@ -97,6 +100,7 @@ export function AppShell() {
       <nav className={`mnav${menu ? ' open' : ''}`} id="mnav" aria-label="Main">
         {NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === '/'}>{label}{I.next}</NavLink>)}
         <NavLink to="/add">Add ROMs{I.next}</NavLink>
+        {canInstall && <button type="button" onClick={() => { setMenu(false); startInstall(); }}>Install the app{I.load}</button>}
       </nav>
 
       {/* A new page remounts (fresh state); a settings section is the same page, so focus stays in its table of contents. */}
@@ -106,6 +110,7 @@ export function AppShell() {
         <div className="wrap">
           <span><b>Everything stays in this browser.</b> ROMs, saves and play time live on your device. No account, no upload.</span>
           <Link to="/settings/storage">Back up your data</Link>
+          {canInstall && <a href="#install" onClick={(e) => { e.preventDefault(); startInstall(); }}>Install the app</a>}
           <a href="#shortcuts" onClick={(e) => { e.preventDefault(); setShortcuts(true); }}>Keyboard shortcuts</a>
           <Link to="/legal">Legal</Link>
           <a href={REPO_URL} target="_blank" rel="noopener">Source on GitHub</a>
@@ -120,20 +125,30 @@ export function AppShell() {
       </div>
       <BoxArtDialog />
       <InstallHint />
+      <InstallSheet />
       <Toasts />
     </>
   );
 }
 
-/** "Fetching box art · n of m": a thin yellow bar pinned under the header while covers download (nothing when idle). */
+/**
+ * "Importing ROMs · n of m" (away from the Add ROMs page, which shows its own) or "Fetching box art · n of m":
+ * a thin yellow bar pinned under the header while it runs (nothing when idle).
+ */
 function ArtProgress() {
-  const { n, of } = useBoxArtProgress();
+  const art = useBoxArtProgress();
+  const onAdd = useLocation().pathname === '/add';
+  const total = useImports((s) => s.rows.length);
+  const left = useImports((s) => s.rows.reduce((k, r) => k + +(r.st === 'work'), 0));
+  const imp = left > 0 && !onAdd;
+  const [n, of] = imp ? [total - left, total] : [art.n, art.of];
+  const label = imp ? 'Importing ROMs' : 'Fetching box art';
   return (
     <div className="artbar" role="status" aria-live="polite">
       {of > 0 && (
         <>
-          <span className="meter" role="progressbar" aria-label="Fetching box art" aria-valuemin={0} aria-valuemax={of} aria-valuenow={n}><i style={{ width: `${(n / of) * 100}%` }} /></span>
-          <span className="wrap"><span className="cnt">Fetching box art · {n} of {of}</span></span>
+          <span className="meter" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={of} aria-valuenow={n}><i style={{ width: `${(n / of) * 100}%` }} /></span>
+          <span className="wrap"><span className="cnt">{label} · {n.toLocaleString('en-US')} of {of.toLocaleString('en-US')}</span></span>
         </>
       )}
     </div>

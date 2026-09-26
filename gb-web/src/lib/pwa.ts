@@ -1,12 +1,23 @@
 /** Offline app shell, updates, and "Install as an app" (the browser's prompt, or the Share sheet on iPhone and iPad). */
+import { create } from 'zustand';
+
 interface InstallPrompt extends Event { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> }
 
 let deferred: InstallPrompt | null = null;
 const VERSION_KEY = 'cartouche-version';
 
+/**
+ * How this browser can install the app right now, for the menus: 'prompt' (its own install dialog),
+ * 'ios' (Share › Add to Home Screen, in Safari), or null (installed, or no way offered).
+ */
+export const useInstall = create<{ can: 'prompt' | 'ios' | null }>(() => ({ can: null }));
+const refresh = () => useInstall.setState({ can: isInstalled() ? null : deferred ? 'prompt' : isIos() ? 'ios' : null });
+
 export function setupPwa(onUpdated: () => void) {
-  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e as InstallPrompt; });
-  window.addEventListener('appinstalled', () => { deferred = null; });
+  window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e as InstallPrompt; refresh(); });
+  window.addEventListener('appinstalled', () => { deferred = null; useInstall.setState({ can: null }); });
+  matchMedia('(display-mode: standalone)').addEventListener?.('change', refresh);
+  refresh();
   // A Home Screen app asks to keep its storage (Safari grants it to installed apps; elsewhere it's a request).
   if (isInstalled()) navigator.storage?.persist?.().catch(() => {});
   // Production only: in dev the service worker would cache Vite's live modules.
@@ -60,6 +71,7 @@ export async function promptInstall(): Promise<boolean> {
   if (!deferred) return false;
   const d = deferred;
   deferred = null;
+  refresh();
   await d.prompt();
   return (await d.userChoice).outcome === 'accepted';
 }

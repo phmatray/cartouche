@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { create } from 'zustand';
 import type { GameEntry, GameLibrary } from '../types/game';
-import { getAllRoms, saveRom, deleteRom, getRom, getAllGameMeta, getGameMeta, setGameMeta, deleteSave, deleteSaveState, deleteScreenshots, getSavedGameIds, listProfiles, resumeStateId, slotStateId, SLOT_COUNT } from '../lib/db';
+import { addRom, getRomIds, saveRom, deleteRom, getRom, getAllGameMeta, getGameMeta, setGameMeta, deleteSave, deleteSaveState, deleteScreenshots, getSavedGameIds, listProfiles, resumeStateId, slotStateId, SLOT_COUNT, type RomSummary, type StoredGameMeta } from '../lib/db';
 import { parseRomTitle, parseRomHeader, computeSha1, isGameBoyRom } from '../lib/rom-utils';
 import { lookupByHash, type GameDbEntry } from '../lib/gamedb';
 import { parseRegion } from '../lib/catalog-utils';
@@ -28,6 +28,7 @@ function groupByCategory(games: GameEntry[]): GameLibrary {
 
 export const titleKey = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
+/** `data`: the ROM, or just its header (the first 0x150 bytes): nothing past it is read. */
 function localEntry(id: string, title: string, genre: string, data: Uint8Array, sha1: string, dbEntry: GameDbEntry | undefined, importedAt?: number): GameEntry {
   const h = parseRomHeader(data);
   return {
@@ -90,20 +91,24 @@ let loadPromise: Promise<void> | null = null;
 async function loadLibrary() {
   let stored;
   try {
-    stored = await Promise.all([getAllRoms(), getAllGameMeta(), getSavedGameIds()]);
+    stored = await Promise.all([getRomIds(), getAllGameMeta(), getSavedGameIds()]);
   } catch {
     // Storage blocked (private mode, site data off, some webviews): the bundled games still play.
     useLibraryStore.setState({ games: CATALOG, savedIds: new Set(), loading: false, storageError: true });
     return;
   }
-  const [userRoms, allMeta, savedIds] = stored;
+  const [romIds, allMeta, savedIds] = stored;
   const metaMap = new Map(allMeta.map((m) => [m.id, m]));
 
-  const userEntries = await Promise.all(userRoms.map(async (rom) => {
-    const sha1 = await computeSha1(rom.data);
-    const dbEntry = await lookupByHash(sha1);
+  const roms: [string, RomSummary][] = [];
+  for (const id of romIds) { // one at a time: a missing summary reads its ROM, and never all of them at once
+    const rom = await romSummary(id, metaMap.get(id));
+    if (rom) roms.push([id, rom]);
+  }
+  const userEntries = await Promise.all(roms.map(async ([id, rom]) => {
+    const dbEntry = await lookupByHash(rom.sha1);
     const genre = (rom.genre && rom.genre !== 'Unknown') ? rom.genre : dbEntry?.genre || rom.genre || 'Unknown';
-    return localEntry(rom.id, dbEntry?.title || rom.title, genre, rom.data, sha1, dbEntry);
+    return localEntry(id, dbEntry?.title || rom.title, genre, rom.head, rom.sha1, dbEntry);
   }));
 
   const all = userEntries.reduce(withLocal, CATALOG).map((g) => {
@@ -115,46 +120,76 @@ async function loadLibrary() {
   useLibraryStore.setState({ games: all, savedIds, loading: false, storageError: false });
 }
 
+const summarize = async (title: string, genre: string, data: Uint8Array): Promise<RomSummary> =>
+  ({ title, genre, sha1: await computeSha1(data), head: data.slice(0, 0x150) });
+
+/** A ROM's summary, from its meta; computed from the ROM once (added before summaries, or restored from a backup) and kept. */
+async function romSummary(id: string, meta: StoredGameMeta | undefined): Promise<RomSummary | undefined> {
+  if (meta?.rom) return meta.rom;
+  const rom = await getRom(id);
+  if (!rom) return undefined;
+  const summary = await summarize(rom.title, rom.genre, rom.data);
+  await setGameMeta({ ...(await getGameMeta(id)), id, rom: summary }).catch(() => {}); // storage full: computed again next time
+  return summary;
+}
+
+/**
+ * Library updates from an import are applied together, a few times a second: one store update per ROM
+ * would rebuild the search index and re-render every screen hundreds of times during a big import.
+ */
+let pending: GameEntry[] = [];
+let flushTimer: ReturnType<typeof setTimeout> | undefined;
+function flushPending() {
+  clearTimeout(flushTimer);
+  flushTimer = undefined;
+  if (!pending.length) return;
+  const add = pending;
+  pending = [];
+  setGames((prev) => add.reduce(withLocal, prev));
+}
+
 /** Load the library again from IndexedDB (after a restore). */
 export const reloadLibrary = () => (loadPromise = loadLibrary());
 
 export const isRomFile = (name: string) => /\.(gb|gbc|rom|bin)$/i.test(name);
 
+/** The biggest Game Boy ROM: 8 MB (header size byte 8). */
+export const MAX_ROM_SIZE = 0x8000 << 8;
+
 /**
- * Add one file to the library, identified by its SHA-1 against the GameDB.
+ * Add one ROM file's bytes to the library, identified by its SHA-1 against the GameDB.
  * A dump already on the shelf is reported as 'dup' unless `force` stores it again as a second copy.
+ * Storage errors (a full disk: QuotaExceededError) are thrown; nothing is half-stored.
  */
-export async function importFile(file: File, force = false): Promise<ImportOutcome> {
-  if (!isRomFile(file.name)) return { status: 'bad' };
-  const data = new Uint8Array(await file.arrayBuffer());
-  if (!isGameBoyRom(data)) return { status: 'bad' };
+export async function importRom(name: string, data: Uint8Array, force = false): Promise<ImportOutcome> {
+  if (!isRomFile(name) || !isGameBoyRom(data)) return { status: 'bad' };
   await (loadPromise ??= loadLibrary());
   const sha1 = await computeSha1(data);
-  const onShelf = useLibraryStore.getState().games.find((g) => g.isLocal && g.sha1 === sha1);
+  const onShelf = pending.find((g) => g.sha1 === sha1) ?? useLibraryStore.getState().games.find((g) => g.isLocal && g.sha1 === sha1);
   if (onShelf && !force) return { status: 'dup', id: onShelf.id, title: onShelf.title, sha1 };
   const dbEntry = await lookupByHash(sha1);
-  const title = dbEntry?.title || file.name.replace(/\.[^.]+$/, '');
+  const title = dbEntry?.title || name.replace(/^.*\//, '').replace(/\.[^.]+$/, '');
   const genre = dbEntry?.genre || 'Unknown';
-  const base = slugify(title) || 'rom';
-  let id = base;
-  for (let n = 2; await getRom(id); n++) id = `${base}-${n}`; // never overwrite another ROM
   const importedAt = Date.now();
-  await saveRom({ id, title, genre, data });
-  await setGameMeta({ id, importedAt });
+  const summary = { title, genre, sha1, head: data.slice(0, 0x150) };
+  const id = await addRom(slugify(title) || 'rom', { title, genre, data }, { importedAt, rom: summary });
   const entry = localEntry(id, title, genre, data, sha1, dbEntry, importedAt);
-  const known = !!dbEntry || !!catalogMatch(useLibraryStore.getState().games, entry); // a GameDB dump, or a catalog homebrew
-  setGames((prev) => withLocal(prev, entry));
-  const added = useLibraryStore.getState().games.find((g) => g.id === id);
+  const cat = catalogMatch(useLibraryStore.getState().games, entry);
+  const added = withLocal(cat ? [cat] : [], entry).at(-1)!; // as it will show on the shelf
+  pending.push(entry);
+  flushTimer ??= setTimeout(flushPending, 400);
   // Box art on: fetch it now (no request when off, unrecognized, or the game has its own bundled cover).
-  if (added && needsDownload(added)) getCoverArtUrl(added.libretroName, added.platform);
-  return { status: known ? 'ok' : 'unk', id, title: added?.title ?? title, sha1 };
+  if (needsDownload(added)) getCoverArtUrl(added.libretroName, added.platform);
+  return { status: dbEntry || cat ? 'ok' : 'unk', id, title: added.title, sha1 }; // known: a GameDB dump, or a catalog homebrew
 }
 
 /** Give a user ROM a new title (for files the GameDB doesn't know). */
 export async function renameGame(id: string, title: string) {
-  const rom = await getRom(id);
+  flushPending();
+  const [rom, meta] = await Promise.all([getRom(id), getGameMeta(id)]);
   if (!rom) return;
   await saveRom({ ...rom, title });
+  if (meta?.rom) await setGameMeta({ ...meta, rom: { ...meta.rom, title } });
   setGames((prev) => prev.map((g) => (g.id === id ? { ...g, title } : g)));
 }
 
@@ -219,7 +254,7 @@ export function useGameLibrary() {
   const linkRomToGame = useCallback(async (game: GameEntry, data: Uint8Array, sha1: string) => {
     const importedAt = Date.now();
     await saveRom({ id: game.id, title: game.title, genre: game.genre, data });
-    await setGameMeta({ ...(await getGameMeta(game.id)), id: game.id, importedAt });
+    await setGameMeta({ ...(await getGameMeta(game.id)), id: game.id, importedAt, rom: await summarize(game.title, game.genre, data) });
     const dbEntry = await lookupByHash(sha1);
     setGames((prev) => withLocal(prev, localEntry(game.id, game.title, game.genre, data, sha1, dbEntry, importedAt)));
   }, []);

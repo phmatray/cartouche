@@ -1,8 +1,12 @@
 import { create } from 'zustand';
+import { promptInstall, useInstall } from '../../lib/pwa';
 
-/** Files waiting for the Add ROMs page (dropped anywhere in the app, or chosen there). */
-export const usePendingImport = create<{ files: File[] }>(() => ({ files: [] }));
-export const queueImport = (files: File[]) => { if (files.length) usePendingImport.setState((s) => ({ files: [...s.files, ...files] })); };
+/** "Install the app" (menu, first-launch hero): the browser's own dialog, else the iPhone/iPad steps. */
+export const useInstallSheet = create<{ open: boolean }>(() => ({ open: false }));
+export function startInstall() {
+  if (useInstall.getState().can === 'prompt') promptInstall().catch(() => {});
+  else useInstallSheet.setState({ open: true });
+}
 
 export type Tone = '' | 'm' | 'c';
 export interface ToastAction { label: string; run: () => void }

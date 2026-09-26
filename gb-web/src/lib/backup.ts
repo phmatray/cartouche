@@ -119,7 +119,7 @@ export async function restoreBackup(b: Backup, withSettings: boolean): Promise<R
       ...o, isFavorite: !!(o.isFavorite || m.isFavorite), totalPlayTime: max(o.totalPlayTime, m.totalPlayTime),
       sessions: max(o.sessions, m.sessions), lastPlayed: max(o.lastPlayed, m.lastPlayed),
       importedAt: o.importedAt ?? m.importedAt,
-    } : m);
+    } : { ...m, rom: undefined }); // a backup's ROM summary is untrusted: the next launch computes it from the ROM itself
   }
 
   const shotKey = (s: StoredScreenshot) => `${s.gameId}@${s.timestamp}`;

@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { device, isInstalled, isIosSafari } from '../../lib/pwa';
+import { trapTab } from '../../lib/ui';
 import { useSettingsStore } from '../../store/settingsStore';
 import { I } from '../icons';
+import { toast, useInstallSheet } from './actions';
 
 const SEEN = 'cartouche-ios-install-hint';
 
@@ -33,5 +35,54 @@ export function InstallHint() {
         <button className="btn k" onClick={() => setOpen(false)}>Got it</button>
       </div>
     </aside>
+  );
+}
+
+/**
+ * "Install the app" on iPhone and iPad (opened from the menu): Safari's two taps. Other iOS browsers and
+ * in-app browsers can't add to the Home Screen, so the page has to be opened in Safari first.
+ */
+export function InstallSheet() {
+  const open = useInstallSheet((s) => s.open);
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const d = ref.current;
+    if (open && d && !d.open) d.showModal();
+    if (!open && d?.open) d.close();
+  }, [open]);
+  const close = () => useInstallSheet.setState({ open: false });
+  const safari = isIosSafari();
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(new URL(import.meta.env.BASE_URL, location.href).href);
+      toast('Link copied: paste it in Safari’s address bar', 'c');
+    } catch {
+      toast('Couldn’t copy: open the Share menu and choose Open in Safari', 'm');
+    }
+  };
+  return (
+    <dialog ref={ref} className="mdlg isheet" aria-labelledby="isheet-t" onClose={close} onKeyDown={trapTab}
+      onClick={(e) => { if (e.target === ref.current) close(); }}>
+      {open && (
+        <>
+          <span className="bar" aria-hidden="true"><i /><i /><i /></span>
+          <div className="in">
+            <h2 id="isheet-t">Install on your {device()}</h2>
+            {safari ? (
+              <p><IosStep safari /><small>On recent iOS, Share is in the ⋯ menu. Cartouche then opens full screen from its icon, plays offline and keeps your saves.</small></p>
+            ) : (
+              <>
+                <p><b>Open this page in Safari first.</b> On iPhone and iPad, only Safari can add an app to the Home Screen.</p>
+                <p><IosStep /><small>It then opens full screen from its icon, plays offline and keeps your saves.</small></p>
+              </>
+            )}
+            <div className="acts">
+              {!safari && <button className="btn line" onClick={copy}>{I.link}Copy link</button>}
+              <button className="btn k" onClick={close} autoFocus>Got it</button>
+            </div>
+          </div>
+        </>
+      )}
+    </dialog>
   );
 }
