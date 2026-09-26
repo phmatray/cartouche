@@ -55,22 +55,6 @@ export function CartridgePicker({ open, player, games, current, onPick, onFile, 
   const sel = rowIdx.length ? rowIdx[Math.min(active, rowIdx.length - 1)] : -1;
   const selEntry = sel >= 0 ? entries[sel] as Row : null;
 
-  useEffect(() => {
-    const d = ref.current;
-    if (!d) return;
-    if (open && !d.open) {
-      back.current = document.activeElement as HTMLElement | null;
-      d.showModal();
-      // Start on the cartridge already in the slot (its first row: Link-ready, Recently played, then A–Z), else the first row.
-      const i = Math.max(0, rowIdx.findIndex((r) => (entries[r] as Row).g.id === current));
-      setActive(i);
-      input.current?.focus();
-      reveal(i, true);
-    }
-    if (!open && d.open) d.close();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on open/close
-  }, [open]);
-
   const measure = () => { const l = list.current; if (l) setView({ top: l.scrollTop, h: l.clientHeight }); };
   useEffect(() => { if (!open) return; addEventListener('resize', measure); return () => removeEventListener('resize', measure); }, [open]);
 
@@ -89,6 +73,22 @@ export function CartridgePicker({ open, player, games, current, onPick, onFile, 
     else if (bottom > l.scrollTop + l.clientHeight) l.scrollTop = bottom - l.clientHeight;
     measure(); // render the new window now, not a frame later on the scroll event
   };
+  useEffect(() => {
+    const d = ref.current;
+    if (!d) return;
+    if (open && !d.open) {
+      back.current = document.activeElement as HTMLElement | null;
+      d.showModal();
+      // Start on the cartridge already in the slot (its first row: Link-ready, Recently played, then A–Z), else the first row.
+      const i = Math.max(0, rowIdx.findIndex((r) => (entries[r] as Row).g.id === current));
+      setActive(i);
+      input.current?.focus();
+      reveal(i, true);
+    }
+    if (!open && d.open) d.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on open/close
+  }, [open]);
+
   const move = (n: number) => {
     if (!rowIdx.length) return;
     const next = Math.max(0, Math.min(rowIdx.length - 1, n));
