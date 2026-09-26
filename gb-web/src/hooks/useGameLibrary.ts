@@ -37,7 +37,7 @@ function localEntry(id: string, title: string, genre: string, data: Uint8Array, 
     region: dbEntry?.region,
     regions: dbEntry?.region ? parseRegion(`(${dbEntry.region})`) : [],
     players: dbEntry?.players,
-    platform: dbEntry?.platform,
+    platform: dbEntry?.platform ?? (data[0x143] & 0x80 ? 'gbc' : 'gb'), // unknown dump: the header's CGB flag
     libretroName: dbEntry?.libretroName,
   };
 }

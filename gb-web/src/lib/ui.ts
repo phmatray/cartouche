@@ -57,6 +57,18 @@ export function tagOf(g: GameEntry, saved: Set<string>): [TagKind, string] {
   return ['rom', 'Your ROM'];
 }
 
+/** Relevance of a game for a (lower-case) query; 0 = no match. */
+export function score(g: GameEntry, q: string): number {
+  const t = g.title.toLowerCase();
+  const s = t === q ? 100 : t.startsWith(q) ? 80 : ` ${t}`.includes(` ${q}`) ? 60 : t.includes(q) ? 40
+    : `${g.developer ?? ''} ${g.year ?? ''} ${g.genre}`.toLowerCase().includes(q) ? 10 : 0;
+  return s && s + (owned(g) ? 5 : 0);
+}
+
+/** Two players per the GameDB. Unknown (catalog homebrew, unrecognized dumps) is not guessed. */
+export const linkReady = (g: GameEntry) => (g.players ?? 0) >= 2;
+export const PLATFORM = { gb: 'Game Boy', gbc: 'Game Boy Color' } as const;
+
 /** "Developer · 1993" with missing parts dropped. */
 export const byline = (g: GameEntry) => [g.developer, g.year].filter(Boolean).join(' · ');
 

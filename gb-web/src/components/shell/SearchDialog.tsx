@@ -1,24 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useGameLibrary } from '../../hooks/useGameLibrary';
-import { byline, owned, paths, sortTitle, tagOf } from '../../lib/ui';
-import type { GameEntry } from '../../types/game';
+import { byline, owned, paths, score, sortTitle, tagOf } from '../../lib/ui';
 import { I } from '../icons';
 import { Cover } from '../library/Cover';
 
 const MAX_RESULTS = 60;
 
-/** Relevance of a game for a (lower-case) query; 0 = no match. */
-function score(g: GameEntry, q: string): number {
-  const t = g.title.toLowerCase();
-  const s = t === q ? 100 : t.startsWith(q) ? 80 : ` ${t}`.includes(` ${q}`) ? 60 : t.includes(q) ? 40
-    : `${g.developer ?? ''} ${g.year ?? ''} ${g.genre}`.toLowerCase().includes(q) ? 10 : 0;
-  return s && s + (owned(g) ? 5 : 0);
-}
-
-function highlight(s: string, q: string): ReactNode {
-  const i = q ? s.toLowerCase().indexOf(q) : -1;
-  return i < 0 ? s : <>{s.slice(0, i)}<mark>{s.slice(i, i + q.length)}</mark>{s.slice(i + q.length)}</>;
+/** `text` with the first match of the (lower-case) query marked. */
+export function Hl({ text, q }: { text: string; q: string }): ReactNode {
+  const i = q ? text.toLowerCase().indexOf(q) : -1;
+  return i < 0 ? text : <>{text.slice(0, i)}<mark>{text.slice(i, i + q.length)}</mark>{text.slice(i + q.length)}</>;
 }
 
 /** Full-screen search over the whole library ("/" opens it). */
@@ -82,7 +74,7 @@ export function SearchDialog({ open, onClose }: { open: boolean; onClose: () => 
                 <li key={g.id}>
                   <Link to={paths.game(g.id)} role="option" aria-selected={i === sel} onClick={close}>
                     <Cover game={g} />
-                    <span className="t">{highlight(g.title, q)}<small>{[byline(g), g.genre !== 'Unknown' ? g.genre : ''].filter(Boolean).join(' · ')}</small></span>
+                    <span className="t"><Hl text={g.title} q={q} /><small>{[byline(g), g.genre !== 'Unknown' ? g.genre : ''].filter(Boolean).join(' · ')}</small></span>
                     <span className={`tag ${kind}`} style={{ margin: 0 }}>{label}</span>
                   </Link>
                 </li>
