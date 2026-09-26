@@ -22,6 +22,9 @@ export function ago(ts: number): string {
   return new Date(ts).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' });
 }
 
+/** A byte count as KB, MB or GB (anything stored shows at least 1 KB). */
+export const mb = (n: number) => (n >= 1073741824 ? `${(n / 1073741824).toFixed(1)} GB` : n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(n ? 1 : 0, Math.round(n / 1024))} KB`);
+
 export function dur(seconds?: number): string {
   if (!seconds) return '—';
   if (seconds < 60) return '< 1 m';

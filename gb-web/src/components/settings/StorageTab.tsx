@@ -5,30 +5,41 @@ import { refreshSavedIds, reloadLibrary, useGameLibrary } from '../../hooks/useG
 import { useSettingsStore } from '../../store/settingsStore';
 import { toast } from '../shell/actions';
 import { ConfirmDialog, type ConfirmRequest } from '../shell/ConfirmDialog';
-import { askBoxArt, boxArtBytes, deleteBoxArt, fetchBoxArtFor, useBoxArtProgress } from '../../lib/cover-art';
+import { askBoxArt, boxArtBytes, boxArtPerGame, deleteBoxArt, fetchBoxArtFor, needsDownload, NO_COVERS, useBoxArtProgress } from '../../lib/cover-art';
+import { mb, owned } from '../../lib/ui';
+import type { GameEntry } from '../../types/game';
 import { Row, SwitchRow } from './parts';
+import { PerGame, type GameUsage } from './PerGame';
 
-interface Usage { roms: number; saves: number; shots: number; perGame: Map<string, { rom: number; saves: number }>; nSaves: number; nShots: number }
-const mb = (n: number) => (n >= 1073741824 ? `${(n / 1073741824).toFixed(1)} GB` : n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(n ? 1 : 0, Math.round(n / 1024))} KB`);
+interface Usage { roms: number; saves: number; shots: number; perGame: Map<string, GameUsage>; nSaves: number; nShots: number }
 const gameOf = (stateId: string) => stateId.replace(/-(slot-\d+|auto)$/, '');
 
-async function measure(): Promise<Usage> {
-  const [roms, sram, states, shots] = await Promise.all([
+/** Everything stored, per game: ROMs, cartridge saves + save states, screenshots, downloaded box art. */
+async function measure(games: GameEntry[]): Promise<Usage> {
+  const [roms, sram, states, shots, art] = await Promise.all([
     getAllFrom<StoredRom>(STORES.roms), getAllFrom<StoredSave>(STORES.saves),
     getAllFrom<StoredSaveState>(STORES.states), getAllFrom<StoredScreenshot>(STORES.screenshots),
+    boxArtPerGame(games),
   ]);
-  const perGame = new Map(roms.map((r) => [r.id, { rom: r.data.length, saves: 0 }]));
-  let saves = 0;
-  for (const s of sram) { saves += s.sram.length; const g = perGame.get(s.id); if (g) g.saves++; }
-  for (const s of states) { saves += s.data.length + s.thumbnail.length; const g = perGame.get(gameOf(s.id)); if (g) g.saves++; }
-  return {
-    roms: roms.reduce((a, r) => a + r.data.length, 0), saves, shots: shots.reduce((a, s) => a + s.png.size, 0),
-    perGame, nSaves: sram.length + states.length, nShots: shots.length,
+  const perGame = new Map<string, GameUsage>();
+  const of = (id: string) => {
+    let g = perGame.get(id);
+    if (!g) perGame.set(id, (g = { rom: 0, saves: 0, nSaves: 0, shots: 0, nShots: 0, art: 0 }));
+    return g;
   };
+  for (const r of roms) of(r.id).rom = r.data.length;
+  for (const s of sram) { const g = of(s.id); g.saves += s.sram.length; g.nSaves++; }
+  for (const s of states) { const g = of(gameOf(s.id)); g.saves += s.data.length + s.thumbnail.length; g.nSaves++; }
+  for (const s of shots) { const g = of(s.gameId); g.shots += s.png.size; g.nShots++; }
+  // Box art only counts for games that have something else stored (it is listed with them).
+  for (const [id, n] of art) if (perGame.has(id)) perGame.get(id)!.art = n;
+  let saves = 0, nSaves = 0, shotBytes = 0;
+  for (const g of perGame.values()) { saves += g.saves; nSaves += g.nSaves; shotBytes += g.shots; }
+  return { roms: roms.reduce((a, r) => a + r.data.length, 0), saves, shots: shotBytes, perGame, nSaves, nShots: shots.length };
 }
 
 export function StorageTab() {
-  const { games, deleteGame } = useGameLibrary();
+  const { games } = useGameLibrary();
   const [usage, setUsage] = useState<Usage | null>(null);
   const [quota, setQuota] = useState<{ usage: number; quota: number } | null>(null);
   const [persisted, setPersisted] = useState(false);
@@ -36,36 +47,48 @@ export function StorageTab() {
   const withSettings = useRef(false);
   const { showBoxArt, boxArtAnswer, setShowBoxArt } = useSettingsStore();
   const artProgress = useBoxArtProgress();
-  const [artBytes, setArtBytes] = useState(0);
-  // Measured again when a download ends or box art is switched.
-  useEffect(() => { boxArtBytes().then(setArtBytes); }, [artProgress.of, showBoxArt]);
+  const [art, setArt] = useState<{ bytes: number; games: Set<string> }>({ bytes: 0, games: new Set() });
+
+  const own = games.filter((g) => g.isLocal);
+  const recognized = own.filter(needsDownload);
+  const shelf = games.filter(owned); // your ROMs and the bundled games: everything that can show a cover
+  const gamesRef = useRef(games);
+  useEffect(() => { gamesRef.current = games; });
+  // Covers are measured again when a download ends, box art is switched, or the library changes.
+  useEffect(() => {
+    let live = true;
+    Promise.all([boxArtBytes(), boxArtPerGame(games)]).then(([bytes, per]) => live && setArt({ bytes, games: new Set(per.keys()) }));
+    return () => { live = false; };
+  }, [artProgress.of, showBoxArt, games]);
+  const covered = shelf.filter((g) => g.coverArt || art.games.has(g.id)).length;
 
   const refresh = useCallback(async () => {
-    setUsage(await measure());
+    setUsage(await measure(gamesRef.current));
     const e = await navigator.storage?.estimate?.();
     if (e) setQuota({ usage: e.usage ?? 0, quota: e.quota ?? 0 });
   }, []);
+  const loaded = games.length > 0;
   useEffect(() => {
+    if (!loaded) return;
     let live = true;
-    measure().then((u) => live && setUsage(u));
+    measure(gamesRef.current).then((u) => live && setUsage(u));
     navigator.storage?.estimate?.().then((e) => live && setQuota({ usage: e.usage ?? 0, quota: e.quota ?? 0 }));
     navigator.storage?.persisted?.().then((p) => live && setPersisted(p));
     return () => { live = false; };
-  }, []);
+  }, [loaded, artProgress.of]);
 
-  const own = games.filter((g) => g.isLocal).sort((a, b) => a.title.localeCompare(b.title));
-  const recognized = own.filter((g) => g.libretroName);
   // Turning box art on asks first, unless the player already said yes.
   const switchArt = (on: boolean) => (!on || boxArtAnswer?.consent ? setShowBoxArt(on) : askBoxArt());
   const downloadArt = async () => {
-    if (!boxArtAnswer?.consent) return askBoxArt(); // a yes there downloads the whole library
+    if (!boxArtAnswer?.consent) return askBoxArt(); // a yes there downloads the whole library (or says there is nothing to fetch)
     setShowBoxArt(true);
-    await fetchBoxArtFor(recognized);
-    toast('Box art downloaded', 'c');
+    const n = await fetchBoxArtFor(recognized);
+    toast(n ? `Box art ready for ${n} game${n === 1 ? '' : 's'}` : NO_COVERS, 'c');
   };
   const removeArt = async () => {
     await deleteBoxArt();
-    setArtBytes(await boxArtBytes());
+    setArt({ bytes: await boxArtBytes(), games: new Set() });
+    await refresh();
     toast('Downloaded box art deleted', 'm');
   };
   const total = usage ? usage.roms + usage.saves + usage.shots : 0;
@@ -113,11 +136,6 @@ export function StorageTab() {
       toast(e instanceof Error ? e.message : 'That file couldn’t be read', 'm');
     }
   };
-  const remove = (id: string, title: string) => setConfirm({
-    title: 'Remove this ROM?', danger: true, ok: 'Remove',
-    body: `${title} and its save slots, resume point and screenshots will be deleted from this browser.`,
-    run: async () => { await deleteGame(id); await refresh(); toast(`${title} removed`, 'm'); },
-  });
   const wipe = () => setConfirm({
     title: 'Erase everything?', danger: true, ok: 'Erase everything',
     body: 'Every ROM, save slot, resume point, screenshot and setting will be deleted from this browser. Export a backup first if you might want them back.',
@@ -140,7 +158,7 @@ export function StorageTab() {
         <i style={{ width: pct(usage?.shots ?? 0), background: 'var(--c)' }} />
       </div>
       <div className="legend">
-        <span><i style={{ background: 'var(--ink)' }} />ROMs · {own.length} · {mb(usage?.roms ?? 0)}</span>
+        <span><i style={{ background: 'var(--ink)' }} />ROMs · {own.length.toLocaleString('en-US')} · {mb(usage?.roms ?? 0)}</span>
         <span><i style={{ background: 'var(--m)' }} />Saves · {usage?.nSaves ?? 0} · {mb(usage?.saves ?? 0)}</span>
         <span><i style={{ background: 'var(--c)' }} />Screenshots · {usage?.nShots ?? 0} · {mb(usage?.shots ?? 0)}</span>
         {quota && <span>{mb(quota.usage)} used by this site, of about {mb(quota.quota)} this browser allows (estimate)</span>}
@@ -152,14 +170,16 @@ export function StorageTab() {
 
       <h3>Box art</h3>
       <SwitchRow label="Show box art"
-        sub="Off by default. Covers of recognized games you added, downloaded by your browser from the libretro-thumbnails project on GitHub (which sees your IP address and browser details) and kept in this browser. Cartouche hosts none. Off: no request is made."
+        sub="Off by default. Covers of recognized games you added, downloaded by your browser from the libretro-thumbnails project on GitHub (which sees your IP address and browser details) and kept in this browser. Cartouche hosts none of them. Off: no request is made. The bundled Tobu Tobu Girl games always show their own freely licensed covers, which come with the app."
         on={showBoxArt && !!boxArtAnswer?.consent} set={switchArt} />
-      <Row label="Downloaded box art" sub={`${mb(artBytes)} stored in this browser`}>
-        <button className="btn danger" disabled={!artBytes && !showBoxArt} onClick={removeArt}>Delete downloaded box art</button>
+      <Row label="Covers" sub={artProgress.of
+        ? <span className="artprog"><span className="progress" role="progressbar" aria-label="Fetching box art" aria-valuemin={0} aria-valuemax={artProgress.of} aria-valuenow={artProgress.n}><i style={{ width: `${(artProgress.n / artProgress.of) * 100}%` }} /></span>Fetching box art · {artProgress.n} of {artProgress.of}</span>
+        : `${covered} of ${shelf.length} games have covers · ${mb(art.bytes)} downloaded, kept in this browser`}>
+        <button className="btn danger" disabled={!art.bytes && !showBoxArt} onClick={removeArt}>Delete downloaded box art</button>
       </Row>
       <Row label="Download box art for my library now"
-        sub={artProgress.of ? `Fetching box art · ${artProgress.n} of ${artProgress.of}` : `${recognized.length} recognized game${recognized.length === 1 ? '' : 's'} in your library`}>
-        <button className="btn line" style={{ color: 'var(--ink)' }} disabled={!recognized.length || artProgress.of > 0} onClick={downloadArt}>Download</button>
+        sub={recognized.length ? `${recognized.length.toLocaleString('en-US')} recognized game${recognized.length === 1 ? '' : 's'} you added can get a cover` : NO_COVERS}>
+        <button className="btn line" style={{ color: 'var(--ink)' }} disabled={artProgress.of > 0} onClick={downloadArt}>Download</button>
       </Row>
 
       <h3>Backup</h3>
@@ -176,22 +196,7 @@ export function StorageTab() {
       </Row>
 
       <h3>Per game</h3>
-      {own.length ? (
-        <table className="gtable">
-          <thead><tr><th>Game</th><th>ROM</th><th>Saves</th><th><span className="sr">Actions</span></th></tr></thead>
-          <tbody>
-            {own.map((g) => {
-              const u = usage?.perGame.get(g.id);
-              return (
-                <tr key={g.id}>
-                  <td className="t">{g.title}</td><td>{u ? mb(u.rom) : '—'}</td><td>{u?.saves ?? 0}</td>
-                  <td><button className="sbtn" aria-label={`Remove ${g.title}`} onClick={() => remove(g.id, g.title)}>Remove</button></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      ) : <p className="empty-inline">No ROMs stored yet.</p>}
+      <PerGame usage={usage?.perGame ?? null} onChanged={refresh} confirm={setConfirm} />
 
       <h3>Start over</h3>
       <Row label="Erase everything" sub="Removes every ROM, save, screenshot and setting from this browser">

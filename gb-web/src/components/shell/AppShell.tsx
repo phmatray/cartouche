@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useGameLibrary } from '../../hooks/useGameLibrary';
+import { useBoxArtProgress } from '../../lib/cover-art';
 import { I, REPO_URL } from '../icons';
 import { queueImport } from './actions';
 import { BoxArtDialog } from './BoxArtDialog';
@@ -88,6 +89,7 @@ export function AppShell() {
           <a className="gh" href={REPO_URL} target="_blank" rel="noopener" aria-label="Cartouche on GitHub" title="Cartouche on GitHub">{I.github}</a>
           <button className="menu" aria-label="Menu" aria-expanded={menu} aria-controls="mnav" onClick={() => setMenu(!menu)}>{menu ? I.close : I.menu}</button>
         </div>
+        <ArtProgress />
       </header>
       <nav className={`mnav${menu ? ' open' : ''}`} id="mnav" aria-label="Main">
         {NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === '/'}>{label}{I.next}</NavLink>)}
@@ -115,6 +117,21 @@ export function AppShell() {
       <BoxArtDialog />
       <Toasts />
     </>
+  );
+}
+
+/** "Fetching box art · n of m": a thin yellow bar pinned under the header while covers download (nothing when idle). */
+function ArtProgress() {
+  const { n, of } = useBoxArtProgress();
+  return (
+    <div className="artbar" role="status" aria-live="polite">
+      {of > 0 && (
+        <>
+          <span className="meter" role="progressbar" aria-label="Fetching box art" aria-valuemin={0} aria-valuemax={of} aria-valuenow={n}><i style={{ width: `${(n / of) * 100}%` }} /></span>
+          <span className="cnt">Fetching box art · {n} of {of}</span>
+        </>
+      )}
+    </div>
   );
 }
 

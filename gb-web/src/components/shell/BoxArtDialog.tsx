@@ -1,7 +1,8 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 import { useLocation } from 'react-router';
 import { useGameLibrary } from '../../hooks/useGameLibrary';
-import { answerBoxArt, fetchBoxArtFor, useBoxArtPrompt } from '../../lib/cover-art';
+import { answerBoxArt, fetchBoxArtFor, NO_COVERS, useBoxArtPrompt } from '../../lib/cover-art';
+import { toast } from './actions';
 import { useSettingsStore } from '../../store/settingsStore';
 
 const GITHUB_PRIVACY = 'https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement';
@@ -30,9 +31,10 @@ export function BoxArtDialog() {
     if (!open && d?.open) d.close();
   }, [open]);
 
-  const yes = () => {
+  const yes = async () => {
     answerBoxArt(true);
-    fetchBoxArtFor(games.filter((g) => g.isLocal));
+    const n = await fetchBoxArtFor(games.filter((g) => g.isLocal));
+    toast(n ? `Box art ready for ${n} game${n === 1 ? '' : 's'}` : NO_COVERS, 'c');
   };
   // Keep Tab inside the dialog (a modal <dialog> otherwise lets focus leave for the browser's own UI).
   const trap = (e: KeyboardEvent) => {

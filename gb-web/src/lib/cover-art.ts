@@ -101,10 +101,20 @@ export function getCoverArtUrl(libretroName?: string, platform: Platform = 'gb')
 /** "Fetching box art · n of m" while a whole library is being downloaded (of = 0: idle). */
 export const useBoxArtProgress = create<{ n: number; of: number }>(() => ({ n: 0, of: 0 }));
 
-/** Download the box art of every recognized game now (it lands in Cache Storage; covers fade in). */
-export async function fetchBoxArtFor(games: { libretroName?: string; platform?: Platform }[]) {
-  const todo = games.filter((g) => g.libretroName && peekCoverArt(g.libretroName, g.platform) === undefined);
-  if (!todo.length || useBoxArtProgress.getState().of) return;
+type ArtGame = { libretroName?: string; platform?: Platform; coverArt?: string };
+/** A game whose cover would come from libretro-thumbnails: recognized, and without a bundled cover of its own. */
+export const needsDownload = (g: ArtGame) => !!g.libretroName && !g.coverArt;
+/** Said (toast and Settings › Storage) when a download finds nothing to fetch. */
+export const NO_COVERS = 'No covers to fetch yet. Covers appear for recognized games you add; bundled games use their own art.';
+
+/**
+ * Download the box art of every recognized game now (it lands in Cache Storage; covers fade in).
+ * Resolves to the number of games that can have downloaded box art (0: nothing to fetch).
+ */
+export async function fetchBoxArtFor(games: ArtGame[]): Promise<number> {
+  const eligible = games.filter(needsDownload);
+  const todo = eligible.filter((g) => peekCoverArt(g.libretroName, g.platform) === undefined);
+  if (!todo.length || useBoxArtProgress.getState().of) return eligible.length;
   useBoxArtProgress.setState({ n: 0, of: todo.length });
   const gen = generation;
   let n = 0;
@@ -117,6 +127,43 @@ export async function fetchBoxArtFor(games: { libretroName?: string; platform?: 
   };
   await Promise.all([worker(), worker(), worker(), worker()]);
   useBoxArtProgress.setState({ n: 0, of: 0 });
+  return eligible.length;
+}
+
+/** Forget one game's downloaded cover (memory and Cache Storage), e.g. when the game is removed. */
+export async function forgetBoxArt(g: ArtGame) {
+  if (!needsDownload(g)) return;
+  const key = cacheKeyOf(g.libretroName!, g.platform);
+  const url = coverCache.get(key);
+  if (url) URL.revokeObjectURL(url);
+  coverCache.delete(key);
+  try { await (await caches.open(CACHE_NAME)).delete(`${rawBase(g.platform ?? 'gb')}/${encodeURIComponent(`${g.libretroName}.png`)}`); } catch { /* Cache Storage unavailable */ }
+}
+
+/** Bytes of downloaded box art kept for one game (0: none), read from Cache Storage only: never a request. */
+async function cachedArtBytes(cache: Cache, base: string, filename: string, hops = 0): Promise<number> {
+  const res = await cache.match(`${base}/${encodeURIComponent(filename)}`);
+  if (!res) return 0;
+  const blob = await res.blob();
+  if (await isPng(blob)) return blob.size;
+  if (hops >= 3 || blob.size > 1024) return 0;
+  const target = (await blob.text()).trim().split('/').pop(); // a libretro symlink: follow it, as fetchBoxart does
+  return target ? cachedArtBytes(cache, base, target, hops + 1) : 0;
+}
+
+/** Downloaded box art per game id (bytes), for the games given. */
+export async function boxArtPerGame(games: (ArtGame & { id: string })[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  try {
+    await migrated;
+    if (!(await caches.has(CACHE_NAME))) return out;
+    const cache = await caches.open(CACHE_NAME);
+    await Promise.all(games.filter(needsDownload).map(async (g) => {
+      const n = await cachedArtBytes(cache, rawBase(g.platform ?? 'gb'), `${g.libretroName}.png`);
+      if (n) out.set(g.id, n);
+    }));
+  } catch { /* Cache Storage unavailable */ }
+  return out;
 }
 
 /** Bytes of box art kept in Cache Storage. */

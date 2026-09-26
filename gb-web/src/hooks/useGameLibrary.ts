@@ -6,7 +6,7 @@ import { parseRomTitle, computeSha1, isGameBoyRom } from '../lib/rom-utils';
 import { lookupByHash, type GameDbEntry } from '../lib/gamedb';
 import { parseRegion } from '../lib/catalog-utils';
 import { assetUrl } from '../lib/ui';
-import { getCoverArtUrl } from '../lib/cover-art';
+import { getCoverArtUrl, needsDownload } from '../lib/cover-art';
 import catalogData from '../data/catalog.json';
 
 /** ok: added and identified · unk: added, not a known dump · dup: same file already on the shelf · bad: not a Game Boy ROM */
@@ -137,8 +137,10 @@ export async function importFile(file: File, force = false): Promise<ImportOutco
   const entry = localEntry(id, title, genre, data, sha1, dbEntry, importedAt);
   const known = !!dbEntry || !!catalogMatch(useLibraryStore.getState().games, entry); // a GameDB dump, or a catalog homebrew
   setGames((prev) => withLocal(prev, entry));
-  getCoverArtUrl(entry.libretroName, entry.platform); // box art on: fetch it now (no request when off or unrecognized)
-  return { status: known ? 'ok' : 'unk', id, title: useLibraryStore.getState().games.find((g) => g.id === id)?.title ?? title, sha1 };
+  const added = useLibraryStore.getState().games.find((g) => g.id === id);
+  // Box art on: fetch it now (no request when off, unrecognized, or the game has its own bundled cover).
+  if (added && needsDownload(added)) getCoverArtUrl(added.libretroName, added.platform);
+  return { status: known ? 'ok' : 'unk', id, title: added?.title ?? title, sha1 };
 }
 
 /** Give a user ROM a new title (for files the GameDB doesn't know). */
