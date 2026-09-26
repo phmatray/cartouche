@@ -31,9 +31,10 @@ void main() {
   }
   vec3 col = texture2D(u_tex, t / u_src).rgb;
 
-  // Screen textures fade out below ~3 device pixels per Game Boy pixel, where they would only moire.
+  // Screen textures need whole device pixels per Game Boy pixel: at a fractional scale below ~6 they
+  // land on a different phase in every cell and show as bands, so they fade out there (and below 3).
   float ppc = u_out.x / LCD.x;
-  float fade = clamp((ppc - 2.0) / 2.0, 0.0, 1.0);
+  float fade = ppc >= 2.99 && abs(ppc - floor(ppc + 0.5)) < 0.02 ? 1.0 : clamp((ppc - 3.0) / 3.0, 0.0, 1.0);
   vec2 cell = fract(uv * LCD);
   if (u_grid > 0.0) {
     float w = max(0.08, 1.0 / ppc);

@@ -119,7 +119,7 @@ export const useSettingsStore = create<SettingsState>()(
         })),
 
       setDisplay: (kind, gameId, cfg) =>
-        set((s) => (gameId !== undefined && gameId in s.gameDisplay
+        set((s) => (gameId !== undefined && s.gameDisplay?.[gameId]
           ? { gameDisplay: { ...s.gameDisplay, [gameId]: cfg } }
           : { display: { ...s.display, [kind]: cfg } })),
       setGameDisplay: (gameId, cfg) =>
@@ -164,7 +164,9 @@ export const useSettingsStore = create<SettingsState>()(
           const { shaderPreset, pixelGrid, ...rest } = s as SettingsValues & { shaderPreset?: string; pixelGrid?: boolean };
           const preset = presetOf(shaderPreset) ?? presetOf(DEFAULT_DISPLAY.dmg.preset)!;
           const filters = pixelGrid === false ? { ...preset.filters, grid: 0 } : preset.filters;
-          s = { ...rest, display: { dmg: { preset: preset.name, filters }, cgb: DEFAULT_DISPLAY.cgb }, gameDisplay: {} };
+          // Color games were always drawn raw before: a player who had picked Clean keeps it for them too.
+          const cgb = preset.name === 'clean' ? { preset: preset.name, filters: preset.filters } : DEFAULT_DISPLAY.cgb;
+          s = { ...rest, display: { dmg: { preset: preset.name, filters }, cgb }, gameDisplay: {} };
         }
         return s;
       },
@@ -175,7 +177,7 @@ export const useSettingsStore = create<SettingsState>()(
 
 /** The screen config a game uses (or the default for its kind with no game), plus the actions the controls need. */
 export function useDisplay(kind: ScreenKind, gameId?: string) {
-  const own = useSettingsStore((s) => (gameId !== undefined ? s.gameDisplay[gameId] : undefined));
+  const own = useSettingsStore((s) => (gameId !== undefined ? s.gameDisplay?.[gameId] ?? undefined : undefined));
   const base = useSettingsStore((s) => s.display?.[kind]);
   const raw = own ?? base;
   const setDisplay = useSettingsStore((s) => s.setDisplay);

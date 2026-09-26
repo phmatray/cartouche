@@ -71,7 +71,7 @@ function Player({ game }: { game: GameEntry }) {
   // and it has its own default screen settings (the core decides, from header byte 0x143 bit 7).
   const inColor = romLoaded && isCgb;
   const display = useDisplay(inColor ? 'cgb' : 'dmg', game.id);
-  const { canvasRef, renderFrame } = useLcdShader(display.cfg.filters, inColor);
+  const { canvasRef, canvasKey, renderFrame } = useLcdShader(display.cfg.filters, inColor);
   const { ensureStarted, feedSamples, muted, toggleMute } = useAudio();
   const saves = useSaveStates(game.id, emu);
   const { isRewinding, startRewind, stopRewind, wrapRunFrame, bufferFill } = useRewind({ saveState, loadState, framebufferSnapshot });
@@ -279,7 +279,7 @@ function Player({ game }: { game: GameEntry }) {
           <div className={`rw${isRewinding ? ' on' : ''}`}>{I.rew}Rewinding<span className="meter"><i style={{ width: `${bufferFill * 100}%` }} /></span></div>
           <div className="screen" style={screenStyle}>
             <div className="frame">
-              <canvas ref={canvasRef} className="lcd" width={800} height={720} aria-label={`${game.title} screen`} />
+              <canvas key={canvasKey} ref={canvasRef} className="lcd" width={800} height={720} aria-label={`${game.title} screen`} />
               {badRom ? (
                 <div className="overlay">
                   <b>This file can’t be played</b>

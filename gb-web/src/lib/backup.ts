@@ -134,7 +134,7 @@ export async function restoreBackup(b: Backup, withSettings: boolean): Promise<R
     // Only known keys holding the same kind of value as now (a backup is untrusted input). Box art
     // stays as this browser's player answered: a yes (or "on") from a backup is never theirs here.
     const own = ['showBoxArt', 'boxArtAnswer'];
-    const known = Object.fromEntries(Object.entries(b.settings).filter(([k, v]) => (SETTINGS_KEYS as string[]).includes(k) && !own.includes(k) && typeof v === typeof cur[k] && Array.isArray(v) === Array.isArray(cur[k])));
+    const known = Object.fromEntries(Object.entries(b.settings).filter(([k, v]) => (SETTINGS_KEYS as string[]).includes(k) && !own.includes(k) && typeof v === typeof cur[k] && (v === null) === (cur[k] === null) && Array.isArray(v) === Array.isArray(cur[k])));
     useSettingsStore.getState().set(known as Partial<SettingsValues>);
   }
   return count;

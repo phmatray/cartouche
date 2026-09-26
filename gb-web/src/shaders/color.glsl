@@ -16,13 +16,14 @@ uniform vec3 u_adj;         // brightness, contrast, saturation (0 = neutral)
 uniform float u_ghost;
 
 const vec3 LUMA = vec3(0.299, 0.587, 0.114);
-// GBC LCD response: gamma 2.2, channel mixing, 0.94 luminance (the widely used gbc-color model).
-const mat3 GBC = mat3(0.78824, 0.025, 0.12039,  0.12157, 0.72941, 0.12157,  0.0, 0.275, 0.66667);
+// GBC LCD response: gamma 2.2 and the channel mixing of the widely used gbc-color model, each row
+// scaled to sum to 1 so white stays white (no green tint, no dimming).
+const mat3 GBC = mat3(0.86638, 0.02429, 0.1325,  0.13362, 0.70857, 0.13379,  0.0, 0.26714, 0.73371);
 
 void main() {
   vec3 c = texture2D(u_frame, v_uv).rgb;
   if (u_mode > 1.5) {
-    vec3 lcd = pow(clamp(GBC * pow(c, vec3(2.2)) * 0.94, 0.0, 1.0), vec3(1.0 / 2.2));
+    vec3 lcd = pow(clamp(GBC * pow(c, vec3(2.2)), 0.0, 1.0), vec3(1.0 / 2.2));
     c = mix(c, lcd, u_corr);
   } else if (u_mode > 0.5) {
     // The core draws the four DMG shades in fixed colours; the midpoints of their luma pick the shade.

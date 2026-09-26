@@ -1,14 +1,16 @@
 import { useEffect } from 'react';
 import { useLcdShader } from '../../hooks/useLcdShader';
 import { useDisplay } from '../../store/settingsStore';
-import { PALETTES, PRESETS, presetOf, type Correction, type Filters, type ScreenKind, type Upscale } from '../../shaders/filters';
+import { PALETTES, presetOf, presetsFor, type Correction, type Filters, type ScreenKind, type Upscale } from '../../shaders/filters';
 import { Row, Seg, Slider, SwitchRow } from './parts';
 
 /** A frame drawn through the actual filter chain, on its own small canvas. */
 export function PresetPreview({ filters, color, frame }: { filters: Filters; color: boolean; frame: Uint8ClampedArray | null }) {
-  const { canvasRef, renderFrame, canvas } = useLcdShader(filters, color);
+  // A fixed 4x backing size, not the shown size: at ~1 device pixel per Game Boy pixel the grid and
+  // scanlines would fade out and every card would differ only by its colours.
+  const { canvasRef, canvasKey, renderFrame, canvas } = useLcdShader(filters, color, false);
   useEffect(() => { if (frame) renderFrame(frame); }, [frame, renderFrame, filters, color, canvas]);
-  return <canvas ref={canvasRef} className="lcd" width={320} height={288} aria-hidden="true" />;
+  return <canvas key={canvasKey} ref={canvasRef} className="lcd" width={640} height={576} aria-hidden="true" />;
 }
 
 const pct = (v: number) => Math.round(v * 100);
@@ -25,15 +27,16 @@ export function ScreenFilters({ kind, gameId, frame }: { kind: ScreenKind; gameI
   return (
     <div className="filters">
       <div className="presets presets-4">
-        {PRESETS.map((p) => (
+        {presetsFor(kind).map((p) => (
           <button key={p.name} className="preset" aria-pressed={!custom && cfg.preset === p.name} onClick={() => choose(p.name)}>
             <PresetPreview filters={p.filters} color={color} frame={frame} /><b>{p.label}</b><small>{p.description}</small>
           </button>
         ))}
         {custom && (
-          <button className="preset" aria-pressed="true" onClick={reset} title={`Back to ${base.label}`}>
+          // Not a button: the current selection, never a reset (that is "Reset to …" below).
+          <div className="preset" aria-current="true">
             <PresetPreview filters={f} color={color} frame={frame} /><b>Custom</b><small>Based on {base.label}</small>
-          </button>
+          </div>
         )}
       </div>
       {gameId !== undefined && (

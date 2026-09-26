@@ -5,9 +5,11 @@ import { cpuColor, type Filters } from '../shaders/filters';
 /**
  * Draws Game Boy frames on a canvas through the filter chain. The WebGL canvas is kept at the size it
  * is shown in device pixels, so pixel-perfect sizes stay pixel-perfect. Without WebGL, a 2D canvas
- * gets the palette / colour correction and adjustments only.
+ * gets the palette / colour correction and adjustments only. `follow: false` keeps the canvas's own
+ * backing size (previews). Put `canvasKey` on the canvas: a failed WebGL set-up swaps in a fresh canvas
+ * for the 2D fallback, since a canvas holding a WebGL context never gives a 2D one.
  */
-export function useLcdShader(filters: Filters, color: boolean) {
+export function useLcdShader(filters: Filters, color: boolean, follow = true) {
   const engineRef = useRef<LcdEngine | null>(null);
   const [canvas, setCanvasState] = useState<HTMLCanvasElement | null>(null);
   const canvasEl = useRef<HTMLCanvasElement | null>(null);
@@ -17,9 +19,10 @@ export function useLcdShader(filters: Filters, color: boolean) {
   useEffect(() => { look.current = { filters, color }; }, [filters, color]);
 
   useEffect(() => {
-    if (!canvas) return;
+    if (!canvas || !webglAvailable) return;
     const engine = new LcdEngine(canvas);
     if (!engine.init(canvas.width, canvas.height)) {
+      engine.destroy();
       // The WebGL context is an external system: its init result can only be known here.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setWebglAvailable(false);
@@ -32,9 +35,9 @@ export function useLcdShader(filters: Filters, color: boolean) {
       const w = Math.min(2880, Math.round(e.contentRect.width * devicePixelRatio));
       if (w > 0) engine.resize(w, Math.round(w * 0.9));
     });
-    ro.observe(canvas);
+    if (follow) ro.observe(canvas);
     return () => { ro.disconnect(); engine.destroy(); engineRef.current = null; };
-  }, [canvas]);
+  }, [canvas, follow, webglAvailable]);
 
   useEffect(() => { engineRef.current?.setFilters(filters, color); }, [filters, color, canvas]);
 
@@ -49,5 +52,5 @@ export function useLcdShader(filters: Filters, color: boolean) {
   }, [webglAvailable]);
 
   /** `canvas` is set once the engine exists: a caller drawing a still frame redraws when it changes. */
-  return { canvasRef: setCanvas, renderFrame, webglAvailable, canvas };
+  return { canvasRef: setCanvas, canvasKey: webglAvailable ? 'gl' : '2d', renderFrame, webglAvailable, canvas };
 }
