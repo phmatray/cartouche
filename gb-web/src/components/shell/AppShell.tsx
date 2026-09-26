@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useGameLibrary } from '../../hooks/useGameLibrary';
-import { I } from '../icons';
+import { I, REPO_URL } from '../icons';
 import { queueImport } from './actions';
 import { BoxArtDialog } from './BoxArtDialog';
 import { SearchDialog } from './SearchDialog';
@@ -85,6 +85,7 @@ export function AppShell() {
             {I.search}<span>Search {games.length ? games.length.toLocaleString('en-US') : ''} games</span><kbd>/</kbd>
           </button>
           <Link className="btn y" aria-label="Add ROMs" to="/add">{I.plus}<span className="lbl">Add ROMs</span></Link>
+          <a className="gh" href={REPO_URL} target="_blank" rel="noopener" aria-label="Cartouche on GitHub" title="Cartouche on GitHub">{I.github}</a>
           <button className="menu" aria-label="Menu" aria-expanded={menu} aria-controls="mnav" onClick={() => setMenu(!menu)}>{menu ? I.close : I.menu}</button>
         </div>
       </header>
@@ -101,6 +102,7 @@ export function AppShell() {
           <Link to="/settings/storage">Back up your data</Link>
           <a href="#shortcuts" onClick={(e) => { e.preventDefault(); setShortcuts(true); }}>Keyboard shortcuts</a>
           <Link to="/legal">Legal</Link>
+          <a href={REPO_URL} target="_blank" rel="noopener">Source on GitHub</a>
           <span className="sp">Box art: libretro-thumbnails</span>
         </div>
       </footer>

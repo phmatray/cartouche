@@ -2,6 +2,7 @@ import { Link } from 'react-router';
 import { isInstalled, promptInstall } from '../../lib/pwa';
 import { toast } from '../shell/actions';
 import { ShortcutsList } from '../shell/Shortcuts';
+import { I, REPO_URL } from '../icons';
 import { Row } from './parts';
 
 export function AboutTab() {
@@ -13,6 +14,10 @@ export function AboutTab() {
     <>
       <h2>About</h2>
       <p className="intro">Cartouche is a Game Boy and Game Boy Color emulator that runs entirely in your browser. The core is written in Rust and compiled to WebAssembly.</p>
+
+      <Row label="Source code" sub="Open source under the MIT License. Issues and contributions welcome.">
+        <a className="btn line" style={{ color: 'var(--ink)' }} href={REPO_URL} target="_blank" rel="noopener">{I.github}Cartouche on GitHub</a>
+      </Row>
 
       <h3>Your data</h3>
       <p className="intro" style={{ margin: '8px 0 0' }}>

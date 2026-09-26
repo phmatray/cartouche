@@ -70,6 +70,9 @@ kbd{border:1px solid #3a3a3a;padding:3px 7px;font:700 11px var(--font);color:var
   .top .btn{width:44px;padding:0}
   .top .menu{display:flex}
 }
+.gh{display:flex;width:44px;height:44px;flex:none;align-items:center;justify-content:center;border:1px solid #3a3a3a;color:var(--mute)}
+.gh:hover{color:var(--paper);border-color:#5a5a5a}
+@media (min-width:641px){.top .gh{margin-left:-16px}}
 .menu{display:none;width:44px;height:44px;border:1px solid #3a3a3a;background:transparent;align-items:center;justify-content:center}
 .mnav{display:none}
 .mnav.open{display:block;position:fixed;inset:60px 0 0;background:var(--band);z-index:60;padding:16px}
