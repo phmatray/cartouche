@@ -99,7 +99,8 @@ export function AppShell() {
         <NavLink to="/add">Add ROMs{I.next}</NavLink>
       </nav>
 
-      <div className="route" key={pathname}><Outlet /></div>
+      {/* A new page remounts (fresh state); a settings section is the same page, so focus stays in its table of contents. */}
+      <div className="route" key={pathname.startsWith('/settings') ? '/settings' : pathname}><Outlet /></div>
 
       <footer className="foot">
         <div className="wrap">

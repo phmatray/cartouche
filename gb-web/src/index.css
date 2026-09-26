@@ -754,12 +754,15 @@ a.fact:hover{background:var(--paper);color:#000}
    play   → player: the box is inserted into the LCD, the bezel closes, the manual and the deck follow.
    eject  player → back: the screen shrinks into the box.
    fade   every other route: a short cross-fade.  still: reduced motion, 150 ms fades, nothing moves. */
-:root{--vt-k:1;--exit:cubic-bezier(.5,0,.75,0)}
+:root{--vt-k:1;--exit:cubic-bezier(.4,0,1,1)}
 @media (max-width:640px){:root{--vt-k:.8}}
 html[data-vt-shell] .top{view-transition-name:top}
 html[data-vt=play] .pl:not(.closed) .sheet,html[data-vt=eject] .pl:not(.closed) .sheet{view-transition-name:sheet}
 html[data-vt=play] .deck,html[data-vt=eject] .deck{view-transition-name:deck}
 html[data-vt=play] .touch,html[data-vt=eject] .touch{view-transition-name:pad}
+/* Into / out of the player the two headers never share the screen: the old one goes first, fast. */
+html[data-vt=play] .top,html[data-vt=eject] .top{view-transition-name:top}
+html[data-vt=play] .pl-top,html[data-vt=eject] .pl-top{view-transition-name:pltop}
 ::view-transition-group(*){animation-timing-function:var(--ease)}
 /* The box travels above everything (the ink band it lands in is named after it, so would paint over it). */
 ::view-transition-group(box){z-index:2}
@@ -773,7 +776,7 @@ html[data-vt=still]::view-transition-old(root){animation-duration:150ms}
 html[data-vt=still]::view-transition-new(root){animation-duration:150ms}
 
 html[data-vt=open]::view-transition-old(root){animation-duration:calc(160ms * var(--vt-k))}
-html[data-vt=open]::view-transition-new(root){animation:vt-in calc(200ms * var(--vt-k)) linear calc(80ms * var(--vt-k)) both}
+html[data-vt=open]::view-transition-new(root){animation:vt-in calc(160ms * var(--vt-k)) var(--ease) calc(40ms * var(--vt-k)) both}
 html[data-vt=open]::view-transition-group(box){animation-duration:calc(420ms * var(--vt-k))}
 html[data-vt=open]::view-transition-old(box),html[data-vt=open]::view-transition-new(box){animation-duration:calc(260ms * var(--vt-k))}
 html[data-vt=open]::view-transition-new(flood){animation:vt-flood calc(420ms * var(--vt-k)) var(--ease) both}
@@ -796,6 +799,9 @@ html[data-vt=play]::view-transition-old(root){animation-duration:calc(180ms * va
 html[data-vt=play]::view-transition-new(root){animation:vt-in calc(240ms * var(--vt-k)) linear calc(80ms * var(--vt-k)) both}
 html[data-vt=play]::view-transition-new(sheet){animation:vt-from-right calc(420ms * var(--vt-k)) var(--ease) calc(280ms * var(--vt-k)) both}
 html[data-vt=play]::view-transition-new(deck){animation:vt-from-below calc(340ms * var(--vt-k)) var(--ease) calc(360ms * var(--vt-k)) both}
+html[data-vt=play]::view-transition-old(top),html[data-vt=eject]::view-transition-old(pltop){animation:vt-out calc(80ms * var(--vt-k)) linear both}
+html[data-vt=play]::view-transition-new(pltop){animation:vt-in calc(200ms * var(--vt-k)) var(--ease) calc(180ms * var(--vt-k)) both}
+html[data-vt=eject]::view-transition-new(top){animation:vt-in calc(160ms * var(--vt-k)) var(--ease) calc(100ms * var(--vt-k)) both}
 html[data-vt=play]::view-transition-new(pad){animation:vt-from-below calc(340ms * var(--vt-k)) var(--ease) calc(400ms * var(--vt-k)) both}
 
 html[data-vt=eject]::view-transition-group(box){animation-duration:calc(380ms * var(--vt-k))}
@@ -803,7 +809,7 @@ html[data-vt=eject]::view-transition-old(box){animation:vt-bezel-out calc(240ms 
 html[data-vt=eject]::view-transition-new(box){animation:vt-in calc(200ms * var(--vt-k)) linear both}
 html[data-vt=eject]::view-transition-old(root){animation-duration:calc(120ms * var(--vt-k))}
 html[data-vt=eject]::view-transition-new(root){animation:vt-in calc(180ms * var(--vt-k)) linear calc(40ms * var(--vt-k)) both}
-html[data-vt=eject]::view-transition-old(sheet){animation:vt-to-right calc(220ms * var(--vt-k)) var(--exit) both}
+html[data-vt=eject]::view-transition-old(sheet){animation:vt-to-right calc(160ms * var(--vt-k)) var(--exit) both}
 html[data-vt=eject]::view-transition-old(deck),html[data-vt=eject]::view-transition-old(pad){animation:vt-to-below calc(200ms * var(--vt-k)) var(--exit) both}
 
 @keyframes vt-in{from{opacity:0}}
@@ -812,7 +818,7 @@ html[data-vt=eject]::view-transition-old(deck),html[data-vt=eject]::view-transit
 @keyframes vt-drain{from{clip-path:circle(var(--vt-r) at var(--vt-x) var(--vt-y))}to{clip-path:circle(0 at var(--vt-x) var(--vt-y))}}
 @keyframes vt-bezel{from{opacity:0;transform:scale(1.14)}}
 @keyframes vt-bezel-out{to{opacity:0;transform:scale(1.14)}}
-@keyframes vt-to-right{to{transform:translateX(100%)}}
+@keyframes vt-to-right{to{opacity:0;transform:translateX(100%)}}
 @keyframes vt-to-below{to{opacity:0;transform:translateY(100%)}}
 @keyframes vt-from-right{from{transform:translateX(100%)}}
 @keyframes vt-from-below{from{opacity:0;transform:translateY(100%)}}

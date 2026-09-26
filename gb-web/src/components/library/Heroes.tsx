@@ -101,7 +101,7 @@ export function ContinueHero({ game }: { game: GameEntry }) {
               : <Link className="btn lg line" to={paths.game(game.id)}>About the game</Link>}
           </div>
         </div>
-        <figure className="shot" style={{ margin: 0 }}>
+        <figure className="shot" style={{ margin: 0 }} data-game={game.id}>
           <div className="frame">
             {save?.thumbnail?.length ? <Frame rgba={save.thumbnail} label="Last frame" /> : save === undefined ? <canvas className="lcd" width={160} height={144} aria-hidden="true" /> : <Attract game={game} label={`${game.title} demo`} />}
           </div>
@@ -133,7 +133,7 @@ export function FirstHero({ bundled }: { bundled?: GameEntry }) {
           </ol>
         </div>
         {bundled && (
-          <figure className="shot" style={{ margin: 0 }}>
+          <figure className="shot" style={{ margin: 0 }} data-game={bundled.id}>
             <div className="frame"><Attract game={bundled} label={`${bundled.title} demo`} /></div>
             <figcaption className="cap"><span>{bundled.title} comes with the app</span><i /><span>Free homebrew</span></figcaption>
           </figure>

@@ -1,6 +1,7 @@
 import { Component, lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { createBrowserRouter, Outlet, RouterProvider, ScrollRestoration, useLocation } from 'react-router';
 import { committed, install } from './lib/transitions';
+import { warmAudio } from './audio/AudioEngine';
 import { AppShell, NotFound } from './components/shell/AppShell';
 import { LibraryPage } from './components/library/LibraryPage';
 
@@ -33,8 +34,15 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean
 
 /** Every route: error boundary, lazy-page suspense, scroll restoration, and the commit signal view transitions wait for. */
 function Root() {
-  const { key } = useLocation();
+  const { key, pathname } = useLocation();
   useEffect(committed, [key]);
+  // One click away from Play (library, game page): open the audio device once the page has settled.
+  const nearPlay = pathname === '/' || /^\/game\/[^/]+\/?$/.test(pathname);
+  useEffect(() => {
+    if (!nearPlay) return;
+    const t = setTimeout(warmAudio, 1500);
+    return () => clearTimeout(t);
+  }, [nearPlay]);
   useEffect(() => {
     const t = setTimeout(() => { loadGame().catch(() => {}); loadPlayer().catch(() => {}); }, 1500);
     return () => clearTimeout(t);

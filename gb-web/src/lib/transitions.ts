@@ -47,11 +47,18 @@ function sourceBox(id: string) {
 }
 const heroBox = () => document.querySelector<HTMLElement>('.gp .hero .cv');
 const screen = () => document.querySelector<HTMLElement>('.pl .screen .frame');
+/** The library hero's screen when it shows this game: already 10:9, it is the LCD's natural twin. */
+const shotOf = (id: string) => document.querySelector<HTMLElement>(`.shot[data-game="${CSS.escape(id)}"] .frame`);
+/**
+ * Where the game lands back on the shelf: its old slot (brought into view if the page moved under it), else a box
+ * of it already on screen, else nowhere: the box then fades out where it is rather than flying off screen.
+ */
 function slotBox(id: string) {
   const s = slots.get(idx());
   const all = boxesOf(id);
-  // Its old slot, else where the game stands now (played, it moved up to Continue), even off screen.
-  return (s?.id === id && all.find((b) => b.closest(`[aria-labelledby="${s.section}"]`))) || all.find(inView) || all[0] || null;
+  const slot = s?.id === id ? all.find((b) => b.closest(`[aria-labelledby="${s.section}"]`)) : undefined;
+  if (slot && !inView(slot)) slot.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  return slot ?? all.find(inView) ?? null;
 }
 
 // ---- running a transition ----
@@ -63,18 +70,22 @@ const waiters: (() => void)[] = [];
 export const settled = (): Promise<unknown> => active?.finished.catch(() => {}) ?? Promise.resolve();
 /** Called by the root route after every committed location: releases the transition's update callback. */
 export function committed() { waiters.splice(0).forEach((f) => f()); }
-// The page is frozen while it waits: never more than a second (a slow lazy chunk then lands without the flight).
-const nextCommit = () => new Promise<void>((r) => { waiters.push(r); setTimeout(r, 1000); });
+// The page is frozen while it waits: never long (a slow lazy chunk then lands without the flight).
+const nextCommit = () => new Promise<void>((r) => { waiters.push(r); setTimeout(r, 400); });
 /** A newer navigation interrupts: the running transition jumps to its end and stops waiting for its page. */
 function interrupt() { active?.skipTransition(); committed(); }
 
-/** Focus a sensible landing point on the new page (the heading, the LCD, or the box we came back to). */
-function land(to: string, back: HTMLElement | null) {
+/**
+ * Focus a sensible landing point on the new page (the heading, the LCD, or the box we came back to). Focus that
+ * survived inside the page (a settings section tab) stays where it is. A lazy page may draw a few frames late.
+ */
+function land(to: string, back: HTMLElement | null, had: Element | null, tries = 10) {
+  if (had?.isConnected && had.closest('main') && document.activeElement === had) return;
   const page = pageOf(to);
   const el = page === 'player' ? document.querySelector<HTMLElement>('.pl canvas.lcd')
-    : page === 'lib' && back ? back.closest<HTMLElement>('a') ?? back.closest('.lrow')?.querySelector<HTMLElement>('a.t') ?? null
-    : document.querySelector<HTMLElement>('main h1');
-  if (!el) return;
+    : (page === 'lib' && back ? back.closest<HTMLElement>('a') ?? back.closest('.lrow')?.querySelector<HTMLElement>('a.t') : null)
+      ?? document.querySelector<HTMLElement>('main h1');
+  if (!el) { if (tries) requestAnimationFrame(() => land(to, back, had, tries - 1)); return; }
   if (!el.matches('a,button')) el.tabIndex = -1;
   el.focus({ preventScroll: true });
 }
@@ -82,8 +93,9 @@ function land(to: string, back: HTMLElement | null) {
 function run(from: string, to: string, go: () => unknown): Promise<void> {
   const kind = kindOf(from, to);
   const id = gameOf(kind === 'open' || kind === 'play' ? to : from);
+  const had = document.activeElement;
   if (!supported) {
-    const done = nextCommit().then(() => land(to, kind === 'close' || kind === 'eject' ? slotBox(id) : null));
+    const done = nextCommit().then(() => land(to, kind === 'close' || kind === 'eject' ? slotBox(id) : null, had));
     go();
     return done;
   }
@@ -98,7 +110,8 @@ function run(from: string, to: string, go: () => unknown): Promise<void> {
   let src: HTMLElement | null = null;
   let band: DOMRect | null = null;
   if (!still) {
-    if (kind === 'open' || kind === 'play') src = sourceBox(id);
+    if (kind === 'play' && pageOf(from) === 'lib') src = shotOf(id) ?? sourceBox(id);
+    else if (kind === 'open' || kind === 'play') src = sourceBox(id);
     else if (kind === 'close') src = heroBox();
     else if (kind === 'eject') src = screen();
     name(src, 'box');
@@ -111,7 +124,8 @@ function run(from: string, to: string, go: () => unknown): Promise<void> {
   if (src && pageOf(from) === 'lib') slots.set(idx(), { id, section: src.closest('[aria-labelledby]')?.getAttribute('aria-labelledby') ?? '' });
   const from_ = src?.getBoundingClientRect() ?? null;
   html.dataset.vt = still ? 'still' : kind;
-  if (pageOf(from) !== 'player' && pageOf(to) !== 'player' && !still) html.dataset.vtShell = '';
+  // The header holds still between shell pages, but not over the search overlay it would pop in front of.
+  if (pageOf(from) !== 'player' && pageOf(to) !== 'player' && !still && !src?.closest('dialog[open]')) html.dataset.vtShell = '';
 
   let dest: HTMLElement | null = null;
   const t = document.startViewTransition(async () => {
@@ -124,7 +138,8 @@ function run(from: string, to: string, go: () => unknown): Promise<void> {
     await done;
     if (kind === 'open' || kind === 'eject' && pageOf(to) === 'game') dest = heroBox();
     else if (kind === 'play') dest = screen();
-    else if (kind === 'close' || kind === 'eject') dest = slotBox(id);
+    else if (kind === 'eject') dest = [shotOf(id)].find((s) => s && inView(s)) ?? slotBox(id);
+    else if (kind === 'close') dest = slotBox(id);
     if (!still) {
       name(dest, 'box');
       // The ink spreads from (or shrinks into) the box: a circle centred on it, big enough to cover the band.
@@ -139,7 +154,7 @@ function run(from: string, to: string, go: () => unknown): Promise<void> {
         html.style.setProperty('--vt-r', `${r}px`);
       }
     }
-    land(to, dest);
+    land(to, dest, had);
   });
   active = t;
   activeTo = to;
@@ -151,6 +166,7 @@ function run(from: string, to: string, go: () => unknown): Promise<void> {
     activeTo = '';
     delete html.dataset.vt;
     delete html.dataset.vtShell;
+    ['--vt-x', '--vt-y', '--vt-r'].forEach((p) => html.style.removeProperty(p));
   });
   return t.updateCallbackDone.catch(() => {});
 }

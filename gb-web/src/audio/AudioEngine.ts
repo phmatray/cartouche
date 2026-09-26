@@ -1,3 +1,11 @@
+// Opening the audio device blocks the main thread for a few hundred ms: done ahead, while idle, so it never lands
+// in the first second of play. Created suspended (no gesture yet); the player's Play click resumes it.
+let spare: AudioContext | null = null;
+export function warmAudio() {
+  if (spare || typeof AudioContext === 'undefined') return;
+  try { spare = new AudioContext({ sampleRate: 44100 }); } catch { /* the player makes its own */ }
+}
+
 export class AudioEngine {
   private context: AudioContext | null = null;
   private workletNode: AudioWorkletNode | null = null;
@@ -11,7 +19,8 @@ export class AudioEngine {
   }
 
   private async setup(): Promise<void> {
-    this.context = new AudioContext({ sampleRate: 44100 });
+    this.context = spare && spare.state !== 'closed' ? spare : new AudioContext({ sampleRate: 44100 });
+    spare = null;
     this.gainNode = this.context.createGain();
     this.gainNode.gain.value = 0.5;
     this.gainNode.connect(this.context.destination);
