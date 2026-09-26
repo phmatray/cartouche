@@ -1,20 +1,33 @@
 import vertexSource from './vertex.glsl?raw';
+import colorSource from './color.glsl?raw';
+import upscaleSource from './upscale.glsl?raw';
+import outputSource from './output.glsl?raw';
+import { colorMode, hasAdjustments, paletteRgb, PRESETS, type Filters } from './filters';
 
-export type PresetName = 'dmg-classic' | 'gb-pocket' | 'gb-light' | 'clean';
+const W = 160, H = 144;
 
+interface Program { p: WebGLProgram; u: Record<string, WebGLUniformLocation | null> }
+interface Target { tex: WebGLTexture; fbo: WebGLFramebuffer; w: number; h: number }
+
+/**
+ * The display pipeline, all within the frame it is given (no added latency):
+ *   1. colour (160x144): DMG palette or GBC correction, adjustments, LCD persistence (feeds back on itself)
+ *   2. upscale (optional): Scale2x / Scale3x
+ *   3. output (canvas size): nearest or sharp bilinear, pixel grid, scanlines, CRT curvature and vignette.
+ */
 export class LcdEngine {
   private gl: WebGLRenderingContext | null = null;
-  private program: WebGLProgram | null = null;
-  private vertexShader: WebGLShader | null = null;
-  private texCurrent: WebGLTexture | null = null;
-  private texPrevious: WebGLTexture | null = null;
-  private posBuffer: WebGLBuffer | null = null;
-  private uvBuffer: WebGLBuffer | null = null;
-  private startTime = 0;
-  private currentPresetSource: string = '';
-  /** Dot-matrix grid strength multiplier (u_grid), 1 = as designed, 0 = off. */
-  grid = 1;
-
+  private progs: { color: Program; up: Program; out: Program } | null = null;
+  private quad: WebGLBuffer | null = null;
+  private frame: WebGLTexture | null = null;
+  private hist: Target[] = [];
+  private up: Target | null = null;
+  private cur = 0;
+  private hasFrame = false;
+  /** The next colour pass ignores the history (first frame, or a filter change while paused). */
+  private fresh = true;
+  private filters: Filters = PRESETS[0].filters;
+  private color = false;
   private canvas: HTMLCanvasElement;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -22,124 +35,112 @@ export class LcdEngine {
   }
 
   init(width: number, height: number): boolean {
-    // Set canvas size BEFORE acquiring context — setting width/height
-    // after getContext() resets the WebGL state (destroys shaders/textures).
     this.canvas.width = width;
     this.canvas.height = height;
-
-    const gl =
-      this.canvas.getContext('webgl2', { antialias: false, alpha: false }) ??
-      this.canvas.getContext('webgl', { antialias: false, alpha: false });
+    const opts = { antialias: false, alpha: false, depth: false, stencil: false };
+    const gl = (this.canvas.getContext('webgl2', opts) ?? this.canvas.getContext('webgl', opts)) as WebGLRenderingContext | null;
     if (!gl) return false;
-    this.gl = gl as WebGLRenderingContext;
-
-    this.vertexShader = this.compileShader(gl.VERTEX_SHADER, vertexSource);
-    if (!this.vertexShader) return false;
-
-    this.texCurrent = this.createTexture();
-    this.texPrevious = this.createTexture();
-
-    this.posBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-      -1, -1,  1, -1,  -1, 1,
-      -1,  1,  1, -1,   1, 1,
-    ]), gl.STATIC_DRAW);
-
-    this.uvBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-      0, 1,  1, 1,  0, 0,
-      0, 0,  1, 1,  1, 0,
-    ]), gl.STATIC_DRAW);
-
-    this.startTime = performance.now();
+    this.gl = gl;
+    const color = this.link(colorSource), up = this.link(upscaleSource), out = this.link(outputSource);
+    if (!color || !up || !out) return false;
+    this.progs = { color, up, out };
+    this.quad = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
+    this.frame = this.texture(W, H);
+    this.hist = [this.target(W, H), this.target(W, H)];
     return true;
   }
 
-  setPreset(fragmentSource: string): boolean {
+  setFilters(filters: Filters, color: boolean): void {
+    if (filters === this.filters && color === this.color) return;
+    this.filters = filters;
+    this.color = color;
+    const n = filters.upscale === 'scale2x' ? 2 : filters.upscale === 'scale3x' ? 3 : 0;
     const gl = this.gl;
-    if (!gl || !this.vertexShader) return false;
-
-    if (fragmentSource === this.currentPresetSource && this.program) return true;
-
-    if (this.program) {
-      gl.deleteProgram(this.program);
+    if (gl && (this.up?.w ?? 0) !== n * W) {
+      if (this.up) { gl.deleteTexture(this.up.tex); gl.deleteFramebuffer(this.up.fbo); }
+      this.up = n ? this.target(n * W, n * H) : null;
     }
+    this.fresh = true;
+    this.redraw();
+  }
 
-    const fragShader = this.compileShader(gl.FRAGMENT_SHADER, fragmentSource);
-    if (!fragShader) return false;
-
-    const program = gl.createProgram()!;
-    gl.attachShader(program, this.vertexShader);
-    gl.attachShader(program, fragShader);
-    gl.linkProgram(program);
-    gl.deleteShader(fragShader);
-
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      console.error('Shader link error:', gl.getProgramInfoLog(program));
-      gl.deleteProgram(program);
-      return false;
-    }
-
-    this.program = program;
-    this.currentPresetSource = fragmentSource;
-    return true;
+  /** Canvas backing size in device pixels (kept by the caller at the size it is shown). */
+  resize(width: number, height: number): void {
+    if (this.canvas.width === width && this.canvas.height === height) return;
+    this.canvas.width = width;
+    this.canvas.height = height;
+    this.redraw();
   }
 
   renderFrame(framebuffer: Uint8ClampedArray): void {
     const gl = this.gl;
-    if (!gl || !this.program) return;
+    if (!gl || !this.progs) return;
+    gl.bindTexture(gl.TEXTURE_2D, this.frame);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, framebuffer);
+    this.hasFrame = true;
+    this.draw();
+  }
 
-    const tmp = this.texPrevious;
-    this.texPrevious = this.texCurrent;
-    this.texCurrent = tmp;
+  /** Draw the last frame again (filters or size changed while paused). */
+  private redraw(): void {
+    if (this.hasFrame) this.draw();
+  }
 
-    gl.bindTexture(gl.TEXTURE_2D, this.texCurrent);
-    gl.texImage2D(
-      gl.TEXTURE_2D, 0, gl.RGBA, 160, 144, 0,
-      gl.RGBA, gl.UNSIGNED_BYTE, framebuffer
-    );
+  private draw(): void {
+    const gl = this.gl!, { color, up, out } = this.progs!, f = this.filters;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
-    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-    gl.useProgram(this.program);
+    // 1. colour + persistence, ping-ponging between the two history targets
+    const prev = this.hist[this.cur], next = this.hist[1 - this.cur];
+    this.cur = 1 - this.cur;
+    this.use(color, next, 0);
+    this.bind(0, this.frame!, false);
+    this.bind(1, prev.tex, false);
+    gl.uniform1i(color.u.u_frame, 0);
+    gl.uniform1i(color.u.u_hist, 1);
+    gl.uniform1f(color.u.u_mode, colorMode(f, this.color));
+    gl.uniform3fv(color.u['u_pal[0]'], paletteRgb(f).flat());
+    gl.uniform1f(color.u.u_corr, f.correction === 'vivid' ? 0.5 : 1);
+    gl.uniform1f(color.u.u_adjOn, hasAdjustments(f) ? 1 : 0);
+    gl.uniform3f(color.u.u_adj, f.brightness, f.contrast, f.saturation);
+    gl.uniform1f(color.u.u_ghost, this.fresh ? 0 : f.ghosting);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    this.fresh = false;
+    let src: Target = next;
 
-    const aPos = gl.getAttribLocation(this.program, 'a_position');
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuffer);
-    gl.enableVertexAttribArray(aPos);
-    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+    // 2. pixel-art upscale
+    if (this.up) {
+      this.use(up, this.up, 0);
+      this.bind(0, src.tex, false);
+      gl.uniform1i(up.u.u_tex, 0);
+      gl.uniform2f(up.u.u_src, W, H);
+      gl.uniform1f(up.u.u_n, this.up.w / W);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      src = this.up;
+    }
 
-    const aUv = gl.getAttribLocation(this.program, 'a_texCoord');
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.uvBuffer);
-    gl.enableVertexAttribArray(aUv);
-    gl.vertexAttribPointer(aUv, 2, gl.FLOAT, false, 0, 0);
-
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, this.texCurrent);
-    gl.uniform1i(gl.getUniformLocation(this.program, 'u_texture'), 0);
-
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, this.texPrevious);
-    gl.uniform1i(gl.getUniformLocation(this.program, 'u_prevTexture'), 1);
-
-    const uRes = gl.getUniformLocation(this.program, 'u_resolution');
-    if (uRes) gl.uniform2f(uRes, this.canvas.width, this.canvas.height);
-
-    const uTex = gl.getUniformLocation(this.program, 'u_texSize');
-    if (uTex) gl.uniform2f(uTex, 160.0, 144.0);
-
-    const uGrid = gl.getUniformLocation(this.program, 'u_grid');
-    if (uGrid) gl.uniform1f(uGrid, this.grid);
-
-    const uTime = gl.getUniformLocation(this.program, 'u_time');
-    if (uTime) gl.uniform1f(uTime, (performance.now() - this.startTime) / 1000.0);
-
+    // 3. output
+    const cw = this.canvas.width, ch = this.canvas.height;
+    this.use(out, null, 1);
+    this.bind(0, src.tex, f.upscale === 'smooth');
+    gl.uniform1i(out.u.u_tex, 0);
+    gl.uniform2f(out.u.u_src, src.w, src.h);
+    gl.uniform2f(out.u.u_out, cw, ch);
+    gl.uniform1f(out.u.u_smooth, f.upscale === 'smooth' ? 1 : 0);
+    gl.uniform1f(out.u.u_grid, f.grid);
+    gl.uniform1f(out.u.u_scan, f.scanlines);
+    gl.uniform1f(out.u.u_crt, f.crt ? 1 : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 
   clear(): void {
     const gl = this.gl;
     if (!gl) return;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.clearColor(0.059, 0.220, 0.059, 1.0);
     gl.clear(gl.COLOR_BUFFER_BIT);
   }
@@ -147,18 +148,57 @@ export class LcdEngine {
   destroy(): void {
     const gl = this.gl;
     if (!gl) return;
-    if (this.program) gl.deleteProgram(this.program);
-    if (this.vertexShader) gl.deleteShader(this.vertexShader);
-    if (this.texCurrent) gl.deleteTexture(this.texCurrent);
-    if (this.texPrevious) gl.deleteTexture(this.texPrevious);
-    if (this.posBuffer) gl.deleteBuffer(this.posBuffer);
-    if (this.uvBuffer) gl.deleteBuffer(this.uvBuffer);
+    if (this.progs) Object.values(this.progs).forEach((p) => gl.deleteProgram(p.p));
+    for (const t of [...this.hist, this.up]) if (t) { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fbo); }
+    if (this.frame) gl.deleteTexture(this.frame);
+    if (this.quad) gl.deleteBuffer(this.quad);
     // Free the context now instead of at GC: browsers cap live WebGL contexts (~16).
     gl.getExtension('WEBGL_lose_context')?.loseContext();
     this.gl = null;
   }
 
-  private compileShader(type: number, source: string): WebGLShader | null {
+  private use(prog: Program, target: Target | null, flip: number): void {
+    const gl = this.gl!;
+    gl.useProgram(prog.p);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, target?.fbo ?? null);
+    gl.viewport(0, 0, target?.w ?? this.canvas.width, target?.h ?? this.canvas.height);
+    gl.uniform1f(prog.u.u_flip, flip);
+  }
+
+  private bind(unit: number, tex: WebGLTexture, linear: boolean): void {
+    const gl = this.gl!;
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    const mode = linear ? gl.LINEAR : gl.NEAREST;
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mode);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, mode);
+  }
+
+  private link(fragment: string): Program | null {
+    const gl = this.gl!;
+    const vs = this.compile(gl.VERTEX_SHADER, vertexSource), fs = this.compile(gl.FRAGMENT_SHADER, fragment);
+    if (!vs || !fs) return null;
+    const p = gl.createProgram()!;
+    gl.attachShader(p, vs);
+    gl.attachShader(p, fs);
+    gl.bindAttribLocation(p, 0, 'a_position');
+    gl.linkProgram(p);
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      console.error('Shader link error:', gl.getProgramInfoLog(p));
+      gl.deleteProgram(p);
+      return null;
+    }
+    const u: Program['u'] = {};
+    for (let i = 0; i < gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS); i++) {
+      const name = gl.getActiveUniform(p, i)!.name;
+      u[name] = gl.getUniformLocation(p, name);
+    }
+    return { p, u };
+  }
+
+  private compile(type: number, source: string): WebGLShader | null {
     const gl = this.gl!;
     const shader = gl.createShader(type)!;
     gl.shaderSource(shader, source);
@@ -171,7 +211,7 @@ export class LcdEngine {
     return shader;
   }
 
-  private createTexture(): WebGLTexture {
+  private texture(w: number, h: number): WebGLTexture {
     const gl = this.gl!;
     const tex = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -179,10 +219,17 @@ export class LcdEngine {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texImage2D(
-      gl.TEXTURE_2D, 0, gl.RGBA, 160, 144, 0,
-      gl.RGBA, gl.UNSIGNED_BYTE, null
-    );
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
     return tex;
+  }
+
+  private target(w: number, h: number): Target {
+    const gl = this.gl!;
+    const tex = this.texture(w, h);
+    const fbo = gl.createFramebuffer()!;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return { tex, fbo, w, h };
   }
 }
