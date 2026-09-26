@@ -14,6 +14,8 @@
   --y:#FFD400;--c:#009FE3;--m:#E5007E;--warn:#FF8A00;--err:#E5322D;
   --flood:#84641F;
   --ease:cubic-bezier(.16,1,.3,1);
+  /* Safe areas (notch, Dynamic Island, home indicator): non-zero in the installed iPhone app, where the page runs under the status bar. */
+  --sat:env(safe-area-inset-top,0px);--sar:env(safe-area-inset-right,0px);--sab:env(safe-area-inset-bottom,0px);--sal:env(safe-area-inset-left,0px);
 }
 *{box-sizing:border-box}
 html,body{margin:0}
@@ -60,7 +62,8 @@ a{color:inherit}
 .search:hover{border-color:#5a5a5a;color:var(--paper)}
 kbd{border:1px solid #3a3a3a;padding:3px 7px;font:700 11px var(--font);color:var(--mute)}
 .search kbd{margin-left:auto}
-@media (max-width:1100px){.nav{display:none}.search{width:auto;flex:1;max-width:360px}}
+/* The menu button stands in for the nav wherever it is hidden (tablets and phones in landscape included). */
+@media (max-width:1100px){.nav{display:none}.search{width:auto;flex:1;max-width:360px}.top .menu{display:flex}}
 @media (max-width:640px){
   .top .wrap{height:60px;gap:8px}
   .mark b{font-size:22px}
@@ -68,7 +71,6 @@ kbd{border:1px solid #3a3a3a;padding:3px 7px;font:700 11px var(--font);color:var
   .search span,.search kbd{display:none}
   .top .btn .lbl{display:none}
   .top .btn{width:44px;padding:0}
-  .top .menu{display:flex}
 }
 .gh{display:flex;width:44px;height:44px;flex:none;align-items:center;justify-content:center;border:1px solid #3a3a3a;color:var(--mute)}
 .gh:hover{color:var(--paper);border-color:#5a5a5a}
@@ -439,7 +441,8 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .pl:fullscreen .deck{position:fixed;left:0;right:0;bottom:0;z-index:5;border:0;background:rgba(18,18,18,.88);transition:opacity .3s}
 .pl:fullscreen.idle .deck{opacity:0;pointer-events:none}
 .pl:fullscreen.idle{cursor:none}
-@media (max-width:900px){
+/* Phones, portrait and landscape (a landscape phone can be wider than 900 px: its own layout follows below). */
+@media (max-width:900px),(orientation:landscape) and (max-height:500px){
   .pl{height:auto;min-height:100dvh;grid-template-rows:56px auto auto 1fr}
   .pl-top{padding:0 12px;gap:10px}
   .pl-top h1{font-size:22px}
@@ -805,3 +808,93 @@ body{font-family:var(--font)}
   .deck{padding-left:8px;padding-right:8px}
   .speed button{min-width:44px}
 }
+
+/* ---------- installed app: safe areas, iPhone player ---------- */
+.wrap{padding-left:max(32px,var(--sal));padding-right:max(32px,var(--sar))}
+@media (max-width:640px){.wrap{padding-left:max(16px,var(--sal));padding-right:max(16px,var(--sar))}}
+.top{padding-top:var(--sat)}
+.mnav.open{inset:calc(60px + var(--sat)) 0 0;padding:16px max(16px,var(--sar)) calc(16px + var(--sab)) max(16px,var(--sal));overflow:auto}
+@media (min-width:641px){.mnav.open{top:calc(72px + var(--sat))}}
+.foot .wrap{padding-bottom:calc(40px + var(--sab))}
+.sdlg .wrap{padding-top:calc(28px + var(--sat))}
+.mdlg{max-height:calc(100dvh - 32px - var(--sat) - var(--sab))}
+.toasts{left:max(24px,var(--sal));bottom:calc(24px + var(--sab))}
+@media (max-width:900px){.toasts{left:max(12px,var(--sal));right:max(12px,var(--sar));bottom:calc(12px + var(--sab))}}
+@media (max-width:640px){.pick{padding:var(--sat) var(--sar) 0 var(--sal)}.pk-file{padding-bottom:calc(8px + var(--sab))}}
+
+/* player: the top bar grows under the status bar, the deck and the touch controls stay clear of the home indicator */
+.pl{grid-template-rows:calc(64px + var(--sat)) minmax(0,1fr) auto}
+.pl-top{padding:var(--sat) max(24px,var(--sar)) 0 max(24px,var(--sal))}
+.deck{padding:12px max(24px,var(--sar)) calc(12px + var(--sab)) max(24px,var(--sal))}
+.sheet{padding-right:var(--sar);padding-bottom:var(--sab)}
+body:has(.pl) .toasts{top:calc(80px + var(--sat))}
+/* game controls: no double-tap zoom, text selection, long-press callout, tap flash or rubber-band scrolling */
+.pl{touch-action:manipulation}
+.pl .stage,.pl .deck,.pl .touch,.pl .touch *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+html:has(.pl),body:has(.pl){overscroll-behavior:none}
+
+/* Immersive: the iPhone's stand-in for fullscreen (no Fullscreen API there). The chrome goes, the screen takes the room,
+   the touch controls stay, and one button in the corner brings everything back. */
+.pl.imm{grid-template-rows:minmax(0,1fr)}
+.pl.imm .pl-top,.pl.imm .sheet,.pl.imm .stage .cap{display:none}
+.pl.imm .pl-body{display:block;height:100dvh}
+.pl.imm .stage{height:100%;padding:calc(16px + var(--sat)) max(16px,var(--sar)) calc(16px + var(--sab)) max(16px,var(--sal))}
+.pl.imm .screen{width:min(100%,calc((100dvh - 32px - var(--sat) - var(--sab) - 24px) * 160 / 144 + 24px))}
+.pl.imm .deck>:not(.fs){display:none}
+.pl.imm .deck{position:fixed;top:calc(12px + var(--sat));right:max(12px,var(--sar));z-index:5;padding:0;border:0;background:none}
+.pl.imm .deck .fs{background:rgba(20,20,20,.72);color:var(--paper);box-shadow:inset 0 0 0 1.5px var(--rule)}
+
+@media (max-width:900px),(orientation:landscape) and (max-height:500px){
+  body:has(.pl) .toasts{top:auto}
+  .pl{grid-template-rows:calc(56px + var(--sat)) auto auto 1fr}
+  .pl-top{padding:var(--sat) max(12px,var(--sar)) 0 max(12px,var(--sal))}
+  .deck{padding:8px max(12px,var(--sar)) 8px max(12px,var(--sal))}
+  .touch{padding:24px max(20px,var(--sar)) max(40px,calc(16px + var(--sab))) max(20px,var(--sal))}
+  .sheet{padding:0 var(--sar) var(--sab) var(--sal)}
+  /* portrait immersive: the bar goes, the screen is already full width; the leave button sits above the controls */
+  .pl.imm{grid-template-rows:auto auto 1fr}
+  .pl.imm .pl-body{height:auto}
+  .pl.imm .stage{height:auto;padding:calc(12px + var(--sat)) max(12px,var(--sar)) 12px max(12px,var(--sal))}
+  .pl.imm .screen{width:100%}
+  .pl.imm .deck{position:static;justify-content:flex-end;padding:8px max(12px,var(--sar)) 0 max(12px,var(--sal))}
+}
+@media (pointer:coarse) and (max-width:900px){.deck{padding-left:max(8px,var(--sal));padding-right:max(8px,var(--sar))}}
+
+/* Phones held sideways: screen in the middle, D-pad on the left, A/B and Start/Select on the right; top bar and deck share one row. */
+@media (orientation:landscape) and (max-height:500px){
+  .pl{height:100dvh;min-height:0;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);grid-template-rows:calc(52px + var(--sat)) minmax(0,1fr);
+    grid-template-areas:"top deck deck" "l stage r"}
+  .pl-body,.touch{display:contents}
+  .pl-top{grid-area:top;min-width:0;padding-right:8px;gap:8px;border-bottom:1px solid var(--rule)}
+  .pl-top h1{font-size:20px}
+  .pl-top .right{display:contents}
+  .manual-btn{margin-left:auto;width:44px;padding:0;justify-content:center;flex:none}
+  .deck{grid-area:deck;border-top:0;border-bottom:1px solid var(--rule);padding:var(--sat) max(12px,var(--sar)) 0 8px;justify-content:flex-end;gap:6px}
+  .deck .push{display:none}
+  .stage{grid-area:stage;padding:8px 8px calc(8px + var(--sab))}
+  .screen{width:min(calc((100dvh - 52px - var(--sat) - var(--sab) - 16px - 24px) * 160 / 144 + 24px),calc(100vw - 360px - var(--sal) - var(--sar)))}
+  .touch .dpad{grid-area:l;align-self:center;justify-self:center;margin-left:var(--sal)}
+  .touch .ab{grid-area:r;align-self:center;justify-self:center;margin:0 var(--sar) 48px 0}
+  .touch .ss{grid-area:r;align-self:end;justify-self:center;margin:0 var(--sar) calc(12px + var(--sab)) 0;gap:8px}
+  .touch .ss button{padding:0 12px}
+  /* the manual slides in from the right, full height */
+  .sheet{top:0;bottom:0;left:auto;width:min(460px,72vw);height:auto;padding:var(--sat) var(--sar) var(--sab) 0;transform:translateX(100%);box-shadow:-20px 0 40px rgba(0,0,0,.5)}
+  .pl.imm{grid-template-rows:minmax(0,1fr);grid-template-areas:"l stage r"}
+  .pl.imm .stage{height:100%;padding:calc(8px + var(--sat)) 8px calc(8px + var(--sab))}
+  .pl.imm .screen{width:min(calc((100dvh - 16px - var(--sat) - var(--sab) - 24px) * 160 / 144 + 24px),calc(100vw - 360px - var(--sal) - var(--sar)))}
+  .pl.imm .deck{position:fixed;top:calc(8px + var(--sat));right:max(8px,var(--sar));padding:0}
+}
+
+/* "Install on your iPhone": a one-time card, and the same steps in Settings › About */
+.ihint{position:fixed;z-index:200;left:max(12px,var(--sal));right:max(12px,var(--sar));bottom:calc(12px + var(--sab));max-width:460px;box-shadow:0 22px 44px rgba(0,0,0,.42),0 3px 8px rgba(0,0,0,.28);animation:tin .35s var(--ease)}
+@media (min-width:641px){.ihint{left:auto;right:max(24px,var(--sar));bottom:calc(24px + var(--sab))}}
+.ihint .bar{display:grid;grid-template-columns:repeat(3,1fr);height:8px}
+.ihint .in{position:relative;padding:14px 16px 16px}
+.ihint .x{position:absolute;top:4px;right:4px;width:44px;height:44px;border:0;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:center}
+.ihint h2{font:900 26px/.9 var(--font);font-stretch:62%;text-transform:uppercase;margin:0 44px 8px 0}
+.ihint p,.ios-install p{margin:0 0 12px;font:500 15px/1.5 var(--font);color:var(--ink-2);max-width:60ch}
+.ios-install p{margin:0}
+.ios-step{display:block;color:var(--ink);font-weight:600}
+.ios-step b{font-weight:800}
+.ios-step .glyph{display:inline-flex;vertical-align:-4px;margin:0 3px 0 1px}
+.ihint small,.ios-install small{display:block;margin-top:6px;font:500 13px/1.5 var(--font);color:var(--ink-3)}

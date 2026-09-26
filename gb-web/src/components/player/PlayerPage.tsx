@@ -85,8 +85,11 @@ function Player({ game }: { game: GameEntry }) {
   const { isRewinding, startRewind, stopRewind, wrapRunFrame, bufferFill } = useRewind({ saveState, loadState: loadAndShow });
   useSaveData({ saveTo, romLoaded, hasBatteryRam, exportSram });
 
+  // No Fullscreen API on iPhone (nor in its Home Screen apps): "immersive" hides the chrome instead and gives the screen all the room.
+  const [immersive, setImmersive] = useState(false);
   const toggleFullscreen = useCallback(() => {
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    if (!document.fullscreenEnabled) setImmersive((v) => !v);
+    else if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     else rootRef.current?.requestFullscreen().catch(() => {});
   }, []);
   const { connected: gamepad } = useGamepad(pressButton, releaseButton, romLoaded, toggleFullscreen);
@@ -104,18 +107,20 @@ function Player({ game }: { game: GameEntry }) {
     let t = 0;
     const wake = () => { setIdle(false); clearTimeout(t); t = window.setTimeout(() => setIdle(true), 2500); };
     wake();
-    window.addEventListener('pointermove', wake);
-    window.addEventListener('keydown', wake);
-    return () => { clearTimeout(t); window.removeEventListener('pointermove', wake); window.removeEventListener('keydown', wake); };
+    const events = ['pointermove', 'pointerdown', 'keydown'];
+    events.forEach((e) => window.addEventListener(e, wake));
+    return () => { clearTimeout(t); events.forEach((e) => window.removeEventListener(e, wake)); };
   }, []);
 
-  // Audio can only start after a user gesture: the click that opened the player usually counts, else the first key or tap.
+  // Audio can only start after a user gesture: the click that opened the player usually counts, else the next key or tap.
+  // Every one tries again (a no-op while it plays): iOS only unlocks on a touch it counts as a gesture (touchend),
+  // and suspends the sound again after a call or a trip to the Home Screen.
   useEffect(() => {
     const start = () => { ensureStarted().catch(() => {}); };
     start();
-    window.addEventListener('pointerdown', start, { once: true });
-    window.addEventListener('keydown', start, { once: true });
-    return () => { window.removeEventListener('pointerdown', start); window.removeEventListener('keydown', start); };
+    const events = ['pointerdown', 'touchend', 'keydown'];
+    events.forEach((e) => window.addEventListener(e, start));
+    return () => events.forEach((e) => window.removeEventListener(e, start));
   }, [ensureStarted]);
 
   /** Boot a ROM: cartridge save first, then the requested resume point or slot, then run. */
@@ -271,7 +276,8 @@ function Player({ game }: { game: GameEntry }) {
     'data-pad': b,
     onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
       e.preventDefault();
-      e.currentTarget.setPointerCapture(e.pointerId);
+      // Capture can throw (pointer already released or cancelled by the system): never lose the press over it.
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* keep going */ }
       e.currentTarget.classList.add('down');
       if (useSettingsStore.getState().haptics) navigator.vibrate?.(8);
       pressButton(BUTTON_NUMBERS[b]);
@@ -282,7 +288,7 @@ function Player({ game }: { game: GameEntry }) {
   });
 
   return (
-    <div ref={rootRef} className={`pl${manual ? '' : ' closed'}${idle ? ' idle' : ''}`} style={{ '--flood': ink } as CSSProperties}>
+    <div ref={rootRef} className={`pl${manual ? '' : ' closed'}${idle ? ' idle' : ''}${immersive ? ' imm' : ''}`} style={{ '--flood': ink } as CSSProperties}>
       <header className="pl-top">
         <Link className="back" to={paths.game(game.id)}>{I.back}<span className="lbl">Back</span></Link>
         <h1><Link to={paths.game(game.id)}><Title text={game.title} /></Link></h1>
@@ -356,7 +362,9 @@ function Player({ game }: { game: GameEntry }) {
         <button className="dk hide-m" onClick={screenshot} disabled={noStore} aria-label="Screenshot, F12">{I.cam}<span className="lbl">Photo</span><span className="k">F12</span></button>
         <span className="push" />
         <button className="dk hide-m" onClick={mute} aria-pressed={muted} aria-label="Mute, M">{muted ? I.mute : I.sound}</button>
-        <button className="dk" onClick={toggleFullscreen} aria-label="Fullscreen, F">{I.full}</button>
+        {document.fullscreenEnabled
+          ? <button className="dk fs" onClick={toggleFullscreen} aria-label="Fullscreen, F">{I.full}</button>
+          : <button className="dk fs" onClick={toggleFullscreen} aria-pressed={immersive} aria-label={immersive ? 'Leave immersive view, F' : 'Immersive view, F'}>{immersive ? I.close : I.full}</button>}
       </nav>
 
       <div className="touch" data-size={touchSize} aria-label="Touch controls">

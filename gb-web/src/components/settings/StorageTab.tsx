@@ -7,6 +7,7 @@ import { toast } from '../shell/actions';
 import { ConfirmDialog, type ConfirmRequest } from '../shell/ConfirmDialog';
 import { askBoxArt, boxArtBytes, boxArtPerGame, deleteBoxArt, fetchBoxArtFor, needsDownload, NO_COVERS, useBoxArtProgress } from '../../lib/cover-art';
 import { mb, owned } from '../../lib/ui';
+import { isInstalled, isIos } from '../../lib/pwa';
 import type { GameEntry } from '../../types/game';
 import { Row, SwitchRow } from './parts';
 import { PerGame, type GameUsage } from './PerGame';
@@ -164,7 +165,10 @@ export function StorageTab() {
         {quota && <span>{mb(quota.usage)} used by this site, of about {mb(quota.quota)} this browser allows (estimate)</span>}
       </div>
       <Row label="Protect my data from automatic cleanup"
-        sub={persisted ? 'Granted: the browser won’t evict your library when space runs low.' : 'Asks the browser not to evict your library when space runs low.'}>
+        sub={<>
+          {persisted ? 'Granted: the browser won’t evict your library when space runs low.' : 'Asks the browser not to evict your library when space runs low.'}
+          {isIos() && !isInstalled() && ' Safari can also delete a website’s data after 7 days of use without a visit. Add Cartouche to your Home Screen (Settings › About) to keep it: Home Screen apps aren’t subject to that.'}
+        </>}>
         <button className={`btn ${persisted ? 'line' : 'k'}`} style={persisted ? { color: 'var(--ink)' } : undefined} disabled={persisted} onClick={persist}>{persisted ? 'Protected' : 'Protect'}</button>
       </Row>
 
