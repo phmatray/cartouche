@@ -22,6 +22,11 @@
           "type": "toml",
           "path": "gb-core/Cargo.toml",
           "jsonpath": "$.package.version"
+        },
+        {
+          "type": "toml",
+          "path": "gb-core/Cargo.lock",
+          "jsonpath": "$.package[?(@.name.value == 'gb-core')].version"
         }
       ],
       "changelog-sections": [
