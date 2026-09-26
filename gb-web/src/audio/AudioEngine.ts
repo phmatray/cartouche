@@ -26,7 +26,8 @@ export class AudioEngine {
   }
 
   async resume(): Promise<void> {
-    if (this.context?.state === 'suspended') {
+    // Not only 'suspended': iOS parks the context as 'interrupted' after a call, Siri or the app going to the background.
+    if (this.context && this.context.state !== 'running' && this.context.state !== 'closed') {
       await this.context.resume();
     }
   }

@@ -17,7 +17,8 @@ const spaFallback = (): Plugin => ({
     fs.copyFileSync(path.join(out, 'index.html'), path.join(out, '404.html'))
     const files = (fs.readdirSync(out, { recursive: true }) as string[])
       .map((f) => f.split(path.sep).join('/'))
-      .filter((f) => fs.statSync(path.join(out, f)).isFile() && !/^(404\.html|sw\.js|og\.png)$/.test(f) && !f.endsWith('.map'))
+      // splash/ and app-screens/ (manifest screenshots) are read once, when the app is installed: not worth keeping offline.
+      .filter((f) => fs.statSync(path.join(out, f)).isFile() && !/^(404\.html|sw\.js|og\.png|splash\/.*|app-screens\/.*)$/.test(f) && !f.endsWith('.map'))
       .sort()
     const hash = crypto.createHash('sha1')
     for (const f of files) hash.update(f).update(fs.readFileSync(path.join(out, f)))

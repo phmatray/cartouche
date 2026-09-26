@@ -5,6 +5,7 @@ import { useBoxArtProgress } from '../../lib/cover-art';
 import { I, REPO_URL } from '../icons';
 import { queueImport } from './actions';
 import { BoxArtDialog } from './BoxArtDialog';
+import { InstallHint } from './InstallHint';
 import { SearchDialog } from './SearchDialog';
 import { ShortcutsDialog } from './Shortcuts';
 import { Toasts } from './Toasts';
@@ -115,6 +116,7 @@ export function AppShell() {
         <div><b>Drop to add</b><span>Your files are read in this browser and never uploaded.</span></div>
       </div>
       <BoxArtDialog />
+      <InstallHint />
       <Toasts />
     </>
   );

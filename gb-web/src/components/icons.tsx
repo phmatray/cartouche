@@ -37,5 +37,7 @@ export const I = {
   right: svg(<><path d="M18 12 8 19V5z" fill="currentColor" /></>),
   link: svg(<><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.2 1.2M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.2-1.2" fill="none" stroke="currentColor" strokeWidth="2.2" /></>),
   github: <svg className="icon" viewBox="0 0 16 16" aria-hidden="true"><path d={GITHUB} fill="currentColor" /></svg>,
+  /** iOS Share: a tray with an arrow out of it (where Add to Home Screen lives). */
+  share: svg(<><path d="M8 9H5v12h14V9h-3M12 15V3M8 7l4-4 4 4" fill="none" stroke="currentColor" strokeWidth="2.2" /></>),
   cart: svg(<><path d="M5 2h11l3 3v17H5z" fill="none" stroke="currentColor" strokeWidth="2" /><path d="M8 6h8v6H8zM8 16h8" fill="none" stroke="currentColor" strokeWidth="2" /></>),
 };
