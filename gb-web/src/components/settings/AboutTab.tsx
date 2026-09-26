@@ -1,6 +1,6 @@
 import { Link } from 'react-router';
 import { device, isInstalled, isIos, promptInstall } from '../../lib/pwa';
-import { IosSteps } from '../shell/InstallHint';
+import { IosStep } from '../shell/InstallHint';
 import { toast } from '../shell/actions';
 import { ShortcutsList } from '../shell/Shortcuts';
 import { I, REPO_URL } from '../icons';
@@ -35,7 +35,10 @@ export function AboutTab() {
       ) : isIos() ? (
         <div className="row col ios-install">
           <span>Install on your {device()}</span>
-          <p><IosSteps /></p>
+          <p>
+            <IosStep />
+            <small>On recent iOS, Share is in Safari’s ⋯ menu. Cartouche then opens full screen from its icon, plays offline, and keeps its storage: Safari can delete a website’s data after 7 days of use without a visit, and Home Screen apps aren’t subject to that.</small>
+          </p>
         </div>
       ) : (
         <Row label="Install as an app" sub="Opens in its own window and works offline after the first visit">

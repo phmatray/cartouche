@@ -276,7 +276,8 @@ function Player({ game }: { game: GameEntry }) {
     'data-pad': b,
     onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
       e.preventDefault();
-      e.currentTarget.setPointerCapture(e.pointerId);
+      // Capture can throw (pointer already released or cancelled by the system): never lose the press over it.
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* keep going */ }
       e.currentTarget.classList.add('down');
       if (useSettingsStore.getState().haptics) navigator.vibrate?.(8);
       pressButton(BUTTON_NUMBERS[b]);

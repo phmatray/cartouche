@@ -2,25 +2,33 @@
 interface InstallPrompt extends Event { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> }
 
 let deferred: InstallPrompt | null = null;
-const UPDATED = 'cartouche-updated';
+const VERSION_KEY = 'cartouche-version';
 
 export function setupPwa(onUpdated: () => void) {
   window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferred = e as InstallPrompt; });
   window.addEventListener('appinstalled', () => { deferred = null; });
   // A Home Screen app asks to keep its storage (Safari grants it to installed apps; elsewhere it's a request).
   if (isInstalled()) navigator.storage?.persist?.().catch(() => {});
-  try { if (sessionStorage.getItem(UPDATED)) { sessionStorage.removeItem(UPDATED); onUpdated(); } } catch { /* storage blocked */ }
   // Production only: in dev the service worker would cache Vite's live modules.
   if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
+  // "Updated": the version running this page differs from the last one seen. This covers both ways a new version
+  // lands: the reload below, and a relaunch after the waiting worker activated on its own when the app closed.
+  navigator.serviceWorker.addEventListener('message', (e) => {
+    const version = (e.data as { version?: string } | null)?.version;
+    if (!version) return;
+    try {
+      const seen = localStorage.getItem(VERSION_KEY);
+      localStorage.setItem(VERSION_KEY, version);
+      if (seen && seen !== version) onUpdated();
+    } catch { /* storage blocked */ }
+  });
+  navigator.serviceWorker.controller?.postMessage('version');
   window.addEventListener('load', async () => {
     const reg = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL }).catch(() => null);
     // A version downloaded during an earlier session waits for this launch: it takes over now, before anything is
     // played, and the page reloads once so the app and its cache are the same version.
     if (reg?.waiting && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        try { sessionStorage.setItem(UPDATED, '1'); } catch { /* storage blocked */ }
-        location.reload();
-      }, { once: true });
+      navigator.serviceWorker.addEventListener('controllerchange', () => location.reload(), { once: true });
       reg.waiting.postMessage('activate');
     }
     // Installed apps are resumed more than relaunched: look for a new version when coming back.
@@ -34,6 +42,10 @@ export const isInstalled = () =>
 
 /** iPhone or iPad (iPadOS reports itself as a Mac with touch). No install prompt there: Share › Add to Home Screen. */
 export const isIos = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+/** Safari itself: other iOS browsers put Share elsewhere, and in-app browsers can't add to the Home Screen at all. */
+export const isIosSafari = () =>
+  isIos() && /Safari\//.test(navigator.userAgent) && !/CriOS|FxiOS|EdgiOS|OPiOS|FBAN|FBAV|Instagram|Line\/|GSA\//.test(navigator.userAgent);
 
 export const device = () => (/iPhone|iPod/.test(navigator.userAgent) ? 'iPhone' : 'iPad');
 

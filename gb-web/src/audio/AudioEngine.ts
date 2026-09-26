@@ -2,11 +2,15 @@ export class AudioEngine {
   private context: AudioContext | null = null;
   private workletNode: AudioWorkletNode | null = null;
   private gainNode: GainNode | null = null;
-  private initialized = false;
+  // One setup for every caller: taps arriving while the worklet loads must not each create an AudioContext.
+  private ready: Promise<void> | null = null;
 
-  async init(): Promise<void> {
-    if (this.initialized) return;
+  init(): Promise<void> {
+    this.ready ??= this.setup().catch((e) => { this.destroy(); throw e; });
+    return this.ready;
+  }
 
+  private async setup(): Promise<void> {
     this.context = new AudioContext({ sampleRate: 44100 });
     this.gainNode = this.context.createGain();
     this.gainNode.gain.value = 0.5;
@@ -17,7 +21,6 @@ export class AudioEngine {
       outputChannelCount: [2],
     });
     this.workletNode.connect(this.gainNode);
-    this.initialized = true;
   }
 
   /** null before init(). */
@@ -62,6 +65,6 @@ export class AudioEngine {
     this.workletNode = null;
     this.gainNode = null;
     this.context = null;
-    this.initialized = false;
+    this.ready = null;
   }
 }

@@ -41,6 +41,7 @@ const PHONES = [
   [375, 812, 3], // X, XS, 11 Pro, 12 mini, 13 mini
   [414, 896, 3], // XS Max, 11 Pro Max
   [414, 896, 2], // XR, 11
+  [414, 736, 3], // 6s Plus, 7 Plus, 8 Plus
   [375, 667, 2], // SE, 8
 ];
 const SPLASH = `<!doctype html><style>
