@@ -1,7 +1,6 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import wasm from 'vite-plugin-wasm'
-import topLevelAwait from 'vite-plugin-top-level-await'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 import fs from 'fs'
@@ -14,7 +13,7 @@ const spaFallback = (): Plugin => ({
   name: 'spa-404-fallback-and-sw',
   apply: 'build',
   closeBundle() {
-    const out = path.resolve(__dirname, 'dist')
+    const out = path.resolve(import.meta.dirname, 'dist')
     fs.copyFileSync(path.join(out, 'index.html'), path.join(out, '404.html'))
     const files = (fs.readdirSync(out, { recursive: true }) as string[])
       .map((f) => f.split(path.sep).join('/'))
@@ -43,8 +42,9 @@ function npmLicenses(moduleIds: Iterable<string>): string[] {
   for (const id of moduleIds) {
     const m = /^(.*[\\/]node_modules[\\/](?:@[^\\/]+[\\/])?[^\\/]+)[\\/]/.exec(id.replace(/^\0/, ''))
     if (m) dirs.add(m[1])
-    // Vite's own runtime helpers (module preload) are virtual modules.
-    else if (id.startsWith('\0vite/')) dirs.add(path.resolve(__dirname, 'node_modules/vite'))
+    // Vite's (module preload) and Rolldown's (CommonJS interop) runtime helpers are virtual modules.
+    else if (id.startsWith('\0vite/')) dirs.add(path.resolve(import.meta.dirname, 'node_modules/vite'))
+    else if (id.startsWith('\0rolldown/')) dirs.add(path.resolve(import.meta.dirname, 'node_modules/rolldown'))
   }
   return [...dirs].sort().map((dir) => {
     const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'))
@@ -57,7 +57,7 @@ function npmLicenses(moduleIds: Iterable<string>): string[] {
 // Crates linked into the wasm binary: normal dependencies of gb-core for wasm32, not proc-macros.
 function crateLicenses(): string[] {
   const meta = JSON.parse(execFileSync('cargo', ['metadata', '--format-version', '1', '--locked',
-    '--filter-platform', 'wasm32-unknown-unknown', '--manifest-path', path.resolve(__dirname, '../gb-core/Cargo.toml')],
+    '--filter-platform', 'wasm32-unknown-unknown', '--manifest-path', path.resolve(import.meta.dirname, '../gb-core/Cargo.toml')],
   { encoding: 'utf8', maxBuffer: 64 << 20 }))
   type Pkg = { id: string; name: string; version: string; license: string; manifest_path: string; targets: { kind: string[] }[] }
   type Node = { id: string; deps: { pkg: string; dep_kinds: { kind: string | null }[] }[] }
@@ -88,8 +88,8 @@ const licenseFiles = (): Plugin => ({
     const ids = Object.values(bundle).flatMap((c) => (c.type === 'chunk' ? c.moduleIds : []))
     const sep = `\n\n${'='.repeat(78)}\n\n`
     const emit = (fileName: string, source: string) => this.emitFile({ type: 'asset', fileName, source })
-    emit('LICENSE.txt', fs.readFileSync(path.resolve(__dirname, '../LICENSE'), 'utf8'))
-    emit('THIRD_PARTY_NOTICES.txt', fs.readFileSync(path.resolve(__dirname, '../THIRD_PARTY_NOTICES.md'), 'utf8'))
+    emit('LICENSE.txt', fs.readFileSync(path.resolve(import.meta.dirname, '../LICENSE'), 'utf8'))
+    emit('THIRD_PARTY_NOTICES.txt', fs.readFileSync(path.resolve(import.meta.dirname, '../THIRD_PARTY_NOTICES.md'), 'utf8'))
     emit('THIRD_PARTY_LICENSES.txt',
       'Licenses of the third-party code included in this build of Cartouche.\n' +
       'Other bundled works (the ROMs in roms/, GameDataBase data, fonts) are listed in THIRD_PARTY_NOTICES.txt.' +
@@ -100,20 +100,24 @@ const licenseFiles = (): Plugin => ({
 export default defineConfig(({ mode }) => ({
   // Deployed at https://phmatray.github.io/cartouche/ (build and preview); the dev server stays at '/'.
   base: mode === 'production' ? '/cartouche/' : '/',
-  plugins: [react(), wasm(), topLevelAwait(), tailwindcss(), licenseFiles(), spaFallback()],
+  plugins: [react(), wasm(), tailwindcss(), licenseFiles(), spaFallback()],
   worker: {
     format: 'es',
     plugins: () => [wasm()],
   },
   build: {
-    rollupOptions: {
+    rolldownOptions: {
       // Libraries change far less often than the app: their own chunk stays cached across releases.
-      output: { manualChunks: (id) => (id.includes('/node_modules/') && !id.endsWith('.css') ? 'vendor' : undefined) },
+      output: {
+        codeSplitting: {
+          groups: [{ debugName: 'vendor', name: (id) => (id.includes('/node_modules/') && !id.endsWith('.css') ? 'vendor' : null) }],
+        },
+      },
     },
   },
   resolve: {
     alias: {
-      'gb-core': path.resolve(__dirname, '../gb-core/pkg'),
+      'gb-core': path.resolve(import.meta.dirname, '../gb-core/pkg'),
     },
   },
   server: {
