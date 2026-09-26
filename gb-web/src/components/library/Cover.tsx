@@ -51,13 +51,13 @@ export function NoArt({ game }: { game: GameEntry }) {
 }
 
 /** Box art fading in over the printed card once (if) it arrives. */
-export function Cover({ game, className = '' }: { game: GameEntry; className?: string }) {
+export function Cover({ game, className = '', 'aria-hidden': hidden }: { game: GameEntry; className?: string; 'aria-hidden'?: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
   const seen = useSeen(ref);
   const { coverUrl, loading } = useCoverArt(game, seen);
   const [shown, setShown] = useState<string | null>(null);
   return (
-    <span ref={ref} className={`cv ${className}${seen && loading ? ' wait' : ''}`}>
+    <span ref={ref} className={`cv ${className}${seen && loading ? ' wait' : ''}`} aria-hidden={hidden}>
       <NoArt game={game} />
       {coverUrl && (
         <img src={coverUrl} alt="" width={512} height={512} decoding="async"

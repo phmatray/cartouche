@@ -659,6 +659,9 @@ body{font-family:var(--font)}
 .pk-chips{display:flex;gap:8px;padding:12px 24px;overflow-x:auto;scrollbar-width:none}
 .pk-chip{flex:none;height:36px;padding:0 12px;border:2px solid var(--ink);background:transparent;color:var(--ink);font:800 12px var(--font);text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}
 .pk-chip[aria-pressed=true]{background:var(--ink);color:var(--paper)}
+.pk-s{display:none}
+.pk-hint{margin:0;padding:0 24px 10px;color:var(--ink-3);font-size:12px}
+.pk-hint kbd{border-color:var(--paper-3);color:var(--ink-3)}
 .pk-list{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;border-top:1px solid var(--paper-3);scrollbar-color:var(--paper-3) var(--paper)}
 .pk-h{position:absolute;left:0;right:0;height:36px;display:flex;align-items:flex-end;padding:0 24px 6px;font:800 11px var(--font);text-transform:uppercase;letter-spacing:.09em;color:var(--ink-3)}
 .pk-row{position:absolute;left:0;right:0;height:64px;display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:14px;align-items:center;padding:0 24px;border-bottom:1px solid var(--paper-2);cursor:pointer}
@@ -682,7 +685,8 @@ body{font-family:var(--font)}
   .pk-head,.pk-q,.pk-chips,.pk-h,.pk-row,.pk-file,.pk-empty{padding-left:16px;padding-right:16px}
   .pk-head h2{font-size:30px}
   .pk-chip{height:44px}
-  .pk-cur{display:none}
+  .pk-cur,.pk-hint,.pk-l,.pk-tl{display:none}
+  .pk-s{display:inline}
 }
 .touch[data-size=S] .dpad,.touch[data-size=S] .ab{zoom:.82}
 .touch[data-size=L] .dpad,.touch[data-size=L] .ab{zoom:1.18}
