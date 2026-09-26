@@ -14,6 +14,8 @@ import { toast } from '../shell/actions';
 import { ConfirmDialog, type ConfirmRequest } from '../shell/ConfirmDialog';
 import { hardwareOf, importSav, useAlbum, useLinkRom, useRomHeader } from '../../hooks/useGameExtras';
 import { Shot } from './Shot';
+import { TagLinks } from '../library/TagLinks';
+import { genreLabel } from '../../lib/search';
 
 export function GamePage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -40,7 +42,6 @@ function GameDetails({ game }: { game: GameEntry }) {
   const need = !owned(game);
   const auto = states[0];
   const slots = Array.from({ length: 5 }, (_, i) => states[i + 1]);
-  const homebrew = /homebrew/i.test(game.category);
 
   useEffect(() => { document.title = `${game.title} · Cartouche`; }, [game.title]);
   useEffect(() => {
@@ -50,13 +51,6 @@ function GameDetails({ game }: { game: GameEntry }) {
     return () => { cancelled = true; };
   }, [game.id, savedIds]);
   const profileName = (id?: string) => (profiles.length > 1 && id ? profiles.find((p) => p.id === id)?.name : undefined);
-
-  const facts = [
-    game.year, game.developer, game.genre !== 'Unknown' && game.genre,
-    game.players && (game.players > 1 ? `1–${game.players} players · link cable` : '1 player'),
-    game.regions?.length && (game.regions.length === 3 ? 'World' : game.regions.join(' / ')),
-    homebrew && 'Homebrew',
-  ].filter(Boolean) as string[];
 
   const remove = () => setConfirm(game.isLocal ? {
     title: 'Remove this ROM?', danger: true, ok: 'Remove ROM & saves',
@@ -74,9 +68,9 @@ function GameDetails({ game }: { game: GameEntry }) {
         <div className="wrap hero">
           <div className="box"><Cover game={game} className="boxart" /></div>
           <div className="info">
-            <nav className="crumbs" aria-label="Breadcrumb"><Link to="/">Library</Link>{I.next}<span>{game.genre !== 'Unknown' ? game.genre : 'Game'}</span></nav>
+            <nav className="crumbs" aria-label="Breadcrumb"><Link to="/">Library</Link>{I.next}<span>{genreLabel(game) || 'Game'}</span></nav>
             <h1 className="hero-t"><Title text={game.title} /></h1>
-            {!!facts.length && <div className="facts">{facts.map((f) => <span key={f} className="fact">{f}</span>)}</div>}
+            <div className="facts"><TagLinks game={game} keys={['year', 'developer', 'publisher', 'genre', 'players', 'region', 'platform', 'is']} className="fact" /></div>
             <div className="acts">
               {need ? (
                 <label className="btn lg play" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useGameLibrary } from '../../hooks/useGameLibrary';
 import { useBoxArtProgress } from '../../lib/cover-art';
+import { paths, searchState } from '../../lib/ui';
 import { I, REPO_URL } from '../icons';
 import { queueImport } from './actions';
 import { BoxArtDialog } from './BoxArtDialog';
@@ -30,7 +31,6 @@ export function AppShell() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [menu, setMenu] = useState(false);
-  const [search, setSearch] = useState(false);
   const [shortcuts, setShortcuts] = useState(false);
   const [dropping, setDropping] = useState(false);
 
@@ -39,10 +39,13 @@ export function AppShell() {
   if (lastPath !== pathname) { setLastPath(pathname); setMenu(false); }
   useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
 
+  // The overlay is open while the URL has ?q= (over whatever page is showing).
+  const openSearch = () => navigate(paths.search('').slice(1), { state: searchState() });
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (typing() || document.querySelector('dialog[open]')) return;
-      if (e.key === '/') { e.preventDefault(); setSearch(true); }
+      if (e.key === '/') { e.preventDefault(); openSearch(); }
       else if (e.key === '?') { e.preventDefault(); setShortcuts(true); }
     };
     // Drop files anywhere: the Add ROMs page opens with them (on that page, its own drop zone lights up instead).
@@ -83,7 +86,7 @@ export function AppShell() {
           <nav className="nav" aria-label="Main">
             {NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === '/'}>{label}</NavLink>)}
           </nav>
-          <button className="search" aria-label="Search games" onClick={() => setSearch(true)}>
+          <button className="search" aria-label="Search games" onClick={openSearch}>
             {I.search}<span>Search {games.length ? games.length.toLocaleString('en-US') : ''} games</span><kbd>/</kbd>
           </button>
           <Link className="btn y" aria-label="Add ROMs" to="/add">{I.plus}<span className="lbl">Add ROMs</span></Link>
@@ -110,7 +113,7 @@ export function AppShell() {
         </div>
       </footer>
 
-      <SearchDialog open={search} onClose={() => setSearch(false)} />
+      <SearchDialog />
       <ShortcutsDialog open={shortcuts} onClose={() => setShortcuts(false)} />
       <div className={`dropall${dropping ? ' on' : ''}`} aria-hidden="true">
         <div><b>Drop to add</b><span>Your files are read in this browser and never uploaded.</span></div>

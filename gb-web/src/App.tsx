@@ -30,7 +30,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean
 function App() {
   return (
     // Served from /cartouche/ on GitHub Pages; 404.html (a copy of index.html) routes deep links here.
-    <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '') || '/'}>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       <ErrorBoundary>
       <Suspense fallback={<div className="loading wrap" aria-busy="true" />}>
         <Routes>
