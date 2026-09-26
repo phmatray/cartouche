@@ -74,9 +74,11 @@ export class LcdEngine {
     this.redraw();
   }
 
-  renderFrame(framebuffer: Uint8ClampedArray): void {
+  /** `fresh`: the picture jumped (a state loaded, a rewind step), so no ghosting from the frames before it. */
+  renderFrame(framebuffer: Uint8ClampedArray, fresh = false): void {
     const gl = this.gl;
     if (!gl || !this.progs) return;
+    if (fresh) this.fresh = true;
     gl.bindTexture(gl.TEXTURE_2D, this.frame);
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, framebuffer);
     this.hasFrame = true;

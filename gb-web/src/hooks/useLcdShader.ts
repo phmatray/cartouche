@@ -41,9 +41,9 @@ export function useLcdShader(filters: Filters, color: boolean, follow = true) {
 
   useEffect(() => { engineRef.current?.setFilters(filters, color); }, [filters, color, canvas]);
 
-  const renderFrame = useCallback((framebuffer: Uint8ClampedArray) => {
+  const renderFrame = useCallback((framebuffer: Uint8ClampedArray, fresh = false) => {
     if (framebuffer.length < 160 * 144 * 4) return; // a detached WASM view: skip the frame rather than upload garbage
-    if (engineRef.current) { engineRef.current.renderFrame(framebuffer); return; }
+    if (engineRef.current) { engineRef.current.renderFrame(framebuffer, fresh); return; }
     const c = canvasEl.current;
     if (webglAvailable || !c) return;
     if (c.width !== 160) { c.width = 160; c.height = 144; }

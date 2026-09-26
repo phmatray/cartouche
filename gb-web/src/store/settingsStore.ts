@@ -162,11 +162,7 @@ export const useSettingsStore = create<SettingsState>()(
         // v4: the four screen styles became presets of the filter chain; Color games get their own default.
         if (version < 4) {
           const { shaderPreset, pixelGrid, ...rest } = s as SettingsValues & { shaderPreset?: string; pixelGrid?: boolean };
-          const preset = presetOf(shaderPreset) ?? presetOf(DEFAULT_DISPLAY.dmg.preset)!;
-          const filters = pixelGrid === false ? { ...preset.filters, grid: 0 } : preset.filters;
-          // Color games were always drawn raw before: a player who had picked Clean keeps it for them too.
-          const cgb = preset.name === 'clean' ? { preset: preset.name, filters: preset.filters } : DEFAULT_DISPLAY.cgb;
-          s = { ...rest, display: { dmg: { preset: preset.name, filters }, cgb }, gameDisplay: {} };
+          s = { ...rest, display: displayFromV3(shaderPreset, pixelGrid), gameDisplay: {} };
         }
         return s;
       },
@@ -174,6 +170,15 @@ export const useSettingsStore = create<SettingsState>()(
     }
   )
 );
+
+/** The v4 `display` for settings saved before v4 (a `shaderPreset` + `pixelGrid` pair): the store migration and old backups. */
+export function displayFromV3(shaderPreset?: unknown, pixelGrid?: unknown): Record<ScreenKind, DisplayConfig> {
+  const preset = presetOf(typeof shaderPreset === 'string' ? shaderPreset : undefined) ?? presetOf(DEFAULT_DISPLAY.dmg.preset)!;
+  const filters = pixelGrid === false ? { ...preset.filters, grid: 0 } : preset.filters;
+  // Color games were always drawn raw before: a player who had picked Clean keeps it for them too.
+  const cgb = preset.name === 'clean' ? { preset: preset.name, filters: preset.filters } : DEFAULT_DISPLAY.cgb;
+  return { dmg: { preset: preset.name, filters }, cgb };
+}
 
 /** The screen config a game uses (or the default for its kind with no game), plus the actions the controls need. */
 export function useDisplay(kind: ScreenKind, gameId?: string) {

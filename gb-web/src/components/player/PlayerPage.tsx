@@ -74,8 +74,15 @@ function Player({ game }: { game: GameEntry }) {
   const { canvasRef, canvasKey, renderFrame } = useLcdShader(display.cfg.filters, inColor);
   const { ensureStarted, feedSamples, muted, toggleMute } = useAudio();
   const saveTo = useRef<string | null>(null); // the save profile played solo (the game's active one)
-  const saves = useSaveStates(game.id, emu, saveTo);
-  const { isRewinding, startRewind, stopRewind, wrapRunFrame, bufferFill } = useRewind({ saveState, loadState });
+  // Every state load (slot, resume point, rewind step) draws its picture at once, paused or not, with no ghosting from before the jump.
+  const loadAndShow = useCallback((data: Uint8Array, frame?: Uint8Array | Uint8ClampedArray) => {
+    if (!loadState(data, frame)) return false;
+    const fb = framebufferSnapshot();
+    if (fb) renderFrame(new Uint8ClampedArray(fb.buffer, fb.byteOffset, fb.length), true);
+    return true;
+  }, [loadState, framebufferSnapshot, renderFrame]);
+  const saves = useSaveStates(game.id, { ...emu, loadState: loadAndShow }, saveTo);
+  const { isRewinding, startRewind, stopRewind, wrapRunFrame, bufferFill } = useRewind({ saveState, loadState: loadAndShow });
   useSaveData({ saveTo, romLoaded, hasBatteryRam, exportSram });
 
   const toggleFullscreen = useCallback(() => {
