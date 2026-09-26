@@ -32,10 +32,12 @@ fn run_until_breakpoint(rom: &str) -> (Vec<u8>, bool) {
 }
 
 fn load_reference(name: &str) -> Vec<[u8; 3]> {
-    let mut decoder = png::Decoder::new(std::fs::File::open(root().join(name)).expect("open reference"));
+    let mut decoder = png::Decoder::new(std::io::BufReader::new(
+        std::fs::File::open(root().join(name)).expect("open reference"),
+    ));
     decoder.set_transformations(png::Transformations::normalize_to_color8());
     let mut reader = decoder.read_info().unwrap();
-    let mut buf = vec![0; reader.output_buffer_size()];
+    let mut buf = vec![0; reader.output_buffer_size().expect("reference fits in memory")];
     let info = reader.next_frame(&mut buf).unwrap();
     let px = |p: &[u8]| -> [u8; 3] {
         match info.color_type {
