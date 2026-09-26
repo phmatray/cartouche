@@ -128,14 +128,14 @@ canvas.lcd,img.lcd{display:block;width:100%;height:auto;image-rendering:pixelate
 .sec-h h2{margin:0;font:900 36px/1 var(--font);font-stretch:62%;text-transform:uppercase}
 .sec-h .count{font:600 14px var(--font);color:var(--mute)}
 .sec-h .end{margin-left:auto}
-.shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(164px,1fr));gap:36px 24px}
-.shelf.row,.slotrow{--n:7;--g:24px;display:flex;gap:var(--g);overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;padding:8px 0 20px;margin:-8px 0 -20px}
-.shelf.row::-webkit-scrollbar,.slotrow::-webkit-scrollbar{display:none}
-.shelf.row>.item,.slotrow>*{flex:0 0 calc((100% - (var(--n) - 1) * var(--g)) / var(--n));width:auto;scroll-snap-align:start}
-@media (max-width:1100px){.shelf.row,.slotrow{--n:4.4}}
-@media (max-width:640px){.shelf{grid-template-columns:repeat(2,minmax(0,1fr));gap:32px 16px}.shelf.row,.slotrow{--n:2.4;--g:16px}}
+.shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(164px,1fr));gap:36px 24px;align-items:start}
+.shelf.rail,.slotrow{--n:7;--g:24px;display:flex;align-items:flex-start;gap:var(--g);overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;padding:8px 0 20px;margin:-8px 0 -20px}
+.shelf.rail::-webkit-scrollbar,.slotrow::-webkit-scrollbar{display:none}
+.shelf.rail>.item,.slotrow>*{flex:0 0 calc((100% - (var(--n) - 1) * var(--g)) / var(--n));width:auto;scroll-snap-align:start}
+@media (max-width:1100px){.shelf.rail,.slotrow{--n:4.4}}
+@media (max-width:640px){.shelf{grid-template-columns:repeat(2,minmax(0,1fr));gap:32px 16px}.shelf.rail,.slotrow{--n:2.4;--g:16px}}
 .item{display:flex;flex-direction:column;text-decoration:none;position:relative;min-width:0}
-.item .art{position:relative;aspect-ratio:1}
+.item .art{position:relative;aspect-ratio:1;flex:none}
 .shelf>.item{width:100%}
 .item .art .cv{height:100%;box-shadow:0 12px 24px rgba(0,0,0,.5);transition:transform .35s var(--ease)}
 .item .art::after{content:"";position:absolute;left:0;right:0;bottom:-12px;height:6px;background:var(--y);transform:scaleX(0);transform-origin:left;transition:transform .3s var(--ease)}
@@ -147,7 +147,7 @@ canvas.lcd,img.lcd{display:block;width:100%;height:auto;image-rendering:pixelate
 .item h3{margin:24px 0 6px;font:800 18px/1.02 var(--font);font-stretch:75%;text-transform:uppercase;min-height:2.04em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .item .sub{font:500 13px/1.35 var(--font);color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mu{text-transform:none}
-.item .hint{font:600 13px/1.35 var(--font);margin-top:2px;margin-bottom:auto}
+.item .hint{font:600 13px/1.35 var(--font);margin-top:2px}
 .item .time{font:600 13px/1.35 var(--font);font-variant-numeric:tabular-nums}
 .tag{align-self:flex-start;display:inline-block;margin-top:10px;font:800 11px/1 var(--font);letter-spacing:.09em;padding:6px 8px;text-transform:uppercase;white-space:nowrap}
 .tag.now{background:var(--c);color:#000}
@@ -601,8 +601,6 @@ body{font-family:var(--font)}
 ::-webkit-scrollbar-track{background:var(--band)}
 ::-webkit-scrollbar-thumb{background:#3a3a3a;border:3px solid var(--band)}
 ::-webkit-scrollbar-thumb:hover{background:#5a5a5a}
-/* .row (a settings line) would otherwise leak space-between and a rule line into shelf rows */
-.shelf.row{justify-content:flex-start;border-bottom:0}
 .lrow .tag,.sres .tag{justify-self:start;align-self:center}
 @media (max-width:640px){.first .hero-t{margin-bottom:16px}.first .acts .btn{flex:1 1 auto;min-width:0;white-space:normal;text-align:center;height:auto;min-height:44px;padding-block:10px}}
 /* big catalog: let the browser skip layout/paint for off-screen boxes */

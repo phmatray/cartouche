@@ -110,7 +110,7 @@ export function LibraryPage() {
             {hasRoms && <button className="linkbtn end" onClick={() => pickFilter('mine', true)}>Only mine {I.next}</button>}
           </div>
           {shelf.length ? (
-            <div className="shelf row">{shelf.map((g) => <Item key={g.id} game={g} saved={savedIds} />)}</div>
+            <div className="shelf rail">{shelf.map((g) => <Item key={g.id} game={g} saved={savedIds} />)}</div>
           ) : (
             <>
               <div className="slotrow">
