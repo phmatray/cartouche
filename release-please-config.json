@@ -1,0 +1,42 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "packages": {
+    ".": {
+      "$comment": "release-type is `simple` rather than `node` or `rust`: the repository root is neither package, and gb-web/package.json (private build manifest) and gb-core/Cargo.toml (unpublished crate) are the two version fields kept in step through extra-files. include-component-in-tag stays false so tags stay plain vX.Y.Z, like v1.0.0. The sections use Keep a Changelog vocabulary because CHANGELOG.md declares that format and its 1.0.0 entry already uses those headings.",
+      "release-type": "simple",
+      "package-name": "cartouche",
+      "include-component-in-tag": false,
+      "changelog-path": "CHANGELOG.md",
+      "extra-files": [
+        {
+          "type": "json",
+          "path": "gb-web/package.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "json",
+          "path": "gb-web/package-lock.json",
+          "jsonpath": "$.version"
+        },
+        {
+          "type": "toml",
+          "path": "gb-core/Cargo.toml",
+          "jsonpath": "$.package.version"
+        }
+      ],
+      "changelog-sections": [
+        { "type": "feat", "section": "Added" },
+        { "type": "fix", "section": "Fixed" },
+        { "type": "perf", "section": "Performance" },
+        { "type": "refactor", "section": "Changed" },
+        { "type": "revert", "section": "Reverted" },
+        { "type": "docs", "section": "Documentation" },
+        { "type": "build", "section": "Changed" },
+        { "type": "ci", "section": "Changed" },
+        { "type": "chore", "section": "Miscellaneous", "hidden": true },
+        { "type": "style", "section": "Miscellaneous", "hidden": true },
+        { "type": "test", "section": "Miscellaneous", "hidden": true }
+      ]
+    }
+  }
+}

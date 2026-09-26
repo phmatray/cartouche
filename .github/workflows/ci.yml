@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-  # release.yml runs the whole suite before publishing a tag.
+  # release-please.yml runs the whole suite on a released commit before packaging it.
   workflow_call:
 
 permissions:

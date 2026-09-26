@@ -66,15 +66,23 @@ One-time repository setup, before the first push to `main`:
 - Settings > Security: enable **Private vulnerability reporting**, which
   SECURITY.md and the issue template links rely on.
 
-Every release:
+Releases are cut by [release-please](https://github.com/googleapis/release-please)
+from the [Conventional Commits](https://www.conventionalcommits.org/) on `main`:
 
-1. Wait until CI is green on `main`. The Pages workflow deploys `main` only
-   after CI succeeded on that commit.
-2. Add a `## [1.2.3] - <date>` entry to `CHANGELOG.md` (the Release workflow
-   fails without one).
-3. Tag the commit (`git tag v1.2.3 && git push origin v1.2.3`). The Release
-   workflow runs the whole CI again on the tag, then builds the zip and
-   publishes the GitHub release with the CHANGELOG entry as notes.
+1. Use conventional commit subjects (`feat:`, `fix:`, `docs:`...). `feat`
+   bumps the minor version, `fix` the patch, and `!` or `BREAKING CHANGE`
+   the major.
+2. On every push to `main`, the release-please workflow keeps a release PR
+   up to date: it writes the `CHANGELOG.md` entry and bumps the version in
+   `gb-web/package.json` and `gb-core/Cargo.toml`.
+3. Merge that PR to release. The same workflow tags `vX.Y.Z`, creates the
+   GitHub release, runs the whole CI again on the released commit, then
+   attaches the web build and µCity's source archive. Don't tag by hand.
+
+The Pages workflow deploys `main` only after CI succeeded on that commit.
+
+Dependencies are kept current by Renovate (shared `phmatray/.github`
+preset). Dependabot is not used.
 
 Only publish artifacts built by the workflows. A local build can contain
 paths from your machine, and is not what CI tested.

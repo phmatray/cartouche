@@ -1,0 +1,131 @@
+name: release-please
+
+# Conventional-Commits-driven releases. On every push to `main`, release-please keeps a release PR
+# up to date (rewriting CHANGELOG.md, .release-please-manifest.json and the version fields listed in
+# release-please-config.json). Merging that PR tags vX.Y.Z and creates the GitHub Release; the
+# `release_created` output then gates the `ci` and `package` jobs in THIS same run.
+#
+# Packaging lives here rather than in a tag-triggered workflow, and it has to: release-please creates
+# the tag with GITHUB_TOKEN, and GitHub deliberately does not fire `on: push: tags` (or `on: release`)
+# for events created by that token. The tag-triggered release.yml this replaced would never have run
+# again — silently, with no failed run to notice, and every release page left without its web build
+# or the µCity source archive that GPL-3.0 section 6 requires next to each release.
+
+on:
+  push:
+    branches: [main]
+  # Manual re-run, for when the push-triggered run failed or was missed. NOT an unconditional
+  # dry-run: with no merged release PR waiting, release_created stays false and nothing is packaged.
+  # But if a release PR was already merged and its run did not complete, a dispatch legitimately
+  # finishes the job — tag, Release and assets. That is the intended recovery path.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  # Required to create and apply the `autorelease: pending` label. release-please finds a merged
+  # release PR *solely* by that label, and this repository has no `autorelease:*` label yet, so it
+  # must create one (POST /repos/{o}/{r}/labels — an Issues-scoped endpoint). Without this the
+  # release PR is opened and can be merged, but is never recognised afterwards: no tag, no Release,
+  # `release_created` stays false, nothing is packaged, and no step fails.
+  issues: write
+
+# Serialize release-please runs: the action pushes a release-PR branch and, on merge, creates the
+# tag and the Release. Two overlapping runs could race on the tag and the manifest, and cancelling
+# mid-tag can leave them half-applied — so never cancel one in progress.
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
+        id: release
+        with:
+          target-branch: main
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  # The whole suite (core tests with every test ROM, lint, build) runs again on the released commit
+  # before anything is attached to the Release.
+  ci:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  # Builds the web app for the release the first job just tagged and attaches it, with µCity's
+  # corresponding source. release-please already wrote the Release notes from CHANGELOG.md.
+  package:
+    needs: [release-please, ci]
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # A job-level permissions block REPLACES the workflow-level one rather than adding to it, so the
+    # scope this job needs has to be restated here.
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.release-please.outputs.tag_name }}
+    steps:
+      # The tree must be the released commit: it carries release-please's version bumps.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: gb-core
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
+      - name: Build WASM core
+        working-directory: gb-core
+        run: RUSTFLAGS="--remap-path-prefix=$HOME=~" wasm-pack build --target web --out-dir pkg
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: gb-web/package-lock.json
+
+      # Built for the root of a domain ("/"); the Pages build uses /cartouche/.
+      - name: Build web app
+        working-directory: gb-web
+        run: |
+          npm ci
+          npm run build -- --base=/
+
+      # dist/ already holds LICENSE.txt, THIRD_PARTY_NOTICES.txt and THIRD_PARTY_LICENSES.txt (vite.config.ts).
+      - name: Package
+        run: |
+          (cd gb-web/dist && zip -r "$GITHUB_WORKSPACE/cartouche-web-${TAG}.zip" .)
+
+      # GPL-3.0 section 6: keep µCity's corresponding source available next to every release.
+      - name: µCity v1.3 source
+        run: |
+          curl -fsSL -o ucity-1.3-source.tar.gz https://github.com/AntonioND/ucity/archive/refs/tags/v1.3.tar.gz \
+            || curl -fsSL -o ucity-1.3-source.tar.gz https://codeberg.org/SkyLyrac/ucity/archive/v1.3.tar.gz
+          tar tzf ucity-1.3-source.tar.gz | grep '/gpl-3.0.txt$' >/dev/null
+
+      # --clobber keeps a re-run idempotent.
+      - name: Attach assets to the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$TAG" "cartouche-web-${TAG}.zip" ucity-1.3-source.tar.gz --clobber
+          gh release edit "$TAG" --title "Cartouche ${TAG}"
