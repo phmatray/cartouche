@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, type RefObject } from 'react';
-import { getGameSaveStates, getSaveState, getSram, saveSaveState, resumeStateId, setActiveProfile, slotStateId, type StoredSaveState } from '../lib/db';
+import { createProfile, getGameSaveStates, getSaveState, getSram, listProfiles, saveSaveState, resumeStateId, setActiveProfile, slotStateId, uniqueName, type StoredSaveState } from '../lib/db';
 import { refreshSavedIds } from './useGameLibrary';
 import { toast } from '../components/shell/actions';
 
@@ -11,6 +11,7 @@ export type SlotKey = 'auto' | number;
  * `states[0]` is the resume point, `states[1..5]` the slots (undefined when empty).
  * `profileRef`: the save profile being played; each state records it, and loading a state taken in
  * another profile switches the battery save back to that one (the state holds that profile's SRAM).
+ * A state from before profiles belongs to Main; one whose profile was deleted goes to a new save.
  */
 export function useSaveStates(
   gameId: string | undefined,
@@ -18,11 +19,12 @@ export function useSaveStates(
     saveState: () => Uint8Array | null;
     loadState: (data: Uint8Array) => boolean;
     framebufferSnapshot: () => Uint8Array | null;
+    exportSram: () => Uint8Array | null;
   },
   profileRef?: RefObject<string | null>,
 ) {
   const [states, setStates] = useState<(StoredSaveState | undefined)[]>([]);
-  const { saveState, loadState, framebufferSnapshot } = emulator;
+  const { saveState, loadState, framebufferSnapshot, exportSram } = emulator;
   const idOf = useCallback((k: SlotKey) => (k === 'auto' ? resumeStateId(gameId!) : slotStateId(gameId!, k)), [gameId]);
 
   const reload = useCallback(async () => {
@@ -50,15 +52,30 @@ export function useSaveStates(
     const entry = await getSaveState(idOf(k));
     if (!entry) return false;
     // Look the profile up before loading: once the state is in, a battery write must already go to the right profile.
-    const other = profileRef?.current && entry.profile && entry.profile !== profileRef.current ? await getSram(entry.profile).catch(() => undefined) : undefined;
+    const owner = entry.profile ?? gameId; // states from before profiles belong to Main
+    const switching = !!profileRef?.current && owner !== profileRef.current;
+    const other = switching ? await getSram(owner).catch(() => undefined) : undefined;
     if (!loadState(entry.data)) return false;
-    if (other && profileRef) {
+    if (!switching || !profileRef) return true;
+    if (other) {
       profileRef.current = other.id;
       setActiveProfile(gameId, other.id).catch(() => {});
       toast(`This save belongs to “${other.name}”: saving there now`, 'c');
+      return true;
+    }
+    // Its save was deleted: never let it overwrite the one being played; it becomes a save of its own.
+    try {
+      const name = uniqueName(await listProfiles(gameId), k === 'auto' ? 'From the resume point' : `From save slot ${k + 1}`);
+      const p = await createProfile(gameId, name, exportSram() ?? new Uint8Array());
+      profileRef.current = p.id;
+      await setActiveProfile(gameId, p.id);
+      refreshSavedIds();
+      toast(`This save’s game was deleted: saving to a new one, “${p.name}”`, 'c');
+    } catch {
+      profileRef.current = null; // storage failed: write nowhere rather than over another save
     }
     return true;
-  }, [gameId, idOf, loadState, profileRef]);
+  }, [gameId, idOf, loadState, exportSram, profileRef]);
 
   return { states, save, load };
 }

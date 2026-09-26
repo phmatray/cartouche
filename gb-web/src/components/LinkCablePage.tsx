@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router';
 import { useLinkCable, type LinkPlayer } from '../hooks/useLinkCable';
 import { fetchRom, refreshSavedIds, useGameLibrary } from '../hooks/useGameLibrary';
 import { importSav, useRomHeader } from '../hooks/useGameExtras';
-import { createProfile, getActiveProfileId, getGameSaveStates, getSaveState, getSram, listProfiles, newProfileId, resumeStateId, slotStateId, uniqueName, writeProfileSram, type StoredSave, type StoredSaveState } from '../lib/db';
+import { createProfile, getActiveProfileId, getGameSaveStates, getSaveState, getSram, listProfiles, newProfileId, resumeStateId, saveSram, slotStateId, uniqueName, type StoredSave, type StoredSaveState } from '../lib/db';
 import { useSettingsStore } from '../store/settingsStore';
 import { ago, bytes, linkReady as isLinkReady, owned, PLATFORM, sortTitle } from '../lib/ui';
 import type { GameEntry } from '../types/game';
@@ -46,11 +46,15 @@ export function LinkCablePage() {
     const v = await savesOf(g);
     setData((d) => ({ ...d, [g]: v }));
   }, []);
+  const dataRef = useRef(data); // the profiles as last read, for onSram
+  useEffect(() => { dataRef.current = data; }, [data]);
   const onSram = useCallback((saves: [Uint8Array | null, Uint8Array | null]) => {
     for (const p of [1, 2] as LinkPlayer[]) {
       const t = targets.current[p], sram = saves[p - 1];
       if (!t || !sram?.length) continue;
-      writeProfileSram(t.profile, sram, t.name).then(() => {
+      // A single put, not read-then-write: when the page is unloading, a second step never runs.
+      const now = Date.now(), old = dataRef.current[t.game]?.profiles.find((x) => x.id === t.profile);
+      saveSram(old ? { ...old, sram, timestamp: now } : { id: t.profile, gameId: t.game, name: t.name, sram, timestamp: now, created: now }).then(() => {
         setWrote((w) => ({ ...w, [p]: Date.now() }));
         refresh(t.game).catch(() => {});
         refreshSavedIds();
@@ -103,13 +107,14 @@ export function LinkCablePage() {
     const g = sel[p], d = data[g];
     if (!d) return;
     setSavErr((e) => ({ ...e, [p]: '' }));
-    if (v === 'import') { savInput.current[p]?.click(); return; }
     if (v === 'new') { setChosen((c) => ({ ...c, [p]: { game: g, profile: newProfileId(g), name: uniqueName(d.profiles, `Player ${p}`), slot: null } })); return; }
     if (v.startsWith('slot:')) {
       const k = v === 'slot:auto' ? 'auto' : +v.slice(5);
       const st = d.states[k === 'auto' ? 0 : k + 1];
-      const profile = st?.profile ?? g; // states from before profiles belong to Main
-      setChosen((c) => ({ ...c, [p]: { game: g, profile, name: d.profiles.find((x) => x.id === profile)?.name ?? 'Main', slot: k } }));
+      const owner = d.profiles.find((x) => x.id === (st?.profile ?? g)); // states from before profiles belong to Main
+      // Its save was deleted: it goes to a new one (as in solo play), never to another save under a borrowed name.
+      const to = owner ?? { id: newProfileId(g), name: uniqueName(d.profiles, k === 'auto' ? 'From the resume point' : `From save slot ${k + 1}`) };
+      setChosen((c) => ({ ...c, [p]: { game: g, profile: to.id, name: to.name, slot: k } }));
       return;
     }
     const id = v.slice(2), c = choice[p];
@@ -177,15 +182,17 @@ export function LinkCablePage() {
   // Battery saves while linked: at the Settings interval (like solo play) and when the tab is hidden or closed.
   const autoSave = useSettingsStore((s) => s.autoSaveEnabled);
   const autoSeconds = useSettingsStore((s) => s.autoSaveIntervalSeconds);
-  const { flush } = link;
+  const { flush, flushNow } = link;
   useEffect(() => {
     if (!state.isRunning) return;
     const t = autoSave ? window.setInterval(flush, autoSeconds * 1000) : 0;
-    const onHide = () => { if (document.visibilityState === 'hidden') flush(); };
+    // Hidden or closing: write the saves already here now (a reload or tab close never gets the worker's reply), then ask for fresher ones.
+    const leave = () => { flushNow(); flush(); };
+    const onHide = () => { if (document.visibilityState === 'hidden') leave(); };
     document.addEventListener('visibilitychange', onHide);
-    window.addEventListener('pagehide', flush);
-    return () => { window.clearInterval(t); document.removeEventListener('visibilitychange', onHide); window.removeEventListener('pagehide', flush); };
-  }, [state.isRunning, autoSave, autoSeconds, flush]);
+    window.addEventListener('pagehide', leave);
+    return () => { window.clearInterval(t); document.removeEventListener('visibilitychange', onHide); window.removeEventListener('pagehide', leave); };
+  }, [state.isRunning, autoSave, autoSeconds, flush, flushNow]);
 
   // Both players' keys, only while the cable is connected.
   const { setInput } = link;
@@ -253,7 +260,6 @@ export function LinkCablePage() {
               {!known && c.slot === null && <option value={`p:${c.profile}`}>{c.name} · new game</option>}
             </optgroup>
             <option value="new">New game (empty save)</option>
-            <option value="import">Import a .sav file…</option>
             {d.states.some(Boolean) && (
               <optgroup label="Start from a save state">
                 {d.states.map((st, i) => st && <option key={i} value={i ? `slot:${i - 1}` : 'slot:auto'}>{i ? `Save slot ${i}` : 'Resume point'} · {ago(st.timestamp)}</option>)}
@@ -261,6 +267,7 @@ export function LinkCablePage() {
             )}
           </select>
         </label>
+        {!state.isRunning && <button className="btn line svp-imp" aria-label={`Import a .sav file for Player ${p}`} onClick={() => savInput.current[p]?.click()}>{I.load}Import a .sav file…</button>}
         <small id={`svp-s${p}`} aria-live="polite">
           {live && t ? <>Saving to <b>{nameOf(t)}</b>{wrote[p] ? `, saved ${ago(wrote[p])}` : ''}</>
             : c.slot !== null ? <>Starts from {slotLabel(c.slot)}, then saves to <b>{nameOf(c)}</b>{known ? '' : ' (new)'}</>

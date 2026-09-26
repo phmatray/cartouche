@@ -82,7 +82,7 @@ export async function readBackup(file: File): Promise<Backup> {
     roms: list<StoredRom>(b.roms, (r) => str(r.id) && r.data instanceof Uint8Array),
     // Save profiles; a backup from before profiles has one save per game, which becomes its "Main".
     saves: list<StoredSave>(b.saves, (r) => str(r.id) && r.sram instanceof Uint8Array).map(asProfile),
-    states: list<StoredSaveState>(b.states, (r) => str(r.id) && r.data instanceof Uint8Array),
+    states: list<StoredSaveState>(b.states, (r) => str(r.id) && r.data instanceof Uint8Array && (r.profile === undefined || str(r.profile))),
     meta: list<StoredGameMeta>(b.meta, (r) => str(r.id)),
     screenshots: list<StoredScreenshot>(b.screenshots, (r) => str(r.gameId) && r.png instanceof Blob),
   };

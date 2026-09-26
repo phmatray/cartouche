@@ -15,7 +15,8 @@ export type ToLinkWorkerMsg =
 export type FromLinkWorkerMsg =
   | { type: 'ready' }
   | { type: 'romLoaded'; player: LinkPlayerIndex; success: boolean; error?: string }
-  | { type: 'frame'; framebuffers: [ArrayBuffer | null, ArrayBuffer | null] }
+  // sram: both battery saves, every SRAM_EVERY frames (kept by the page to write on unload, when a round trip can't finish)
+  | { type: 'frame'; framebuffers: [ArrayBuffer | null, ArrayBuffer | null]; sram?: [ArrayBuffer | null, ArrayBuffer | null] }
   | { type: 'sram'; data: [ArrayBuffer | null, ArrayBuffer | null] }
   | { type: 'error'; message: string };
 
@@ -25,6 +26,13 @@ const emus: [Emulator | null, Emulator | null] = [null, null];
 const loaded = [false, false];
 const prevButtons = [0, 0];
 let wasmMemory: WebAssembly.Memory | null = null;
+const SRAM_EVERY = 30;
+let frames = 0;
+
+function exportBoth() {
+  return [0, 1].map((i) => (loaded[i] && emus[i]!.has_battery_ram() ? emus[i]!.export_sram().buffer as ArrayBuffer : null)) as [ArrayBuffer | null, ArrayBuffer | null];
+}
+const buffers = (l: (ArrayBuffer | null)[]) => l.filter((b): b is ArrayBuffer => b !== null);
 
 function post(msg: FromLinkWorkerMsg, transfer: Transferable[] = []) {
   (self as DedicatedWorkerGlobalScope).postMessage(msg, transfer);
@@ -74,8 +82,8 @@ function copyFramebuffer(emu: Emulator): ArrayBuffer {
     }
 
     case 'exportSram': {
-      const data = [0, 1].map((i) => (loaded[i] && emus[i]!.has_battery_ram() ? emus[i]!.export_sram().buffer as ArrayBuffer : null)) as [ArrayBuffer | null, ArrayBuffer | null];
-      post({ type: 'sram', data }, data.filter((b): b is ArrayBuffer => b !== null));
+      const data = exportBoth();
+      post({ type: 'sram', data }, buffers(data));
       break;
     }
 
@@ -100,7 +108,8 @@ function copyFramebuffer(emu: Emulator): ArrayBuffer {
         loaded[0] ? copyFramebuffer(emu1) : null,
         loaded[1] ? copyFramebuffer(emu2) : null,
       ];
-      post({ type: 'frame', framebuffers }, framebuffers.filter((b): b is ArrayBuffer => b !== null));
+      const sram = ++frames % SRAM_EVERY === 0 ? exportBoth() : undefined;
+      post({ type: 'frame', framebuffers, sram }, buffers([...framebuffers, ...(sram ?? [])]));
       break;
     }
 

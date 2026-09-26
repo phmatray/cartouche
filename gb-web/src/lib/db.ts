@@ -6,9 +6,36 @@ const SAVESTATE_STORE = 'savestates';
 const GAME_META_STORE = 'gamemeta';
 const SCREENSHOT_STORE = 'screenshots';
 
+/**
+ * A tab still holding an older version's connection blocks the upgrade: say so on the page (the app
+ * can't render until the database opens), and clear it once the upgrade goes through.
+ */
+function blockedNotice(show: boolean) {
+  const id = 'db-blocked';
+  document.getElementById(id)?.remove();
+  if (!show) return;
+  const el = document.createElement('div');
+  el.id = id;
+  el.className = 'toasts';
+  el.setAttribute('role', 'alert');
+  el.innerHTML = '<div class="toast m"><i></i><span>Close other Cartouche tabs to finish updating</span></div>';
+  document.body.append(el);
+}
+
+/** One connection for the tab, closed when another tab upgrades the database (so this tab never blocks it). */
+let conn: Promise<IDBDatabase> | null = null;
 function openDB(): Promise<IDBDatabase> {
+  conn ??= openConnection().then((db) => {
+    db.onversionchange = () => { db.close(); conn = null; };
+    db.onclose = () => { conn = null; };
+    return db;
+  }, (e) => { conn = null; throw e; });
+  return conn;
+}
+function openConnection(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onblocked = () => blockedNotice(true);
     req.onupgradeneeded = (ev) => {
       const db = req.result;
       if (!db.objectStoreNames.contains(ROM_STORE)) db.createObjectStore(ROM_STORE, { keyPath: 'id' });
@@ -26,8 +53,8 @@ function openDB(): Promise<IDBDatabase> {
       // v4: album. Existing stores are kept as they are; only the new one is added.
       if (!db.objectStoreNames.contains(SCREENSHOT_STORE)) db.createObjectStore(SCREENSHOT_STORE, { keyPath: 'id', autoIncrement: true }).createIndex('gameId', 'gameId');
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => { blockedNotice(false); resolve(req.result); };
+    req.onerror = () => { blockedNotice(false); reject(req.error); };
   });
 }
 
@@ -35,6 +62,7 @@ function txOp<T>(storeName: string, mode: IDBTransactionMode, op: (store: IDBObj
   return openDB().then((db) => new Promise((resolve, reject) => {
     const tx = db.transaction(storeName, mode);
     const req = op(tx.objectStore(storeName));
+    if (mode === 'readwrite') tx.commit?.(); // one request: commit now, not at the next task (a page unloading never gets one)
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   }));
@@ -53,8 +81,9 @@ export function deleteRom(id: string): Promise<void> { return txOp(ROM_STORE, 'r
  */
 export interface StoredSave { id: string; gameId: string; name: string; sram: Uint8Array; timestamp: number; created?: number; }
 export const gameOfSave = (id: string) => id.split('~')[0];
-/** Fill in what a save written before profiles (or read from an old backup) lacks. */
-export const asProfile = (s: Omit<StoredSave, 'gameId' | 'name'> & Partial<StoredSave>): StoredSave => ({ ...s, gameId: s.gameId || gameOfSave(s.id), name: s.name || 'Main' });
+/** Fill in what a save written before profiles (or read from a backup, untrusted) lacks or gets wrong. */
+export const asProfile = (s: Omit<StoredSave, 'gameId' | 'name'> & Partial<StoredSave>): StoredSave =>
+  ({ ...s, gameId: gameOfSave(s.id), name: typeof s.name === 'string' && s.name.trim() ? s.name.trim().slice(0, 40) : 'Main' });
 export function saveSram(save: StoredSave): Promise<void> { return txOp(SAVE_STORE, 'readwrite', (s) => s.put(save)).then(() => {}); }
 export function getSram(id: string): Promise<StoredSave | undefined> { return txOp<StoredSave | undefined>(SAVE_STORE, 'readonly', (s) => s.get(id)).then((r) => r && asProfile(r)); }
 export function deleteSave(id: string): Promise<void> { return txOp(SAVE_STORE, 'readwrite', (s) => s.delete(id)).then(() => {}); }

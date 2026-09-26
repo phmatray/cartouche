@@ -18,6 +18,8 @@ export interface LinkCableControls {
   loadRom: (player: LinkPlayer, data: Uint8Array, from?: { sram?: Uint8Array; state?: Uint8Array }) => void;
   /** Ask both consoles for their battery saves; they arrive in the `onSram` callback. */
   flush: () => void;
+  /** Hand `onSram` the latest battery saves already received, right now (leaving the page: no time to ask the worker). */
+  flushNow: () => void;
   start: () => void;
   stop: () => void;
   setInput: (player: LinkPlayer, buttons: number) => void;
@@ -38,6 +40,8 @@ export function useLinkCable(onSram?: (saves: [Uint8Array | null, Uint8Array | n
   const rafRef = useRef<number>(0);
   const isRunningRef = useRef(false);
   const waitingFrame = useRef(false);
+  const latest = useRef<[Uint8Array | null, Uint8Array | null] | null>(null); // the running session's last battery saves
+  const toSaves = (d: [ArrayBuffer | null, ArrayBuffer | null]) => d.map((b) => (b ? new Uint8Array(b) : null)) as [Uint8Array | null, Uint8Array | null];
 
   const [state, setState] = useState<LinkCableState>({
     p1Ready: false,
@@ -81,10 +85,12 @@ export function useLinkCable(onSram?: (saves: [Uint8Array | null, Uint8Array | n
         case 'frame':
           renderToCanvas(p1CanvasRef.current, msg.framebuffers[0]);
           renderToCanvas(p2CanvasRef.current, msg.framebuffers[1]);
+          if (msg.sram) latest.current = toSaves(msg.sram);
           waitingFrame.current = false;
           break;
         case 'sram':
-          onSramRef.current?.(msg.data.map((b) => (b ? new Uint8Array(b) : null)) as [Uint8Array | null, Uint8Array | null]);
+          latest.current = toSaves(msg.data);
+          onSramRef.current?.(latest.current);
           if (closing) worker.terminate();
           break;
         case 'error':
@@ -98,6 +104,8 @@ export function useLinkCable(onSram?: (saves: [Uint8Array | null, Uint8Array | n
       cancelAnimationFrame(rafRef.current);
       isRunningRef.current = false;
       closing = true;
+      // Unloading, the worker's reply never arrives: write what is already here, then ask for fresher saves anyway.
+      if (latest.current) onSramRef.current?.(latest.current);
       worker.postMessage({ type: 'exportSram' } satisfies ToLinkWorkerMsg);
       setTimeout(() => worker.terminate(), 3000);
       workerRef.current = null;
@@ -107,10 +115,12 @@ export function useLinkCable(onSram?: (saves: [Uint8Array | null, Uint8Array | n
   const loadRom = useCallback((player: LinkPlayer, data: Uint8Array, from: { sram?: Uint8Array; state?: Uint8Array } = {}) => {
     // Transfer copies so the originals stay intact
     const copy = (u: Uint8Array) => u.buffer.slice(u.byteOffset, u.byteOffset + u.byteLength) as ArrayBuffer;
+    latest.current = null; // a new session: never write the previous one's saves to its targets
     const buf = copy(data), sram = from.sram && copy(from.sram), state = from.state && copy(from.state);
     send({ type: 'loadRom', player, data: buf, sram, state }, [buf, sram, state].filter((b): b is ArrayBuffer => !!b));
   }, [send]);
   const flush = useCallback(() => send({ type: 'exportSram' }), [send]);
+  const flushNow = useCallback(() => { if (latest.current) onSramRef.current?.(latest.current); }, []);
 
   const frameLoop = useCallback(function loop() {
     if (!isRunningRef.current) return;
@@ -138,5 +148,5 @@ export function useLinkCable(onSram?: (saves: [Uint8Array | null, Uint8Array | n
     send({ type: 'setInput', player, buttons });
   }, [send]);
 
-  return { state, loadRom, flush, start, stop, setInput, p1CanvasRef, p2CanvasRef };
+  return { state, loadRom, flush, flushNow, start, stop, setInput, p1CanvasRef, p2CanvasRef };
 }

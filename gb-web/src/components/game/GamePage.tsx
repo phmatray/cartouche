@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type CSSProperties, type Dispatch, ty
 import { Link, useNavigate, useParams } from 'react-router';
 import type { GameEntry } from '../../types/game';
 import { refreshSavedIds, useGameLibrary } from '../../hooks/useGameLibrary';
-import { createProfile, deleteSave, getActiveProfileId, getGameSaveStates, listProfiles, saveSram, setActiveProfile, uniqueName, type StoredSave, type StoredSaveState } from '../../lib/db';
+import { createProfile, deleteSave, getActiveProfileId, getGameSaveStates, getSram, listProfiles, saveSram, setActiveProfile, uniqueName, type StoredSave, type StoredSaveState } from '../../lib/db';
 import type { RomMetadata } from '../../lib/rom-utils';
 import { ago, assetUrl, bytes, download, dur, owned, paths, tagOf } from '../../lib/ui';
 import { I } from '../icons';
@@ -200,6 +200,7 @@ function GameDetails({ game }: { game: GameEntry }) {
  * export, import, delete. The link cable page lets each player pick one.
  */
 function Saves({ game, header, setConfirm }: { game: GameEntry; header: RomMetadata | null; setConfirm: Dispatch<SetStateAction<ConfirmRequest | null>> }) {
+  const { savedIds } = useGameLibrary(); // changes when saves are written or erased elsewhere: reload
   const [list, setList] = useState<StoredSave[] | null>(null);
   const [active, setActive] = useState('');
   const [editing, setEditing] = useState<string | null>(null);
@@ -215,17 +216,27 @@ function Saves({ game, header, setConfirm }: { game: GameEntry; header: RomMetad
     Promise.all([listProfiles(game.id), getActiveProfileId(game.id)])
       .then(([l, a]) => { if (!cancelled) { setList(l); setActive(a); } }).catch(() => setList([]));
     return () => { cancelled = true; };
-  }, [game.id]);
+  }, [game.id, savedIds]);
   const noSave = header && header.ramSize === 'None' && !/MBC2/.test(header.cartridgeType);
   if (noSave && !list?.length) return null;
 
   const rename = async (p: StoredSave, name: string) => {
     setEditing(null);
     name = name.trim().slice(0, 40);
-    if (name && name !== p.name) { await saveSram({ ...p, name }); await reload(); }
+    if (!name || name === p.name) return;
+    // The stored record, not the row (it may be stale): a save erased meanwhile stays erased.
+    const [cur, all] = await Promise.all([getSram(p.id), listProfiles(game.id)]);
+    if (cur) {
+      const unique = uniqueName(all.filter((x) => x.id !== p.id), name); // two saves never share a name
+      await saveSram({ ...cur, name: unique });
+      if (unique !== name) toast(`Another save is named “${name}”: renamed to “${unique}”`, 'm');
+    }
+    await reload();
   };
   const duplicate = async (p: StoredSave) => {
-    const c = await createProfile(game.id, uniqueName(list ?? [], `${p.name} (copy)`), p.sram);
+    const [cur, all] = await Promise.all([getSram(p.id), listProfiles(game.id)]);
+    if (!cur) { await reload(); return; }
+    const c = await createProfile(game.id, uniqueName(all, `${cur.name} (copy)`), cur.sram);
     await reload();
     toast(`“${c.name}” created`, 'c');
   };

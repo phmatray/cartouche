@@ -285,7 +285,9 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .pn-in{flex:1;min-width:0;background:var(--band-3);border:0;border-bottom:2px solid var(--y);padding:6px 8px;font:800 16px var(--font)}
 .profiles .pa{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 /* link cable: which battery save each player plays and writes to */
-.svp{margin-top:16px;display:grid;gap:8px}
+.svp{margin-top:16px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+.svp .sel{min-width:0}
+.svp-imp{justify-self:start;height:36px;padding:0 12px;font-size:13px}
 .svp .sel select{flex:1;min-width:0;text-transform:none;letter-spacing:0}
 .svp .sel>span{flex:none}
 .svp small{font:500 13px/1.4 var(--font);color:var(--mute)}
@@ -549,7 +551,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .lc-bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-top:24px}
 .lc-bar .status{font:800 14px var(--font);text-transform:uppercase;letter-spacing:.06em}
 .compat{margin-top:48px}
-@media (max-width:900px){.lc{grid-template-columns:1fr}.cable{flex-direction:row;padding:14px 0}.cable i{height:4px;width:auto;background:repeating-linear-gradient(90deg,var(--dim) 0 8px,transparent 8px 14px)}.cable.on i{background:repeating-linear-gradient(90deg,var(--y) 0 8px,transparent 8px 14px)}}
+@media (max-width:900px){.lc{grid-template-columns:minmax(0,1fr)}.cable{flex-direction:row;padding:14px 0}.cable i{height:4px;width:auto;background:repeating-linear-gradient(90deg,var(--dim) 0 8px,transparent 8px 14px)}.cable.on i{background:repeating-linear-gradient(90deg,var(--y) 0 8px,transparent 8px 14px)}}
 
 /* ---------- welcome ---------- */
 .welcome{min-height:calc(100vh - 72px);display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:56px;align-items:center;padding:56px 0}
