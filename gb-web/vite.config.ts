@@ -9,7 +9,7 @@ import crypto from 'crypto'
 import { execFileSync } from 'child_process'
 
 // GitHub Pages serves 404.html for unknown paths; a copy of index.html lets the SPA router take over.
-// The service worker gets the list of built files to keep offline, and a version that changes with them.
+// The service worker gets the list of built files to keep offline (not og.png, only for link previews), and a version that changes with them.
 const spaFallback = (): Plugin => ({
   name: 'spa-404-fallback-and-sw',
   apply: 'build',
@@ -18,7 +18,7 @@ const spaFallback = (): Plugin => ({
     fs.copyFileSync(path.join(out, 'index.html'), path.join(out, '404.html'))
     const files = (fs.readdirSync(out, { recursive: true }) as string[])
       .map((f) => f.split(path.sep).join('/'))
-      .filter((f) => fs.statSync(path.join(out, f)).isFile() && !/^(404\.html|sw\.js)$/.test(f) && !f.endsWith('.map'))
+      .filter((f) => fs.statSync(path.join(out, f)).isFile() && !/^(404\.html|sw\.js|og\.png)$/.test(f) && !f.endsWith('.map'))
       .sort()
     const hash = crypto.createHash('sha1')
     for (const f of files) hash.update(f).update(fs.readFileSync(path.join(out, f)))
