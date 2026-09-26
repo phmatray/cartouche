@@ -22,28 +22,40 @@ export function useRewind({
   const captureCounterRef = useRef(0);
   const rewindStepCounterRef = useRef(0);
   const isRewindingRef = useRef(false);
+  const pendingFrameRef = useRef<Uint8ClampedArray | null>(null); // rewound on press, not drawn yet
   const [isRewinding, setIsRewinding] = useState(false);
   const [bufferFill, setBufferFill] = useState(0);
 
   const startRewind = useCallback(() => {
-    if (bufferRef.current.length === 0) return;
+    if (isRewindingRef.current) return;
+    const snap = bufferRef.current.pop();
+    if (!snap) return;
+    // The first step happens on press, so even a tap shorter than a frame rewinds; the next frame draws it.
+    loadState(snap.state, snap.frame);
+    pendingFrameRef.current = snap.frame;
+    setBufferFill(bufferRef.current.length / bufferSize);
     isRewindingRef.current = true;
     setIsRewinding(true);
-    rewindStepCounterRef.current = REWIND_STEP_FRAMES - 1; // first step on the next frame, so a tap rewinds too
-  }, []);
+    rewindStepCounterRef.current = 0;
+  }, [loadState, bufferSize]);
 
   const stopRewind = useCallback(() => {
     isRewindingRef.current = false;
     setIsRewinding(false);
     captureCounterRef.current = 0;
+    pendingFrameRef.current = null; // released before the next frame: play simply goes on from the rewound state
   }, []);
 
   const wrapRunFrame = useCallback(
     (originalRunFrame: () => Uint8ClampedArray | null): Uint8ClampedArray | null => {
       if (isRewindingRef.current) {
         rewindStepCounterRef.current++;
-        // Between steps the canvas keeps the last rewound frame.
-        if (rewindStepCounterRef.current < REWIND_STEP_FRAMES) return null;
+        // Between steps the canvas keeps the last rewound frame (the one rewound on press is drawn first).
+        if (rewindStepCounterRef.current < REWIND_STEP_FRAMES) {
+          const pending = pendingFrameRef.current;
+          pendingFrameRef.current = null;
+          return pending;
+        }
         rewindStepCounterRef.current = 0;
 
         const snap = bufferRef.current.pop();
