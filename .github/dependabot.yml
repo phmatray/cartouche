@@ -1,7 +1,0 @@
-version: 2
-updates:
-  # Keeps the workflow actions current (the v4-era majors run on the deprecated Node 20 runtime).
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
