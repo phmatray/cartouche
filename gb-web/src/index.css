@@ -85,7 +85,8 @@ kbd{border:1px solid #3a3a3a;padding:3px 7px;font:700 11px var(--font);color:var
 .menu{display:none;width:44px;height:44px;border:1px solid #3a3a3a;background:transparent;align-items:center;justify-content:center}
 .mnav{display:none}
 .mnav.open{display:block;position:fixed;inset:60px 0 0;background:var(--band);z-index:60;padding:16px}
-.mnav a{display:flex;align-items:center;justify-content:space-between;text-decoration:none;font:900 40px/1 var(--font);font-stretch:62%;text-transform:uppercase;padding:18px 0;border-bottom:1px solid var(--rule)}
+.mnav a,.mnav button{display:flex;align-items:center;justify-content:space-between;text-decoration:none;font:900 40px/1 var(--font);font-stretch:62%;text-transform:uppercase;padding:18px 0;border-bottom:1px solid var(--rule)}
+.mnav button{width:100%;border-width:0 0 1px;border-style:solid;border-color:var(--rule);background:none;color:inherit;text-align:left}
 .mnav a[aria-current]{color:var(--y)}
 
 /* ---------- buttons ---------- */
@@ -592,14 +593,22 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .rrow .t small{display:block;font:500 13px var(--font);font-stretch:100%;text-transform:none;color:var(--mute);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rrow .st{font:800 12px var(--font);text-transform:uppercase;letter-spacing:.07em;display:flex;align-items:center;gap:8px}
 .rrow .st i{width:10px;height:10px;flex:none}
-.st.ok i{background:var(--c)}.st.dup i{background:var(--warn)}.st.unk i{background:var(--paper)}.st.bad i{background:var(--err)}.st.work i{background:var(--dim);animation:blink 1s steps(2) infinite}
+.st.ok i{background:var(--c)}.st.dup i{background:var(--warn)}.st.unk i{background:var(--paper)}.st.bad i{background:var(--err)}.st.stop i{background:var(--dim)}
+.rrow{content-visibility:auto;contain-intrinsic-size:auto 81px} /* thousands of rows in a big import: off-screen ones cost nothing */
+.tip{margin:14px 0 0;font:500 14px/1.5 var(--font);color:var(--mute);max-width:70ch}
+.tip[hidden]{display:none}
+.tip b{display:block;font:800 12px var(--font);text-transform:uppercase;letter-spacing:.07em;color:var(--paper);margin-bottom:2px}
+.fullnote{margin-top:32px;padding:22px 24px 24px;max-width:760px}
+.fullnote h2{font:900 34px/.9 var(--font);font-stretch:62%;text-transform:uppercase;margin:0 0 10px;color:var(--err)}
+.fullnote p{font:500 15px/1.5 var(--font);color:var(--ink-2);margin:0 0 12px;max-width:64ch}
+.fullnote .acts{margin-top:18px}.st.work i{background:var(--dim);animation:blink 1s steps(2) infinite}
 .rrow .act{text-align:right}
 .progress{height:6px;background:var(--band-3);margin:24px 0 6px}
 .progress i{display:block;height:100%;background:var(--y);transition:width .2s linear}
 .sumline{display:flex;flex-wrap:wrap;gap:8px 22px;font:700 14px var(--font);margin-top:14px}
 .sumline span{color:var(--mute)}
 .sumline b{color:var(--paper)}
-@media (max-width:760px){.drop{grid-template-columns:1fr;padding:32px 20px;gap:20px}.drop .ic{width:64px;height:64px}.rrow{grid-template-columns:48px minmax(0,1fr) auto}.rrow .act{grid-column:2/-1;text-align:left}.rrow .cv{width:48px;height:48px}}
+@media (max-width:760px){.drop{grid-template-columns:1fr;padding:32px 20px;gap:20px}.drop .ic{width:64px;height:64px}.rrow{grid-template-columns:48px minmax(0,1fr) auto}.rrow .act{grid-column:2/-1;text-align:left}.rrow .cv{width:48px;height:48px}.rrow .from{display:none}.rrow .t small{white-space:normal;overflow-wrap:anywhere}}
 
 /* ---------- link cable ---------- */
 .lc{display:grid;grid-template-columns:minmax(0,1fr) 120px minmax(0,1fr);gap:0;align-items:stretch}
@@ -1048,9 +1057,19 @@ html:has(.pl),body:has(.pl){overscroll-behavior:none}
 .ihint .in{position:relative;padding:14px 16px 16px}
 .ihint .x{position:absolute;top:4px;right:4px;width:44px;height:44px;border:0;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:center}
 .ihint h2{font:900 26px/.9 var(--font);font-stretch:62%;text-transform:uppercase;margin:0 44px 8px 0}
-.ihint p,.ios-install p{margin:0 0 12px;font:500 15px/1.5 var(--font);color:var(--ink-2);max-width:60ch}
+.ihint p,.ios-install p,.isheet p{margin:0 0 12px;font:500 15px/1.5 var(--font);color:var(--ink-2);max-width:60ch}
 .ios-install p{margin:0}
 .ios-step{display:block;color:var(--ink);font-weight:600}
 .ios-step b{font-weight:800}
 .ios-step .glyph{display:inline-flex;vertical-align:-4px;margin:0 3px 0 1px}
-.ihint small,.ios-install small{display:block;margin-top:6px;font:500 13px/1.5 var(--font);color:var(--ink-3)}
+.ihint small,.ios-install small,.isheet small{display:block;margin-top:6px;font:500 13px/1.5 var(--font);color:var(--ink-3)}
+/* "Install the app" (menu): the iPhone steps in a sheet; on the first-launch hero, a small link under its buttons (phones and tablets) */
+.isheet .in{padding:22px 24px 24px}
+.isheet h2{font-size:34px}
+.isheet .acts{margin-top:20px}
+.hinstall{display:none;margin:18px 0 0;align-items:baseline;flex-wrap:wrap;gap:4px 12px;font:500 14px var(--font);color:var(--ink-2)}
+.hinstall .linkbtn{color:var(--ink);min-height:44px;text-decoration:underline;text-underline-offset:4px}
+.hinstall .linkbtn:hover{color:#000}
+.hinstall .icon{width:18px;height:18px}
+@media (max-width:900px){.hinstall{display:flex}}
+@media (max-width:480px){.isheet .in{padding:20px 18px 18px}.isheet .acts .btn{flex:1 1 100%}}

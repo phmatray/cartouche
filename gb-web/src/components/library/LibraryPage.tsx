@@ -6,6 +6,7 @@ import type { GameEntry } from '../../types/game';
 import { letterOf, motion, owned, paths, playsNow, searchState, sortTitle, TEST_CATEGORY } from '../../lib/ui';
 import { I } from '../icons';
 import { ContinueHero, FirstHero } from './Heroes';
+import { useImports } from '../../lib/import-queue';
 import { Item, ListRow } from './GameItem';
 
 type Sort = 'name' | 'recent' | 'most' | 'year';
@@ -82,9 +83,14 @@ export function LibraryPage() {
   useSpatialFocus();
   useEffect(() => { document.title = 'Library · Cartouche'; }, []);
 
+  // While an import runs the hero keeps its game: following each new ROM would restart its live demo every flush.
+  const importing = useImports((s) => s.rows.some((r) => r.st === 'work'));
+  const [held, setHeld] = useState<string>();
   const { cont, shelf, free, tests, hasRoms } = useMemo(() => {
     const when = (g: GameEntry) => g.lastPlayed || g.importedAt || 0;
     const mine = games.filter((g) => owned(g) && when(g)).sort((a, b) => when(b) - when(a));
+    const i = importing && held ? mine.findIndex((g) => g.id === held) : -1;
+    if (i > 0) mine.unshift(...mine.splice(i, 1));
     return {
       cont: mine[0] as GameEntry | undefined,
       shelf: mine.slice(1),
@@ -92,7 +98,8 @@ export function LibraryPage() {
       tests: games.filter((g) => playsNow(g) && g.category === TEST_CATEGORY),
       hasRoms: games.some((g) => g.isLocal),
     };
-  }, [games]);
+  }, [games, importing, held]);
+  if (cont?.id !== held) setHeld(cont?.id);
 
   const list = useMemo(() => search(index, { text: '', filters: FILTERS[filter][1] }).sort(COMPARE[sort]), [index, filter, sort]);
   const present = useMemo(() => new Set(list.map(letterOf)), [list]);

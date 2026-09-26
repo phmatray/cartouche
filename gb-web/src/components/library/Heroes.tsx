@@ -5,7 +5,9 @@ import type { StoredSaveState } from '../../lib/db';
 import { getLatestSaveState } from '../../lib/db';
 import { useInk } from '../../hooks/useInk';
 import { fetchRom } from '../../hooks/useGameLibrary';
+import { useInstall } from '../../lib/pwa';
 import { ago, byline, dur, paths } from '../../lib/ui';
+import { startInstall } from '../shell/actions';
 import { I } from '../icons';
 import { Cover, Title } from './Cover';
 
@@ -116,6 +118,7 @@ export function ContinueHero({ game }: { game: GameEntry }) {
 
 /** First launch: nothing stored yet, so this hero shows nothing it would have to download. */
 export function FirstHero({ bundled }: { bundled?: GameEntry }) {
+  const canInstall = useInstall((s) => s.can) !== null;
   return (
     <section className="first" aria-label="Welcome">
       <div className="wrap">
@@ -126,6 +129,9 @@ export function FirstHero({ bundled }: { bundled?: GameEntry }) {
             <Link className="btn k lg" to="/add">{I.plus}Add your ROMs</Link>
             {bundled && <Link className="btn lg line" to={paths.play(bundled.id)}>{I.play}Play {bundled.title} now</Link>}
           </div>
+          {canInstall && (
+            <p className="hinstall"><button type="button" className="linkbtn" onClick={startInstall}>{I.load}Install the app</button><span>Full screen, offline, saves kept.</span></p>
+          )}
           <ol className="steps">
             <li><b>Add your ROMs</b><span>Drop files anywhere, several at once.</span></li>
             <li><b>Recognized</b><span>Title, developer and year arrive by themselves.</span></li>

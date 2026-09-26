@@ -71,8 +71,47 @@ function txOp<T>(storeName: string, mode: IDBTransactionMode, op: (store: IDBObj
 export interface StoredRom { id: string; title: string; genre: string; data: Uint8Array; }
 export function saveRom(rom: StoredRom): Promise<void> { return txOp(ROM_STORE, 'readwrite', (s) => s.put(rom)).then(() => {}); }
 export function getRom(id: string): Promise<StoredRom | undefined> { return txOp(ROM_STORE, 'readonly', (s) => s.get(id)); }
-export function getAllRoms(): Promise<StoredRom[]> { return txOp(ROM_STORE, 'readonly', (s) => s.getAll()); }
-export function deleteRom(id: string): Promise<void> { return txOp(ROM_STORE, 'readwrite', (s) => s.delete(id)).then(() => {}); }
+export function getRomIds(): Promise<string[]> { return txOp(ROM_STORE, 'readonly', (s) => s.getAllKeys()).then((k) => k.map(String)); }
+
+/** Run `fn` in one read-write transaction over `stores`: all of it lands, or none (a full disk aborts it whole). */
+function inTx<T>(stores: string[], fn: (tx: IDBTransaction, done: (v: T) => void) => void): Promise<T> {
+  return openDB().then((db) => new Promise<T>((resolve, reject) => {
+    const tx = db.transaction(stores, 'readwrite');
+    let out: T;
+    fn(tx, (v) => { out = v; });
+    tx.oncomplete = () => resolve(out);
+    tx.onabort = () => reject(tx.error ?? new DOMException('Transaction aborted', 'AbortError'));
+  }));
+}
+
+/** Store a new ROM and its meta together, under `base` or the first free `base-2`, `base-3`… (never overwrites). Resolves to its id. */
+export function addRom(base: string, rom: Omit<StoredRom, 'id'>, meta: Omit<StoredGameMeta, 'id'>): Promise<string> {
+  return inTx([ROM_STORE, GAME_META_STORE], (tx, done) => {
+    const roms = tx.objectStore(ROM_STORE);
+    const attempt = (id: string, n: number) => {
+      roms.getKey(id).onsuccess = (e) => {
+        if ((e.target as IDBRequest).result !== undefined) return attempt(`${base}-${n}`, n + 1);
+        roms.add({ ...rom, id });
+        tx.objectStore(GAME_META_STORE).put({ ...meta, id });
+        done(id);
+      };
+    };
+    attempt(base, 2);
+  });
+}
+
+/** Remove a ROM, and the summary of it its meta keeps (favorites and play time stay). */
+export function deleteRom(id: string): Promise<void> {
+  return inTx([ROM_STORE, GAME_META_STORE], (tx, done) => {
+    tx.objectStore(ROM_STORE).delete(id);
+    const metas = tx.objectStore(GAME_META_STORE);
+    metas.get(id).onsuccess = (e) => {
+      const m = (e.target as IDBRequest<StoredGameMeta | undefined>).result;
+      if (m?.rom) { delete m.rom; metas.put(m); }
+      done(undefined);
+    };
+  });
+}
 
 /**
  * A save profile: one named battery save (cartridge SRAM) of a game. A game can have several
@@ -128,7 +167,12 @@ export function saveSaveState(state: StoredSaveState): Promise<void> { return tx
 export function getSaveState(id: string): Promise<StoredSaveState | undefined> { return txOp(SAVESTATE_STORE, 'readonly', (s) => s.get(id)); }
 export function deleteSaveState(id: string): Promise<void> { return txOp(SAVESTATE_STORE, 'readwrite', (s) => s.delete(id)).then(() => {}); }
 
-export interface StoredGameMeta { id: string; isFavorite?: boolean; totalPlayTime?: number; lastPlayed?: number; importedAt?: number; sessions?: number; activeSave?: string; }
+/**
+ * What the library shows of a stored ROM, kept beside it so a launch reads a few hundred bytes per game
+ * instead of every ROM (a big collection is gigabytes). `head`: the first 0x150 bytes, the cartridge header.
+ */
+export interface RomSummary { title: string; genre: string; sha1: string; head: Uint8Array }
+export interface StoredGameMeta { id: string; isFavorite?: boolean; totalPlayTime?: number; lastPlayed?: number; importedAt?: number; sessions?: number; activeSave?: string; rom?: RomSummary }
 export type GameMeta = StoredGameMeta;
 export function getGameMeta(id: string): Promise<StoredGameMeta | undefined> { return txOp(GAME_META_STORE, 'readonly', (s) => s.get(id)); }
 export function setGameMeta(meta: StoredGameMeta): Promise<void> { return txOp(GAME_META_STORE, 'readwrite', (s) => s.put(meta)).then(() => {}); }
