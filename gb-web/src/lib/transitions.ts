@@ -90,8 +90,9 @@ function land(to: string, back: HTMLElement | null, had: Element | null, tries =
   el.focus({ preventScroll: true });
 }
 
-function run(from: string, to: string, go: () => unknown): Promise<void> {
-  const kind = kindOf(from, to);
+/** `fade`: a plain cross-fade whatever the pages. `overlay`: the search is open on one side (the header can't hold still over it). */
+function run(from: string, to: string, go: () => unknown, fade = false, overlay = fade): Promise<void> {
+  const kind = fade ? 'fade' : kindOf(from, to);
   const id = gameOf(kind === 'open' || kind === 'play' ? to : from);
   const had = document.activeElement;
   if (!supported) {
@@ -125,7 +126,7 @@ function run(from: string, to: string, go: () => unknown): Promise<void> {
   const from_ = src?.getBoundingClientRect() ?? null;
   html.dataset.vt = still ? 'still' : kind;
   // The header holds still between shell pages, but not over the search overlay it would pop in front of.
-  if (pageOf(from) !== 'player' && pageOf(to) !== 'player' && !still && !src?.closest('dialog[open]')) html.dataset.vtShell = '';
+  if (pageOf(from) !== 'player' && pageOf(to) !== 'player' && !still && !overlay && !src?.closest('dialog[open]')) html.dataset.vtShell = '';
 
   let dest: HTMLElement | null = null;
   const t = document.startViewTransition(async () => {
@@ -174,20 +175,23 @@ function run(from: string, to: string, go: () => unknown): Promise<void> {
 // Back / forward: hold the router's own popstate handling until the old page is captured, then replay it.
 // Registered at import, in the capture phase, so it runs before the router's listener.
 let routed: Router | null = null;
-/** A pathname without the /cartouche basename (the router's location keeps it). */
-const strip = (r: Router, p: string) => (r.basename && r.basename !== '/' && p.startsWith(r.basename) ? p.slice(r.basename.length) : p) || '/';
+/** A pathname without the /cartouche/ basename (the router's location keeps it). */
+const strip = (r: Router, p: string) => { const b = r.basename?.replace(/\/$/, ''); return (b && p.startsWith(b) ? p.slice(b.length) : p) || '/'; };
+/** A location with the search overlay open (`?q=`): opening it, or leaving it with Esc / back, cross-fades. */
+const searching = (search = '') => new URLSearchParams(search).has('q');
 const here = (r: Router) => strip(r, r.state.location.pathname);
 let replaying = false;
 window.addEventListener('popstate', (e) => {
   if (replaying || !routed) return;
   const from = here(routed), to = strip(routed, location.pathname);
   if (to === from) { interrupt(); return; }
-  if (!supported) { run(from, to, () => {}); return; } // the router navigates as usual; focus lands after
+  const fade = searching(routed.state.location.search), overlay = fade || searching(location.search);
+  if (!supported) { run(from, to, () => {}, fade, overlay); return; } // the router navigates as usual; focus lands after
   e.stopImmediatePropagation();
   run(from, to, () => {
     replaying = true;
     try { window.dispatchEvent(new PopStateEvent('popstate', { state: e.state })); } finally { replaying = false; }
-  });
+  }, fade, overlay);
 }, true);
 
 /** Route every navigation of `router` through a view transition (and back/forward through the same, reversed). */
@@ -204,12 +208,14 @@ export function install(router: Router) {
     const path = typeof to === 'string' ? to.split(/[?#]/)[0] : (to as { pathname?: string }).pathname ?? from;
     if (!path.startsWith('/') || path === from) return navigate(to as never, opts as never);
     if (path === activeTo) return Promise.resolve(); // a double click: already on its way
+    // A tag link into the search (/?q=…) opens it over the library: a cross-fade, never a back step.
+    if (searching(typeof to === 'string' ? to.split('#')[0].split('?')[1] : (to as { search?: string }).search)) return run(from, path, () => navigate(to as never, opts as never), true);
     // "Back" links to the page we just came from are real back steps: scroll position and slot come back.
     const kind = kindOf(from, path);
     if ((kind === 'close' || kind === 'eject') && entries.get(idx() - 1) === path && !(opts as { replace?: boolean })?.replace) {
       history.back();
       return Promise.resolve();
     }
-    return run(from, path, () => navigate(to as never, opts as never));
+    return run(from, path, () => navigate(to as never, opts as never), false, searching(router.state.location.search));
   }) as Router['navigate'];
 }
