@@ -43,7 +43,8 @@ a{color:inherit}
 .icon.s{width:16px;height:16px}
 .cond{font-stretch:62%;text-transform:uppercase}
 #app{min-height:100vh}
-.route{animation:in .45s var(--ease)}
+/* Browsers with View Transitions animate route changes there (below); the others get the old entrance. */
+@supports not (view-transition-name:none){.route{animation:in .45s var(--ease)}}
 @keyframes in{from{opacity:0;transform:translateY(8px)}}
 
 /* ---------- header ---------- */
@@ -746,6 +747,81 @@ a.fact:hover{background:var(--paper);color:#000}
 .nf h1{font:900 clamp(64px,10vw,160px)/.82 var(--font);font-stretch:62%;text-transform:uppercase;margin:0 0 24px}
 
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
+
+/* ---------- Route transitions (lib/transitions.ts sets html[data-vt] and names the one box that travels) ----------
+   open   shelf → game page: the box flies to the hero, the game's ink floods out of it (clip circle).
+   close  game page → shelf: the reverse, faster; the ink drains back into the slot.
+   play   → player: the box is inserted into the LCD, the bezel closes, the manual and the deck follow.
+   eject  player → back: the screen shrinks into the box.
+   fade   every other route: a short cross-fade.  still: reduced motion, 150 ms fades, nothing moves. */
+:root{--vt-k:1;--exit:cubic-bezier(.5,0,.75,0)}
+@media (max-width:640px){:root{--vt-k:.8}}
+html[data-vt-shell] .top{view-transition-name:top}
+html[data-vt=play] .pl:not(.closed) .sheet,html[data-vt=eject] .pl:not(.closed) .sheet{view-transition-name:sheet}
+html[data-vt=play] .deck,html[data-vt=eject] .deck{view-transition-name:deck}
+html[data-vt=play] .touch,html[data-vt=eject] .touch{view-transition-name:pad}
+::view-transition-group(*){animation-timing-function:var(--ease)}
+/* The box travels above everything (the ink band it lands in is named after it, so would paint over it). */
+::view-transition-group(box){z-index:2}
+/* The header is the same on both pages: it stays put instead of cross-fading. */
+::view-transition-old(top){animation:none;opacity:0}
+::view-transition-new(top){animation:none}
+
+html[data-vt]::view-transition-old(root){animation:vt-out calc(120ms * var(--vt-k)) linear both}
+html[data-vt]::view-transition-new(root){animation:vt-in calc(180ms * var(--vt-k)) linear both}
+html[data-vt=still]::view-transition-old(root){animation-duration:150ms}
+html[data-vt=still]::view-transition-new(root){animation-duration:150ms}
+
+html[data-vt=open]::view-transition-old(root){animation-duration:calc(160ms * var(--vt-k))}
+html[data-vt=open]::view-transition-new(root){animation:vt-in calc(200ms * var(--vt-k)) linear calc(80ms * var(--vt-k)) both}
+html[data-vt=open]::view-transition-group(box){animation-duration:calc(420ms * var(--vt-k))}
+html[data-vt=open]::view-transition-old(box),html[data-vt=open]::view-transition-new(box){animation-duration:calc(260ms * var(--vt-k))}
+html[data-vt=open]::view-transition-new(flood){animation:vt-flood calc(420ms * var(--vt-k)) var(--ease) both}
+
+html[data-vt=close]::view-transition-old(root){animation-duration:calc(120ms * var(--vt-k))}
+html[data-vt=close]::view-transition-new(root){animation:vt-in calc(160ms * var(--vt-k)) linear calc(40ms * var(--vt-k)) both}
+html[data-vt=close]::view-transition-group(box){animation-duration:calc(340ms * var(--vt-k))}
+html[data-vt=close]::view-transition-old(box),html[data-vt=close]::view-transition-new(box){animation-duration:calc(220ms * var(--vt-k))}
+html[data-vt=close]::view-transition-old(flood){animation:vt-drain calc(280ms * var(--vt-k)) var(--ease) both}
+
+/* Box ⇄ screen: the square box becomes the 10:9 screen. The group morphs; the pictures are cropped to it
+   (never stretched) and cross-fade, the bezel closing in from outside the crop as the cartridge lands. */
+html[data-vt=play]::view-transition-image-pair(box),html[data-vt=eject]::view-transition-image-pair(box){overflow:hidden}
+html[data-vt=play]::view-transition-old(box),html[data-vt=play]::view-transition-new(box),
+html[data-vt=eject]::view-transition-old(box),html[data-vt=eject]::view-transition-new(box){width:100%;height:100%;object-fit:cover}
+html[data-vt=play]::view-transition-group(box){animation-duration:calc(520ms * var(--vt-k))}
+html[data-vt=play]::view-transition-old(box){animation:vt-out calc(240ms * var(--vt-k)) linear calc(140ms * var(--vt-k)) both}
+html[data-vt=play]::view-transition-new(box){animation:vt-bezel calc(380ms * var(--vt-k)) var(--ease) calc(140ms * var(--vt-k)) both}
+html[data-vt=play]::view-transition-old(root){animation-duration:calc(180ms * var(--vt-k))}
+html[data-vt=play]::view-transition-new(root){animation:vt-in calc(240ms * var(--vt-k)) linear calc(80ms * var(--vt-k)) both}
+html[data-vt=play]::view-transition-new(sheet){animation:vt-from-right calc(420ms * var(--vt-k)) var(--ease) calc(280ms * var(--vt-k)) both}
+html[data-vt=play]::view-transition-new(deck){animation:vt-from-below calc(340ms * var(--vt-k)) var(--ease) calc(360ms * var(--vt-k)) both}
+html[data-vt=play]::view-transition-new(pad){animation:vt-from-below calc(340ms * var(--vt-k)) var(--ease) calc(400ms * var(--vt-k)) both}
+
+html[data-vt=eject]::view-transition-group(box){animation-duration:calc(380ms * var(--vt-k))}
+html[data-vt=eject]::view-transition-old(box){animation:vt-bezel-out calc(240ms * var(--vt-k)) var(--exit) both}
+html[data-vt=eject]::view-transition-new(box){animation:vt-in calc(200ms * var(--vt-k)) linear both}
+html[data-vt=eject]::view-transition-old(root){animation-duration:calc(120ms * var(--vt-k))}
+html[data-vt=eject]::view-transition-new(root){animation:vt-in calc(180ms * var(--vt-k)) linear calc(40ms * var(--vt-k)) both}
+html[data-vt=eject]::view-transition-old(sheet){animation:vt-to-right calc(220ms * var(--vt-k)) var(--exit) both}
+html[data-vt=eject]::view-transition-old(deck),html[data-vt=eject]::view-transition-old(pad){animation:vt-to-below calc(200ms * var(--vt-k)) var(--exit) both}
+
+@keyframes vt-in{from{opacity:0}}
+@keyframes vt-out{to{opacity:0}}
+@keyframes vt-flood{from{clip-path:circle(0 at var(--vt-x) var(--vt-y))}to{clip-path:circle(var(--vt-r) at var(--vt-x) var(--vt-y))}}
+@keyframes vt-drain{from{clip-path:circle(var(--vt-r) at var(--vt-x) var(--vt-y))}to{clip-path:circle(0 at var(--vt-x) var(--vt-y))}}
+@keyframes vt-bezel{from{opacity:0;transform:scale(1.14)}}
+@keyframes vt-bezel-out{to{opacity:0;transform:scale(1.14)}}
+@keyframes vt-to-right{to{transform:translateX(100%)}}
+@keyframes vt-to-below{to{opacity:0;transform:translateY(100%)}}
+@keyframes vt-from-right{from{transform:translateX(100%)}}
+@keyframes vt-from-below{from{opacity:0;transform:translateY(100%)}}
+
+/* Landing points that take focus after a route change (not controls: no ring). */
+main h1[tabindex="-1"]:focus,.pl canvas.lcd:focus{outline:none}
+/* The LCD stays dark until the first frame, which then fades in (during or right after the landing). */
+.pl canvas.lcd{opacity:0;transition:opacity .25s linear}
+.pl canvas.lcd.lit{opacity:1}
 
 /* ---------- Cartouche additions (not in the prototype) ---------- */
 html{background:var(--band)}

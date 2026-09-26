@@ -57,7 +57,7 @@ export function Cover({ game, className = '', 'aria-hidden': hidden }: { game: G
   const { coverUrl, loading } = useCoverArt(game, seen);
   const [shown, setShown] = useState<string | null>(null);
   return (
-    <span ref={ref} className={`cv ${className}${seen && loading ? ' wait' : ''}`} aria-hidden={hidden}>
+    <span ref={ref} className={`cv ${className}${seen && loading ? ' wait' : ''}`} aria-hidden={hidden} data-game={game.id}>
       <NoArt game={game} />
       {coverUrl && (
         <img src={coverUrl} alt="" width={512} height={512} decoding="async"
