@@ -28,5 +28,6 @@
     "noUncheckedSideEffectImports": true
   },
   "include": ["src"],
+  // Unit tests run on Node (npm test), which strips their types; the app build leaves them out.
   "exclude": ["src/**/*.test.ts"]
 }

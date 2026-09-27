@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { RegisterState, EmulatorError } from '../types/emulator';
+import type { FrameTrace } from '../neural/trace';
 
 // These will be dynamically imported from the WASM module
 let wasmMemory: WebAssembly.Memory | null = null;
@@ -233,6 +234,33 @@ export function useEmulator() {
     emulatorRef.current?.set_channel_muted(channel, muted);
   }, []);
 
+  const lastTraced = useRef(0);
+  /** The per-frame layer trace (Neural 4x, Smooth motion). Costs some emulation time while on. */
+  const setTraceEnabled = useCallback((on: boolean) => {
+    const emu = emulatorRef.current;
+    if (!emu || emu.trace_enabled() === on) return;
+    emu.set_trace_enabled(on);
+    lastTraced.current = 0; // the core counts frames again from 1
+  }, []);
+
+  /**
+   * The trace of the frame finished since the last call, as views into the core's memory (valid until the
+   * next run_frame); null when no new frame finished (LCD off) or tracing is off.
+   */
+  const getTrace = useCallback((): FrameTrace | null => {
+    const emu = emulatorRef.current;
+    if (!emu || !wasmMemory || !emu.trace_enabled()) return null;
+    const frame = emu.trace_frame();
+    if (frame === 0 || frame === lastTraced.current) return null;
+    lastTraced.current = frame;
+    const view = (ptr: number, len: number) => (ptr ? new Uint8Array(wasmMemory!.buffer, ptr, len) : null);
+    const n = emu.layer_len();
+    const meta = view(emu.frame_meta_ptr(), emu.frame_meta_len());
+    const final = view(emu.layer_final_ptr(), n), bg = view(emu.layer_bg_ptr(), n), win = view(emu.layer_win_ptr(), n);
+    const obj = view(emu.layer_obj_ptr(), n), info = view(emu.layer_info_ptr(), n);
+    return meta && final && bg && win && obj && info ? { meta, final, bg, win, obj, info } : null;
+  }, []);
+
   const getBgp = useCallback((): number => {
     const emu = emulatorRef.current;
     return emu ? emu.get_bgp() : 0;
@@ -266,5 +294,7 @@ export function useEmulator() {
     getVramData,
     getBgp,
     setChannelMuted,
+    setTraceEnabled,
+    getTrace,
   };
 }

@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { LcdEngine } from '../shaders/lcd-engine';
 import { cpuColor, type Filters } from '../shaders/filters';
+import type { FrameTrace } from '../neural/trace';
 
 /**
  * Draws Game Boy frames on a canvas through the filter chain. The WebGL canvas is kept at the size it
@@ -16,6 +17,7 @@ export function useLcdShader(filters: Filters, color: boolean, follow = true) {
   const setCanvas = useCallback((node: HTMLCanvasElement | null) => { canvasEl.current = node; setCanvasState(node); }, []);
   const [webglAvailable, setWebglAvailable] = useState(true);
   const look = useRef({ filters, color });
+  const motion = useRef(false);
   useEffect(() => { look.current = { filters, color }; }, [filters, color]);
 
   useEffect(() => {
@@ -30,6 +32,7 @@ export function useLcdShader(filters: Filters, color: boolean, follow = true) {
     }
     engineRef.current = engine;
     engine.setFilters(look.current.filters, look.current.color);
+    engine.setMotion(motion.current);
     engine.clear();
     const ro = new ResizeObserver(([e]) => {
       const w = Math.min(2880, Math.round(e.contentRect.width * devicePixelRatio));
@@ -41,9 +44,10 @@ export function useLcdShader(filters: Filters, color: boolean, follow = true) {
 
   useEffect(() => { engineRef.current?.setFilters(filters, color); }, [filters, color, canvas]);
 
-  const renderFrame = useCallback((framebuffer: Uint8ClampedArray, fresh = false) => {
+  /** `trace` and `tau`: see LcdEngine.renderFrame. */
+  const renderFrame = useCallback((framebuffer: Uint8ClampedArray, fresh = false, trace: FrameTrace | null = null, tau = 0) => {
     if (framebuffer.length < 160 * 144 * 4) return; // a detached WASM view: skip the frame rather than upload garbage
-    if (engineRef.current) { engineRef.current.renderFrame(framebuffer, fresh); return; }
+    if (engineRef.current) { engineRef.current.renderFrame(framebuffer, fresh, trace, tau); return; }
     const c = canvasEl.current;
     if (webglAvailable || !c) return;
     if (c.width !== 160) { c.width = 160; c.height = 144; }
@@ -51,6 +55,10 @@ export function useLcdShader(filters: Filters, color: boolean, follow = true) {
     c.getContext('2d')?.putImageData(new ImageData(cpuColor(framebuffer, f, col) as Uint8ClampedArray<ArrayBuffer>, 160, 144), 0, 0);
   }, [webglAvailable]);
 
+  /** Smooth motion: on or off, and the in-between picture for a display refresh without a new frame. */
+  const setMotion = useCallback((on: boolean) => { motion.current = on; engineRef.current?.setMotion(on); }, []);
+  const drawMotion = useCallback((tau: number) => engineRef.current?.drawMotion(tau), []);
+
   /** `canvas` is set once the engine exists: a caller drawing a still frame redraws when it changes. */
-  return { canvasRef: setCanvas, canvasKey: webglAvailable ? 'gl' : '2d', renderFrame, webglAvailable, canvas };
+  return { canvasRef: setCanvas, canvasKey: webglAvailable ? 'gl' : '2d', renderFrame, setMotion, drawMotion, webglAvailable, canvas };
 }

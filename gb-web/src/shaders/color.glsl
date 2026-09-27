@@ -1,4 +1,4 @@
-// Pass 1, at 160x144: DMG palette or GBC colour correction, adjustments, then LCD persistence.
+// Pass 1, at 160x144 (at 640x576 after Neural 4x or Smooth motion): DMG palette or GBC colour correction, adjustments, then LCD persistence.
 // Keep in step with cpuColor() in filters.ts (the Canvas2D fallback).
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
@@ -14,8 +14,11 @@ uniform float u_corr;       // correction strength: 1 accurate, 0.5 vivid
 uniform float u_adjOn;
 uniform vec3 u_adj;         // brightness, contrast, saturation (0 = neutral)
 uniform float u_ghost;
+uniform float u_lerp;       // 1 after an upscaler that blends shades (Neural 4x): palette by interpolation, not threshold
 
 const vec3 LUMA = vec3(0.299, 0.587, 0.114);
+// Luma of the core's four DMG shades, lightest first.
+const vec4 SHADE_L = vec4(0.926525, 0.651514, 0.338824, 0.078933);
 // GBC LCD response: gamma 2.2 and the channel mixing of the widely used gbc-color model, each row
 // scaled to sum to 1 so white stays white (no green tint, no dimming).
 const mat3 GBC = mat3(0.86638, 0.02429, 0.1325,  0.13362, 0.70857, 0.13379,  0.0, 0.26714, 0.73371);
@@ -28,7 +31,13 @@ void main() {
   } else if (u_mode > 0.5) {
     // The core draws the four DMG shades in fixed colours; the midpoints of their luma pick the shade.
     float l = dot(c, LUMA);
-    c = l > 0.79 ? u_pal[0] : l > 0.49 ? u_pal[1] : l > 0.21 ? u_pal[2] : u_pal[3];
+    if (u_lerp > 0.5) { // a blend of two shades becomes the same blend of their palette colours
+      c = l > SHADE_L.y ? mix(u_pal[1], u_pal[0], clamp((l - SHADE_L.y) / (SHADE_L.x - SHADE_L.y), 0.0, 1.0))
+        : l > SHADE_L.z ? mix(u_pal[2], u_pal[1], (l - SHADE_L.z) / (SHADE_L.y - SHADE_L.z))
+        : mix(u_pal[3], u_pal[2], clamp((l - SHADE_L.w) / (SHADE_L.z - SHADE_L.w), 0.0, 1.0));
+    } else {
+      c = l > 0.79 ? u_pal[0] : l > 0.49 ? u_pal[1] : l > 0.21 ? u_pal[2] : u_pal[3];
+    }
   }
   if (u_adjOn > 0.5) {
     c = (c + u_adj.x - 0.5) * (1.0 + u_adj.y) + 0.5;

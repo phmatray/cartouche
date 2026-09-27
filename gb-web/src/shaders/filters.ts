@@ -1,9 +1,10 @@
 /** The display filter chain: what LcdEngine draws and the Screen / Display controls edit. */
 
-export type PresetName = 'dmg-classic' | 'gb-pocket' | 'gb-light' | 'clean' | 'crt-tv' | 'gbc-accurate';
+export type PresetName = 'dmg-classic' | 'gb-pocket' | 'gb-light' | 'clean' | 'crt-tv' | 'gbc-accurate' | 'neural';
 export type PaletteId = 'original' | 'pea-soup' | 'pocket-grey' | 'backlit' | 'teal' | 'arctic' | 'sunset' | 'grey' | 'custom';
 export type Correction = 'off' | 'accurate' | 'vivid';
-export type Upscale = 'nearest' | 'scale2x' | 'scale3x' | 'smooth';
+/** 'neural': Neural 4x (neural/upscaler.ts), WebGL 2 only; nearest elsewhere. */
+export type Upscale = 'nearest' | 'scale2x' | 'scale3x' | 'smooth' | 'neural';
 /** Which default a game uses: original Game Boy games, or games the core runs in Color mode. */
 export type ScreenKind = 'dmg' | 'cgb';
 
@@ -60,6 +61,8 @@ export const PRESETS: PresetInfo[] = [
     filters: { ...NEUTRAL, correction: 'accurate', ghosting: 0.2, grid: 0.3 } },
   { name: 'crt-tv', label: 'CRT TV', description: 'Scanlines on a curved tube', kinds: BOTH,
     filters: { ...NEUTRAL, correction: 'vivid', ghosting: 0.1, upscale: 'smooth', scanlines: 0.6, crt: true, brightness: 0.05, saturation: 0.1 } },
+  { name: 'neural', label: 'Neural', description: 'Neural 4× upscaling', kinds: BOTH,
+    filters: { ...NEUTRAL, upscale: 'neural', correction: 'accurate' } },
   { name: 'clean', label: 'Clean', description: 'No filter, raw pixels', kinds: BOTH, filters: NEUTRAL },
 ];
 
@@ -92,7 +95,7 @@ export function normalizeDisplay(c: unknown, kind: ScreenKind): DisplayConfig {
       custom,
       correction: oneOf(f.correction, ['off', 'accurate', 'vivid'] as const, d.correction),
       ghosting: clamp(f.ghosting, 0, 0.7, d.ghosting),
-      upscale: oneOf(f.upscale, ['nearest', 'scale2x', 'scale3x', 'smooth'] as const, d.upscale),
+      upscale: oneOf(f.upscale, ['nearest', 'scale2x', 'scale3x', 'smooth', 'neural'] as const, d.upscale),
       grid: clamp(f.grid, 0, 1, d.grid),
       scanlines: clamp(f.scanlines, 0, 1, d.scanlines),
       crt: typeof f.crt === 'boolean' ? f.crt : d.crt,
