@@ -41,6 +41,12 @@ export const LEGAL_ES: LegalSection[] = [
       'y cpu_instrs de Blargg, de Shay Green, de https://github.com/retrio/gb-test-roms. Su autor ' +
       'no indica ninguna licencia; se incluye porque la comunidad de la emulación lo redistribuye ampliamente para ' +
       'pruebas, y se retirará de inmediato a petición del autor.\n\n' +
+      'Cuatro juegos creados con GB Studio, alojados sin modificar porque las licencias de sus autores permiten ' +
+      'redistribuir la ROM completa: Dawn Will Come (código MIT, gráficos y música CC BY 4.0), Poltersprite (juego ' +
+      'CC BY-NC-SA 4.0, código GPL-3.0), Millennium Gun (código 0BSD, gráficos y sonido CC0 1.0, plugin MIT) y ' +
+      'Dusky Dungeon (MIT, gráficos CC BY 4.0, fuentes CC BY 4.0 y CC BY 3.0). Cada uno se descarga solo cuando lo ' +
+      'pides. Sus autores, fuentes y condiciones de licencia completas están en roms/gbstudio/LICENSES.txt, enlazado ' +
+      'más abajo. Los demás juegos de la colección GB Studio no se alojan: enlazan a las páginas de sus autores.\n\n' +
       'Una base de datos de volcados conocidos de Game Boy y Game Boy Color (huellas de archivos, títulos y nombres ' +
       'No-Intro), usada solo para identificar los archivos que añades. La biblioteca muestra homebrew gratuito, ' +
       'cartuchos de prueba de libre disponibilidad y tus propias ROM, nunca juegos comerciales. Ninguna imagen de juegos comerciales.',
@@ -87,9 +93,9 @@ export const LEGAL_ES: LegalSection[] = [
     body:
       'Sin cuenta, sin servidor, sin analíticas, sin publicidad, sin cookies.\n\n' +
       'Tus ROM, partidas guardadas, estados guardados, ajustes, favoritos y tiempo de juego se guardan solo en este ' +
-      'navegador (IndexedDB y localStorage) y nunca salen de tu dispositivo. Borra los datos de este sitio en ' +
+      'navegador (IndexedDB y localStorage) y nunca salen de tu dispositivo, salvo si activas la sincronización entre dispositivos (ver más abajo). Borra los datos de este sitio en ' +
       'los ajustes de tu navegador para eliminarlo todo.\n\n' +
-      'Solo GitHub recibe peticiones, salvo si conectas RetroAchievements (ver más abajo). GitHub Pages sirve la app y sus fuentes. Las carátulas están desactivadas de forma ' +
+      'Solo GitHub recibe peticiones, salvo si conectas RetroAchievements, juegas en línea o activas la sincronización entre dispositivos (ver más abajo). GitHub Pages sirve la app y sus fuentes. Las carátulas están desactivadas de forma ' +
       'predeterminada y necesitan tu aceptación (cuadro de diálogo del primer inicio o Ajustes > Almacenamiento); solo entonces el ' +
       'navegador carga también las portadas de las ROM reconocidas que añadiste desde raw.githubusercontent.com. Como cualquier ' +
       'servidor web, GitHub recibe ' +
@@ -102,7 +108,16 @@ export const LEGAL_ES: LegalSection[] = [
       'pide a retroachievements.org (https://retroachievements.org) la lista de juegos de las dos consolas y, para un juego que ' +
       'abres, sus logros y cuáles has conseguido; la clave y el usuario van en esas peticiones, como exige su API web. Una ROM se ' +
       'reconoce comparando su huella MD5 con esas listas en el navegador: nunca se envían ni la ROM ni su huella. ' +
-      'RetroAchievements recibe tu dirección IP y los datos de tu navegador. «Desconectar» olvida la clave y detiene toda petición.',
+      'RetroAchievements recibe tu dirección IP y los datos de tu navegador. «Desconectar» olvida la clave y detiene toda petición.\n\n' +
+      'El juego en línea (Cable Link) y la sincronización entre dispositivos (Ajustes > Sincronizar) no hacen ninguna ' +
+      'petición hasta que abres o te unes a una sala, o vinculas un dispositivo. Entonces tu navegador contacta cinco ' +
+      'relés Nostr públicos que Cartouche no gestiona (relay02.lnfi.network, staging.yabu.me, top.testrelay.top, ' +
+      'yabu.me y relay.mostro.network) para encontrar el otro navegador, y servidores STUN públicos de Google y ' +
+      'Cloudflare para conocer su propia dirección de red. Los relés solo transmiten un saludo cifrado, pero ven las ' +
+      'direcciones IP de ambos navegadores, y el otro jugador o dispositivo conoce la tuya: así funciona una conexión ' +
+      'directa (WebRTC). Los datos de juego y de sincronización van después directamente de un navegador al otro, ' +
+      'cifrados, sin pasar por ningún servidor de Cartouche. Si añades tu propio servidor TURN (Jugar en línea > ajustes ' +
+      'de conexión), una conexión que no puede ser directa pasa por él.',
   },
   {
     title: 'Solicitudes de retirada',
@@ -124,6 +139,7 @@ export const LEGAL_ES: LegalSection[] = [
       { file: 'LICENSE.txt', label: 'Licencia de Cartouche (MIT)' },
       { file: 'THIRD_PARTY_NOTICES.txt', label: 'Avisos de terceros (juegos y cartuchos de prueba incluidos, GameDataBase, fuentes, carátulas)' },
       { file: 'licenses/GPL-3.0-ucity.txt', label: 'GNU GPL versión 3 (µCity)' },
+      { file: 'roms/gbstudio/LICENSES.txt', label: 'Colección GB Studio: autores y licencias de los juegos alojados' },
       { file: 'THIRD_PARTY_LICENSES.txt', label: 'Licencias completas de los paquetes npm, crates de Rust y fuentes incluidos' },
     ],
   },

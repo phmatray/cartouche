@@ -44,6 +44,12 @@ export const LEGAL_SECTIONS: LegalSection[] = [
       'and Blargg\'s cpu_instrs by Shay Green, from https://github.com/retrio/gb-test-roms. Its author ' +
       'states no license; it is included because the emulator community widely redistributes it for ' +
       'testing, and it will be removed immediately on the author\'s request.\n\n' +
+      'Four games made with GB Studio, hosted unmodified because their authors\' licenses allow redistribution ' +
+      'of the whole ROM: Dawn Will Come (code MIT, art and music CC BY 4.0), Poltersprite (game CC BY-NC-SA 4.0, ' +
+      'code GPL-3.0), Millennium Gun (code 0BSD, graphics and audio CC0 1.0, plugin MIT) and Dusky Dungeon (MIT, ' +
+      'graphics CC BY 4.0, fonts CC BY 4.0 and CC BY 3.0). Each one is downloaded only when you ask for it. Their ' +
+      'authors, sources and full license terms are in roms/gbstudio/LICENSES.txt, linked below. The other games ' +
+      'of the GB Studio collection are not hosted: they link to their authors\' pages.\n\n' +
       'A database of known Game Boy and Game Boy Color dumps (file fingerprints, titles and No-Intro ' +
       'names), used only to identify files you add. The library lists free homebrew, freely available ' +
       'test cartridges and your own ROMs, never commercial games. No images of commercial games.',
@@ -90,9 +96,10 @@ export const LEGAL_SECTIONS: LegalSection[] = [
     body:
       'No account, no server, no analytics, no advertising, no cookies.\n\n' +
       'Your ROMs, saves, save states, settings, favorites and play time are stored only in this ' +
-      'browser (IndexedDB and localStorage) and never leave your device. Clear this site\'s data in ' +
-      'your browser settings to delete everything.\n\n' +
-      'Only GitHub receives requests, unless you connect RetroAchievements (see below). GitHub Pages serves the app and its fonts. Box art is off by ' +
+      'browser (IndexedDB and localStorage) and never leave your device, unless you turn on device sync ' +
+      '(see below). Clear this site\'s data in your browser settings to delete everything.\n\n' +
+      'Only GitHub receives requests, unless you connect RetroAchievements, play online or turn on device ' +
+      'sync (see below). GitHub Pages serves the app and its fonts. Box art is off by ' +
       'default and needs your yes (first-launch dialog or Settings > Storage); only then does the ' +
       'browser also load covers of recognized ROMs you added from raw.githubusercontent.com. Like any ' +
       'web server, GitHub receives ' +
@@ -105,7 +112,15 @@ export const LEGAL_SECTIONS: LegalSection[] = [
       'https://retroachievements.org) for the game lists of both consoles and, for a game you open, its achievements and ' +
       'which ones you earned; the key and username go in those requests, as its Web API requires. It identifies a ROM by ' +
       'comparing its MD5 fingerprint with those lists in the browser: the ROM and its fingerprint are never sent. ' +
-      'RetroAchievements receives your IP address and browser details. "Disconnect" forgets the key and stops every request.',
+      'RetroAchievements receives your IP address and browser details. "Disconnect" forgets the key and stops every request.\n\n' +
+      'Play online (Link Cable) and device sync (Settings > Sync) make no request until you open or join a room, or ' +
+      'pair a device. Then your browser contacts five public Nostr relays that Cartouche does not run ' +
+      '(relay02.lnfi.network, staging.yabu.me, top.testrelay.top, yabu.me and relay.mostro.network) to find the ' +
+      'other browser, and public STUN servers run by Google and Cloudflare to learn its own network address. The ' +
+      'relays carry only an encrypted handshake, but they see the IP addresses of both browsers, and the other ' +
+      'player or device learns yours: that is how a direct (WebRTC) connection works. Game and sync data then go ' +
+      'directly from one browser to the other, encrypted, through no Cartouche server. If you add your own TURN ' +
+      'server (Play online > Connection settings), a connection that cannot go direct goes through it.',
   },
   {
     title: 'Takedown requests',
@@ -127,6 +142,7 @@ export const LEGAL_SECTIONS: LegalSection[] = [
       { file: 'LICENSE.txt', label: 'Cartouche license (MIT)' },
       { file: 'THIRD_PARTY_NOTICES.txt', label: 'Third-party notices (bundled games and test cartridges, GameDataBase, fonts, box art)' },
       { file: 'licenses/GPL-3.0-ucity.txt', label: 'GNU GPL version 3 (µCity)' },
+      { file: 'roms/gbstudio/LICENSES.txt', label: 'GB Studio collection: authors and licenses of the hosted games' },
       { file: 'THIRD_PARTY_LICENSES.txt', label: 'Full licenses of the bundled npm packages, Rust crates and fonts' },
     ],
   },
