@@ -84,9 +84,13 @@ export function SearchDialog() {
   }
 
   // State → URL: typing replaces the entry (debounced, off the keystroke path); facet picks push one (see `apply`).
+  // Marked as our own (`ownQ`): its render can land after the next key, and must not put the older text back.
   useEffect(() => {
     if (!open || formatted === urlQ) return;
-    const t = setTimeout(() => navigate(paths.search(formatted).slice(1), { replace: true, state: location.state }), 250);
+    const t = setTimeout(() => {
+      setOwnQ(formatted);
+      navigate(paths.search(formatted).slice(1), { replace: true, state: location.state });
+    }, 250);
     return () => clearTimeout(t);
   }, [open, formatted, urlQ, navigate, location.state]);
 
