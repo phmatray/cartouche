@@ -206,6 +206,8 @@ function Player({ game }: { game: GameEntry }) {
     const s = useSettingsStore.getState();
     const slot = q.get('slot');
     const from: SlotKey | null = q.get('resume') ? 'auto' : slot !== null ? +slot : null;
+    // A slot is loaded once: a reload (or iOS bringing back an evicted tab) goes on from the resume point instead.
+    if (slot !== null) setQ((p) => { p.delete('slot'); if (s.resumePoints) p.set('resume', '1'); return p; }, { replace: true });
     // A state replaces the start-up at once: the animation then costs nothing (and plays if the state is gone).
     if (!powerOn(data, machineOf(data, game.id), s.startupAnimation || from !== null)) { setBadRom(true); return; }
     setNeedsRom(false);
@@ -226,7 +228,7 @@ function Player({ game }: { game: GameEntry }) {
       else if (!refused.current) toast(ok ? (from === 'auto' ? tNow('player.toast.resumed') : tNow('player.toast.loadedSlot', { n: String(+from + 1) })) : tNow('player.toast.gone'), ok ? 'c' : 'm');
     }
     setIsRunning(q.get('edit') !== 'controls');
-  }, [powerOn, hasBatteryRam, importSram, game.id, q, saves, setIsRunning, consoleNow, skipBoot]);
+  }, [powerOn, hasBatteryRam, importSram, game.id, q, setQ, saves, setIsRunning, consoleNow, skipBoot]);
 
   const booted = useRef(false);
   useEffect(() => {
