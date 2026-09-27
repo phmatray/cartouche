@@ -406,7 +406,8 @@ function Player({ game }: { game: GameEntry }) {
       return undefined;
     };
     const down = (e: KeyboardEvent) => {
-      if (typing() || document.querySelector('dialog[open]') || e.ctrlKey || e.metaKey || e.altKey) return;
+      // The touch layout editor has the page (arrows and +/- move its parts): the game waits, no shortcut gets through.
+      if (editing || typing() || document.querySelector('dialog[open]') || e.ctrlKey || e.metaKey || e.altKey) return;
       // Keys on the camera lens or the printer tray work their own controls (Enter presses the button, not Start).
       if (e.target instanceof Element && e.target.closest('.cdock,.ptray')) return;
       const a = actions.current;
@@ -434,7 +435,7 @@ function Player({ game }: { game: GameEntry }) {
       window.removeEventListener('keydown', down); window.removeEventListener('keyup', up);
       window.removeEventListener('blur', releaseAll); document.removeEventListener('visibilitychange', onHidden);
     };
-  }, [keybindings, pressButton, releaseButton]);
+  }, [keybindings, pressButton, releaseButton, editing]);
 
   const auto = saves.states[0];
   const [kind, label] = tagOf(game, savedIds);
