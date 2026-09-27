@@ -67,6 +67,41 @@ test('measured against the record the game loaded, even when the store moved bef
   assert.deepEqual(db.get('g')!.sram, b(9));
 });
 
+test('a rename made elsewhere (same time) is kept by the next write', async () => {
+  const { db, io } = store();
+  const x = { id: 'g', gameId: 'g', name: 'Main', sram: b(5), timestamp: 1, created: 1 };
+  db.set('g', x);
+  const w = new SramWriter(io);
+  w.adopt('g', x);
+  db.set('g', { ...x, name: 'Léa' }); // the game page renames it while the game runs here
+  await w.check('g');
+  const r = w.write('g', b(6), 'Main', 2);
+  assert.ok(r && r !== 'unknown');
+  assert.deepEqual(db.get('g'), { ...x, name: 'Léa', sram: b(6), timestamp: 2 });
+});
+
+test('what this player wrote, written over elsewhere, goes to a new profile even when the game did not change it since', async () => {
+  const { db, io } = store();
+  db.set('g', { id: 'g', gameId: 'g', name: 'Main', sram: b(1), timestamp: 1, created: 1 });
+  const w = new SramWriter(io);
+  await w.check('g');
+  w.write('g', b(21), 'Main', 2); // this player's progress
+  db.set('g', { id: 'g', gameId: 'g', name: 'Main', sram: b(6), timestamp: 3, created: 1 }); // another page wrote over it
+  await w.check('g');
+  const r = w.write('g', b(21), 'Main', 4); // the same RAM as its last write
+  assert.ok(r && r !== 'unknown');
+  assert.equal(r.to.id, 'g~2');
+  assert.deepEqual(db.get('g~2')!.sram, b(21));
+  assert.deepEqual(db.get('g')!.sram, b(6));
+  assert.equal(w.write('g~2', b(21), 'Main'), null); // once
+  // A save only loaded here (never written) and replaced elsewhere is not copied back while unchanged.
+  const w2 = new SramWriter(io);
+  w2.adopt('h', { id: 'h', gameId: 'h', name: 'Main', sram: b(1), timestamp: 1, created: 1 });
+  db.set('h', { id: 'h', gameId: 'h', name: 'Main', sram: b(2), timestamp: 2, created: 1 });
+  await w2.check('h');
+  assert.equal(w2.write('h', b(1), 'Main'), null);
+});
+
 test('a resume point is older than a battery save written well after it, not one from the same leave', () => {
   assert.equal(resumeOlderThan(10_000, undefined), false); // no battery save
   assert.equal(resumeOlderThan(10_000, { timestamp: 9_000 }), false); // the save is older
