@@ -84,14 +84,21 @@ export const LEGAL_FR: LegalSection[] = [
       'Les ROM, sauvegardes, sauvegardes instantanées, réglages, favoris et temps de jeu sont stockés uniquement dans ce ' +
       'navigateur (IndexedDB et localStorage) et ne quittent jamais l’appareil. Effacer les données de ce site dans ' +
       'les réglages du navigateur supprime tout.\n\n' +
-      'Seul GitHub reçoit des requêtes. GitHub Pages sert l’app et ses polices. Les jaquettes sont désactivées par ' +
+      'Seul GitHub reçoit des requêtes (sauf si vous donnez une clé d’API à la traduction en direct, voir plus bas). GitHub Pages sert l’app et ses polices. Les jaquettes sont désactivées par ' +
       'défaut et nécessitent un accord (boîte de dialogue du premier lancement ou Réglages > Stockage) ; seulement alors le ' +
       'navigateur charge aussi les jaquettes des ROM reconnues ajoutées depuis raw.githubusercontent.com. Comme tout ' +
       'serveur web, GitHub reçoit ' +
       'l’adresse IP et les informations du navigateur ; voir la déclaration générale de confidentialité de GitHub ' +
       '(https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).\n\n' +
       'Les jaquettes téléchargées sont conservées dans ce navigateur (Cache Storage) et ne sont jamais envoyées nulle part. Elles peuvent être supprimées à tout moment avec ' +
-      '« Supprimer les jaquettes téléchargées » dans Réglages > Stockage, ou en effaçant les données du site.',
+      '« Supprimer les jaquettes téléchargées » dans Réglages > Stockage, ou en effaçant les données du site.\n\n' +
+      'La traduction en direct reste désactivée tant que vous ne l’activez pas pour un jeu. Avec le traducteur intégré de ' +
+      'Chrome, le texte est traduit dans le navigateur ; Chrome télécharge une fois son modèle de traduction chez Google, le ' +
+      'texte lui-même n’est jamais envoyé. Avec votre propre clé d’API Anthropic, chaque ligne lue à l’écran est envoyée, ' +
+      'avec le titre du jeu, depuis votre navigateur vers api.anthropic.com et facturée sur votre clé. La clé est stockée ' +
+      'sans chiffrement dans ce navigateur (pour cette session seulement, sauf si vous demandez à la mémoriser) et lisible ' +
+      'par les autres pages de la même adresse web : utilisez une clé avec un plafond de dépenses bas. Réglages > Stockage ' +
+      'la supprime avec les traductions.',
   },
   {
     title: 'Demandes de retrait',

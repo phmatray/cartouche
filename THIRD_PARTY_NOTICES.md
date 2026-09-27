@@ -247,7 +247,7 @@ SOFTWARE.
   text is in `gb-web/public/licenses/OFL-Archivo.txt`, published with the app
   at `licenses/OFL-Archivo.txt`. It is the only typeface the app ships or loads.
 - Misaki font (美咲フォント: Misaki Gothic and Misaki Gothic 2nd) and k6x8
-  (k6x8 Gothic), Copyright (C) 2002-2021 and 2004-2023 Num Kadoma
+  (k6x8 Gothic), Copyright (C) 2002-2021 and 2000-2023 Num Kadoma
   (門真 なむ, https://littlelimit.net/misaki.htm and
   https://littlelimit.net/k6x8.htm). License, as stated in both archives:
   "These fonts are free software. Unlimited permission is granted to use,

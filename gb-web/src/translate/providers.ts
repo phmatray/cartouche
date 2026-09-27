@@ -1,44 +1,9 @@
 /**
- * Who translates: Chrome's built-in Translator API (on-device, free, desktop Chrome 138+ only), or Claude
- * with the player's own Anthropic API key, called straight from the browser.
+ * Claude with the player's own Anthropic API key, called straight from the browser (Chrome's on-device
+ * translator is in chrome.ts). Loaded with the reader, only once translate is on.
  */
-import type { ChromeStatus, Lang } from './store';
-
-// ---- Chrome's Translator API (https://developer.chrome.com/docs/ai/translator-api)
-
-interface ChromeTranslator { translate(text: string): Promise<string> }
-interface TranslatorStatic {
-  availability(o: { sourceLanguage: string; targetLanguage: string }): Promise<'unavailable' | 'downloadable' | 'downloading' | 'available'>;
-  create(o: { sourceLanguage: string; targetLanguage: string; monitor?: (m: EventTarget) => void }): Promise<ChromeTranslator>;
-}
-const api = () => (globalThis as unknown as { Translator?: TranslatorStatic }).Translator;
-
-export async function chromeStatus(src: string, dst: Lang): Promise<ChromeStatus> {
-  const T = api();
-  if (!T) return 'missing';
-  try { return await T.availability({ sourceLanguage: src, targetLanguage: dst }); } catch { return 'unavailable'; }
-}
-
-const translators = new Map<string, Promise<ChromeTranslator>>();
-/**
- * The translator for a language pair, created once. A model that still has to be downloaded needs a user
- * gesture to start: call this from a click first (the toggle does), later calls reuse it.
- */
-export function chromeTranslator(src: string, dst: Lang, onProgress?: (loaded: number) => void): Promise<ChromeTranslator> {
-  const T = api();
-  if (!T) return Promise.reject(new Error('This browser has no built-in translator'));
-  const k = `${src}>${dst}`;
-  let t = translators.get(k);
-  if (!t) {
-    t = T.create({
-      sourceLanguage: src, targetLanguage: dst,
-      monitor: (m) => m.addEventListener('downloadprogress', (e) => onProgress?.((e as ProgressEvent).loaded)),
-    });
-    t.catch(() => translators.delete(k));
-    translators.set(k, t);
-  }
-  return t;
-}
+import type { Lang } from './store';
+import { t } from '../i18n/core.ts';
 
 // ---- Claude (Anthropic Messages API, the player's own key)
 
@@ -62,28 +27,51 @@ export async function claudeTranslate(o: { key: string; text: string; src: 'ja' 
     'and keep names consistent with the previous lines. Reply with JSON only: ' +
     '{"source": "<the original text, corrected>", "translation": "<the translation>"}';
   const prev = o.previous.length ? `Previous lines:\n${o.previous.map((l) => `- ${l}`).join('\n')}\n\n` : '';
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    signal: o.signal,
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': o.key,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: CLAUDE_MODEL, max_tokens: 600, system,
-      messages: [{ role: 'user', content: `Game: ${o.title}\n\n${prev}Text:\n${o.text}` }],
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      signal: o.signal,
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': o.key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: CLAUDE_MODEL, max_tokens: 600, system,
+        messages: [{ role: 'user', content: `Game: ${o.title}\n\n${prev}Text:\n${o.text}` }],
+      }),
+    });
+  } catch (e) {
+    if ((e as Error).name === 'AbortError') throw e;
+    throw new ClaudeError(t('translate.err.offline'), 0); // the browser's own words ("Failed to fetch", "Load failed") say nothing
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => null) as { error?: { message?: string } } | null;
-    throw new Error(res.status === 401 ? 'The API key was refused' : res.status === 429 ? 'Too many requests, or no credit left' : body?.error?.message || `Error ${res.status}`);
+    throw new ClaudeError(errorText(res.status, body?.error?.message), res.status);
   }
   const data = await res.json() as { content?: { type: string; text?: string }[]; stop_reason?: string };
-  if (data.stop_reason === 'refusal') throw new Error('Claude declined this line');
+  if (data.stop_reason === 'refusal') throw new ClaudeError(t('translate.err.declined'), 200);
   const text = (data.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
   return parseResult(text);
+}
+
+/** A failed request, with its HTTP status (0: no answer at all). */
+export class ClaudeError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) { super(message); this.status = status; }
+}
+
+/**
+ * What to tell the player about an HTTP error: a refused key (401), a rate limit (429), an empty balance
+ * (Anthropic answers 400 "credit balance is too low"), else the API's own message.
+ */
+export function errorText(status: number, message?: string): string {
+  if (status === 401) return t('translate.err.refused');
+  if (status === 429) return t('translate.err.busy');
+  if (status === 400 && /credit/i.test(message ?? '')) return t('translate.err.credit');
+  return message || t('translate.err.status', { status: String(status) });
 }
 
 /** The JSON reply, tolerating a code fence or prose around it; plain text becomes the translation. */

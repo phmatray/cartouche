@@ -84,14 +84,21 @@ export const LEGAL_ES: LegalSection[] = [
       'Tus ROM, partidas guardadas, estados guardados, ajustes, favoritos y tiempo de juego se guardan solo en este ' +
       'navegador (IndexedDB y localStorage) y nunca salen de tu dispositivo. Borra los datos de este sitio en ' +
       'los ajustes de tu navegador para eliminarlo todo.\n\n' +
-      'Solo GitHub recibe peticiones. GitHub Pages sirve la app y sus fuentes. Las carátulas están desactivadas de forma ' +
+      'Solo GitHub recibe peticiones (salvo que des una clave de API a la traducción en directo, más abajo). GitHub Pages sirve la app y sus fuentes. Las carátulas están desactivadas de forma ' +
       'predeterminada y necesitan tu aceptación (cuadro de diálogo del primer inicio o Ajustes > Almacenamiento); solo entonces el ' +
       'navegador carga también las portadas de las ROM reconocidas que añadiste desde raw.githubusercontent.com. Como cualquier ' +
       'servidor web, GitHub recibe ' +
       'tu dirección IP y los datos de tu navegador; consulta la declaración general de privacidad de GitHub ' +
       '(https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).\n\n' +
       'Las carátulas descargadas se guardan en este navegador (Cache Storage) y nunca se envían a ninguna parte. Elimínalas cuando quieras con ' +
-      '«Eliminar las carátulas descargadas» en Ajustes > Almacenamiento, o borrando los datos del sitio.',
+      '«Eliminar las carátulas descargadas» en Ajustes > Almacenamiento, o borrando los datos del sitio.\n\n' +
+      'La traducción en directo está desactivada hasta que la actives para un juego. Con el traductor integrado de ' +
+      'Chrome, el texto se traduce dentro de tu navegador; Chrome descarga una vez su modelo de traducción desde Google y ' +
+      'el texto nunca se envía. Con tu propia clave de API de Anthropic, cada línea leída de la pantalla se envía, con el ' +
+      'título del juego, desde tu navegador a api.anthropic.com y se cobra a tu clave. La clave se guarda sin cifrar en ' +
+      'este navegador (solo durante esta sesión, salvo que pidas recordarla) y la pueden leer otras páginas de la misma ' +
+      'dirección web: usa una clave con un límite de gasto bajo. Ajustes > Almacenamiento la elimina junto con las ' +
+      'traducciones.',
   },
   {
     title: 'Solicitudes de retirada',

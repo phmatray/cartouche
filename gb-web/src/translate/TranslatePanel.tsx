@@ -1,14 +1,13 @@
 import { useState, type ReactNode } from 'react';
-import { LANGS, useTranslate, type ChromeStatus, type Provider } from './store';
+import { LANG_NAMES, useT } from '../i18n';
+import { ConfirmDialog, type ConfirmRequest } from '../components/shell/ConfirmDialog';
+import { LANGS, useTranslate, type Provider } from './store';
 import { liveSession, toggleTranslate } from './useLiveTranslate';
 /** What the reader writes for a character it could not read (ocr.ts; not imported: the reader loads only when needed). */
 const UNKNOWN = '□';
 import './translate.css';
 
-const CHROME: Record<ChromeStatus, [string, 'ok' | 'bad' | '']> = {
-  checking: ['Checking…', ''], missing: ['Not in this browser', 'bad'], unavailable: ['No model for this language', 'bad'],
-  downloadable: ['Downloads when you turn it on', ''], downloading: ['Downloading', ''], available: ['Ready', 'ok'],
-};
+const CHROME_OK = { missing: 'bad', unavailable: 'bad', available: 'ok' } as Record<string, string>;
 
 /** An 8x8 bitmap key (16 hex digits, row bytes) as crisp pixels. */
 function Tile({ k }: { k: string }) {
@@ -22,12 +21,13 @@ function Tile({ k }: { k: string }) {
 
 /** Manual › Game › Translate: the switch, the language, who translates, and the teaching chart. */
 export function TranslatePanel({ gameId }: { gameId: string }) {
+  const t = useT();
   const s = useTranslate();
   const on = !!s.games[gameId];
   const [draft, setDraft] = useState('');
   const [pick, setPick] = useState<string | null>(null);
   const [fix, setFix] = useState('');
-  const chrome = CHROME[s.chrome];
+  const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const radio = (p: Provider, title: string, body: ReactNode, extra?: ReactNode) => (
     <li>
       <input type="radio" name="tl-prov" id={`tl-${p}`} checked={s.provider === p} onChange={() => s.set({ provider: p })} />
@@ -35,65 +35,86 @@ export function TranslatePanel({ gameId }: { gameId: string }) {
       {extra && <div style={{ gridColumn: 2 }}>{extra}</div>}
     </li>
   );
-  const teach = (char: string | null) => { if (pick) liveSession()?.teach(pick, char); setPick(null); };
+  const picked = pick === null ? null : s.seen.find((g) => g.key === pick) ?? null;
+  const teach = (char: string | null) => { if (picked) liveSession()?.teach(picked.key, char); setPick(null); };
+  const status = s.readerError || (on ? (s.ready ? t('translate.panel.reading') : t('translate.panel.starting')) : t('translate.panel.off'));
   return (
     <section className="trp">
-      <h3>Translate</h3>
-      <p>Reads the text the game draws, straight from its tiles, and pins a translation over it. Made for Japanese games; English ones work roughly.</p>
+      <h3>{t('translate.panel.title')}</h3>
+      <p>{t('translate.panel.intro')}</p>
       <div className="row">
-        <span>Live translate<small>{on ? (s.ready ? 'Reading the screen' : 'Starting…') : 'Off for this game'}</small></span>
-        <button className="switch" role="switch" aria-checked={on} aria-label="Live translate" onClick={() => toggleTranslate(gameId, !on)} />
+        <span>{t('translate.panel.live')}<small className={s.readerError ? 'bad' : undefined}>{status}</small></span>
+        <button className="switch" role="switch" aria-checked={on} aria-label={t('translate.panel.live')} onClick={() => toggleTranslate(gameId, !on, true)} />
       </div>
       <div className="row col">
-        <span>Translate into</span>
-        <div className="seg langs" role="group" aria-label="Translate into">
-          {LANGS.map(([k, name]) => <button key={k} aria-pressed={s.lang === k} onClick={() => s.set({ lang: k })}>{name}</button>)}
+        <span>{t('translate.panel.into')}</span>
+        <div className="seg langs" role="group" aria-label={t('translate.panel.into')}>
+          {LANGS.map((k) => <button key={k} lang={k} aria-pressed={s.lang === k} onClick={() => s.set({ lang: k })}>{LANG_NAMES[k]}</button>)}
         </div>
       </div>
-      <ul className="prov" role="radiogroup" aria-label="Translated by">
-        {radio('auto', 'Best available', 'Chrome’s translator when this browser has one, else Claude if you added a key, else the text as read.')}
-        {radio('chrome', 'Chrome, on this device', 'Free and private: nothing leaves the browser. Desktop Chrome 138 or later; not on iPhone or iPad.',
-          <span className={`st ${chrome[1]}`}>{chrome[0]}{s.chrome === 'downloading' && <i><b style={{ width: `${Math.round(s.chromeProgress * 100)}%` }} /></i>}</span>)}
-        {radio('claude', 'Claude, with your API key',
-          <>Better with misread characters and names, and it teaches the reader. Each line goes to Anthropic with the game’s title, billed to your key: about $1 per 2,000 lines with Claude Haiku 4.5. The key stays in this browser.</>,
+      <ul className="prov" role="radiogroup" aria-label={t('translate.panel.by')}>
+        {radio('auto', t('translate.panel.auto'), t('translate.panel.autoSub'))}
+        {radio('chrome', t('translate.panel.chrome'), t('translate.panel.chromeSub'),
+          <span className={`st ${CHROME_OK[s.chrome] ?? ''}`}>{t(`translate.panel.chromeStatus.${s.chrome}`)}{s.chrome === 'downloading' && <i><b style={{ width: `${Math.round(s.chromeProgress * 100)}%` }} /></i>}</span>)}
+        {radio('claude', t('translate.panel.claude'), t('translate.panel.claudeSub'),
           <>
             {s.claudeKey
-              ? <span className={`st ${s.claudeError ? 'bad' : 'ok'}`}>{s.claudeError || 'Key saved'}</span>
-              : <span className="st">No key yet</span>}
+              ? <span className={`st ${s.claudeError ? 'bad' : 'ok'}`}>{s.claudeError || t('translate.panel.keySaved')}</span>
+              : <span className="st">{t('translate.panel.noKey')}</span>}
             <form className="tl-key" onSubmit={(e) => { e.preventDefault(); s.set({ claudeKey: draft.trim() }); setDraft(''); }}>
               <input className="field" type="password" autoComplete="off" spellCheck={false} placeholder={s.claudeKey ? '••••••••' + s.claudeKey.slice(-4) : 'sk-ant-…'}
-                aria-label="Anthropic API key" value={draft} onChange={(e) => setDraft(e.target.value)} />
-              <button className="sbtn" type="submit" disabled={!draft.trim()}>Save</button>
-              {s.claudeKey && <button className="sbtn" type="button" onClick={() => s.set({ claudeKey: '' })}>Forget</button>}
+                aria-label={t('translate.panel.keyLabel')} value={draft} onChange={(e) => setDraft(e.target.value)} />
+              <button className="sbtn" type="submit" disabled={!draft.trim()}>{t('common.save')}</button>
+              {s.claudeKey && <button className="sbtn" type="button" onClick={() => s.set({ claudeKey: '' })}>{t('translate.panel.forget')}</button>}
             </form>
+            <label className="tl-remember">
+              <input type="checkbox" checked={s.rememberKey} onChange={(e) => s.set({ rememberKey: e.target.checked })} />
+              {t('translate.panel.remember')}
+            </label>
+            <p className="fine">{t('translate.panel.keyNote', { remembered: s.rememberKey ? '' : t('translate.panel.keyUntilClose') })}</p>
           </>)}
-        {radio('none', 'Don’t translate', 'Show the text as read, to check it or copy it.')}
+        {radio('none', t('translate.panel.none'), t('translate.panel.noneSub'))}
       </ul>
       {on && (
         <>
-          <h3>Teach</h3>
+          <h3>{t('translate.panel.teach')}</h3>
           {s.seen.length ? (
             <>
-              <p>Every game draws its own letters, so some come out wrong ({UNKNOWN} could not be read). Tap one to correct it: this game remembers.</p>
-              <div className="chart" role="group" aria-label="Last text read">
+              <p>{t('translate.panel.teachIntro', { unknown: UNKNOWN })}</p>
+              <div className="chart" role="group" aria-label={t('translate.panel.chart')}>
                 {s.seen.map((g, i) => (
-                  <button key={i} aria-pressed={pick === g.key} aria-label={`Read as ${g.char}, correct it`} onClick={() => { setPick(g.key); setFix(g.char === UNKNOWN ? '' : g.char); }}>
+                  <button key={i} aria-pressed={pick === g.key} aria-label={t('translate.panel.readAs', { char: g.char })} onClick={() => { setPick(g.key); setFix(g.char === UNKNOWN ? '' : g.char); }}>
                     <Tile k={g.key} /><b className={g.char === UNKNOWN ? 'unk' : ''}>{g.char}</b>
                   </button>
                 ))}
               </div>
-              {pick && (
-                <form className="teach" onSubmit={(e) => { e.preventDefault(); teach(fix.trim() || ''); }}>
-                  <input className="field" autoFocus lang="ja" maxLength={2} value={fix} onChange={(e) => setFix(e.target.value)} aria-label="The right character" />
-                  <button className="sbtn" type="submit">{fix.trim() ? 'Correct' : 'Not a letter'}</button>
-                  <button className="sbtn" type="button" onClick={() => teach(null)}>Undo</button>
-                </form>
+              {picked && (
+                <>
+                  {/* The reader's next guesses: one tap, no Japanese keyboard needed. */}
+                  {!!picked.alts?.length && (
+                    <div className="alts" role="group" aria-label={t('translate.panel.looksLike')}>
+                      <span>{t('translate.panel.looksLike')}</span>
+                      {picked.alts.filter((c) => c !== picked.char).map((c) => <button key={c} className="sbtn" lang="ja" onClick={() => teach(c)}>{c}</button>)}
+                    </div>
+                  )}
+                  <form className="teach" onSubmit={(e) => { e.preventDefault(); teach(fix.trim() || ''); }}>
+                    <input className="field" autoFocus lang="ja" maxLength={2} value={fix} onChange={(e) => setFix(e.target.value)} aria-label={t('translate.panel.right')} />
+                    <button className="sbtn" type="submit">{fix.trim() ? t('translate.panel.correct') : t('translate.panel.notLetter')}</button>
+                    <button className="sbtn" type="button" onClick={() => teach(null)}>{t('translate.panel.reset')}</button>
+                  </form>
+                </>
               )}
-              <p className="fine"><button className="linkbtn" onClick={() => liveSession()?.forgetAll()}>Forget this game’s corrections</button></p>
+              <p className="fine">
+                <button className="linkbtn" onClick={() => setConfirm({
+                  title: t('translate.panel.forgetTitle'), body: t('translate.panel.forgetBody'), ok: t('translate.panel.forget'), danger: true,
+                  run: () => liveSession()?.forgetAll(),
+                })}>{t('translate.panel.forgetAll')}</button>
+              </p>
             </>
-          ) : <div className="empty-inline">When the game shows text, its characters appear here to check.</div>}
+          ) : <div className="empty-inline">{t('translate.panel.empty')}</div>}
         </>
       )}
+      <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
     </section>
   );
 }

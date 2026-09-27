@@ -2,28 +2,42 @@
 
 /* The layer sits on the LCD (inside the frame's padding) and sizes type to the screen: 1cqw = 1.6 Game Boy pixels. */
 .tl{position:absolute;inset:12px;pointer-events:none;container-type:size}
-.slip{position:absolute;pointer-events:auto;display:flex;flex-direction:column;justify-content:center;gap:0;text-align:left;
-  background:var(--paper);color:var(--ink);border:0;box-shadow:inset 0 0 0 2px var(--ink),0 6px 16px rgba(0,0,0,.34),0 1px 3px rgba(0,0,0,.3);
+/* Paused: the pause card is on the screen, the slips wait under it. */
+.frame:has(> .overlay) .tl{visibility:hidden}
+.slip{position:absolute;pointer-events:auto;display:flex;flex-direction:column;
+  background:var(--paper);color:var(--ink);box-shadow:inset 0 0 0 2px var(--ink),0 6px 16px rgba(0,0,0,.34),0 1px 3px rgba(0,0,0,.3);
+  animation:slip .22s var(--ease) both;transform-origin:50% 100%;transition:opacity .14s var(--ease)}
+.slip:not(.low){transform-origin:50% 0}
+/* Held: the slip turns to tracing paper and the game shows through. */
+.slip.peek{opacity:.07}
+.slip .face{flex:1;display:flex;flex-direction:column;justify-content:center;text-align:left;border:0;background:none;color:inherit;margin:0;cursor:pointer;
   padding:clamp(6px,2.4cqw,12px) clamp(7px,2.8cqw,14px) clamp(6px,2.2cqw,11px);
   font:600 clamp(11px,4.2cqw,24px)/1.22 var(--font);letter-spacing:.005em;text-wrap:pretty;overflow-wrap:anywhere;
-  animation:slip .22s var(--ease) both;transform-origin:50% 100%;-webkit-user-select:text;user-select:text;cursor:pointer}
-.slip:not(.low){transform-origin:50% 0}
-.slip.long{font-size:clamp(10px,3.5cqw,20px)}
-.slip[disabled]{cursor:default}
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
+.slip.long .face{font-size:clamp(10px,3.5cqw,20px)}
+.slip .face:focus-visible{outline:3px solid var(--y);outline-offset:2px}
+.slip .txt{display:block}
+.slip .face:lang(ja){font-family:system-ui,'Hiragino Sans','Noto Sans JP',sans-serif;font-weight:500;letter-spacing:.04em}
 /* The tab: a printed index tab on the slip's top edge, what the slip says and who translated it. */
-.slip .tab{position:absolute;left:clamp(6px,2.4cqw,12px);top:0;transform:translateY(-62%);background:var(--y);color:#000;
+.slip .tab,.tl-tag{display:inline-flex;align-items:center;gap:.4em;background:var(--y);color:#000;
   font:800 clamp(8px,2.5cqw,12px)/1 var(--font);font-stretch:75%;text-transform:uppercase;letter-spacing:.08em;padding:.34em .5em .3em;white-space:nowrap;
   box-shadow:0 0 0 2px var(--ink)}
-.slip.raw .tab,.slip.error .tab{background:var(--paper-2)}
-.slip.error .tab{background:var(--err);color:#fff}
-.slip .txt{display:block}
-.slip:lang(ja) .txt{font-family:system-ui,'Hiragino Sans','Noto Sans JP',sans-serif;font-weight:500;letter-spacing:.04em}
-.slip.translating .txt{color:var(--ink-3)}
-.slip .note{display:block;margin-top:.35em;font-size:.72em;font-weight:600;color:var(--ink-3)}
-.slip .err{display:block;margin-top:.35em;font-size:.72em;font-weight:700;color:var(--err)}
-/* Translating: ink runs along the slip's bottom edge. */
-.slip .bar{position:absolute;left:2px;right:2px;bottom:2px;height:3px;background:linear-gradient(90deg,transparent,var(--ink) 30%,var(--ink) 70%,transparent) 0 0/40% 100% no-repeat;animation:slipbar 1s linear infinite}
-.slip:focus-visible{outline:3px solid var(--y);outline-offset:2px}
+.slip .tab{position:absolute;left:clamp(6px,2.4cqw,12px);top:0;transform:translateY(-62%)}
+/* A box not translated: only a tab on its corner, the game's own text stays in view. */
+.tl-tag{position:absolute;pointer-events:auto;transform:translateY(calc(-100% - 3px));background:var(--paper);max-width:92cqw;animation:slip .22s var(--ease) both}
+.tl-tag > span{overflow:hidden;text-overflow:ellipsis}
+.tl-tag.under{transform:translateY(3px)}
+.tl-tag.error{background:var(--err);color:#fff}
+.tl-tag.translating{overflow:hidden}
+.tl-tag.translating::after{content:"";position:absolute;left:0;right:0;bottom:0;height:2px;background:linear-gradient(90deg,transparent,var(--ink) 30%,var(--ink) 70%,transparent) 0 0/40% 100% no-repeat;animation:slipbar 1s linear infinite}
+.tl-tag.hid{background:var(--ink);color:var(--paper)}
+.tl-tag.hid button{border:0;background:var(--y);color:#000;font:inherit;letter-spacing:inherit;text-transform:inherit;padding:.3em .45em;margin:-.2em -.3em -.2em 0;cursor:pointer;position:relative}
+.tl-tag.hid button::before{content:"";position:absolute;inset:-14px -10px}
+/* Not text: a small cross, with a thumb-sized hit area. */
+.nt{position:relative;display:grid;place-items:center;width:1.2em;height:1.2em;margin:-.15em -.2em -.15em 0;padding:0;border:0;background:none;color:inherit;cursor:pointer}
+.nt::before{content:"";position:absolute;left:50%;top:50%;width:44px;height:44px;transform:translate(-50%,-50%)}
+.nt svg{width:100%;height:100%}
+.nt:hover,.nt:focus-visible{background:rgba(0,0,0,.14)}
 @keyframes slip{from{opacity:0;transform:scale(.96) translateY(3px);filter:blur(2px)}}
 @keyframes slipbar{from{background-position:-60% 0}to{background-position:160% 0}}
 
@@ -60,6 +74,13 @@
 .chart b.unk{color:var(--err)}
 .teach{display:flex;gap:8px;align-items:center;margin:4px 0 6px}
 .teach .field{width:5.5em;font-size:18px;text-align:center}
+/* The reader's other guesses for the picked character, as keys to press (no Japanese keyboard needed). */
+.alts{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0 8px}
+.alts span{font:800 11px/1 var(--font);letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);margin-right:4px}
+.alts .sbtn{min-width:44px;height:44px;font:500 20px/1 system-ui,'Hiragino Sans','Noto Sans JP',sans-serif}
+.trp .row small.bad{color:var(--err)}
+.trp .tl-remember{display:flex;align-items:center;gap:8px;margin-top:10px;font:600 13px/1.3 var(--font);cursor:pointer;min-height:32px}
+.trp .tl-remember input{width:18px;height:18px;margin:0;accent-color:var(--ink)}
 @media (max-width:760px){.trp .tl-key{flex-wrap:wrap}.trp .tl-key .field{flex-basis:100%}}
 /* Narrow phones: with the translate button in the deck, one button steps through the speeds. */
 @media (max-width:480px){.deck:has(.tlb) .speed{display:none}.deck:has(.tlb) .dk.spd{display:inline-flex}}

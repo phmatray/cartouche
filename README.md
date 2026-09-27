@@ -153,8 +153,13 @@ cd gb-core && cargo test --release --no-fail-fast
   ([GitHub privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)).
 - Settings › Storage shows what is stored and deletes it, box art included.
 - Live translate is off until you turn it on for a game. With Chrome's built-in
-  translator nothing leaves the browser; with your own Anthropic API key, the
-  text read from the screen goes to `api.anthropic.com`, billed to your key.
+  translator the text never leaves the browser (Chrome downloads its model from
+  Google once); with your own Anthropic API key, the text read from the screen
+  goes to `api.anthropic.com`, billed to your key. The key is stored
+  unencrypted in this browser, for the session unless you ask to remember it,
+  and other pages on the same address (`phmatray.github.io`) could read it: use
+  a key with a low spend limit. Settings › Storage deletes it with the
+  translations.
 
 ## Your own cartridges
 

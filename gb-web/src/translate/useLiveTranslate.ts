@@ -4,7 +4,7 @@
  */
 import { useCallback, useEffect, useRef } from 'react';
 import { useTranslate } from './store';
-import { chromeStatus, chromeTranslator } from './providers';
+import { chromeStatus, chromeTranslator, hasChromeTranslator } from './chrome';
 import type { Live } from './live';
 
 /** Frames between two looks at the screen (6 a second): text boxes print far slower than that. */
@@ -38,12 +38,15 @@ export function useLiveTranslate(gameId: string, title: string) {
 
 /**
  * Turn Live translate on or off for a game. Call it from the click: Chrome only starts downloading its
- * translation model within a user gesture.
+ * translation model within a user gesture. Returns false, leaving it off, when nothing here can translate
+ * (no built-in translator, no Claude key) and `anyway` isn't set: the text as read over the game's own would
+ * only make the screen worse, so the caller explains what is needed instead.
  */
-export function toggleTranslate(gameId: string, on: boolean) {
+export function toggleTranslate(gameId: string, on: boolean, anyway = false): boolean {
   const s = useTranslate.getState();
+  if (on && !anyway && s.provider !== 'none' && !hasChromeTranslator() && !s.claudeKey) return false;
   s.setOn(gameId, on);
-  if (!on || s.provider === 'claude' || s.provider === 'none') return;
+  if (!on || s.provider === 'claude' || s.provider === 'none') return true;
   chromeStatus('ja', s.lang).then((st) => {
     useTranslate.setState({ chrome: st });
     if (st === 'downloadable' || st === 'downloading') {
@@ -51,4 +54,5 @@ export function toggleTranslate(gameId: string, on: boolean) {
         .then(() => useTranslate.setState({ chrome: 'available' }), () => useTranslate.setState({ chrome: 'downloadable' }));
     }
   });
+  return true;
 }

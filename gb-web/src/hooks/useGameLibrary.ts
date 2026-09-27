@@ -241,7 +241,7 @@ export function useGameLibrary() {
 
   /** Remove the user's ROM and everything saved for it. */
   const deleteGame = useCallback(async (gameId: string) => {
-    await Promise.all([deleteRom(gameId), eraseSaves(gameId)]);
+    await Promise.all([deleteRom(gameId), eraseSaves(gameId), import('../translate/db').then((m) => m.forgetGame(gameId))]);
     // ponytail: the catalog entry a ROM replaced comes back on the next library load, not immediately.
     setGames((prev) => prev.filter((g) => g.id !== gameId));
   }, [eraseSaves]);

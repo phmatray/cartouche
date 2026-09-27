@@ -27,8 +27,12 @@ self.onmessage = async (e: MessageEvent<ToReader>) => {
     return;
   }
   await loading;
-  if (!reader) return;
+  if (!reader) return; // the glyph set failed to load: Live was told when it happened
   const t0 = performance.now();
-  const boxes = readBoxes(screenRows(new Uint8Array(m.meta)), reader);
-  post({ type: 'boxes', boxes, ms: performance.now() - t0 });
+  try {
+    const boxes = readBoxes(screenRows(new Uint8Array(m.meta)), reader);
+    post({ type: 'boxes', boxes, ms: performance.now() - t0 });
+  } catch (e) {
+    post({ type: 'error', message: e instanceof Error ? e.message : String(e) });
+  }
 };

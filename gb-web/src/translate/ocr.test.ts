@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { H, LINES_OFF, LINE_LEN, L, META_LEN, VRAM_OFF } from '../neural/trace.ts';
-import { bestGlyph, parseGlyphs, passage, readBoxes, screenRows, shift, tidy, voice, type Glyphs, type Reader } from './ocr.ts';
+import { bestGlyph, parseGlyphs, passage, readBoxes, screenRows, shift, text, tidy, voice, type Box, type Glyphs, type Reader } from './ocr.ts';
 
 const G: Glyphs = parseGlyphs(new Uint8Array(fs.readFileSync(new URL('./glyphs.bin', import.meta.url))));
 const reader = (): Reader => ({ glyphs: G, learned: new Map() });
@@ -127,4 +127,40 @@ test('voice, and tidying a line', () => {
   assert.equal(tidy('Ｈ・Ｐ　１０'), 'H・P　10');
   assert.equal(tidy('ヘいわ  カンター－－'), 'へいわ  カンターーー');
   assert.equal(tidy('リんご     ベル'), 'りんご  ベル');
+});
+
+test('a status bar, a logo or a stray label is not a text box; dialogue is', () => {
+  const box = (chars: string, score = 0.1, lines = 1): Box => ({
+    layer: 'bg', x: 0, y: 0, w: 8 * chars.length, h: 8 * lines, lines: [chars],
+    glyphs: [...chars].map((char, i) => ({ key: String(i), char, x: i * 8, y: 0, score })),
+  });
+  assert.equal(text(box('00ゼザ02')), false); // score and lives: two kana-looking icons
+  assert.equal(text(box('ィ岬買ほ胸ゆゅ．')), false); // a logo read as letters: mostly kanji and symbols
+  assert.equal(text(box('ゅ』ッの')), false);
+  assert.equal(text(box('むらのためにも', 0.6)), false); // nothing matches well: not a font
+  assert.equal(text(box('むらのためにも')), true);
+  assert.equal(text(box('ガッチャーン！！！')), true);
+  assert.equal(text(box('ＨＥＬＬＯ')), true); // an English game
+});
+
+test('in a line of kana, "!" drawn like ノ reads as "!"', () => {
+  const { tiles, rowsOf } = spell(['すごいノ']);
+  const boxes = readBoxes(screenRows(frame(tiles, [[0, ...rowsOf('すごいノ'), 0, ...rowsOf('すごいノ'), 0]], 128)), reader());
+  assert.deepEqual(boxes.map((b) => b.lines), [['すごい！ すごい！']]);
+});
+
+test('a dakuten drawn in its own cell after the kana voices it', () => {
+  const mark = [0x0a, 0x0a, 0, 0, 0, 0, 0, 0]; // two ticks at the top of the cell
+  const { tiles, rowsOf } = spell(['かいと'], [mark]);
+  const [ka, i, to] = rowsOf('かいと');
+  const boxes = readBoxes(screenRows(frame(tiles, [[0, ka, 1, i, to, 0]], 128)), reader());
+  assert.deepEqual(boxes.map((b) => b.lines), [['がいと']]);
+});
+
+test('the reader keeps its next guesses for a character (to offer when correcting it)', () => {
+  const i = G.chars.indexOf('の');
+  const m = bestGlyph(G, G.hi[i], G.lo[i]);
+  assert.equal(m?.alts?.[0].char, 'の');
+  assert.equal(m?.alts?.length, 6);
+  assert.equal(new Set(m?.alts?.map((a) => a.char)).size, 6);
 });

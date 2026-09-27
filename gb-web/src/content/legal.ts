@@ -96,9 +96,11 @@ export const LEGAL_SECTIONS: LegalSection[] = [
       'Downloaded box art is kept in this browser (Cache Storage) and never sent anywhere. Delete it anytime with ' +
       '"Delete downloaded box art" in Settings > Storage, or by clearing the site data.\n\n' +
       'Live translate is off until you turn it on for a game. With Chrome\'s built-in translator, the text is ' +
-      'translated inside your browser. With your own Anthropic API key, each line read from the screen is sent, ' +
-      'with the game\'s title, from your browser to api.anthropic.com and billed to your key; the key is kept ' +
-      'in this browser only.',
+      'translated inside your browser; Chrome downloads its translation model from Google once, the text itself ' +
+      'is never sent. With your own Anthropic API key, each line read from the screen is sent, with the game\'s ' +
+      'title, from your browser to api.anthropic.com and billed to your key. The key is stored unencrypted in this ' +
+      'browser (for this session only, unless you ask to remember it), readable by other pages of the same web ' +
+      'address: use a key with a low spend limit. Settings > Storage deletes it with the translations.',
   },
   {
     title: 'Takedown requests',

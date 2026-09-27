@@ -9,6 +9,7 @@ import add from './add.ts';
 import link from './link.ts';
 import settings from './settings.ts';
 import legal from './legal.ts';
+import translate from './translate.ts';
 
-const fr: Messages = { common, shell, library, search, game, player, add, link, settings, legal };
+const fr: Messages = { common, shell, library, search, game, player, add, link, settings, legal, translate };
 export default fr;

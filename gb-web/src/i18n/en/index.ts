@@ -9,5 +9,6 @@ import add from './add.ts';
 import link from './link.ts';
 import settings from './settings.ts';
 import legal from './legal.ts';
+import translate from './translate.ts';
 
-export default { common, shell, library, search, game, player, add, link, settings, legal };
+export default { common, shell, library, search, game, player, add, link, settings, legal, translate };

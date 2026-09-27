@@ -2,6 +2,7 @@
  * Live translate over time: when a text box has finished printing (its text stopped changing), and what the
  * reader learns from a corrected original. Pure functions: unit-tested in session.test.ts.
  */
+import { BG_CRAM_OFF, H, LINES_OFF, LINE_LEN, META_LEN, VRAM_OFF } from '../neural/trace.ts';
 import { voice } from './ocr.ts';
 
 export interface SettleState { text: string; since: number; done: string }
@@ -47,4 +48,16 @@ export function confirm(pending: Map<string, { char: string; n: number }>, found
     if (n === 2) ok.push([key, char]);
   }
   return ok;
+}
+
+/**
+ * Two metas show the same BG and window text when every scanline's registers, the BG palettes (a Game Boy
+ * Color fade changes only those) and VRAM match: sprites, their palettes and the frame number don't count,
+ * so a character walking about doesn't cost a read.
+ */
+export function sameText(a: Uint8Array, b: Uint8Array): boolean {
+  for (let y = 0; y < H; y++) for (let i = LINES_OFF + y * LINE_LEN, e = i + 11; i < e; i++) if (a[i] !== b[i]) return false;
+  for (let i = BG_CRAM_OFF; i < BG_CRAM_OFF + 64; i++) if (a[i] !== b[i]) return false;
+  for (let i = VRAM_OFF; i < META_LEN; i++) if (a[i] !== b[i]) return false;
+  return true;
 }

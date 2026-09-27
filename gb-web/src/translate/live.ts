@@ -3,23 +3,15 @@
  * worker when their tiles changed, finished text boxes get translated (cache, then the chosen provider), and
  * the store tells the overlay what to show.
  */
-import { H, LINES_OFF, LINE_LEN, META_LEN, VRAM_OFF } from '../neural/trace.ts';
+import { META_LEN } from '../neural/trace.ts';
+import { t } from '../i18n/core.ts';
 import { hasKana, passage, type Box } from './ocr.ts';
 import type { FromReader, ToReader } from './worker.ts';
-import { chromeStatus, chromeTranslator, claudeTranslate } from './providers.ts';
-import { confirm, corrections, settle, settleState } from './session.ts';
+import { chromeStatus, chromeTranslator } from './chrome.ts';
+import { ClaudeError, claudeTranslate } from './providers.ts';
+import { confirm, corrections, sameText, settle, settleState } from './session.ts';
 import { getGlyphs, getLine, putGlyphs, putLine } from './db.ts';
 import { useTranslate, type LiveBox } from './store.ts';
-
-/**
- * Two metas show the same BG and window text when every scanline's registers and VRAM match: sprites,
- * palettes and the frame number don't count, so a character walking about doesn't cost a read.
- */
-function sameText(a: Uint8Array, b: Uint8Array): boolean {
-  for (let y = 0; y < H; y++) for (let i = LINES_OFF + y * LINE_LEN, e = i + 11; i < e; i++) if (a[i] !== b[i]) return false;
-  for (let i = VRAM_OFF; i < META_LEN; i++) if (a[i] !== b[i]) return false;
-  return true;
-}
 
 export class Live {
   private worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
@@ -35,6 +27,8 @@ export class Live {
   private job = 0;
   private dead = false;
   private urgent = false;
+  /** A key Anthropic refused: not sent again until the player changes it. */
+  private refused = '';
   private readonly gameId: string;
   private readonly title: string;
 
@@ -42,6 +36,8 @@ export class Live {
     this.gameId = gameId;
     this.title = title;
     this.worker.onmessage = (e: MessageEvent<FromReader>) => this.onReader(e.data);
+    // The worker's script failed to load or threw outside a read: nothing will come back.
+    this.worker.onerror = (e) => this.onReader({ type: 'error', message: e.message || 'worker' });
     getGlyphs(gameId).then((map) => { this.learned = map; this.send({ type: 'learned', map }); });
     this.checkChrome();
   }
@@ -49,7 +45,7 @@ export class Live {
   dispose() {
     this.dead = true;
     this.worker.terminate();
-    useTranslate.setState({ boxes: [], seen: [], ready: false });
+    useTranslate.setState({ boxes: [], seen: [], ready: false, readerError: '' });
   }
 
   /** A traced frame's meta (a view valid until the next frame: copied here). */
@@ -66,6 +62,26 @@ export class Live {
   teach(key: string, char: string | null) {
     if (char === null) delete this.learned[key]; else this.learned[key] = char;
     this.learned = { ...this.learned };
+    this.saveLearned();
+  }
+
+  /** "Not text" on a slip: every tile of it reads as nothing from now on. Returns what they read as before, for undo. */
+  notText(keys: string[]): Record<string, string | undefined> {
+    const before = Object.fromEntries(keys.map((k) => [k, this.learned[k]]));
+    this.learned = { ...this.learned, ...Object.fromEntries(keys.map((k) => [k, ''])) };
+    this.saveLearned();
+    return before;
+  }
+
+  /** Undo "Not text": the tiles' earlier readings back. */
+  restore(before: Record<string, string | undefined>) {
+    const next = { ...this.learned };
+    for (const [k, v] of Object.entries(before)) if (v === undefined) delete next[k]; else next[k] = v;
+    this.learned = next;
+    this.saveLearned();
+  }
+
+  private saveLearned() {
     putGlyphs(this.gameId, this.learned);
     this.send({ type: 'learned', map: this.learned });
     this.again();
@@ -108,7 +124,14 @@ export class Live {
 
   private onReader(m: FromReader) {
     if (m.type === 'ready') { useTranslate.setState({ ready: true }); return; }
-    if (m.type === 'error') { console.warn('Live translate:', m.message); return; }
+    if (m.type === 'error') {
+      // Nothing more will be read: say so (the Manual shows it) instead of waiting forever.
+      console.warn('Live translate:', m.message);
+      this.busy = false;
+      this.pending = null;
+      useTranslate.setState({ readerError: t('translate.err.reader', { error: m.message }) });
+      return;
+    }
     this.busy = false;
     this.boxes = m.boxes;
     const text = m.boxes.map(passage).join('\n');
@@ -116,7 +139,7 @@ export class Live {
     // New text that doesn't continue what the slips show: take them down until it settles.
     if (!text || (shown.length && !text.startsWith(this.settled.done))) useTranslate.setState({ boxes: [] });
     const last = m.boxes[m.boxes.length - 1];
-    if (last) useTranslate.setState({ seen: last.glyphs.map(({ key, char }) => ({ key, char })) });
+    if (last) useTranslate.setState({ seen: last.glyphs.map(({ key, char, alts }) => ({ key, char, alts })) });
     if (this.urgent && text) {
       this.urgent = false;
       this.settled = { text, since: performance.now(), done: text };
@@ -137,7 +160,7 @@ export class Live {
     for (const b of boxes) {
       const source = passage(b), sourceLang = hasKana(source) ? 'ja' : 'en';
       if (sourceLang === s.lang) continue; // already in the player's language
-      live.push({ x: b.x, y: b.y, w: b.w, h: b.h, source, sourceLang, state: 'translating' });
+      live.push({ x: b.x, y: b.y, w: b.w, h: b.h, source, sourceLang, keys: [...new Set(b.glyphs.map((g) => g.key))], state: 'translating' });
     }
     useTranslate.setState({ boxes: live });
     await Promise.all(live.map(async (lb) => {
@@ -163,22 +186,28 @@ export class Live {
     const useChrome = provider === 'chrome' || (provider === 'auto' && (chrome === 'available' || (!claudeKey && fetching)));
     const useClaude = !useChrome && (provider === 'claude' || (provider === 'auto' && !!claudeKey));
     if (useChrome) {
-      if (chrome === 'missing' || chrome === 'unavailable' || chrome === 'checking') throw new Error('This browser has no built-in translator for this language');
+      if (chrome === 'missing' || chrome === 'unavailable' || chrome === 'checking') throw new Error(t('translate.err.noTranslator'));
       if (chrome !== 'available') {
-        // The first download needs a user gesture (the toggle's click starts it); until it's done, show the text as read.
+        // The first download needs a user gesture (a click or key, not a gamepad): the deck's Translate button
+        // starts it. Until it's done, the text shows as read.
         chromeTranslator(lb.sourceLang, lang, (p) => useTranslate.setState({ chrome: 'downloading', chromeProgress: p }))
           .then(() => { useTranslate.setState({ chrome: 'available' }); this.refresh(); }, () => {});
-        return { state: 'raw', note: 'Chrome is downloading its translation model' };
+        return { state: 'raw', note: t(chrome === 'downloading' ? 'translate.slip.downloading' : 'translate.slip.clickToDownload') };
       }
-      const t = await chromeTranslator(lb.sourceLang, lang);
-      const translation = await t.translate(lb.source);
+      const tr = await chromeTranslator(lb.sourceLang, lang);
+      const translation = await tr.translate(lb.source);
       putLine(this.gameId, lang, lb.source, translation, 'chrome');
       return { state: 'done', translation, by: 'chrome' };
     }
     if (useClaude) {
-      if (!claudeKey) throw new Error('Add your Claude API key in the Manual');
+      if (!claudeKey) throw new Error(t('translate.err.addKey'));
+      if (claudeKey === this.refused) throw new Error(t('translate.err.refused'));
       const r = await claudeTranslate({ key: claudeKey, text: lb.source, src: lb.sourceLang, dst: lang, title: this.title, previous: this.history })
-        .catch((e: Error) => { useTranslate.setState({ claudeError: e.message }); throw e; });
+        .catch((e: Error) => {
+          if (e instanceof ClaudeError && e.status === 401) this.refused = claudeKey;
+          useTranslate.setState({ claudeError: e.message });
+          throw e;
+        });
       useTranslate.setState({ claudeError: '' });
       putLine(this.gameId, lang, lb.source, r.translation, 'claude');
       if (r.source) this.learn(box, r.source);

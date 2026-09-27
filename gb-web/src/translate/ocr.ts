@@ -88,7 +88,13 @@ function height(hi: number, lo: number): number {
   return top < 0 ? 0 : bottom - top + 1;
 }
 
-export interface Match { char: string; score: number }
+export interface Match {
+  char: string; score: number;
+  /** The next closest characters, best first (distinct, the best included): a line's context or the player picks among them. */
+  alts?: { char: string; score: number }[];
+}
+/** How many look-alikes a match keeps. */
+const ALTS = 6;
 
 /** Chessboard distance from each of the 64 pixels to the nearest ink pixel, capped at 3. */
 export function distances(hi: number, lo: number): Uint8Array {
@@ -143,16 +149,29 @@ export function bestGlyph(g: Glyphs, hi: number, lo: number, keep = 24): Match |
     }
   }
   const order = [...rough.keys()].filter((i) => rough[i] < Infinity).sort((a, b) => rough[a] - rough[b]).slice(0, keep);
-  let best = -1, bestScore = Infinity;
   const tall = height(hi, lo) > 5;
+  const scored: { char: string; score: number }[] = [];
   for (const i of order) {
     const dg = glyphDistances(g, i);
+    let best = Infinity;
     for (const [sh, sl, lost, dt] of shifted) {
       const s = (sumAt(sh, sl, dg) + sumAt(g.hi[i], g.lo[i], dt) + 3 * lost + 0.3 * (pop(sh ^ g.hi[i]) + pop(sl ^ g.lo[i]))) / (ink + g.ink[i]) + g.penalty[i] + (tall && g.small[i] ? 0.3 : 0);
-      if (s < bestScore) { bestScore = s; best = i; }
+      if (s < best) best = s;
     }
+    scored.push({ char: g.chars[i], score: best });
   }
-  return best < 0 ? null : { char: g.chars[best], score: bestScore };
+  const alts = topAlts(scored);
+  return alts.length ? { ...alts[0], alts } : null;
+}
+
+/** The best few distinct characters of a list of readings (a character may have several drawings). */
+function topAlts(list: { char: string; score: number }[]): { char: string; score: number }[] {
+  const out: { char: string; score: number }[] = [];
+  for (const m of [...list].sort((a, b) => a.score - b.score)) {
+    if (!out.some((o) => o.char === m.char)) out.push(m);
+    if (out.length === ALTS) break;
+  }
+  return out;
 }
 
 const dtCache = new WeakMap<Glyphs, Map<number, Uint8Array>>();
@@ -284,7 +303,7 @@ export interface Box {
   x: number; y: number; w: number; h: number;
   lines: string[];
   /** Every recognised cell: its bitmap key, what it was read as, and where (for teaching corrections). */
-  glyphs: { key: string; char: string; x: number; y: number }[];
+  glyphs: { key: string; char: string; x: number; y: number; score: number; alts?: string[] }[];
 }
 
 const DAKUTEN = 'かきくけこさしすせそたちつてとはひふへほカキクケコサシスセソタチツテトハヒフヘホウ';
@@ -311,10 +330,13 @@ function ring(hi: number, lo: number): boolean {
   return false;
 }
 
-/** A mark alone in its cell, the way games draw them on the row above the kana: a few pixels low in the cell. */
+/**
+ * A mark alone in its cell: low in the cell, the way games draw it on the row above the kana, or in the top
+ * half, drawn in the cell after the kana.
+ */
 function loneMark(hi: number, lo: number): Mark | null {
   const ink = pop(hi) + pop(lo);
-  if (ink < 2 || ink > 8 || pop(hi & 0xffff0000)) return null;
+  if (ink < 2 || ink > 8 || (pop(hi & 0xffff0000) && lo)) return null;
   return ring(hi, lo) ? '゜' : '゛';
 }
 
@@ -339,11 +361,13 @@ export interface Reader {
 /** What a cell shows. `unknown`: shaped like a character (two colours, a blank edge) but matching no glyph well. */
 export type Seen =
   | { kind: 'blank' } | { kind: 'other' } | { kind: 'mark'; mark: Mark }
-  | { kind: 'char'; key: string; char: string; score: number }
+  | { kind: 'char'; key: string; char: string; score: number; alts?: Match['alts'] }
   | { kind: 'unknown'; key: string };
 
 /** Placeholder for a character that could not be read (the translation providers are told what it means). */
 export const UNKNOWN = '□';
+/** The reference font's double quotes: games draw a lone dakuten the same way. */
+const QUOTES = '〝〟＂';
 
 /**
  * Many games use a bold font: vertical strokes two pixels wide. Its tiles are matched against the reference
@@ -375,7 +399,7 @@ function match(r: Reader, hi: number, lo: number): Match | null {
     m = bestGlyph(r.glyphs, hi, lo);
     if (blocks(hi, lo) >= 2) {
       const b = bestGlyph(boldOf(r.glyphs), hi, lo);
-      if (b && (!m || b.score < m.score)) m = b;
+      if (b) { const alts = topAlts([...(m?.alts ?? []), ...b.alts!]); m = { ...alts[0], alts }; }
     }
     cache.set(key, m);
   }
@@ -391,7 +415,7 @@ export function readCell(c: Cell, bg: number, r: Reader): Seen {
   if (!vs) return { kind: 'other' };
   if (!vs.length) return { kind: 'blank' };
   let best: (Seen & { kind: 'char' }) | null = null, shaped = '';
-  const consider = (key: string, char: string, score: number) => { if (!best || score < best.score) best = { kind: 'char', key, char, score }; };
+  const consider = (key: string, char: string, score: number, alts?: Match['alts']) => { if (!best || score < best.score) best = { kind: 'char', key, char, score, alts }; };
   for (const [hi, lo] of vs) {
     const key = keyOf(hi, lo);
     const taught = r.learned.get(key);
@@ -399,7 +423,7 @@ export function readCell(c: Cell, bg: number, r: Reader): Seen {
     if (!spaced(hi, lo)) continue;
     shaped ||= key;
     const m = match(r, hi, lo);
-    if (m) consider(key, m.char, m.score);
+    if (m) consider(key, m.char, m.score, m.alts);
     for (const [mh, ml] of MARK_AREAS) {
       const markH = (hi & mh) >>> 0, markL = (lo & ml) >>> 0, n = pop(markH) + pop(markL);
       if (n < 2 || n > 6) continue;
@@ -409,7 +433,8 @@ export function readCell(c: Cell, bg: number, r: Reader): Seen {
     }
   }
   const found = best as (Seen & { kind: 'char' }) | null;
-  if (found && found.score <= ACCEPT) return found;
+  // A dakuten alone in its cell matches the font's double quotes: it's a mark (for the kana before or below).
+  if (found && found.score <= ACCEPT) return QUOTES.includes(found.char) ? { kind: 'mark', mark: '゛' } : found;
   const mark = vs.length === 1 ? loneMark(vs[0][0], vs[0][1]) : null;
   if (mark) return { kind: 'mark', mark };
   return shaped ? { kind: 'unknown', key: shaped } : { kind: 'other' };
@@ -467,10 +492,30 @@ export function readBoxes(rows: Row[], r: Reader): Box[] {
     else { b.lines.push(s.text); b.ys.push(s.y); }
     b.glyphs.push(...s.glyphs);
   }
-  // A lone short line is more likely a label or noise than something to translate, and numbers alone (a
-  // score, a status bar) need no translation.
-  return boxes.filter((b) => b.glyphs.length >= 3 && b.glyphs.filter((g) => WORDY.test(g.char)).length >= 2).sort((a, b) => a.y - b.y || a.x - b.x).map(({ ys, ...b }) => (void ys, b));
+  return boxes.filter(text).sort((a, b) => a.y - b.y || a.x - b.x).map(({ ys, ...b }) => (void ys, b));
 }
+
+/**
+ * A box worth translating, not a label, a status bar, a logo or a picture read as letters. Numbers alone need
+ * no translation. Latin text (an English game): a few letters and no kana. Japanese: three different common kana at least
+ * (status bars and logos read as a scatter of rare kana, kanji, symbols and Latin letters), characters that
+ * match fairly well on average, and on a single line, not mostly kanji, symbols or Latin letters.
+ */
+export function text(b: Box): boolean {
+  const g = b.glyphs, n = g.length;
+  if (n < 3 || g.filter((x) => WORDY.test(x.char)).length < 2) return false;
+  const latin = g.filter((x) => LATIN.test(x.char)).length;
+  if (latin >= 3 && latin * 2 >= n && !g.some((x) => KANA.test(x.char))) return true;
+  const common = new Set(g.filter((x) => COMMON.test(x.char) && !SMALL.includes(x.char) && !RARE.includes(x.char)).map((x) => x.char)).size;
+  const odd = g.filter((x) => !KANA.test(x.char) && !PUNCT.test(x.char) && !/^[0-9０-９]$/.test(x.char)).length;
+  const mean = g.reduce((s, x) => s + x.score, 0) / n;
+  return common >= 3 && mean <= MEAN_MAX && (b.lines.length > 1 || odd * 2 < n);
+}
+/** Hiragana and katakana, marks and the long vowel left out. */
+const COMMON = /^[ぁ-んァ-ン]$/;
+const LATIN = /^[A-Za-zＡ-Ｚａ-ｚ]$/;
+/** The worst average match of a real text box (unreadable cells count 1; tuned on captures of dialogue, menus, titles and status bars). */
+const MEAN_MAX = 0.5;
 
 const WORDY = /^[\u3041-\u30fa\uff21-\uff3a\uff41-\uff5a\u4e00-\u9fff]$/;
 const CORE = /^[\u3041-\u30fb\uff10-\uff19\uff21-\uff3a\uff41-\uff5a]$/;
@@ -484,29 +529,66 @@ function segment(row: Row, seen: Seen[], a: number, b: number, above?: { row: Ro
     if (s.kind === 'char') { idx.push(j); keys.add(s.key); } else if (s.kind === 'blank') blanks++; else odd++;
   }
   const n = idx.length;
-  if (n < 2 || !blanks || n <= odd || keys.size * 3 < n || (n >= 4 && keys.size <= 2)) return null;
+  if (n < 2 || !blanks || n <= odd || keys.size * 3 < n || (n >= 4 && keys.size <= 2) || (n >= 3 && keys.size === 1)) return null;
   // Words, not scenery: most characters are kana, letters or digits (scenery reads as dashes, symbols, kanji).
   const core = idx.filter((j) => CORE.test((seen[j] as { char: string }).char)).length;
   if (core < 2 || core * 2 < n) return null;
-  // From the first to the last character (unreadable cells at the ends are cursors and decorations).
-  const first = idx[0], last = idx[n - 1];
+  // A line of kana: a Latin letter, digit, bracket or kanji in it is more likely a misread kana (び as Ｄ,
+  // く as 〈, ろ as ５), so a kana (or ! ?) close behind wins instead.
+  const kanaLine = idx.filter((j) => KANA.test((seen[j] as { char: string }).char)).length * 5 >= n * 3;
+  const chars = new Map<number, string>();
+  for (const j of idx) {
+    const s = seen[j] as Seen & { kind: 'char' };
+    let ch = s.char;
+    if (kanaLine && s.score > 0 && !KANA.test(ch) && !PUNCT.test(ch)) {
+      const alt = s.alts?.find((m) => (KANA.test(m.char) || PUNCT.test(m.char)) && m.score <= Math.min(ACCEPT, s.score + FOREIGN));
+      if (alt) ch = alt.char;
+    }
+    chars.set(j, ch);
+  }
+  // "!" drawn like ノ in most fonts: a ノ ending a word of hiragana, or doubled, is one.
+  if (kanaLine) for (const j of idx) {
+    if (chars.get(j) !== 'ノ') continue;
+    const prev = chars.get(j - 1) ?? '', next = chars.get(j + 1);
+    if ((next === undefined || next === 'ノ' || next === '！') && (/[ぁ-ゖ！ノ]/.test(prev) || next === 'ノ')) chars.set(j, '！');
+  }
+  // From the first to the last character (unreadable cells at the ends are cursors and decorations), and a
+  // mark drawn in the cell after the last one.
+  const first = idx[0];
+  let last = idx[n - 1];
+  if (last + 1 < b && seen[last + 1].kind === 'mark') last++;
   let text = '';
   for (let j = first; j <= last; j++) {
     const s = seen[j];
     if (s.kind === 'unknown') { text += UNKNOWN; continue; }
+    if (s.kind === 'mark') {
+      // A mark in its own cell after a kana voices it.
+      const v = voice(text.slice(-1), s.mark);
+      text = v ? text.slice(0, -1) + v : `${text} `;
+      continue;
+    }
     if (s.kind !== 'char') { text += ' '; continue; }
+    const ch = chars.get(j)!;
     const k = above ? above.row.cells.findIndex((c) => c.x === row.cells[j].x) : -1;
     const m = k >= 0 ? above!.seen[k] : null;
-    text += (m?.kind === 'mark' && (voice(s.char, m.mark) ?? voice(s.char, '゛'))) || s.char;
+    text += (m?.kind === 'mark' && (voice(ch, m.mark) ?? voice(ch, '゛'))) || ch;
   }
   const cells = row.cells;
   const glyphs: Box['glyphs'] = [];
   for (let j = first; j <= last; j++) {
     const s = seen[j];
-    if (s.kind === 'char' || s.kind === 'unknown') glyphs.push({ key: s.key, char: s.kind === 'char' ? s.char : UNKNOWN, x: cells[j].x, y: cells[j].y });
+    if (s.kind === 'char') glyphs.push({ key: s.key, char: chars.get(j)!, x: cells[j].x, y: cells[j].y, score: s.score, alts: s.alts?.map((m) => m.char) });
+    else if (s.kind === 'unknown') glyphs.push({ key: s.key, char: UNKNOWN, x: cells[j].x, y: cells[j].y, score: 1 });
   }
   return { layer: row.layer, y: row.y, x0: cells[first].x, x1: cells[last].x + 8, text: tidy(text), glyphs };
 }
+
+/** Hiragana and katakana (with the long vowel mark). */
+const KANA = /^[ぁ-ー]$/;
+/** Punctuation a line of kana uses. */
+const PUNCT = /^[、。，．・：！？「」『』…‥ー〜]$/;
+/** How much worse a kana may match than a foreign character in a kana line and still win. */
+const FOREIGN = 0.2;
 
 const HIRA_LOOK = 'へべぺり', KATA_LOOK = 'ヘベペリ';
 /**

@@ -10,6 +10,8 @@ import { mb, owned } from '../../lib/ui';
 import { isInstalled, isIos, fileAccept } from '../../lib/pwa';
 import type { GameEntry } from '../../types/game';
 import { Row, SwitchRow } from './parts';
+import { usage as translateUsage, wipe as wipeTranslate } from '../../translate/db';
+import { useTranslate } from '../../translate/store';
 import { PerGame, type GameUsage } from './PerGame';
 import { date, num, t as tNow, useT } from '../../i18n';
 
@@ -88,6 +90,16 @@ export function StorageTab() {
     const n = await fetchBoxArtFor(recognized);
     toast(n ? tNow('shell.art.ready', { count: n }) : NO_COVERS(), 'c');
   };
+  // Live translate keeps its own database and settings (lines translated, characters learned, the API key).
+  const [tl, setTl] = useState({ lines: 0, games: 0 });
+  const hasKey = useTranslate((s) => !!s.claudeKey);
+  useEffect(() => { let live = true; translateUsage().then((u) => live && setTl(u)); return () => { live = false; }; }, []);
+  const removeTranslate = async () => {
+    await wipeTranslate();
+    useTranslate.setState({ claudeKey: '', rememberKey: false, games: {} });
+    setTl({ lines: 0, games: 0 });
+    toast(tNow('translate.storage.deleted'), 'm');
+  };
   const removeArt = async () => {
     await deleteBoxArt();
     setArt({ bytes: await boxArtBytes(), games: new Set() });
@@ -145,7 +157,7 @@ export function StorageTab() {
     title: t('settings.storage.wipeTitle'), danger: true, ok: t('settings.storage.wipe'),
     body: t('settings.storage.wipeBody'),
     run: async () => {
-      await clearAll();
+      await Promise.all([clearAll(), wipeTranslate()]);
       useSettingsStore.getState().resetToDefaults();
       // Box art too (the offline app shell stays: it holds no personal data).
       await deleteBoxArt();
@@ -205,6 +217,12 @@ export function StorageTab() {
 
       <h3>{t('settings.storage.perGame')}</h3>
       <PerGame usage={usage?.perGame ?? null} onChanged={refresh} confirm={setConfirm} />
+
+      <h3>{t('translate.storage.title')}</h3>
+      <Row label={t('translate.storage.label')}
+        sub={t('translate.storage.sub', { count: tl.lines, games: t('translate.storage.games', { count: tl.games }), key: hasKey ? t('translate.storage.key') : t('translate.storage.noKey') })}>
+        <button className="btn danger" disabled={!tl.lines && !tl.games && !hasKey} onClick={removeTranslate}>{t('translate.storage.delete')}</button>
+      </Row>
 
       <h3>{t('settings.storage.startOver')}</h3>
       <Row label={t('settings.storage.wipe')} sub={t('settings.storage.wipeSub')}>

@@ -1,7 +1,8 @@
 // node --test: when Live translate calls a text box finished, and what it learns from a corrected original.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { confirm, corrections, settle, settleState } from './session.ts';
+import { BG_CRAM_OFF, META_LEN, OAM_OFF, VRAM_OFF } from '../neural/trace.ts';
+import { confirm, corrections, sameText, settle, settleState } from './session.ts';
 
 test('a box settles once its text stops changing, and once only', () => {
   const s = settleState();
@@ -42,4 +43,15 @@ test('a correction is learned on its second agreeing sighting', () => {
   assert.deepEqual(confirm(pending, [['k1', 'ぬ']]), []); // disagrees: starts over
   assert.deepEqual(confirm(pending, [['k1', 'ぬ']]), [['k1', 'ぬ']]);
   assert.deepEqual(confirm(pending, [['k1', 'ぬ']]), []); // reported once
+});
+
+test('the same text: sprites moving do not count, a BG palette fade or new tiles do', () => {
+  const a = new Uint8Array(META_LEN), b = a.slice();
+  b[OAM_OFF + 5] = 42; // a sprite moved
+  assert.equal(sameText(a, b), true);
+  b[BG_CRAM_OFF + 3] = 0x7f; // a Game Boy Color fade: only the BG palettes change
+  assert.equal(sameText(a, b), false);
+  const c = a.slice();
+  c[VRAM_OFF + 0x1800] = 7; // a new tile in the map
+  assert.equal(sameText(a, c), false);
 });

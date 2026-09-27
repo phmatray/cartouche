@@ -390,8 +390,9 @@ function Player({ game }: { game: GameEntry }) {
         <button className="dk hide-m" onClick={screenshot} disabled={noStore} aria-label={t('player.deck.shotF12')}>{I.cam}<span className="lbl">{t('player.deck.photo')}</span><span className="k">F12</span></button>
         <span className="push" />
         {(translating || game.regions?.includes('JP')) && (
-          <button className="dk tlb" onClick={() => toggleTranslate(game.id, !translating)} aria-pressed={translating} aria-label="Live translate" title="Live translate">
-            <TranslateMark /><span className="lbl">Translate</span>
+          <button className="dk tlb" aria-pressed={translating} aria-label={t('translate.deck.label')} title={t('translate.deck.label')}
+            onClick={() => { if (!toggleTranslate(game.id, !translating)) { toast(tNow('translate.deck.needKey'), 'm'); setTab('game'); setManual(true); } }}>
+            <TranslateMark /><span className="lbl">{t('translate.deck.button')}</span>
           </button>
         )}
         <button className="dk hide-m" onClick={mute} aria-pressed={muted} aria-label={t('player.deck.muteM')}>{muted ? I.mute : I.sound}</button>
