@@ -17,8 +17,8 @@ import { Shot } from './Shot';
 import { TagLinks } from '../library/TagLinks';
 import { genreLabel } from '../../lib/search';
 import { fileAccept } from '../../lib/pwa';
-import { descOf } from '../../lib/catalog-utils';
-import { rich, size, t as tNow, useT } from '../../i18n';
+import { creditOf, descOf } from '../../lib/catalog-utils';
+import { headerSize, rich, size, t as tNow, useT } from '../../i18n';
 import { raShown } from '../../lib/retroachievements';
 
 const Achievements = lazy(() => import('./Achievements'));
@@ -113,11 +113,11 @@ function GameDetails({ game }: { game: GameEntry }) {
               <h3>{t('game.credits')}</h3>
               <p className="credit">
                 {game.copyright && <>{game.copyright}. </>}
-                {game.license}{game.licenseUrl && <> (<a href={assetUrl(game.licenseUrl)} target="_blank" rel="noreferrer">{t('game.license')}</a>)</>}.
+                {creditOf(game, 'license')}{game.licenseUrl && <> (<a href={assetUrl(game.licenseUrl)} target="_blank" rel="noreferrer">{t('game.license')}</a>)</>}.
                 {game.source && <> {t('game.source')} <a href={game.source} target="_blank" rel="noreferrer">{game.source.replace(/^https?:\/\//, '')}</a>.</>}
                 {game.homepage && <> {t('game.homepage')} <a href={game.homepage} target="_blank" rel="noreferrer">{game.homepage.replace(/^https?:\/\//, '')}</a>.</>}
-                {game.changes && <> {game.changes}</>}
-                {game.coverCredit && <> {game.coverCredit}</>}
+                {game.changes && <> {creditOf(game, 'changes')}</>}
+                {game.coverCredit && <> {creditOf(game, 'coverCredit')}</>}
                 {game.romUrl && game.madeWith && <> {t('game.notices')} <a href={assetUrl('roms/gbstudio/LICENSES.txt')} target="_blank" rel="noreferrer">LICENSES.txt</a>.</>}
                 {game.romUrl && !game.madeWith && !game.isLocal && <> {t('game.notices')} <a href={assetUrl('THIRD_PARTY_NOTICES.txt')} target="_blank" rel="noreferrer">THIRD_PARTY_NOTICES.txt</a>.</>}
               </p>
@@ -128,8 +128,8 @@ function GameDetails({ game }: { game: GameEntry }) {
             <dl className="spec">
               <div><dt>{t('game.cart.hardware')}</dt><dd>{hardwareOf(header)}</dd></div>
               <div><dt>{t('game.cart.mapper')}</dt><dd>{header.cartridgeType}</dd></div>
-              <div><dt>{t('game.cart.romSize')}</dt><dd>{sizeText(header.romSize)}</dd></div>
-              <div><dt>{t('game.cart.ram')}</dt><dd>{sizeText(header.ramSize)}</dd></div>
+              <div><dt>{t('game.cart.romSize')}</dt><dd>{headerSize(header.romSize)}</dd></div>
+              <div><dt>{t('game.cart.ram')}</dt><dd>{headerSize(header.ramSize)}</dd></div>
               <div><dt>{t('game.cart.headerTitle')}</dt><dd>{header.title || '—'}</dd></div>
               <div><dt>{t('game.cart.source')}</dt><dd>{game.isLocal ? t('game.cart.yourFile') : game.madeWith ? t('game.cart.hosted') : game.romUrl ? t('game.cart.bundled') : t('game.cart.free')}</dd></div>
               <div><dt>Super Game Boy</dt><dd>{header.sgbFlag !== 'SGB Supported' ? t('game.cart.no') : header.cgbFlag === 'CGB Only' ? t('game.cart.supported') : t('game.cart.sgbPlays')}</dd></div>
@@ -195,7 +195,7 @@ function GameDetails({ game }: { game: GameEntry }) {
               <section>
                 <h3>{t('game.manage')}</h3>
                 <div className="danger-zone">
-                  <span>{game.isLocal ? (header ? t('game.storedSize', { size: sizeText(header.romSize) }) : t('game.stored')) : (game.madeWith ? t('game.hostedErase') : t('game.bundledErase'))}</span>
+                  <span>{game.isLocal ? (header ? t('game.storedSize', { size: headerSize(header.romSize) }) : t('game.stored')) : (game.madeWith ? t('game.hostedErase') : t('game.bundledErase'))}</span>
                   <button className="btn danger" onClick={remove}>{game.isLocal ? t('game.remove.ok') : t('game.erase.ok')}</button>
                 </div>
               </section>
@@ -332,7 +332,3 @@ function Saves({ game, header, setConfirm }: { game: GameEntry; header: RomMetad
   );
 }
 
-/** A header size ("32 KB", "None") in the active language's units. */
-function sizeText(s: string) {
-  return s === 'None' ? tNow('common.none') : s.replace(/(\d+) (KB|MB)/, (_, n, u) => size(Number(n) * (u === 'KB' ? 1024 : 1048576)));
-}

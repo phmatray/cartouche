@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import type { GameEntry } from '../../types/game';
 import type { StoredSaveState, StoredScreenshot } from '../../lib/db';
@@ -15,7 +15,7 @@ import { hardwareOf } from '../../hooks/useGameExtras';
 import { Shot } from '../game/Shot';
 import { DebugPanel } from './DebugPanel';
 import { SkinPicker } from './TouchSkins';
-import { date, rich, useT, type Key } from '../../i18n';
+import { date, headerSize, rich, useT, type Key } from '../../i18n';
 import { descOf } from '../../lib/catalog-utils';
 import { raShown } from '../../lib/retroachievements';
 
@@ -63,14 +63,26 @@ export function Manual(p: ManualProps) {
     album: () => <AlbumPage {...p} />,
     game: () => <GamePageTab {...p} />,
   };
+  // ARIA tabs: the arrow keys (and Home/End) move between tabs, which are one Tab stop; they don't reach the D-pad.
+  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    const i = TABS.findIndex(([k]) => k === tab);
+    const n = ({ ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: TABS.length - 1 } as Record<string, number>)[e.key];
+    if (n === undefined) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const j = (n + TABS.length) % TABS.length;
+    p.onTab(TABS[j][0]);
+    e.currentTarget.querySelectorAll<HTMLElement>('[role=tab]')[j]?.focus();
+  };
   return (
     <aside className="sheet" id="sheet" aria-label={t('player.manual')}>
-      <div className="tabs" role="tablist">
+      <div className="tabs" role="tablist" onKeyDown={onKey}>
         {TABS.map(([k, label, pg]) => (
-          <button key={k} role="tab" aria-selected={tab === k} onClick={() => p.onTab(k)}>{t(label)}<small>{t('player.page', { n: String(pg) })}</small></button>
+          <button key={k} id={`mt-${k}`} role="tab" aria-selected={tab === k} aria-controls="mt-panel" tabIndex={tab === k ? 0 : -1}
+            onClick={() => p.onTab(k)}>{t(label)}<small>{t('player.page', { n: String(pg) })}</small></button>
         ))}
       </div>
-      <section className="page on" role="tabpanel">{page[tab]()}</section>
+      <section className="page on" id="mt-panel" role="tabpanel" aria-labelledby={`mt-${tab}`}>{page[tab]()}</section>
     </aside>
   );
 }
@@ -249,7 +261,7 @@ function GamePageTab({ game, header, emu, isRunning }: ManualProps) {
   const rows: [string, ReactNode][] = [
     [t('search.facet.developer'), game.developer || '—'], [t('search.facet.year'), game.year || '—'],
     [t('game.cart.hardware'), header ? hardwareOf(header) : '—'], [t('game.cart.mapper'), header?.cartridgeType || '—'],
-    ['ROM', header?.romSize || '—'], [t('game.cart.ram'), header?.ramSize === 'None' ? t('common.none') : header?.ramSize || '—'],
+    [t('game.cart.romSize'), header ? headerSize(header.romSize) : '—'], [t('game.cart.ram'), header ? headerSize(header.ramSize) : '—'],
     [t('library.col.played'), dur(game.totalPlayTime)], [t('game.sessions'), game.sessions ?? 0],
   ];
   return (

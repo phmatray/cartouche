@@ -55,7 +55,7 @@ export default {
     all: 'Tout voir',
     download: { one: 'Télécharger {count} jeu · {size}', other: 'Tout télécharger ({count}) · {size}' },
     downloaded: 'Tout est téléchargé',
-    confirmTitle: { one: 'Télécharger {count} jeu ?', other: 'Télécharger {count} jeux ?' },
+    confirmTitle: { one: 'Télécharger {count} jeu ?', other: 'Télécharger {count} jeux ?' },
     confirmBody: 'La licence de leurs auteurs permet à Cartouche de les héberger. Ils sont enregistrés dans ce navigateur ({size} au total) et se jouent ensuite hors connexion.',
     lowSpace: 'Il reste environ {free} d’espace dans ce navigateur, ce qui risque de ne pas suffire.',
     confirmOk: 'Télécharger',

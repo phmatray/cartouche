@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { useSettingsStore } from '../store/settingsStore';
 import { t } from '../i18n/core';
+import { inkFor } from './ink';
 
 /**
  * Box art lives in libretro-thumbnails, one repository per platform. The file name is known ahead
@@ -206,7 +207,7 @@ export const cachedInk = (url: string) => inkCache.get(url) ?? null;
 
 /**
  * The game's "flood" ink: the dominant saturated hue of its box art, laid down at a fixed
- * depth (like #84641F) so white text always reads on it. Null when the art has no strong color.
+ * depth (like #84641F, darker for the bright hues) so white text always reads on it. Null when the art has no strong color.
  */
 export async function sampleInk(url: string): Promise<string | null> {
   if (inkCache.has(url)) return inkCache.get(url)!;
@@ -236,7 +237,7 @@ export async function sampleInk(url: string): Promise<string | null> {
   let best = -1;
   for (let i = 0; i < BINS; i++) if (weight[i] > (best < 0 ? 0 : weight[best])) best = i;
   // Needs a meaningful share of the cover (not a few stray pixels) to count as its ink.
-  const ink = best >= 0 && weight[best] > 20 ? `hsl(${Math.round(hueSum[best] / weight[best])} 62% 32%)` : null;
+  const ink = best >= 0 && weight[best] > 20 ? inkFor(Math.round(hueSum[best] / weight[best])) : null;
   inkCache.set(url, ink);
   return ink;
 }
@@ -245,5 +246,5 @@ export async function sampleInk(url: string): Promise<string | null> {
 export function fallbackInk(seed: string): string {
   let h = 0;
   for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return `hsl(${h % 360} 62% 32%)`;
+  return inkFor(h % 360);
 }

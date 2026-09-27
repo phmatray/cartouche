@@ -37,7 +37,7 @@ export default {
   },
   art: {
     title: '¿Mostrar carátulas?',
-    p1: 'Las carátulas tienen derechos de autor de las editoras de los juegos. Cartouche no aloja ni incluye ninguna (solo las portadas con licencia libre de sus juegos incluidos).',
+    p1: 'Las carátulas tienen derechos de autor de las editoras de los juegos. Cartouche no aloja ni incluye ninguna (solo las carátulas con licencia libre de sus juegos incluidos).',
     p2: 'Si aceptas, tu navegador descarga las carátulas de los juegos reconocidos que añadas directamente del proyecto libretro-thumbnails en GitHub, así que GitHub ve tu dirección IP y los datos de tu navegador (consulta <a>la declaración de privacidad de GitHub</a>). Tu navegador las guarda en su almacenamiento local. No compartimos nada. Puedes eliminarlas cuando quieras en Ajustes › Almacenamiento.',
     no: 'Continuar sin ellas',
     yes: 'Descargar carátulas',
