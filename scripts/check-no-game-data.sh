@@ -57,11 +57,12 @@ done <<< "$boot_roms"
 
 # Content: no copy of the Nintendo logo (a boot ROM dump carries it) in any tracked file but the bundled ROMs,
 # whose headers need it: raw in a binary, or written out as a byte array or base64 in a text file (scripts/logo_scan.py).
-# Matched by the SHA-1 of its 48 bytes, so neither script holds any of them.
+# Matched by the SHA-1 of its 48 bytes, so neither script holds any of them. It also fails any archive by its magic
+# bytes (zip, gzip, 7z, xz, zstd, bzip2, rar), whatever the file is named: the extension check above is only by name.
 python3 scripts/logo_scan.py --self-test >/dev/null
 logo_hits=$(git ls-files --eol | awk -F'\t' '{print ($1 ~ /^i\/-text/ ? 0 : 1) "\t" $2}' | grep -Ev '\.(gb|gbc)$' | python3 scripts/logo_scan.py)
 if [[ -n $logo_hits ]]; then
-  echo "Nintendo logo bytes not allowed in:"; echo "$logo_hits"; fail=1
+  echo "Nintendo logo bytes or archives not allowed in:"; echo "$logo_hits"; fail=1
 fi
 
 # Content: no reference to the local training directory (its files name the games).
