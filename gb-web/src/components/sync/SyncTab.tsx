@@ -216,7 +216,7 @@ function Doors() {
           : <button className="btn k lg" disabled={!online} onClick={() => setScan(true)}>{I.cam}{t('sync.doors.scan')}</button>}
         <form className="sy-type" onSubmit={submit}>
           <label htmlFor="sy-code">{t('sync.doors.type')}</label>
-          <textarea id="sy-code" className="sy-code-in" rows={2} value={code} placeholder={CODE_SHAPE} aria-invalid={bad} aria-describedby="sy-code-err"
+          <textarea id="sy-code" className="sy-code-in" rows={3} value={code} placeholder={CODE_SHAPE} aria-invalid={bad} aria-describedby="sy-code-err"
             autoCapitalize="characters" autoComplete="off" autoCorrect="off" spellCheck={false}
             onChange={(e) => { setCode(e.target.value); setBad(false); }} />
           <button className="btn line" disabled={code.replace(/\W/g, '').length < 54 || !online}>{t('sync.doors.pair')}</button>

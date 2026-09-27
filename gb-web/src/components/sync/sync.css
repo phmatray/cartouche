@@ -40,16 +40,16 @@
 .sy-doors section+section{border-left:2px dashed var(--paper-3)}
 .sy-doors h4,.sy-pair h4{margin:0;font:900 44px/.85 var(--font);font-stretch:62%;text-transform:uppercase}
 .sy-doors p{margin:0 0 4px;font:500 15px/1.5 var(--font);color:var(--ink-2);max-width:44ch}
-.sy-type{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;width:100%;margin-top:10px;padding-top:14px;border-top:1px solid var(--paper-2)}
-.sy-type label{grid-column:1/-1;font:800 12px var(--font);text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3)}
-.sy-type .btn{align-self:end;color:var(--ink)}
+.sy-type{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;width:100%;margin-top:10px;padding-top:14px;border-top:1px solid var(--paper-2)}
+.sy-type label{font:800 12px var(--font);text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3)}
+.sy-type .btn{justify-self:start;color:var(--ink)}
 .sy-code-in{min-width:0;resize:none;border:2px solid var(--ink);background:#fff;color:var(--ink);padding:10px 12px;
   font:800 17px/1.35 var(--font);font-stretch:80%;letter-spacing:.1em;text-transform:uppercase;font-variant-numeric:tabular-nums}
 .sy-code-in::placeholder{color:var(--paper-3)}
 .sy-code-in:focus{outline:none;box-shadow:0 0 0 3px var(--y)}
 .sy-code-in[aria-invalid=true]{border-color:var(--err)}
 .sy-off{border:2px solid var(--err);padding:10px 14px;margin:0 0 16px;font:600 14px/1.45 var(--font);color:var(--ink);background:#fff}
-.sy-err{grid-column:1/-1;font:600 13px/1.4 var(--font);color:#b3261e;min-height:1.4em;margin:0}
+.sy-err{font:600 13px/1.4 var(--font);color:#b3261e;min-height:1.4em;margin:0}
 
 /* ---------- the camera, in a Game Boy's bezel ---------- */
 .sy-scan{display:flex;flex-direction:column;align-items:flex-start;gap:10px;width:100%}
@@ -127,6 +127,7 @@
   .sy-cable-row{grid-template-columns:minmax(0,1fr) 28px minmax(0,1fr)}
   .sy-cable-row .sy-lcd{padding:8px 4px}
   .sy-lcd small{letter-spacing:.02em}
+  .sy-code-in{height:calc(5lh + 24px)} /* 2 groups a line: the whole 9-group code in 5 lines */
 }
 @media (prefers-reduced-motion:reduce){
   .sy-dots i,.sy-pair.found .sy-cable i,.sy-view.live .sy-reticle,.sy-pair.paired .sy-cable-row .sy-lcd:last-child{animation:none}

@@ -26,6 +26,7 @@ export default {
     upTo: { one: '1–{count} players · link cable', other: '1–{count} players · link cable' },
   },
   year: { upTo: 'up to {y}', from: '{y} and later' },
+  decade: '{y}s',
   not: 'not {label}',
   chip: '{facet}: {label}',
   chipNot: 'Not {label}',
