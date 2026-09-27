@@ -5,7 +5,7 @@ import { fetchRom, refreshSavedIds, useGameLibrary } from '../hooks/useGameLibra
 import { importSav, readRomFile, useRomHeader } from '../hooks/useGameExtras';
 import { createProfile, getActiveProfileId, getGameSaveStates, getSaveState, getSram, listProfiles, newProfileId, resumeStateId, slotStateId, uniqueName, type StoredSave, type StoredSaveState } from '../lib/db';
 import { useSettingsStore } from '../store/settingsStore';
-import { ago, bytes, linkReady as isLinkReady, owned, PLATFORM, sortTitle } from '../lib/ui';
+import { ago, bytes, linkReady as isLinkReady, owned, PLATFORM, sortTitle, TEST_CATEGORY } from '../lib/ui';
 import type { GameEntry } from '../types/game';
 import { CartridgePicker } from './CartridgePicker';
 import { Item } from './library/GameItem';
@@ -83,7 +83,9 @@ export function LinkCablePage() {
   }, [refresh]);
   const link = useLinkCable(onSram);
   const { state } = link;
-  const playable = useMemo(() => games.filter(owned).sort((a, b) => +isLinkReady(b) - +isLinkReady(a) || sortTitle(a.title).localeCompare(sortTitle(b.title))), [games]);
+  // The test cartridges only when shown in the library (they used to be the first pick for a new player).
+  const tests = useSettingsStore((s) => s.showTests);
+  const playable = useMemo(() => games.filter((g) => owned(g) && (tests || g.category !== TEST_CATEGORY)).sort((a, b) => +isLinkReady(b) - +isLinkReady(a) || sortTitle(a.title).localeCompare(sortTitle(b.title))), [games, tests]);
   const linkReady = playable.filter(isLinkReady);
   const first = (q.get('g') && playable.some((g) => g.id === q.get('g')) ? q.get('g') : playable[0]?.id) ?? '';
   const [pick, setPick] = useState<Record<LinkPlayer, string>>({ 1: '', 2: '' });
