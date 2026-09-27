@@ -89,6 +89,21 @@ fn states_stay_on_their_console() {
 }
 
 #[test]
+fn a_state_brings_back_its_palette() {
+    let state = colourised(9).save_state();
+    let mut gb = colourised(0);
+    assert!(gb.load_state(&state));
+    assert_eq!(gb.palette, 9);
+    let mut booting = GameBoy::with_boot(dmg_rom(b"CARTOUCHE"), true, 5, true).unwrap();
+    let mid = booting.save_state();
+    let mut other = GameBoy::with_boot(dmg_rom(b"CARTOUCHE"), true, 0, true).unwrap();
+    assert!(other.load_state(&mid));
+    other.finish_boot().unwrap();
+    booting.finish_boot().unwrap();
+    assert_eq!(other.bus.ppu.bg_cram, booting.bus.ppu.bg_cram, "a state saved during the animation keeps its palette");
+}
+
+#[test]
 fn animation_plays_then_hands_over() {
     let mut gb = GameBoy::with_boot(dmg_rom(b"CARTOUCHE"), true, 0, true).unwrap();
     assert!(gb.bus.boot_rom_active && gb.bus.cgb_mode);

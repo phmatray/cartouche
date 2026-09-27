@@ -190,6 +190,12 @@ impl Emulator {
         self.gb.as_ref().and_then(|gb| gb.state_console(data)).map_or(255, |c| c as u8)
     }
 
+    /// The palette an original Game Boy cartridge is colourised with: 0 automatic, 1-12 (see
+    /// `load_rom_with`); a loaded state brings back its own.
+    pub fn palette(&self) -> u8 {
+        self.gb.as_ref().map_or(0, |gb| gb.palette)
+    }
+
     /// The start-up animation is playing.
     pub fn booting(&self) -> bool {
         self.gb.as_ref().map_or(false, |gb| gb.bus.boot_rom_active)

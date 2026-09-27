@@ -70,7 +70,7 @@ function Player({ game }: { game: GameEntry }) {
   const emu = useEmulator();
   const { isReady, isRunning, setIsRunning, romLoaded, isCgb, loadRom, runFrame, getAudioSamples, pressButton, releaseButton,
     errors, hasBatteryRam, exportSram, importSram, saveState, loadState, framebufferSnapshot, setTraceEnabled, getTrace,
-    consoleNow, stateConsole, skipBoot } = emu;
+    consoleNow, stateConsole, paletteNow, skipBoot } = emu;
   const keybindings = useSettingsStore((s) => s.keybindings);
   const rewindSeconds = useSettingsStore((s) => s.rewindBufferSeconds);
   const screenSize = useSettingsStore((s) => s.screenSize);
@@ -131,10 +131,12 @@ function Player({ game }: { game: GameEntry }) {
       }
     }
     if (!loadState(data, frame)) return false;
+    // A colourised state brings back its own palette: the Screen page then offers a restart if the game's choice differs.
+    if (consoleNow() === CONSOLE_COMPAT) { const p = paletteNow(); setRunning(p ? `gbc${p}` : 'gbc'); }
     const fb = framebufferSnapshot();
     if (fb) { renderFrame(new Uint8ClampedArray(fb.buffer, fb.byteOffset, fb.length), true); setLit(true); }
     return true;
-  }, [loadState, framebufferSnapshot, renderFrame, stateConsole, consoleNow, powerOn]);
+  }, [loadState, framebufferSnapshot, renderFrame, stateConsole, consoleNow, powerOn, paletteNow]);
   const saves = useSaveStates(game.id, { ...emu, loadState: loadAndShow }, saveTo);
   // Rewinding stops quietly at a restart onto another console.
   const rewindLoad = useCallback((data: Uint8Array, frame?: Uint8ClampedArray) => stateConsole(data) === consoleNow() && loadAndShow(data, frame), [stateConsole, consoleNow, loadAndShow]);

@@ -78,9 +78,10 @@ export function ConsoleRows({ gameId }: { gameId?: string }) {
   const choose = (c: ConsoleChoice) => set(gameId === undefined ? { console: c } : { gameConsole: { ...useSettingsStore.getState().gameConsole, [gameId]: c } });
   return (
     <>
-      <Row label={t('settings.console.label')} sub={t('settings.console.sub')}>
+      <div className="row col">
+        <span>{t('settings.console.label')}<small>{t('settings.console.sub')}</small></span>
         <Seg<'dmg' | 'gbc'> label={t('settings.console.label')} value={value === 'dmg' ? 'dmg' : 'gbc'} options={[['dmg', 'Game Boy'], ['gbc', 'Game Boy Color']]} set={choose} />
-      </Row>
+      </div>
       {value !== 'dmg' && (
         <div className="row col">
           <span>{t('settings.console.colors')}<small>{t('settings.console.colorsSub')}</small></span>

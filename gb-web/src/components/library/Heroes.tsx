@@ -11,6 +11,7 @@ import { startInstall } from '../shell/actions';
 import { I } from '../icons';
 import { Cover, Title } from './Cover';
 import { useT } from '../../i18n';
+import { consoleFor, paletteOf, useSettingsStore } from '../../store/settingsStore';
 
 /** Latest resume point / save slot of a game, undefined while loading, null when there is none. */
 function useLatestSave(gameId: string) {
@@ -52,7 +53,8 @@ function Attract({ game, label }: { game?: GameEntry; label: string }) {
       await wasm.default();
       if (stopped) return;
       emu = new wasm.Emulator();
-      if (!emu.load_rom(rom)) return;
+      const c = consoleFor(useSettingsStore.getState(), game.id); // the console the game itself plays on
+      if (!emu.load_rom_with(rom, c !== 'dmg', paletteOf(c), false)) return;
       const ctx = canvas.getContext('2d')!;
       const img = ctx.createImageData(160, 144);
       const still = matchMedia('(prefers-reduced-motion: reduce)').matches;

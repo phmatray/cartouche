@@ -2,7 +2,7 @@
 # Fails if the tracked tree (index included) contains game data or training material:
 # ROMs other than the six bundled homebrew ones and the allowlisted GB Studio ones, saves and save states,
 # datasets, model checkpoints, boot ROM / BIOS images other than the two hash-pinned SameBoy ones, any file
-# over 2 MB, or anything referring to a local training directory.
+# over 2 MB, a copy of the Nintendo logo outside the bundled ROMs, or anything referring to a local training directory.
 # The only model data allowed in the repository is gb-web/src/neural/weights/*.bin.
 # scripts/rom-allowlist.sha1 lists each hosted GB Studio ROM ("<sha1>  <path>", shasum format): a ROM is allowed
 # there only with that exact content, and only a listed ROM is exempt from the 2 MB limit.
@@ -17,7 +17,7 @@ banned_ext='\.(gb|gbc|sgb|sav|srm|state|npz|npy|pt|pth|ckpt|safetensors|onnx|h5|
 # (THIRD_PARTY_NOTICES.md). Any other file named like a boot ROM or BIOS image fails.
 boot_roms='6f64da4cecd7e54e2f928eb3e3ba7810a7a567d0d247cc71737d1771e073a916  gb-core/boot/sameboy_dmg_boot.bin
 f767b8e7e510a255f81328c89dba6e0c996b370e1bc86aebb8584a7da47a5bba  gb-core/boot/sameboy_cgb_boot.bin'
-boot_like='(boot|bios).*\.(bin|rom|gb|gbc)$|^gb-core/boot/'
+boot_like='(boot|bios).*\.(bin|rom|gb|gbc)$|(^|/)[^/]*(rom|dmg0|cgb0)[^/]*\.(bin|rom)$|^gb-core/boot/'
 fail=0
 
 # Listed with its SHA-1, and the file has exactly that content.
@@ -52,6 +52,18 @@ while read -r _ path; do
     echo "allowlisted boot ROM not tracked: $path"; fail=1
   fi
 done <<< "$boot_roms"
+
+# Content: no copy of the Nintendo logo (a boot ROM dump carries it) in any tracked binary but the bundled ROMs,
+# whose headers need it. Matched by the SHA-1 of its 48 bytes, so this script holds none of them.
+logo_hits=$(git ls-files --eol | awk -F'\t' '$1 ~ /^i\/-text/ {print $2}' | grep -Ev '\.(gb|gbc)$' | python3 -c '
+import hashlib, sys
+for path in sys.stdin.read().splitlines():
+    d = open(path, "rb").read()
+    if any(hashlib.sha1(d[i:i + 48]).hexdigest() == "0745fdef34132d1b3d488cfbdf0379a39fd54b4c" for i in range(len(d) - 47)):
+        print(path)')
+if [[ -n $logo_hits ]]; then
+  echo "Nintendo logo bytes not allowed in:"; echo "$logo_hits"; fail=1
+fi
 
 # Content: no reference to the local training directory (its files name the games).
 if git grep -I -l -i 'cartouche-training' -- ':!scripts/check-no-game-data.sh'; then

@@ -174,6 +174,8 @@ export function useEmulator() {
   /** The console the core runs (0 Game Boy, 1 Game Boy Color, 2 Game Boy cartridge on a Game Boy Color), and a state's. */
   const consoleNow = useCallback((): number => emulatorRef.current?.console() ?? 255, []);
   const stateConsole = useCallback((data: Uint8Array): number => emulatorRef.current?.state_console(data) ?? 255, []);
+  /** The palette a colourised Game Boy cartridge runs with (0 automatic, 1-12): a loaded state brings back its own. */
+  const paletteNow = useCallback((): number => emulatorRef.current?.palette() ?? 0, []);
   const skipBoot = useCallback(() => { emulatorRef.current?.finish_boot(); }, []);
 
   const releaseButton = useCallback((button: number) => {
@@ -303,6 +305,7 @@ export function useEmulator() {
     releaseButton,
     consoleNow,
     stateConsole,
+    paletteNow,
     skipBoot,
     errors,
     setErrors,

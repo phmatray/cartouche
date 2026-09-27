@@ -917,7 +917,7 @@ body{font-family:var(--font)}
 .filters .filters-h h3{margin:0;border:0;padding:0}
 .row.col{display:grid;justify-content:stretch;gap:10px}
 .row.col .seg{grid-auto-columns:minmax(0,1fr);max-width:440px}
-.row.col .seg button{padding:0 4px}
+.row.col .seg button{padding:0 4px;white-space:normal;line-height:1.1}
 @media (max-width:560px){
   .row.col .seg.wrap{display:grid;width:100%;padding:0;grid-auto-flow:row;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px;background:var(--ink)}
   .row.col .seg.wrap button{background:var(--paper)}
