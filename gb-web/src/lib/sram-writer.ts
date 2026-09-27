@@ -7,7 +7,30 @@ export interface SramIO {
   fork(of: StoredSave | undefined, id: string): Promise<StoredSave>;
 }
 
-const same = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, i) => x === b[i]);
+const equal = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, i) => x === b[i]);
+/** MBC3+TIMER exports end with a 48-byte clock footer (gb-core export_sram); cartridge RAM sizes are multiples of 512. */
+const FOOTER = 48;
+const footerOf = (s: Uint8Array) => (s.length % 512 === FOOTER ? s.subarray(s.length - FOOTER) : null);
+/** The clock in wall time: when it started (running) or what it reads (halted). A clock that only ran on reads the same. */
+function clockOf(f: Uint8Array): [halted: boolean, at: number] {
+  const v = new DataView(f.buffer, f.byteOffset, f.byteLength);
+  const w = (i: number) => v.getUint32(i * 4, true);
+  const dh = w(4);
+  const days = (w(3) & 0xff) | ((dh & 1) << 8) | (dh & 0x80 ? 512 : 0);
+  const total = (w(0) % 60) + (w(1) % 60) * 60 + (w(2) % 24) * 3600 + days * 86400;
+  return dh & 0x40 ? [true, total] : [false, Number(v.getBigUint64(40, true)) - total];
+}
+/**
+ * The same save: the same RAM and, with a clock, the same clock. Every export stamps the clock with the time it was
+ * taken, so a clock that only ran on (a game opened and left, a paused tab) is no change; one the game set is.
+ */
+const same = (a: Uint8Array, b: Uint8Array) => {
+  const [fa, fb] = [footerOf(a), footerOf(b)];
+  if (!fa || !fb) return equal(a, b);
+  const [ca, cb] = [clockOf(fa), clockOf(fb)];
+  // Seconds, both rounded down: the same clock can read up to 2 s apart.
+  return equal(a.subarray(0, -FOOTER), b.subarray(0, -FOOTER)) && ca[0] === cb[0] && Math.abs(ca[1] - cb[1]) <= 2;
+};
 
 /**
  * One player's battery save, written to its profile without going over a save it didn't see.
@@ -47,7 +70,7 @@ export class SramWriter {
     const k = this.known;
     if (k?.id !== id) return 'unknown';
     // Nothing new since it was loaded or written; or no save yet and the RAM still blank (the core powers it on zeroed).
-    if (!k.lost && (k.rec ? same(k.rec.sram, sram) : sram.every((x) => x === 0))) return null;
+    if (!k.lost && (k.rec ? same(k.rec.sram, sram) : (footerOf(sram) ? sram.subarray(0, -FOOTER) : sram).every((x) => x === 0))) return null;
     const base = k.fork ?? k.rec ?? { id, gameId: id.split('~')[0], name, created: now };
     const to: StoredSave = { ...base, sram: sram.slice(), timestamp: now };
     this.known = { id: to.id, rec: to, mine: true };

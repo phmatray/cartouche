@@ -108,3 +108,29 @@ test('a resume point is older than a battery save written well after it, not one
   assert.equal(resumeOlderThan(10_000, { timestamp: 10_050 }), false); // the same leave wrote both
   assert.equal(resumeOlderThan(10_000, { timestamp: 60_000 }), true); // a link session wrote it later
 });
+
+test('a clock that only ran on is no change; RAM or a clock the game set is', async () => {
+  // 512 B of RAM + the 48-byte MBC3 clock footer: live s/m/h/DL/DH, latched ×5 (u32 LE), then the unix time (u64 LE).
+  const rtc = (ram: number, secs: number, at: number, halted = false) => {
+    const s = new Uint8Array(512 + 48); s[0] = ram;
+    const v = new DataView(s.buffer, 512);
+    v.setUint32(0, secs % 60, true); v.setUint32(4, Math.floor(secs / 60) % 60, true); v.setUint32(8, Math.floor(secs / 3600) % 24, true);
+    v.setUint32(12, Math.floor(secs / 86400) & 0xff, true); v.setUint32(16, halted ? 0x40 : 0, true);
+    v.setUint32(20, 3, true); // a latch: not the clock's value
+    v.setBigUint64(40, BigInt(at), true);
+    return s;
+  };
+  const { db, io } = store();
+  db.set('g', { id: 'g', gameId: 'g', name: 'Main', sram: rtc(1, 7, 1000), timestamp: 1, created: 1 });
+  const w = new SramWriter(io);
+  await w.check('g');
+  assert.equal(w.write('g', rtc(1, 20, 1013), 'Main'), null); // opened, left 13 s later
+  assert.equal(w.write('g', rtc(1, 86400 + 3607, 1000 + 86400 + 3600), 'Main'), null); // a paused tab, a day later
+  assert.notEqual(w.write('g', rtc(1, 3600, 1013), 'Main'), null); // the game set its clock
+  assert.notEqual(w.write('g', rtc(2, 3600, 1013), 'Main'), null); // the game saved
+  assert.notEqual(w.write('g', rtc(2, 3600, 1013, true), 'Main'), null); // the game stopped its clock
+  // No save yet: a clock alone is no save.
+  const w2 = new SramWriter(io);
+  await w2.check('h');
+  assert.equal(w2.write('h', rtc(0, 5, 2000), 'Main'), null);
+});
