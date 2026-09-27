@@ -1228,6 +1228,8 @@ html:has(.pl),body:has(.pl){overscroll-behavior:none}
   .manual-btn{margin-left:auto;width:44px;padding:0;justify-content:center;flex:none}
   .deck{grid-area:top;justify-self:end;max-width:100%;border-top:0;border-bottom:1px solid var(--rule);padding:var(--sat) max(12px,var(--sar)) 0 8px;justify-content:flex-end;gap:6px}
   .deck .push{display:none}
+  /* notices keep to the bottom-left corner, under the D-pad, instead of a bar across the game */
+  body:has(.pl) .toasts{right:auto;max-width:min(360px,calc(100vw - 24px))}
   @media (max-width:600px){.deck .speed{display:none}.deck .dk.spd{display:inline-flex}} /* 4" phones: room left for the title */
   .stage{grid-area:stage;padding:8px 8px calc(8px + var(--sab))}
   .screen{width:min(var(--sw,100vw),calc((100dvh - 52px - var(--sat) - var(--sab) - 16px - 24px) * var(--ar) + 24px),calc(100vw - 360px - var(--sal) - var(--sar)))}
