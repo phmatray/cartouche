@@ -2,7 +2,9 @@
 //!
 //! A packet is `88 33 | command | compression | length (u16 LE) | data | checksum (u16 LE) | 00 00`.
 //! The checksum is the 16-bit sum of the command, compression, length and data bytes as sent. The
-//! printer answers 0x00 to every byte except the last two: 0x81 (it is there) and its status byte.
+//! printer answers 0x00 to every byte except the last two: 0x81 (it is there) and its status byte:
+//! the status from *before* the command ran (Pan Docs: DATA answers 00, PRINT 08), except STATUS
+//! ($0F), which answers the live one, and a checksum error, reported on the packet that had it.
 //! Commands: 1 INIT, 2 PRINT (sheets, margins, palette, exposure), 4 DATA (up to 0x280 bytes: two
 //! rows of 20 tiles, RLE-compressed when compression is 1), 8 BREAK, 0x0F STATUS.
 //! Outside a packet it answers 0xFF, like an unplugged cable, so games that probe the link for a
@@ -12,6 +14,8 @@ use std::collections::VecDeque;
 
 pub const WIDTH: usize = 160;
 const BUFFER_MAX: usize = 0x2000;
+/// A packet left unfinished this long (100 ms, in M-cycles) is dropped: the next byte starts over.
+const PACKET_TIMEOUT: u32 = 104_858;
 /// Printing time per pixel row, in CPU M-cycles (about 8 ms: a 144-row picture takes ~1.2 s).
 const ROW_CYCLES: u32 = 8_400;
 
@@ -34,7 +38,12 @@ pub struct Printer {
     /// Decompressed tile data waiting for a PRINT.
     buffer: Vec<u8>,
     busy: u32,
+    /// The status byte this packet answers with (fixed once its checksum is in).
+    reply: u8,
+    /// M-cycles since the last byte, while a packet is part-way.
+    quiet: u32,
     /// Finished prints: `[margins, exposure, shade, shade, ...]`, 160 shades (0 white - 3 black) per row.
+    /// A feed with nothing to print (empty buffer, or 0 sheets) is a job with no rows.
     pub jobs: VecDeque<Vec<u8>>,
 }
 
@@ -51,6 +60,7 @@ impl Printer {
     pub fn exchange(&mut self, byte: u8) -> u8 {
         let p = self.pos;
         self.pos += 1;
+        self.quiet = 0;
         let body = 6 + self.len; // magic + header + data
         match p {
             0 => return if byte == 0x88 { 0x00 } else { self.pos = 0; 0xFF },
@@ -63,14 +73,16 @@ impl Printer {
             _ if p == body => self.checksum = byte as u16,
             _ if p == body + 1 => {
                 self.checksum |= (byte as u16) << 8;
+                let before = self.status;
                 self.run();
+                self.reply = if self.command == 0x0F { self.status } else { before & !STATUS_CHECKSUM | self.status & STATUS_CHECKSUM };
             }
             _ if p == body + 2 => return 0x81,
             _ => {
                 self.pos = 0;
-                let s = self.status;
+                let s = self.reply;
                 // A finished print reports "done" once, then the printer is idle again.
-                if s & (STATUS_BUSY | STATUS_FULL) == STATUS_FULL { self.status &= !STATUS_FULL; }
+                if s & (STATUS_BUSY | STATUS_FULL) == STATUS_FULL && self.status & STATUS_BUSY == 0 { self.status &= !STATUS_FULL; }
                 return s;
             }
         }
@@ -90,15 +102,16 @@ impl Printer {
         match self.command {
             0x01 => { self.buffer.clear(); self.status = 0; }
             0x02 if self.data.len() >= 4 && self.status & STATUS_BUSY == 0 => {
-                let [_, margins, palette, exposure] = [self.data[0], self.data[1], self.data[2], self.data[3]];
-                let rows = self.buffer.len() / (WIDTH / 8 * 16) * 8;
+                let [sheets, margins, palette, exposure] = [self.data[0], self.data[1], self.data[2], self.data[3]];
+                // 0 sheets: a paper feed only (Pan Docs).
+                let rows = if sheets == 0 { 0 } else { self.buffer.len() / (WIDTH / 8 * 16) * 8 };
+                let mut job = vec![margins, exposure];
                 if rows > 0 {
-                    let mut job = vec![margins, exposure];
                     job.extend(decode(&self.buffer, palette));
-                    self.jobs.push_back(job);
                     self.busy = rows as u32 * ROW_CYCLES;
                     self.status = STATUS_BUSY | STATUS_FULL;
                 }
+                self.jobs.push_back(job);
                 self.buffer.clear();
             }
             0x04 => {
@@ -114,6 +127,10 @@ impl Printer {
 
     /// Advances printing; `m_cycles` of CPU time.
     pub fn tick(&mut self, m_cycles: u32) {
+        if self.pos > 0 {
+            self.quiet += m_cycles;
+            if self.quiet >= PACKET_TIMEOUT { self.pos = 0; }
+        }
         if self.busy == 0 { return; }
         self.busy = self.busy.saturating_sub(m_cycles);
         if self.busy == 0 { self.status &= !STATUS_BUSY; }
@@ -226,11 +243,14 @@ mod tests {
         let mut rle = Vec::new();
         for _ in 0..40 { rle.extend_from_slice(&[0x80, 0xFF, 13]); rle.extend_from_slice(&[0xFF, 0x00].repeat(7)); }
         assert_eq!(decompress(&rle), band);
+        // Each packet answers the status from before it ran (Pan Docs: DATA 00, then 08, PRINT 08).
         let r = send(&mut p, 0x04, true, &rle);
-        assert_eq!(*r.last().unwrap(), STATUS_UNPROCESSED);
-        send(&mut p, 0x04, false, &[]); // end of data
+        assert_eq!(*r.last().unwrap(), 0);
+        assert_eq!(*send(&mut p, 0x04, false, &[]).last().unwrap(), STATUS_UNPROCESSED); // end of data
+        assert_eq!(*send(&mut p, 0x0F, false, &[]).last().unwrap(), STATUS_UNPROCESSED);
         let r = send(&mut p, 0x02, false, &[1, 0x13, 0xE4, 0x40]);
-        assert_eq!(*r.last().unwrap(), STATUS_BUSY | STATUS_FULL);
+        assert_eq!(*r.last().unwrap(), STATUS_UNPROCESSED);
+        assert_eq!(*send(&mut p, 0x0F, false, &[]).last().unwrap(), STATUS_BUSY | STATUS_FULL);
 
         let job = p.jobs.pop_front().expect("a print");
         assert_eq!(&job[..2], &[0x13, 0x40]);
@@ -245,6 +265,27 @@ mod tests {
         p.tick(1);
         assert_eq!(*send(&mut p, 0x0F, false, &[]).last().unwrap(), STATUS_FULL, "done, reported once");
         assert_eq!(*send(&mut p, 0x0F, false, &[]).last().unwrap(), 0);
+    }
+
+    #[test]
+    fn a_feed_without_data_or_with_zero_sheets_is_a_job_with_no_rows() {
+        let mut p = Printer::new();
+        send(&mut p, 0x01, false, &[]);
+        send(&mut p, 0x02, false, &[1, 0x03, 0xE4, 0x40]); // empty buffer
+        send(&mut p, 0x04, false, &[0; 0x280]);
+        send(&mut p, 0x02, false, &[0, 0x10, 0xE4, 0x40]); // 0 sheets
+        assert_eq!(p.jobs.pop_front().unwrap(), vec![0x03, 0x40]);
+        assert_eq!(p.jobs.pop_front().unwrap(), vec![0x10, 0x40]);
+        assert_eq!(*send(&mut p, 0x0F, false, &[]).last().unwrap() & STATUS_BUSY, 0, "nothing printed");
+    }
+
+    #[test]
+    fn an_abandoned_packet_times_out_after_100_ms() {
+        let mut p = Printer::new();
+        for b in [0x88, 0x33, 0x04, 0x00, 0x80, 0x02, 1, 2] { p.exchange(b); } // DATA, cut off
+        p.tick(PACKET_TIMEOUT);
+        let r = send(&mut p, 0x0F, false, &[]);
+        assert_eq!(&r[r.len() - 2..], &[0x81, 0x00], "the next packet is heard as a packet");
     }
 
     #[test]

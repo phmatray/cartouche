@@ -48,7 +48,9 @@ impl Camera {
         if reg >= REG_COUNT { return; }
         if reg == 0 {
             self.regs[0] = value & 0x07;
-            if value & 1 != 0 && self.busy == 0 {
+            if value & 1 == 0 {
+                self.busy = 0; // writing 0 stops a running capture (its picture is never written)
+            } else if self.busy == 0 {
                 // Capture length in M-cycles (Pan Docs): 32446 + (N ? 0 : 512) + 16 x exposure.
                 let n = self.regs[1] & 0x80 != 0;
                 let exposure = u16::from_be_bytes([self.regs[2], self.regs[3]]) as u32;
@@ -174,6 +176,11 @@ mod tests {
         let pic = cam.tick(1).expect("capture finishes");
         assert_eq!(pic.len(), 0xE00);
         assert_eq!(cam.read(0), 0x02, "busy clears, filter bits stay");
+
+        cam.write(0, 0x01);
+        cam.write(0, 0x00);
+        assert_eq!(cam.read(0) & 1, 0, "writing 0 stops a capture");
+        assert!(cam.tick(total).is_none(), "a stopped capture writes no picture");
     }
 
     #[test]
