@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { useGameLibrary, useSearchIndex } from '../../hooks/useGameLibrary';
 import { formatQuery, search, type Filter as SearchFilter } from '../../lib/search';
 import type { GameEntry } from '../../types/game';
-import { letterOf, motion, owned, paths, playsNow, searchState, sortTitle, TEST_CATEGORY } from '../../lib/ui';
+import { byName, letterOf, motion, owned, paths, playsNow, searchState, TEST_CATEGORY } from '../../lib/ui';
 import { I } from '../icons';
 import { ContinueHero, FirstHero } from './Heroes';
 import { queueDownloads, useImports } from '../../lib/import-queue';
@@ -23,7 +23,6 @@ type Filter = keyof typeof FILTERS;
 const SORTS: [Sort, Key][] = [['name', 'library.sort.name'], ['recent', 'library.sort.recent'], ['most', 'library.sort.most'], ['year', 'library.sort.year']];
 const LETTERS = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
-const byName = (a: GameEntry, b: GameEntry) => sortTitle(a.title).localeCompare(sortTitle(b.title));
 const COMPARE: Record<Sort, (a: GameEntry, b: GameEntry) => number> = {
   name: byName,
   recent: (a, b) => (b.lastPlayed || 0) - (a.lastPlayed || 0) || byName(a, b),
