@@ -135,12 +135,15 @@ for the numbers above, on the bundled homebrew:
   same path as the reference for every block.
 - After a frame's VRAM changes, the incremental cache reaches exactly the from-scratch result
   within 9 frames on all 60 consecutive pairs (median: 1 frame) with a 64-cell budget.
+- These results are the same in Chrome (ANGLE Metal) and in WebKit (Safari's engine), on the same Mac.
 
-Cost, Chrome on an Apple M1 Max (ANGLE Metal), wall clock over hundreds of frames with a final
-readback: 0.19 ms for a frame drawn by the table alone, 0.29 ms for a frame drawn from the tile
-cache, 1.3–1.7 ms for a frame that also recomputes 32–192 map cells, 23 ms to rebuild every used
-map at once. Phones were not measured. A full scene change is spread over several frames (192
-cells per frame), with the table drawing the cells not yet computed.
+Cost on an Apple M1 Max, wall clock over hundreds of frames with a final readback, Chrome / WebKit:
+0.19 / 0.13 ms for a frame drawn by the table alone, 0.29 / 0.56 ms for a frame drawn from the tile
+cache, 1.3–1.7 / 2.5–3.9 ms for a frame that also recomputes 32–192 map cells, 23 / 26 ms to
+rebuild every used map at once. Phones were not measured. A full scene change is spread over
+several frames (192 cells per frame), with the table drawing the cells not yet computed. The core's
+layer trace, on while Neural 4× or Smooth motion is in use, cost 11–15% more emulation time per
+frame when it was measured.
 
 **Automatic fallback.** The time of the neural passes is measured with
 `EXT_disjoint_timer_query_webgl2` when the browser has it, otherwise from the time between frames.
@@ -175,10 +178,10 @@ it runs: the in-between frames are drawn with sharp pixels.
 
 **Measured.** Scored against real emulated frames (the true frame between two others), on the
 bundled homebrew, with the reference implementation that the shipped shaders match bit for bit
-(0 differing pixels on 36 test pairs): on µCity's scrolling map, 114 of 114 in-between frames are
+(0 differing pixels on 36 test pairs, in Chrome and WebKit): on µCity's scrolling map, 114 of 114 in-between frames are
 identical to the real frame (repeating the frame gets 65.9% of pixels right, a 50% blend 51.8%,
 TV-style block matching 89.5%); on Tobu Tobu Girl and Tobu Tobu Girl Deluxe, 99.7% and 99.6% of
 pixels are right (98.9% and 98.8% by repeating the frame). On held-out games, 81.7% of steady-
 motion in-between frames are pixel-perfect. Uneven motion is the common case in real games, which
-is why the guard holds those frames. The perceived smoothness was not measured. Cost: 0.27 ms per
-generated frame on the M1 Max.
+is why the guard holds those frames. The perceived smoothness was not measured. Cost: 0.27 ms
+(Chrome) and 0.57 ms (WebKit) per generated frame on the M1 Max.
