@@ -115,7 +115,7 @@ export default {
     bad: '{file} est endommagé ou n’est pas une ROM Game Boy',
     fromZip: '{file} contient plusieurs ROM : chargement de {rom}',
     unknown: 'Associé à {title}. Ce fichier ne figure pas parmi les copies connues : il peut s’agir d’un hack ou d’une copie défectueuse.',
-    other: 'Associé, mais son empreinte indique {title}',
+    other: 'Ce fichier est {title}, un autre jeu : ajouté à votre bibliothèque à part',
     ok: '{title} reconnu : la ROM est associée',
   },
 } satisfies Messages['game'];

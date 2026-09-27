@@ -114,7 +114,7 @@ export default {
     bad: '{file} is damaged or isn’t a Game Boy ROM',
     fromZip: '{file} holds several ROMs: loading {rom}',
     unknown: 'Linked to {title}. This file isn’t among the known dumps, so it could be a hack or a bad dump.',
-    other: 'Linked, but its fingerprint says {title}',
+    other: 'This file is {title}, another game: added to your library on its own',
     ok: '{title} recognized: your ROM is linked',
   },
 };
