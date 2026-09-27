@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { GameEntry } from '../types/game';
 import { addScreenshot, createProfile, getScreenshots, listProfiles, uniqueName, type StoredSave, type StoredScreenshot } from '../lib/db';
-import { computeSha1, isGameBoyRom, parseRomHeader, savSizeError, type RomMetadata } from '../lib/rom-utils';
+import { computeSha1, isGameBoyRom, parseRomHeader, savSizeError, withoutCopierHeader, type RomMetadata } from '../lib/rom-utils';
 import { lookupByHash } from '../lib/gamedb';
 import { owned } from '../lib/ui';
 import { toast } from '../components/shell/actions';
@@ -59,15 +59,15 @@ export async function importSav(game: GameEntry, file: File): Promise<StoredSave
 export const hardwareOf = (m: RomMetadata) => (m.cgbFlag === 'CGB Only' ? 'Game Boy Color' : m.cgbFlag === 'CGB Compatible' ? 'Game Boy + Color' : 'Game Boy'); // names: not translated
 
 /**
- * A picked file's ROM bytes. A .zip gives the Game Boy ROM inside (the first when there are several, and a toast
+ * A picked file's ROM bytes, without a copier header. A .zip gives the Game Boy ROM inside (the first when there are several, and a toast
  * says which). Throws when the archive is unreadable or holds no ROM.
  */
 export async function readRomFile(file: File): Promise<Uint8Array> {
-  if (!/\.zip$/i.test(file.name)) return new Uint8Array(await file.arrayBuffer());
+  if (!/\.zip$/i.test(file.name)) return withoutCopierHeader(new Uint8Array(await file.arrayBuffer()));
   const roms = (await listZip(file)).filter((e) => isRomFile(e.name) && !HIDDEN.test(e.name));
   if (!roms.length) throw new Error(t('game.link.bad', { file: file.name }));
   if (roms.length > 1) toast(t('game.link.fromZip', { file: file.name, rom: roms[0].name.split('/').pop()! }), 'm');
-  return readEntry(file, roms[0]);
+  return withoutCopierHeader(await readEntry(file, roms[0]));
 }
 
 /**

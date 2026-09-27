@@ -1,4 +1,7 @@
-import { num, size, t } from '../i18n/core';
+import { num, size, t } from '../i18n/core.ts';
+
+/** The ROM without the 512-byte copier header some old dumps carry in front (16 KB banks + 0x200). */
+export const withoutCopierHeader = (data: Uint8Array) => (data.length % 0x4000 === 0x200 ? data.slice(0x200) : data); // a copy: callers hash and store `.buffer`
 
 /**
  * A real Game Boy ROM: the header checksum (0x14D, over 0x134-0x14C) is right and the ROM-size byte

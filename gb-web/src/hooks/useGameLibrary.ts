@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo } from 'react';
 import { create } from 'zustand';
 import type { GameEntry, GameLibrary } from '../types/game';
 import { addRom, getRomIds, saveRom, deleteRom, getRom, getAllGameMeta, getGameMeta, setGameMeta, deleteSave, deleteSaveState, deleteScreenshots, getSavedGameIds, listProfiles, resumeStateId, slotStateId, SLOT_COUNT, type RomSummary, type StoredGameMeta } from '../lib/db';
-import { parseRomTitle, parseRomHeader, computeSha1, isGameBoyRom } from '../lib/rom-utils';
+import { parseRomTitle, parseRomHeader, computeSha1, isGameBoyRom, withoutCopierHeader } from '../lib/rom-utils';
 import { lookupByHash, type GameDbEntry } from '../lib/gamedb';
 import { parseRegion } from '../lib/catalog-utils';
 import { assetUrl, TEST_CATEGORY } from '../lib/ui';
@@ -189,6 +189,7 @@ export const MAX_ROM_SIZE = 0x8000 << 8;
  * Storage errors (a full disk: QuotaExceededError) are thrown; nothing is half-stored.
  */
 export async function importRom(name: string, data: Uint8Array, force = false): Promise<ImportOutcome> {
+  data = withoutCopierHeader(data);
   if (!isRomFile(name) || !isGameBoyRom(data)) return { status: 'bad' };
   await (loadPromise ??= loadLibrary());
   const sha1 = await computeSha1(data);
