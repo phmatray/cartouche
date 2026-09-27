@@ -33,7 +33,7 @@ image of 2-bit colour ids.
   neighbours.
 - A 1×1 head gives, for each of the 16 subpixels of a map pixel, logits over the 4 colour ids.
 - Ids that do not appear in the pixel's 3×3 neighbourhood are masked, so no colour is invented.
-  Weights under 0.2 are dropped after the softmax ("snap"), the rest renormalised: without that,
+  Weights under 0.3 are dropped after the softmax ("snap"), the rest renormalised: without that,
   faint tints flicker.
 - The result is cached per map in a 1024×1024 weight atlas. A map cell is recomputed only when
   its tile data or map entry changes (and then its 8 neighbours too), a bounded number of cells
@@ -85,6 +85,14 @@ held-out games), and it flickers when pixels near an edge change.
   colour ids of its 3×3 neighbourhood. Loss: soft cross-entropy on the 12 free subpixels. The same
   random rotation or flip is applied to input and target, so the network learns a symmetric
   version of the teacher. About 230,000 map crops; about 80 minutes on one laptop GPU (Apple M1 Max).
+- **Curves.** xBRZ only looks at a pixel's close neighbours, so on long shallow curves it rounds each
+  step on its own and the curve comes out as a row of bumps; outlined curves (a thin line of one
+  colour between two others) came out as zigzags. The network was then fine-tuned (45 minutes) with
+  60% of each batch made of generated shapes: circles, ellipses and lines in bands of 1 to 4
+  colours, drawn at pixel centres for the input and at subpixel centres for the target, which is
+  the smooth curve the pixel art stands for. No game data is involved in those shapes. A second
+  term keeps the output still when an 8×8 block elsewhere in a game crop changes, so the longer
+  reach does not bring flicker back.
 - **Learned-classical table.** A greedy forward selection of the 16 equality bits (over
   rotation- and flip-closed groups of pixel pairs), then a least-squares fit of each table entry
   to the teacher, on about 23 million quadrant samples. About 35 minutes on the CPU.
@@ -100,6 +108,9 @@ homebrew ROMs (the only frames this repository may show):
   smoother edges). **Blend**: the share of output pixels whose colour is none of the colours of
   their 3×3 source neighbourhood (softness). **Dither kept**: the share of pixels over checkerboard
   dithering left identical to nearest.
+- **Outlined curves**: generated rings and ellipses of two to four colour bands; the mean colour
+  error, near edges, against the same shapes drawn at subpixel centres. Nearest: 13.4, xBRZ: 8.35,
+  the network before the curve training: 8.50, as shipped: 6.58.
 - **Flicker**: on consecutive frames, the output of frame A is moved by the emulator's exact motion
   vectors and compared with the output of frame B, on output pixels whose own source pixel did
   not change. **Flicker 3×3**: only where the whole 3×3 source neighbourhood is unchanged.
@@ -113,20 +124,23 @@ Girl Deluxe, µCity, dmg-acid2, cgb-acid2 and cpu_instrs):
 | EPX (Scale4x) | 99.96 / 99.84 | 0.4643 | 0 | 77.8 | 0.3350 | 0.0121 |
 | xBRZ 4× (teacher) | 99.39 / 97.43 | 0.4002 | 1.56 | 66.9 | 0.4315 | 0.0206 |
 | Learned-classical table alone | 100 / 100 | 0.3998 | 1.89 | 59.5 | 0.4617 | 0.0350 |
-| Tile-aware network alone | 100 / 100 | 0.4006 | 1.19 | 70.3 | 0.3595 | 0.0183 |
-| **Neural 4× as shipped** | **100 / 100** | **0.4026** | **1.36** | **67.7** | **0.4105** | **0.0375** |
+| Tile-aware network alone | 100 / 100 | 0.4176 | 0.85 | 76.3 | 0.3527 | 0.0224 |
+| **Neural 4× as shipped** | **100 / 100** | **0.4158** | **1.08** | **72.4** | **0.4164** | **0.0405** |
 
 What this says, plainly:
 
-- Edges are as smooth as xBRZ's (jaggy within 0.003), and unlike xBRZ no source pixel ever moves.
-- It flickers about 5% less than xBRZ over all changed pixels, but more where the 3×3 neighbourhood is
+- Curves are smoother than xBRZ's (outlined-curve error 21% lower), and unlike xBRZ no source pixel
+  ever moves. The jaggy score is 0.016 worse than xBRZ's, mostly because this version blends less
+  (the snap went from 0.2 to 0.3 to keep flicker down) and that score rewards soft edges.
+- It flickers about 3.5% less than xBRZ over all changed pixels, but more where the 3×3 neighbourhood is
   still. The tile-aware network alone flickers least; the shipped version gives up some of that
   around sprites, where the network alone drew visible speckle, and uses the table there.
-- It does not beat its teacher on edge quality: it was trained to imitate it. Better edges would
-  need a better teacher or real high-resolution art.
+- The curve training cost 1.4% more flicker on these frames, and 8% more where the 3×3
+  neighbourhood is still. The table still imitates xBRZ: sprites and the blocks next to them keep
+  xBRZ's bumps on long curves.
 
-On the held-out games the shipped version keeps 100% exactness and flickers 15% less than xBRZ
-(0.216% against 0.253% of pixels); those frames are not shown here.
+On the held-out games the shipped version keeps 100% exactness and flickers 17% less than xBRZ
+(0.210% against 0.253% of pixels; 0.216% before the curve training); those frames are not shown here.
 
 ### The WebGL implementation
 
@@ -136,8 +150,8 @@ the table), `governor.ts` (automatic fallback). Checked against the reference im
 for the numbers above, on the bundled homebrew:
 
 - The table path is bit-exact (0 differing channels over 88 frames).
-- The tile path differs by at most 1/255 on 0.13% of pixels (8-bit weight atlas), and picks the
-  same path as the reference for every block.
+- The tile path differs by at most 1/255 on 0.09% of pixels (8-bit weight atlas), except one pixel
+  of 32 million, and picks the same path as the reference for every block.
 - After a frame's VRAM changes, the incremental cache reaches exactly the from-scratch result
   within 9 frames on all 60 consecutive pairs (median: 1 frame) with a 64-cell budget.
 - These results are the same in Chrome (ANGLE Metal) and in WebKit (Safari's engine), on the same Mac.

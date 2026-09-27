@@ -19,7 +19,7 @@
  */
 import tileUrl from './weights/tile4x.bin?url';
 import lcUrl from './weights/lc4x.bin?url';
-import { lcTexture, packTileNet, parseLc, parseTileNet, type LcTable, type TileNet } from './weights';
+import { SNAP, lcTexture, packTileNet, parseLc, parseTileNet, type LcTable, type TileNet } from './weights';
 import {
   COMBOS, H, L, LINES_OFF, LINE_LEN, MapState, W, bgCombo, clearRect, isCgb, lineReg, linePalettes, planRegion, rendered,
   validTrace, vramOf, winCombo, wrapSpans, type FrameTrace, type Rect,
@@ -39,8 +39,6 @@ export function loadWeights(): Promise<NeuralWeights> {
 }
 
 export const OUT_W = W * 4, OUT_H = H * 4;
-/** Snap: subpixel weights under this are dropped (faint tints that only flicker), the rest renormalised. */
-const SNAP = 0.2;
 
 const VS = `#version 300 es
 in vec2 a_position;

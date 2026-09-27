@@ -1,7 +1,8 @@
 // node --test: weight file parsing and the std140 layout the shaders index.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { halfToFloat, lcTexture, packTileNet, parseLc, parseTileNet } from './weights.ts';
+import { readFileSync } from 'node:fs';
+import { SNAP, halfToFloat, lcTexture, packTileNet, parseLc, parseTileNet, type TileNet } from './weights.ts';
 
 test('halfToFloat', () => {
   assert.equal(halfToFloat(0x3c00), 1);
@@ -45,6 +46,66 @@ test('parseTileNet + packTileNet: every weight lands where the shaders read it',
   const head = blocks[2][0].offset / 4, s = 7;
   assert.equal(data[head + s * 16 + j * 4 + i], (4 * s + i) * 4 + j);
   assert.equal(data[head + 16 * 16 + 4 * s + i], 4 * s + i);
+});
+
+/** The tile network on a torus map of colour ids, on the CPU (the same maths as the shaders): 4 id weights per subpixel. */
+function tileWeights(net: TileNet, ids: Uint8Array, n: number): Float32Array {
+  const at = (x: number, y: number) => ((y + n) % n) * n + ((x + n) % n);
+  let h = new Float32Array(0);
+  for (const [l, { w, b, cin, cout, k }] of net.layers.entries()) {
+    if (k === 1) break;
+    const o = new Float32Array(cout * n * n);
+    for (let co = 0; co < cout; co++) for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      let s = b[co];
+      for (let t = 0; t < 9; t++) {
+        const p = at(x + (t % 3) - 1, y + Math.floor(t / 3) - 1);
+        if (l === 0) s += w[(co * cin + ids[p]) * 9 + t];
+        else for (let ci = 0; ci < cin; ci++) s += w[(co * cin + ci) * 9 + t] * h[ci * n * n + p];
+      }
+      o[co * n * n + y * n + x] = Math.max(s, 0) + (l ? h[co * n * n + y * n + x] : 0);
+    }
+    h = o;
+  }
+  const head = net.layers[net.L], out = new Float32Array(64 * n * n);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) for (let s = 0; s < 16; s++) {
+    const sx = s & 3, sy = s >> 2, q = 4 * ((4 * y + sy) * 4 * n + 4 * x + sx);
+    if (sx > 0 && sx < 3 && sy > 0 && sy < 3) { out[q + ids[at(x, y)]] = 1; continue; } // central 2x2: the source id
+    const present = [0, 0, 0, 0];
+    for (let t = 0; t < 9; t++) present[ids[at(x + (t % 3) - 1, y + Math.floor(t / 3) - 1)]] = 1;
+    const lg = [0, 1, 2, 3].map((i) => {
+      let v = head.b[4 * s + i];
+      for (let c = 0; c < net.C; c++) v += head.w[(4 * s + i) * net.C + c] * h[c * n * n + y * n + x];
+      return present[i] ? v : -1e4;
+    });
+    const m = Math.max(...lg), e = lg.map((v) => Math.exp(v - m)), sum = e.reduce((a, v) => a + v);
+    const wt = e.map((v) => (v / sum >= SNAP ? v / sum : 0)), kept = wt.reduce((a, v) => a + v);
+    for (let i = 0; i < 4; i++) out[q + i] = wt[i] / kept;
+  }
+  return out;
+}
+
+test('tile network: outlined curves come out smooth, not zigzag', () => {
+  // Rings of three bands (outline, thin line, fill) sampled at pixel centres, which is the pixel art, and at
+  // subpixel centres, which is the curve it stands for. The error is measured on subpixels next to an edge.
+  const net = parseTileNet(new Uint8Array(readFileSync(new URL('./weights/tile4x.bin', import.meta.url))).buffer);
+  const n = 48, ids = new Uint8Array(n * n);
+  let err = 0, errNearest = 0, count = 0;
+  for (const R of [13.3, 19.6, 23.1]) {
+    const id = (x: number, y: number) => { const d = R - Math.hypot(x - 24.3, (y - 23.8) * 1.3); return d < 0 ? 0 : d < 1.2 ? 3 : d < 2.3 ? 1 : 2; };
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) ids[y * n + x] = id(x + 0.5, y + 0.5);
+    const w = tileWeights(net, ids, n);
+    for (let y = 0; y < 4 * n; y++) for (let x = 0; x < 4 * n; x++) {
+      const px = x >> 2, py = y >> 2, lo = ids[py * n + px];
+      let edge = false;
+      for (let t = 0; t < 9; t++) edge ||= ids[((py + Math.floor(t / 3) - 1 + n) % n) * n + (px + (t % 3) - 1 + n) % n] !== lo;
+      if (!edge) continue;
+      const truth = id((x + 0.5) / 4, (y + 0.5) / 4), q = 4 * (y * 4 * n + x);
+      err += 1 - w[q + truth]; errNearest += +(lo !== truth); count++;
+    }
+  }
+  err /= count; errNearest /= count;
+  // Over 0.6 x nearest with the network trained on xBRZ alone, which drew these rings as zigzags; 0.47 now.
+  assert.ok(err < 0.55 * errNearest, `outlined-curve error ${err} vs nearest ${errNearest}`);
 });
 
 test('parseLc + lcTexture', () => {
