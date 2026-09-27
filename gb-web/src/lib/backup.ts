@@ -1,6 +1,8 @@
 import { t } from '../i18n';
-import { decode, jsonBlob, readStreamed } from './backup-json';
-import { asProfile, getAllFrom, getRom, getRomIds, putInto, STORES, type StoredGameMeta, type StoredRom, type StoredSave, type StoredSaveState, type StoredScreenshot } from './db';
+import { decode, jsonBlob, splitJson } from './backup-json';
+import { mover, placeRom } from './backup-merge';
+import { computeSha1 } from './rom-utils';
+import { asProfile, getAllFrom, getAllGameMeta, getRom, getRomIds, putInto, STORES, type StoredGameMeta, type StoredRom, type StoredSave, type StoredSaveState, type StoredScreenshot } from './db';
 import { cleanSetting } from './settings-clean';
 import { SETTINGS_KEYS, displayFromV3, useSettingsStore, type SettingsValues } from '../store/settingsStore';
 
@@ -13,9 +15,10 @@ interface Backup {
   version: number;
   exported: string;
   settings: Partial<SettingsValues>;
-  /** How many ROMs the file holds, and a fresh read of them, one at a time (a library can be gigabytes). */
+  /** How many ROMs the file holds. */
   romCount: number;
-  roms: () => AsyncIterable<StoredRom>;
+  /** Read one at a time when restored (a big library's ROMs don't fit in memory at once); null: not a valid ROM. */
+  roms: (() => Promise<StoredRom | null>)[];
   saves: StoredSave[];
   states: StoredSaveState[];
   meta: StoredGameMeta[];
@@ -45,26 +48,13 @@ const str = (x: unknown) => typeof x === 'string' && x.length > 0;
 /** Read and check a backup file. Throws with a readable message when it isn't one. */
 export async function readBackup(file: File): Promise<Backup> {
   const notBackup = () => new Error(t('settings.storage.notBackup', { file: file.name }));
-  const isRom = (r: StoredRom) => !!r && typeof r === 'object' && str(r.id) && r.data instanceof Uint8Array;
-  let b: Partial<Omit<Backup, 'roms'>> & { roms?: unknown };
-  let roms: () => AsyncIterable<StoredRom>;
-  let romCount = 0;
-  try {
-    // Written by exportBackup: the ROMs come last, read one at a time (the whole file can pass a string's size limit).
-    const streamed = await readStreamed(file, 'roms', 'saves');
-    if (streamed) {
-      b = streamed.head;
-      for await (const r of streamed.items()) if (str((r as { id?: unknown })?.id)) romCount++; // counted without decoding them
-      roms = async function* () { for await (const r of streamed.items()) { const rom = decode(r) as StoredRom; if (isRom(rom)) yield rom; } };
-    } else {
-      b = decode(JSON.parse(await file.text())) as typeof b; // older backups: ROMs first, never that big
-      const list = Array.isArray(b?.roms) ? (b.roms as StoredRom[]).filter(isRom) : [];
-      romCount = list.length;
-      roms = async function* () { yield* list; };
-    }
-  } catch (e) {
-    throw e instanceof SyntaxError ? notBackup() : new Error(t('settings.storage.unreadable'));
+  let raw: unknown, items: [number, number][];
+  try { ({ head: raw, items } = await splitJson(file, 'roms')); } catch (e) {
+    // SyntaxError: not JSON. RangeError: a head or a ROM past what this browser can hold. Else: the file couldn't be read.
+    throw e instanceof SyntaxError ? notBackup()
+      : new Error(t(e instanceof RangeError ? 'settings.storage.tooBig' : 'settings.storage.unreadable', { file: file.name }), { cause: e });
   }
+  const b = decode(raw) as Partial<Omit<Backup, 'roms'>>;
   // 'cartshelf': backups exported before the app was renamed.
   if (!b || (b.app !== APP && b.app !== 'cartshelf')) throw notBackup();
   if (b.version !== VERSION) throw new Error(t('settings.storage.newer'));
@@ -72,7 +62,11 @@ export async function readBackup(file: File): Promise<Backup> {
   return {
     app: APP, version: VERSION, exported: String(b.exported ?? ''),
     settings: b.settings && typeof b.settings === 'object' ? b.settings : {},
-    romCount, roms,
+    romCount: items.length,
+    roms: items.map(([start, end]) => async () => {
+      const r = decode(JSON.parse(await file.slice(start, end).text())) as StoredRom;
+      return r && typeof r === 'object' && str(r.id) && r.data instanceof Uint8Array ? r : null;
+    }),
     // Save profiles; a backup from before profiles has one save per game, which becomes its "Main".
     saves: list<StoredSave>(b.saves, (r) => str(r.id) && r.sram instanceof Uint8Array).map(asProfile),
     states: list<StoredSaveState>(b.states, (r) => str(r.id) && r.data instanceof Uint8Array && (r.profile === undefined || str(r.profile))),
@@ -86,25 +80,41 @@ export interface RestoreCount { roms: number; saves: number; screenshots: number
 /**
  * Merge a backup into this browser. Nothing here is lost: a ROM already stored is kept,
  * a save or save state is replaced only by a newer one, favorites and play time are combined.
- * Settings are applied only when asked.
+ * ROMs are matched by SHA-1: a backup game whose id is taken here by another game gets a free id, its saves with it.
+ * Settings are applied only when asked. `count` is filled as it goes (a full disk stops it midway: it says what landed).
  */
-export async function restoreBackup(b: Backup, withSettings: boolean): Promise<RestoreCount> {
-  const count: RestoreCount = { roms: 0, saves: 0, screenshots: 0 };
+export async function restoreBackup(b: Backup, withSettings: boolean, count: RestoreCount = { roms: 0, saves: 0, screenshots: 0 }): Promise<RestoreCount> {
   const [romIds, saves, states, meta, shots] = await Promise.all([
-    getRomIds().then((ids) => new Set(ids)), getAllFrom<StoredSave>(STORES.saves), getAllFrom<StoredSaveState>(STORES.states),
-    getAllFrom<StoredGameMeta>(STORES.meta), getAllFrom<StoredScreenshot>(STORES.screenshots),
+    getRomIds(), getAllFrom<StoredSave>(STORES.saves), getAllFrom<StoredSaveState>(STORES.states),
+    getAllGameMeta(), getAllFrom<StoredScreenshot>(STORES.screenshots),
   ]);
-  for await (const r of b.roms()) if (!romIds.has(r.id)) { await putInto(STORES.roms, r); count.roms++; }
+  const moved = new Map<string, string>();
+  if (b.roms.length) {
+    const here = new Map<string, string>(); // id → SHA-1
+    const claimed = new Set<string>();
+    const summaries = new Map(meta.map((m) => [m.id, m.rom?.sha1]));
+    for (const id of romIds) { // from the summaries; a ROM without one yet is read alone
+      here.set(id, summaries.get(id) ?? await getRom(id).then((r) => (r ? computeSha1(r.data) : '')));
+    }
+    for (const read of b.roms) {
+      const r = await read();
+      if (!r) continue;
+      const to = placeRom(r.id, await computeSha1(r.data), here, claimed);
+      if (to.id !== r.id) moved.set(r.id, to.id);
+      if (to.store) { await putInto(STORES.roms, { ...r, id: to.id }); count.roms++; }
+    }
+  }
+  const move = mover(moved);
 
   const newer = async <T extends { id: string; timestamp: number }>(store: typeof STORES.saves | typeof STORES.states, mine: T[], theirs: T[]) => {
     const at = new Map(mine.map((x) => [x.id, x.timestamp]));
     for (const x of theirs) if ((at.get(x.id) ?? -1) < x.timestamp) { await putInto(store, x); count.saves++; }
   };
-  await newer(STORES.saves, saves, b.saves);
-  await newer(STORES.states, states, b.states);
+  await newer(STORES.saves, saves, b.saves.map(move.save));
+  await newer(STORES.states, states, b.states.map(move.state));
 
   const metaById = new Map(meta.map((m) => [m.id, m]));
-  for (const m of b.meta) {
+  for (const m of b.meta.map(move.meta)) {
     const o = metaById.get(m.id);
     const max = (a?: number, c?: number) => (a == null ? c : c == null ? a : Math.max(a, c));
     await putInto(STORES.meta, o ? {
@@ -116,9 +126,10 @@ export async function restoreBackup(b: Backup, withSettings: boolean): Promise<R
 
   const shotKey = (s: StoredScreenshot) => `${s.gameId}@${s.timestamp}`;
   const have = new Set(shots.map(shotKey));
-  for (const s of b.screenshots) {
+  for (const s of b.screenshots.map((x) => ({ ...x, gameId: move.game(x.gameId) }))) {
     if (have.has(shotKey(s))) continue;
-    await putInto(STORES.screenshots, { gameId: s.gameId, png: s.png, timestamp: s.timestamp }); // new id: never overwrite
+    // A new id: never overwrite. A Game Boy Printer strip stays one.
+    await putInto(STORES.screenshots, { gameId: s.gameId, png: s.png, timestamp: s.timestamp, ...(s.kind === 'print' && { kind: 'print' }) });
     count.screenshots++;
   }
 

@@ -64,9 +64,12 @@ function txOp<T>(storeName: string, mode: IDBTransactionMode, op: (store: IDBObj
   return openDB().then((db) => new Promise((resolve, reject) => {
     const tx = db.transaction(storeName, mode);
     const req = op(tx.objectStore(storeName));
-    if (mode === 'readwrite') tx.commit?.(); // one request: commit now, not at the next task (a page unloading never gets one)
-    req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
+    if (mode === 'readonly') { req.onsuccess = () => resolve(req.result); return; }
+    // A write has landed once the transaction commits: a full disk can still abort it after the request succeeded.
+    tx.oncomplete = () => resolve(req.result);
+    tx.onabort = () => reject(tx.error ?? req.error ?? new DOMException('Transaction aborted', 'AbortError'));
+    tx.commit?.(); // one request: commit now, not at the next task (a page unloading never gets one)
   }));
 }
 
@@ -172,8 +175,9 @@ export function deleteSaveState(id: string): Promise<void> { return txOp(SAVESTA
 /**
  * What the library shows of a stored ROM, kept beside it so a launch reads a few hundred bytes per game
  * instead of every ROM (a big collection is gigabytes). `head`: the first 0x150 bytes, the cartridge header.
+ * `size`: the ROM's length in bytes (summaries written before it lack it).
  */
-export interface RomSummary { title: string; genre: string; sha1: string; head: Uint8Array }
+export interface RomSummary { title: string; genre: string; sha1: string; head: Uint8Array; size?: number }
 export interface StoredGameMeta { id: string; isFavorite?: boolean; totalPlayTime?: number; lastPlayed?: number; importedAt?: number; sessions?: number; activeSave?: string; rom?: RomSummary }
 export type GameMeta = StoredGameMeta;
 export function getGameMeta(id: string): Promise<StoredGameMeta | undefined> { return txOp(GAME_META_STORE, 'readonly', (s) => s.get(id)); }
