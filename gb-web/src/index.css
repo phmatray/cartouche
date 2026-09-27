@@ -115,7 +115,7 @@ kbd{border:1px solid #3a3a3a;padding:3px 7px;font:700 11px var(--font);color:var
 .flood{background:var(--flood);color:#fff;transition:background-color .6s var(--ease)}
 .cont .wrap{display:grid;grid-template-columns:minmax(220px,300px) minmax(0,1fr) minmax(280px,420px);gap:48px;align-items:center;padding-top:56px;padding-bottom:56px}
 .boxart{width:100%;height:auto;aspect-ratio:1;box-shadow:0 22px 44px rgba(0,0,0,.42),0 3px 8px rgba(0,0,0,.28)}
-.hero-t{font:900 clamp(44px,5.6vw,84px)/.88 var(--font);font-stretch:62%;text-transform:uppercase;margin:0 0 22px;text-wrap:balance}
+.hero-t{font:900 clamp(44px,5.6vw,84px)/.88 var(--font);font-stretch:62%;text-transform:uppercase;margin:0 0 22px;text-wrap:balance;overflow-wrap:break-word;hyphens:auto}
 .meta{display:flex;flex-wrap:wrap;gap:6px 22px;font:600 16px/1.35 var(--font);margin:0 0 28px}
 .meta span{color:rgba(255,255,255,.84)}
 .meta strong{color:#fff;font-weight:800}
@@ -220,7 +220,7 @@ canvas.lcd,img.lcd{display:block;width:100%;height:auto;image-rendering:pixelate
 .lrow .noart,.rrow .noart,.sres .noart{padding:5px}
 .lrow .noart b,.rrow .noart b,.sres .noart b{font-size:12px}
 .lrow .noart small,.lrow .noart .bar{display:none}
-.lrow .t{font:800 17px/1.1 var(--font);font-stretch:75%;text-transform:uppercase}
+.lrow .t{overflow-wrap:anywhere;font:800 17px/1.1 var(--font);font-stretch:75%;text-transform:uppercase}
 .lrow .t small{display:block;font:500 13px var(--font);font-stretch:100%;text-transform:none;color:var(--mute);margin-top:3px}
 .lrow .c{font:600 14px var(--font);color:var(--mute);font-variant-numeric:tabular-nums}
 .lrow .tag{margin:0}
@@ -580,7 +580,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .shortcuts div{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--paper-2);font:600 14px var(--font)}
 .shortcuts .key{height:32px;min-width:32px;font-size:12px}
 @media (max-width:900px){
-  .manual{grid-template-columns:1fr}
+  .manual{grid-template-columns:minmax(0,1fr)}
   .toc{position:static;flex-direction:row;overflow-x:auto;scrollbar-width:none;border-top:0;margin:0 -16px;padding:0 16px}
   .toc a{flex:none;border:0;padding:14px 16px 14px 0;font-size:22px}
   .toc a small{display:none}
@@ -603,7 +603,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .results{margin-top:40px}
 .rrow{display:grid;grid-template-columns:56px minmax(0,1fr) 160px 170px;gap:18px;align-items:center;padding:12px 0;border-bottom:1px solid var(--rule)}
 .rrow .noart small,.rrow .noart .bar{display:none}
-.rrow .t{font:800 17px/1.15 var(--font);font-stretch:75%;text-transform:uppercase}
+.rrow .t{overflow-wrap:anywhere;font:800 17px/1.15 var(--font);font-stretch:75%;text-transform:uppercase}
 .rrow .t small{display:block;font:500 13px var(--font);font-stretch:100%;text-transform:none;color:var(--mute);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rrow .st{font:800 12px var(--font);text-transform:uppercase;letter-spacing:.07em;display:flex;align-items:center;gap:8px}
 .rrow .st i{width:10px;height:10px;flex:none}
@@ -672,7 +672,7 @@ dialog::backdrop{background:rgba(0,0,0,.72)}
 .sres a{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:16px;align-items:center;padding:10px 12px;text-decoration:none;border-bottom:1px solid var(--rule)}
 .sres a[aria-selected=true],.sres a:hover{background:var(--band-2);box-shadow:inset 6px 0 0 var(--y)}
 .sres .noart small,.sres .noart .bar{display:none}
-.sres .t{font:800 18px/1.1 var(--font);font-stretch:75%;text-transform:uppercase}
+.sres .t{overflow-wrap:anywhere;font:800 18px/1.1 var(--font);font-stretch:75%;text-transform:uppercase}
 .sres .t small{display:block;font:500 13px var(--font);font-stretch:100%;text-transform:none;color:var(--mute);margin-top:3px}
 .sres mark{background:var(--y);color:#000}
 .sres .tag{align-self:center}
@@ -986,6 +986,8 @@ body{font-family:var(--font)}
   .touch .ss button{height:44px}
   .range input,input[type=range]{height:44px}
 }
+/* touch only: the search's keyboard hints (↑ ↓, Enter, Esc) don't apply */
+@media (pointer:coarse) and (hover:none){.shint>span:has(kbd){display:none}}
 @media (pointer:coarse) and (max-width:640px){
   .index{grid-template-columns:repeat(8,1fr)}
   .index button:nth-child(9n){border-right:1px solid var(--rule)}
