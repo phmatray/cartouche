@@ -20,7 +20,7 @@ const same = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every(
  */
 export class SramWriter {
   /** The profile's record as last read or written here, and what it held (`fork`: where the next write goes). */
-  private known: { id: string; rec?: StoredSave; fork?: StoredSave } | null = null;
+  private known: { id: string; rec?: StoredSave; fork?: StoredSave; mine?: boolean; lost?: boolean } | null = null;
   private io: SramIO;
   constructor(io: SramIO) { this.io = io; }
 
@@ -32,9 +32,14 @@ export class SramWriter {
     const rec = await this.io.read(id);
     if (this.known !== k) return; // written meanwhile: the next check looks again
     if (k?.id !== id) { this.known = { id, rec }; return; }
-    if (k.fork || rec?.timestamp === k.rec?.timestamp) return;
+    if (k.fork) return;
+    // The same write: only its name may have changed (a rename keeps the time); the next write keeps that name.
+    if (rec?.timestamp === k.rec?.timestamp) { if (rec) k.rec = rec; return; }
     const fork = await this.io.fork(rec ?? k.rec, id);
-    if (this.known === k) k.fork = fork;
+    if (this.known !== k) return;
+    k.fork = fork;
+    // What this player wrote was written over: its RAM goes to the new profile at the next write, even unchanged.
+    k.lost = !!(k.mine && rec && k.rec && !same(rec.sram, k.rec.sram));
   }
 
   /** The profile written to (a new one after a change elsewhere), null when nothing changed. */
@@ -42,10 +47,10 @@ export class SramWriter {
     const k = this.known;
     if (k?.id !== id) return 'unknown';
     // Nothing new since it was loaded or written; or no save yet and the RAM still blank (the core powers it on zeroed).
-    if (k.rec ? same(k.rec.sram, sram) : sram.every((x) => x === 0)) return null;
+    if (!k.lost && (k.rec ? same(k.rec.sram, sram) : sram.every((x) => x === 0))) return null;
     const base = k.fork ?? k.rec ?? { id, gameId: id.split('~')[0], name, created: now };
     const to: StoredSave = { ...base, sram: sram.slice(), timestamp: now };
-    this.known = { id: to.id, rec: to };
+    this.known = { id: to.id, rec: to, mine: true };
     const done = this.io.put(to).catch((e) => { if (this.known?.rec === to) this.known = k; throw e; });
     return { to, done };
   }

@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router';
 import { useLinkCable, type LinkPlayer } from '../hooks/useLinkCable';
 import { fetchRom, refreshSavedIds, useGameLibrary } from '../hooks/useGameLibrary';
 import { importSav, readRomFile, useRomHeader } from '../hooks/useGameExtras';
-import { createProfile, getActiveProfileId, getGameSaveStates, getSaveState, getSram, listProfiles, newProfileId, resumeStateId, saveSram, slotStateId, uniqueName, type StoredSave, type StoredSaveState } from '../lib/db';
+import { createProfile, getActiveProfileId, getGameSaveStates, getSaveState, getSram, listProfiles, newProfileId, resumeStateId, slotStateId, uniqueName, type StoredSave, type StoredSaveState } from '../lib/db';
 import { useSettingsStore } from '../store/settingsStore';
 import { ago, bytes, linkReady as isLinkReady, owned, PLATFORM, sortTitle } from '../lib/ui';
 import type { GameEntry } from '../types/game';
@@ -14,6 +14,8 @@ import { I } from './icons';
 import { toast } from './shell/actions';
 import { fileAccept } from '../lib/pwa';
 import { holdLinkCable } from '../lib/play-lock';
+import { SramWriter } from '../lib/sram-writer';
+import { CHECK_MS, sramIO } from '../hooks/useSaveData';
 import { rich, t as tNow, useT } from '../i18n';
 
 // Fixed two-player keys: player 1 on the right of the keyboard, player 2 on the left.
@@ -50,16 +52,22 @@ export function LinkCablePage() {
     const v = await savesOf(g);
     setData((d) => ({ ...d, [g]: v }));
   }, []);
-  const dataRef = useRef(data); // the profiles as last read, for onSram
-  useEffect(() => { dataRef.current = data; }, [data]);
+  // One writer per player: never over a save changed elsewhere since it was loaded (a solo tab, a sync, a restore).
+  const writers = useRef<Record<LinkPlayer, SramWriter>>({ 1: new SramWriter(sramIO), 2: new SramWriter(sramIO) });
   const onSram = useCallback((saves: [Uint8Array | null, Uint8Array | null]) => {
     for (const p of [1, 2] as LinkPlayer[]) {
       const t = targets.current[p], sram = saves[p - 1];
       if (!t || !sram?.length) continue;
-      // A single put, not read-then-write: when the page is unloading, a second step never runs.
-      const now = Date.now(), old = dataRef.current[t.game]?.profiles.find((x) => x.id === t.profile);
-      saveSram(old ? { ...old, sram, timestamp: now } : { id: t.profile, gameId: t.game, name: t.name, sram, timestamp: now, created: now }).then(() => {
-        setWrote((w) => ({ ...w, [p]: Date.now() }));
+      // A single put issued at once: when the page is unloading, a second step never runs.
+      const w = writers.current[p].write(t.profile, sram, t.name);
+      if (!w || w === 'unknown') continue; // unchanged
+      if (w.to.id !== t.profile) {
+        targets.current = { ...targets.current, [p]: { ...t, profile: w.to.id, name: w.to.name } };
+        setLinked(targets.current);
+        toast(tNow('player.toast.changedElsewhere', { name: w.to.name }), 'm');
+      }
+      w.done.then(() => {
+        setWrote((x) => ({ ...x, [p]: Date.now() }));
         refresh(t.game).catch(() => {});
         refreshSavedIds();
       }).catch(() => toast(tNow('link.toast.saveFailed', { p: String(p) }), 'm'));
@@ -172,6 +180,12 @@ export function LinkCablePage() {
         return { state: st.data };
       };
       const [f1, f2] = await Promise.all([from(choice[1]), from(choice[2])]);
+      // What each save holds now: a change made elsewhere from here on is never written over.
+      const [r1, r2] = await Promise.all([1, 2].map((p) => { const c = choice[p as LinkPlayer]; return c ? getSram(c.profile) : undefined; }));
+      for (const [p, c, r] of [[1, choice[1], r1], [2, choice[2], r2]] as const) {
+        writers.current[p] = new SramWriter(sramIO);
+        if (c) writers.current[p].adopt(c.profile, r);
+      }
       targets.current = { 1: choice[1], 2: choice[2] };
       setLinked(targets.current);
       setWrote({ 1: 0, 2: 0 });
@@ -190,7 +204,9 @@ export function LinkCablePage() {
   const { flush, flushNow } = link;
   useEffect(() => {
     if (!state.isRunning) return;
-    const t = autoSave ? window.setInterval(flush, autoSeconds * 1000) : 0;
+    const check = () => Promise.all(([1, 2] as LinkPlayer[]).map((p) => { const c = targets.current[p]; return c ? writers.current[p].check(c.profile).catch(() => {}) : undefined; }));
+    const watch = window.setInterval(check, CHECK_MS);
+    const t = autoSave ? window.setInterval(() => { check().then(flush); }, autoSeconds * 1000) : 0;
     // Hidden or closing: write the saves already here now (a reload or tab close never gets the worker's reply), then ask for fresher ones.
     const leave = () => { flushNow(); flush(); };
     const onHide = () => { if (document.visibilityState === 'hidden') leave(); };
@@ -199,6 +215,7 @@ export function LinkCablePage() {
     window.addEventListener('beforeunload', leave); // WebKit drops a write issued in pagehide during a reload or close
     return () => {
       window.clearInterval(t);
+      window.clearInterval(watch);
       document.removeEventListener('visibilitychange', onHide);
       window.removeEventListener('pagehide', leave);
       window.removeEventListener('beforeunload', leave);
