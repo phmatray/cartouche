@@ -351,10 +351,13 @@ SOFTWARE.
 ### Rust crates compiled into the WebAssembly core
 
 `wasm-bindgen`, `js-sys`, `thiserror` and `log`, and their dependencies
-`wasm-bindgen-shared`, `once_cell`, `cfg-if` and `unicode-ident`, each
-licensed MIT OR Apache-2.0 (`unicode-ident` additionally Unicode-3.0).
-Test-only crates (`wasm-bindgen-test`, `png`) are MIT OR Apache-2.0 and are
-not part of the published build.
+`wasm-bindgen-shared`, `once_cell`, `cfg-if`, `unicode-ident`, `futures-util`,
+`futures-core`, `futures-task` and `pin-project-lite`, each licensed MIT OR
+Apache-2.0 (`unicode-ident` additionally Unicode-3.0), and `slab` (MIT).
+The full license text of each one ships in `THIRD_PARTY_LICENSES.txt`, the
+complete list for the published build.
+Test-only crates (`wasm-bindgen-test`, `png`, `flate2`) are MIT OR Apache-2.0
+and are not part of the published build.
 
 ## 2. Used at runtime, never bundled or redistributed
 
