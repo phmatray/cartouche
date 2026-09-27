@@ -73,8 +73,8 @@ const CREDIT_LINKS = {
   gpl: ext(`${base}licenses/GPL-3.0-ucity.txt`),
   src: ext('https://github.com/AntonioND/ucity/tree/v1.3'),
   sameboy: ext('https://github.com/LIJI32/SameBoy'),
-  notices: (s: string) => <a href={base + 'THIRD_PARTY_NOTICES.txt'} style={ink}>{s}</a>,
-  licenses: (s: string) => <a href={base + 'THIRD_PARTY_LICENSES.txt'} style={ink}>{s}</a>,
+  notices: ext(`${base}THIRD_PARTY_NOTICES.txt`),
+  licenses: ext(`${base}THIRD_PARTY_LICENSES.txt`),
   ra: ext('https://retroachievements.org'),
   legal: (s: string) => <Link to="/legal" style={ink}>{s}</Link>,
 };
