@@ -1044,7 +1044,8 @@ body{font-family:var(--font)}
 .manual .paper .notice{margin:16px 0 0}
 .rrow{grid-template-columns:56px minmax(0,1fr) 170px 250px}
 .rrow .act{display:flex;gap:8px;justify-content:flex-end}
-@media (max-width:760px){.rrow{grid-template-columns:48px minmax(0,1fr) auto}.rrow .act{justify-content:flex-start}.row{flex-wrap:wrap}.row:has(>.switch){flex-wrap:nowrap}}
+/* narrow: status and actions go under the title (a column of their own left the title a few letters wide) */
+@media (max-width:760px){.rrow{grid-template-columns:48px minmax(0,1fr);row-gap:8px}.rrow>:first-child{grid-row:1/span 3;align-self:start;height:48px}.rrow .st,.rrow .act{grid-column:2}.rrow .act{justify-content:flex-start}.rrow .act:empty{display:none}.row{flex-wrap:wrap}.row:has(>.switch){flex-wrap:nowrap}}
 .player .frame canvas{background:#000}
 .lc-bar .switch[disabled]{opacity:.5}
 /* link cable: the cartridge in each slot, and the picker sheet */
