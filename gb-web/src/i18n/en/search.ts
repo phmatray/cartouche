@@ -2,7 +2,7 @@
 export default {
   facet: {
     genre: 'Genre', players: 'Players', region: 'Region', platform: 'Platform', decade: 'Decade', year: 'Year',
-    developer: 'Developer', publisher: 'Publisher', language: 'Language', save: 'Save', is: 'Your games',
+    developer: 'Developer', publisher: 'Publisher', language: 'Language', save: 'Save', made: 'Made with', is: 'Your games',
   },
   // The GameDB's genres (and the catalog's): the key is the search value.
   genre: {

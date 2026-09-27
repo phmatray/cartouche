@@ -31,7 +31,9 @@ Never commit ROMs, boot ROM dumps, box art or Nintendo artwork (the one exceptio
 key art of the bundled Tobu Tobu Girl games in `gb-web/public/covers/`, credited in
 THIRD_PARTY_NOTICES.md); the only tracked ROMs are the
 bundled ones in `gb-web/public/roms/`, each re-included by its own `.gitignore` line and listed
-with license and SHA-256 in THIRD_PARTY_NOTICES.md.
+with license and SHA-256 in THIRD_PARTY_NOTICES.md. The hosted GB Studio ROMs in `gb-web/public/roms/gbstudio/`
+must also be listed with their SHA-1 in `scripts/rom-allowlist.sha1` and credited in its `LICENSES.txt`
+(only when the author's license covers redistribution of the whole ROM; everything else links to the author).
 
 ---
 

@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { useGameLibrary, useSearchIndex } from '../../hooks/useGameLibrary';
 import { formatQuery, search, type Filter as SearchFilter } from '../../lib/search';
 import type { GameEntry } from '../../types/game';
 import { letterOf, motion, owned, paths, playsNow, searchState, sortTitle, TEST_CATEGORY } from '../../lib/ui';
 import { I } from '../icons';
 import { ContinueHero, FirstHero } from './Heroes';
-import { useImports } from '../../lib/import-queue';
+import { queueDownloads, useImports } from '../../lib/import-queue';
+import { ConfirmDialog, type ConfirmRequest } from '../shell/ConfirmDialog';
 import { Item, ListRow } from './GameItem';
-import { useT, type Key } from '../../i18n';
+import { size, t as tNow, useT, type Key } from '../../i18n';
 
 type Sort = 'name' | 'recent' | 'most' | 'year';
 // Shortcuts into the search model (the same filters as `is:mine`, `region:us`… in the search overlay).
@@ -88,7 +89,7 @@ export function LibraryPage() {
   // While an import runs the hero keeps its game: following each new ROM would restart its live demo every flush.
   const importing = useImports((s) => s.rows.some((r) => r.st === 'work'));
   const [held, setHeld] = useState<string>();
-  const { cont, shelf, free, tests, hasRoms } = useMemo(() => {
+  const { cont, shelf, free, tests, gbs, hasRoms } = useMemo(() => {
     const when = (g: GameEntry) => g.lastPlayed || g.importedAt || 0;
     const mine = games.filter((g) => owned(g) && when(g)).sort((a, b) => when(b) - when(a));
     const i = importing && held ? mine.findIndex((g) => g.id === held) : -1;
@@ -96,7 +97,9 @@ export function LibraryPage() {
     return {
       cont: mine[0] as GameEntry | undefined,
       shelf: mine.slice(1),
-      free: games.filter((g) => playsNow(g) && g !== mine[0] && g.category !== TEST_CATEGORY),
+      free: games.filter((g) => playsNow(g) && g !== mine[0] && g.category !== TEST_CATEGORY && !g.madeWith),
+      // The GB Studio collection, best first; the ones that play here (hosted or already added) lead.
+      gbs: games.filter((g) => g.madeWith === 'GB Studio').sort((a, b) => +owned(b) - +owned(a)),
       tests: games.filter((g) => playsNow(g) && g.category === TEST_CATEGORY),
       hasRoms: games.some((g) => g.isLocal),
     };
@@ -155,6 +158,18 @@ export function LibraryPage() {
           </section>
         )}
 
+        {gbs.length > 0 && (
+          <section className="sec" aria-labelledby="h-gbs">
+            <div className="sec-h">
+              <h2 id="h-gbs">{t('library.gbs.title')}</h2>
+              <span className="count">{t('library.gbs.sub', { count: gbs.filter((g) => g.romUrl).length, games: t('common.games', { count: gbs.length }) })}</span>
+              <Link className="linkbtn end" to={paths.search('made:gbstudio')} state={searchState()}>{t('library.gbs.all')} {I.next}</Link>
+            </div>
+            <div className="shelf rail">{gbs.map((g) => <Item key={g.id} game={g} saved={savedIds} />)}</div>
+            <DownloadAll games={gbs} />
+          </section>
+        )}
+
         {tests.length > 0 && (
           <section className="sec" aria-labelledby="h-tests">
             <div className="sec-h"><h2 id="h-tests">{t('library.tests')}</h2><span className="count">{t('library.testsSub')}</span></div>
@@ -208,6 +223,37 @@ export function LibraryPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+/**
+ * Every hosted game not in the library yet, through the import queue (progress and Stop on the Add ROMs page).
+ * Asks first, with the total size and a warning when the browser's storage estimate looks too small.
+ */
+function DownloadAll({ games }: { games: GameEntry[] }) {
+  const left = games.filter((g) => g.romUrl && !g.isLocal);
+  const total = left.reduce((n, g) => n + (g.size ?? 0), 0);
+  const busy = useImports((s) => s.rows.some((r) => r.st === 'work'));
+  const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
+  const navigate = useNavigate();
+  const t = useT();
+  if (!games.some((g) => g.romUrl)) return null;
+  const ask = async () => {
+    const est = await navigator.storage?.estimate?.().catch(() => undefined);
+    const room = est?.quota ? est.quota - (est.usage ?? 0) : Infinity;
+    setConfirm({
+      title: tNow('library.gbs.confirmTitle', { count: left.length }), ok: tNow('library.gbs.confirmOk'),
+      body: `${tNow('library.gbs.confirmBody', { size: size(total) })}${room < total * 2 ? ` ${tNow('library.gbs.lowSpace', { free: size(room) })}` : ''}`,
+      run: () => { queueDownloads(left); navigate('/add'); },
+    });
+  };
+  return (
+    <div className="gbs-all">
+      {left.length ? (
+        <button className="btn line" onClick={ask} disabled={busy}>{I.load}{t('library.gbs.download', { count: left.length, size: size(total) })}</button>
+      ) : <span>{I.check}{t('library.gbs.downloaded')}</span>}
+      <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
+    </div>
   );
 }
 

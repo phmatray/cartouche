@@ -45,16 +45,25 @@ function localEntry(id: string, title: string, genre: string, data: Uint8Array, 
     platform: dbEntry?.platform ?? (data[0x143] & 0x80 ? 'gbc' : 'gb'), // unknown dump: the header's CGB flag
     libretroName: dbEntry?.libretroName,
     // Header facts the search filters on (publisher, color support, battery save).
-    publisher: h && !h.publisher.startsWith('Unknown') ? h.publisher : undefined,
+    publisher: h && !/^(Unknown|None)/.test(h.publisher) ? h.publisher : undefined,
     compatibility: h ? ({ 'DMG Only': 'mono', 'CGB Compatible': 'dual', 'CGB Only': 'color' } as const)[h.cgbFlag] : undefined,
     saveType: h ? (/BATTERY/.test(h.cartridgeType) ? 'battery' : 'none') : undefined,
   };
 }
 
-const catalogMatch = (list: GameEntry[], e: GameEntry) => {
+/**
+ * The catalog entry a user ROM belongs to: same id, same SHA-1 (hosted GB Studio games), same title, or else an
+ * unknown dump whose header title starts one catalog title and no other (GB Studio headers: 'OPOSSUMCOUNTR').
+ */
+function catalogMatch(list: GameEntry[], e: GameEntry) {
   const k = titleKey(e.title);
-  return list.find((g) => !g.isLocal && (g.id === e.id || titleKey(g.title) === k));
-};
+  const cat = list.filter((g) => !g.isLocal);
+  const found = cat.find((g) => g.id === e.id || (!!e.sha1 && g.sha1 === e.sha1) || titleKey(g.title) === k);
+  const h = titleKey(e.romHeaderTitle ?? '');
+  if (found || e.developer || h.length < 6) return found;
+  const hits = cat.filter((g) => titleKey(g.title).startsWith(h));
+  return hits.length === 1 ? hits[0] : undefined;
+}
 
 /**
  * Put a user ROM on the shelf. When it matches a catalog entry (same id, or same title) it replaces
@@ -83,6 +92,8 @@ function withLocal(list: GameEntry[], e: GameEntry): GameEntry[] {
  * GameDB (loaded on demand) only identifies the files a player adds.
  */
 const CATALOG = (catalogData as GameEntry[]).map((g) => ({ ...g, regions: g.regions || [] }));
+/** The catalog with the GB Studio collection (its own chunk: about a hundred entries the first paint doesn't need). */
+const fullCatalog = () => import('../data/gbstudio.json').then((m) => [...CATALOG, ...(m.default as GameEntry[]).map((g) => ({ ...g, regions: [] }))]);
 
 interface LibraryState { games: GameEntry[]; savedIds: Set<string>; loading: boolean; storageError: boolean }
 /** One library shared by every screen (it used to be loaded again by each hook call). */
@@ -92,11 +103,12 @@ const setGames = (fn: (prev: GameEntry[]) => GameEntry[]) => useLibraryStore.set
 let loadPromise: Promise<void> | null = null;
 async function loadLibrary() {
   let stored;
+  const catalog = await fullCatalog();
   try {
     stored = await Promise.all([getRomIds(), getAllGameMeta(), getSavedGameIds()]);
   } catch {
     // Storage blocked (private mode, site data off, some webviews): the bundled games still play.
-    useLibraryStore.setState({ games: CATALOG, savedIds: new Set(), loading: false, storageError: true });
+    useLibraryStore.setState({ games: catalog, savedIds: new Set(), loading: false, storageError: true });
     return;
   }
   const [romIds, allMeta, savedIds] = stored;
@@ -113,7 +125,7 @@ async function loadLibrary() {
     return localEntry(id, dbEntry?.title || rom.title, genre, rom.head, rom.sha1, dbEntry);
   }));
 
-  const all = userEntries.reduce(withLocal, CATALOG).map((g) => {
+  const all = userEntries.reduce(withLocal, catalog).map((g) => {
     const meta = metaMap.get(g.id);
     if (!meta) return g;
     return { ...g, isFavorite: meta.isFavorite, lastPlayed: meta.lastPlayed, totalPlayTime: meta.totalPlayTime, sessions: meta.sessions, importedAt: meta.importedAt };
@@ -174,9 +186,10 @@ export async function importRom(name: string, data: Uint8Array, force = false): 
   const genre = dbEntry?.genre || 'Unknown';
   const importedAt = Date.now();
   const summary = { title, genre, sha1, head: data.slice(0, 0x150) };
-  const id = await addRom(slugify(title) || 'rom', { title, genre, data }, { importedAt, rom: summary });
+  const cat = catalogMatch(useLibraryStore.getState().games, localEntry('', title, genre, data, sha1, dbEntry));
+  // A catalog game keeps its id (and its page's address) once its file is here.
+  const id = await addRom(cat?.id ?? (slugify(title) || 'rom'), { title, genre, data }, { importedAt, rom: summary });
   const entry = localEntry(id, title, genre, data, sha1, dbEntry, importedAt);
-  const cat = catalogMatch(useLibraryStore.getState().games, entry);
   const added = withLocal(cat ? [cat] : [], entry).at(-1)!; // as it will show on the shelf
   pending.push(entry);
   flushTimer ??= setTimeout(flushPending, 400);
@@ -184,6 +197,37 @@ export async function importRom(name: string, data: Uint8Array, force = false): 
   if (needsDownload(added)) getCoverArtUrl(added.libretroName, added.platform);
   return { status: dbEntry || cat ? 'ok' : 'unk', id, title: added.title, sha1 }; // known: a GameDB dump, or a catalog homebrew
 }
+
+/** A download that failed or isn't the expected file: its message is for the player. */
+export class FetchError extends Error {}
+
+/** A hosted catalog ROM (the GB Studio collection), downloaded and checked against its SHA-1; `progress` gets 0..1. */
+export async function fetchHosted(game: GameEntry, progress?: (done: number) => void): Promise<Uint8Array> {
+  let data: Uint8Array;
+  try {
+    const res = await fetch(assetUrl(game.romUrl!));
+    if (!res.ok || !res.body) throw new Error();
+    const total = game.size || Number(res.headers.get('content-length'));
+    const parts: Uint8Array<ArrayBuffer>[] = [];
+    let got = 0;
+    for (const reader = res.body.getReader(); ;) {
+      const r = await reader.read();
+      if (r.done) break;
+      parts.push(r.value);
+      got += r.value.length;
+      if (total) progress?.(Math.min(1, got / total));
+    }
+    data = new Uint8Array(await new Blob(parts).arrayBuffer());
+  } catch {
+    throw new FetchError(t('player.error.download')); // offline, or cut off midway
+  }
+  if (game.sha1 && (await computeSha1(data)) !== game.sha1) throw new FetchError(t('add.mismatch'));
+  return data;
+}
+
+/** Download a hosted game into the library (IndexedDB): it keeps its id and plays offline from then on. */
+export const downloadGame = async (game: GameEntry, progress?: (done: number) => void) =>
+  importRom(`${game.id}.gb`, await fetchHosted(game, progress));
 
 /** Give a user ROM a new title (for files the GameDB doesn't know). */
 export async function renameGame(id: string, title: string) {

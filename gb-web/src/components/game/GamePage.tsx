@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type CSSProperties, type Dispatch, type SetStateAction } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import type { GameEntry } from '../../types/game';
-import { refreshSavedIds, useGameLibrary } from '../../hooks/useGameLibrary';
+import { downloadGame, FetchError, refreshSavedIds, useGameLibrary } from '../../hooks/useGameLibrary';
 import { createProfile, deleteSave, getActiveProfileId, getGameSaveStates, getSram, listProfiles, saveSram, setActiveProfile, uniqueName, type StoredSave, type StoredSaveState } from '../../lib/db';
 import type { RomMetadata } from '../../lib/rom-utils';
 import { ago, assetUrl, bytes, download, dur, owned, paths, tagOf } from '../../lib/ui';
@@ -44,6 +44,9 @@ function GameDetails({ game }: { game: GameEntry }) {
   const [profiles, setProfiles] = useState<StoredSave[]>([]);
   const [kind, label] = tagOf(game, savedIds);
   const need = !owned(game);
+  /** GB Studio collection: a hosted game not downloaded yet, or one its author distributes (link-out). */
+  const hosted = !!game.madeWith && !!game.romUrl && !game.isLocal;
+  const author = !!game.madeWith && need && !!game.homepage;
   const auto = states[0];
   const slots = Array.from({ length: 5 }, (_, i) => states[i + 1]);
 
@@ -74,10 +77,11 @@ function GameDetails({ game }: { game: GameEntry }) {
           <div className="info">
             <nav className="crumbs" aria-label={t('game.crumbs')}><Link to="/">{t('shell.nav.library')}</Link>{I.next}<span>{genreLabel(game) || t('game.game')}</span></nav>
             <h1 className="hero-t"><Title text={game.title} /></h1>
-            <div className="facts"><TagLinks game={game} keys={['year', 'developer', 'publisher', 'genre', 'players', 'region', 'platform', 'is']} className="fact" /></div>
+            <div className="facts"><TagLinks game={game} keys={['year', 'developer', 'publisher', 'genre', 'players', 'region', 'platform', 'made', 'is']} className="fact" /></div>
             <div className="acts">
+              {author && <a className="btn lg play" href={game.homepage} target="_blank" rel="noreferrer">{I.ext}{t('game.author.get')}</a>}
               {need ? (
-                <label className="btn lg play" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
+                <label className={`btn lg ${author ? 'line' : 'play'}`} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
                   {I.cart}{t('game.loadRom')}
                   <input type="file" accept={fileAccept('.gb,.gbc')} className="sr" tabIndex={-1}
                     onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f && await linkRom(f)) navigate(paths.play(game.id)); }} />
@@ -85,6 +89,7 @@ function GameDetails({ game }: { game: GameEntry }) {
               ) : (
                 <Link className="btn lg play" to={paths.play(game.id, auto ? '?resume=1' : '')}>{I.play}{auto ? t('library.hero.continue') : t('library.hero.play')}</Link>
               )}
+              {hosted && <Download game={game} />}
               <button className="btn lg line" aria-pressed={!!game.isFavorite} onClick={() => toggleFavorite(game.id)}>
                 {game.isFavorite ? <>{I.star}{t('library.favorite')}</> : <>{I.starO}{t('game.addFav')}</>}
               </button>
@@ -98,6 +103,7 @@ function GameDetails({ game }: { game: GameEntry }) {
         <article className="paper sheet-card">
           <h2>{t('game.about')}</h2>
           {descOf(game) && <p className="lede">{descOf(game)}</p>}
+          {hosted && game.size && <p className="lede" style={{ fontSize: 15 }}>{t('game.dl.note', { size: size(game.size) })}</p>}
           {need && <p className="lede" style={{ fontSize: 15 }}>{game.homepage ? rich(t('game.getIt'), { a: (s) => <a href={game.homepage} target="_blank" rel="noreferrer">{s}</a> }) : t('game.loadIt')}</p>}
           {game.license && (
             <>
@@ -109,7 +115,8 @@ function GameDetails({ game }: { game: GameEntry }) {
                 {game.homepage && <> {t('game.homepage')} <a href={game.homepage} target="_blank" rel="noreferrer">{game.homepage.replace(/^https?:\/\//, '')}</a>.</>}
                 {game.changes && <> {game.changes}</>}
                 {game.coverCredit && <> {game.coverCredit}</>}
-                {game.romUrl && !game.isLocal && <> {t('game.notices')} <a href={assetUrl('THIRD_PARTY_NOTICES.txt')} target="_blank" rel="noreferrer">THIRD_PARTY_NOTICES.txt</a>.</>}
+                {game.romUrl && game.madeWith && <> {t('game.notices')} <a href={assetUrl('roms/gbstudio/LICENSES.txt')} target="_blank" rel="noreferrer">LICENSES.txt</a>.</>}
+                {game.romUrl && !game.madeWith && !game.isLocal && <> {t('game.notices')} <a href={assetUrl('THIRD_PARTY_NOTICES.txt')} target="_blank" rel="noreferrer">THIRD_PARTY_NOTICES.txt</a>.</>}
               </p>
             </>
           )}
@@ -121,12 +128,12 @@ function GameDetails({ game }: { game: GameEntry }) {
               <div><dt>{t('game.cart.romSize')}</dt><dd>{sizeText(header.romSize)}</dd></div>
               <div><dt>{t('game.cart.ram')}</dt><dd>{sizeText(header.ramSize)}</dd></div>
               <div><dt>{t('game.cart.headerTitle')}</dt><dd>{header.title || '—'}</dd></div>
-              <div><dt>{t('game.cart.source')}</dt><dd>{game.isLocal ? t('game.cart.yourFile') : game.romUrl ? t('game.cart.bundled') : t('game.cart.free')}</dd></div>
+              <div><dt>{t('game.cart.source')}</dt><dd>{game.isLocal ? t('game.cart.yourFile') : game.madeWith ? t('game.cart.hosted') : game.romUrl ? t('game.cart.bundled') : t('game.cart.free')}</dd></div>
               <div><dt>Super Game Boy</dt><dd>{header.sgbFlag === 'SGB Supported' ? t('game.cart.supported') : t('game.cart.no')}</dd></div>
               <div><dt>{t('game.cart.revision')}</dt><dd>{header.romVersion ? `1.${header.romVersion}` : '1.0'}</dd></div>
             </dl>
           ) : (
-            <div className="empty-inline">{I.cart}<span>{need ? t('game.cart.later') : t('game.cart.reading')}</span></div>
+            <div className="empty-inline">{I.cart}<span>{need ? t('game.cart.later') : hosted ? t('game.cart.afterDownload') : t('game.cart.reading')}</span></div>
           )}
           <h3>{t('game.album')}</h3>
           {shots.length ? (
@@ -142,8 +149,11 @@ function GameDetails({ game }: { game: GameEntry }) {
           {need ? (
             <section>
               <h3>{t('game.playIt')}</h3>
-              <dl className="stats"><div><dt>{t('library.col.status')}</dt><dd><span className={`tag ${kind}`} style={{ margin: 0 }}>{label}</span></dd></div></dl>
-              <p className="note" style={{ marginTop: 16 }}>{t('game.dump')}</p>
+              <dl className="stats">
+                <div><dt>{t('library.col.status')}</dt><dd><span className={`tag ${kind}`} style={{ margin: 0 }}>{label}</span></dd></div>
+                {game.price && <div><dt>{t('game.author.price')}</dt><dd>{[t(`game.author.${game.price}`), game.priceNote].filter(Boolean).join(' · ')}</dd></div>}
+              </dl>
+              <p className="note" style={{ marginTop: 16 }}>{author ? t('game.author.steps') : t('game.dump')}</p>
             </section>
           ) : (
             <>
@@ -181,7 +191,7 @@ function GameDetails({ game }: { game: GameEntry }) {
               <section>
                 <h3>{t('game.manage')}</h3>
                 <div className="danger-zone">
-                  <span>{game.isLocal ? (header ? t('game.storedSize', { size: sizeText(header.romSize) }) : t('game.stored')) : t('game.bundledErase')}</span>
+                  <span>{game.isLocal ? (header ? t('game.storedSize', { size: sizeText(header.romSize) }) : t('game.stored')) : (game.madeWith ? t('game.hostedErase') : t('game.bundledErase'))}</span>
                   <button className="btn danger" onClick={remove}>{game.isLocal ? t('game.remove.ok') : t('game.erase.ok')}</button>
                 </div>
               </section>
@@ -191,6 +201,35 @@ function GameDetails({ game }: { game: GameEntry }) {
       </div>
       <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
     </main>
+  );
+}
+
+/**
+ * One tap: fetch the hosted ROM, check its SHA-1 and keep it in this browser (it then plays offline).
+ * The button fills as the file arrives; a failure says why and the button offers the download again.
+ */
+function Download({ game }: { game: GameEntry }) {
+  const [done, setDone] = useState<number | null>(null);
+  const [err, setErr] = useState('');
+  const t = useT();
+  const go = async () => {
+    setErr('');
+    setDone(0);
+    try {
+      await downloadGame(game, setDone);
+      toast(tNow('game.dl.done', { title: game.title }), 'c');
+    } catch (e) {
+      setErr(e instanceof FetchError ? e.message : tNow('game.dl.full')); // not a download error: storing it failed
+    }
+    setDone(null);
+  };
+  return (
+    <>
+      <button className="btn lg line dl" onClick={go} disabled={done !== null} aria-busy={done !== null} style={{ '--p': `${(done ?? 0) * 100}%` } as CSSProperties}>
+        {I.load}{done === null ? t('game.dl.button') : t('game.dl.progress', { pct: Math.round(done * 100) })}
+      </button>
+      {err && <p className="dlerr" role="alert">{err.charAt(0).toUpperCase() + err.slice(1)}</p>}
+    </>
   );
 }
 

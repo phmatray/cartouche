@@ -13,6 +13,7 @@ export default {
   renamed: 'Renamed',
   notRom: 'damaged or not a Game Boy ROM',
   unreadable: 'couldn’t be read',
+  mismatch: 'not the expected file (its SHA-1 differs)',
   anyway: 'Import anyway',
   st: { work: 'Checking…', ok: 'Added', dup: 'Already in library', unk: 'Added, not recognized', bad: 'Skipped', stop: 'Not imported' },
   sum: {

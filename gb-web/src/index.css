@@ -183,6 +183,20 @@ canvas.lcd,img.lcd{display:block;width:100%;height:auto;image-rendering:pixelate
 .noart small{font:700 11px var(--font);text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2)}
 .noart .bar{display:grid;grid-template-columns:repeat(3,1fr);height:8px;margin-top:8px}
 .bar i:nth-child(1){background:var(--c)}.bar i:nth-child(2){background:var(--m)}.bar i:nth-child(3){background:var(--y)}
+/* Long credits ("eishiya, H0lyhandgrenade, Kezia Salmon") stay on two lines; phone-sized boxes print smaller */
+.noart small{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3}
+@media (max-width:640px){.noart{padding:10px}.noart b{font-size:22px}.noart b[data-long]{font-size:17px}.noart small{-webkit-line-clamp:1}}
+/* GB Studio title card: the four shades of a Game Boy screen */
+.noart.gbs .bar{grid-template-columns:repeat(4,1fr)}
+.noart.gbs .bar i:nth-child(1){background:var(--ink)}.noart.gbs .bar i:nth-child(2){background:var(--ink-2)}.noart.gbs .bar i:nth-child(3){background:var(--ink-3)}.noart.gbs .bar i:nth-child(4){background:var(--paper-3)}
+.gbs-all{margin-top:22px;display:flex;align-items:center;gap:12px;font:700 14px var(--font);color:var(--mute)}
+.gbs-all span{display:inline-flex;align-items:center;gap:8px}
+.gbs-all .btn:disabled{opacity:.5;cursor:default}
+@media (max-width:640px){.gbs-all .btn{flex:1;white-space:normal;height:auto;min-height:44px;padding-block:10px}}
+/* one-tap download: the button fills as the ROM arrives */
+.btn.dl{font-variant-numeric:tabular-nums}
+.btn.dl[aria-busy=true]{background:linear-gradient(90deg,rgba(255,255,255,.3) var(--p),transparent 0);cursor:progress}
+.dlerr{flex-basis:100%;margin:0;font:600 14px/1.45 var(--font);color:#fff}
 
 .tools{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;margin-bottom:22px}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
@@ -685,6 +699,8 @@ dialog::backdrop{background:rgba(0,0,0,.72)}
 .sres .t small{display:block;font:500 13px var(--font);font-stretch:100%;text-transform:none;color:var(--mute);margin-top:3px}
 .sres mark{background:var(--y);color:#000}
 .sres .tag{align-self:center}
+/* Narrow phones: the status tag goes under the title, which keeps the width to wrap between words */
+@media (max-width:400px){.sres a{grid-template-columns:56px minmax(0,1fr);row-gap:8px}.sres .cv{grid-row:span 2;align-self:start}.sres .tag{grid-column:2}}
 .sbar input::-webkit-search-cancel-button{display:none}
 .sempty{padding:40px 0;font:600 16px var(--font);color:var(--mute)}
 /* search: autocomplete, facet bar and sheets, active filters (the query lives in the URL) */

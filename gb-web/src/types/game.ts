@@ -31,6 +31,13 @@ export interface GameEntry {
   /** Test cartridges: what a pass looks like, shown under the box. */
   hint?: string;
   hints?: Partial<Record<'fr' | 'es', string>>;
+  /** The tool it was made with ('GB Studio': the GB Studio collection, data/gbstudio.json). */
+  madeWith?: string;
+  /** What the author asks for it on their page (link-out entries); `priceNote` is the listed amount of a paid game. */
+  price?: 'free' | 'pwyw' | 'paid';
+  priceNote?: string;
+  /** Size in bytes of the hosted ROM at romUrl (download progress and totals). */
+  size?: number;
   isLocal: boolean;
   isFavorite?: boolean;
   lastPlayed?: number;

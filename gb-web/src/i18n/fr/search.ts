@@ -3,7 +3,7 @@ import type { Messages } from '../core.ts';
 export default {
   facet: {
     genre: 'Genre', players: 'Joueurs', region: 'Région', platform: 'Plateforme', decade: 'Décennie', year: 'Année',
-    developer: 'Développeur', publisher: 'Éditeur', language: 'Langue', save: 'Sauvegarde', is: 'Mes jeux',
+    developer: 'Développeur', publisher: 'Éditeur', language: 'Langue', save: 'Sauvegarde', made: 'Créé avec', is: 'Mes jeux',
   },
   genre: {
     action: 'Action', adventure: 'Aventure', 'action rpg': 'Action-RPG', board: 'Jeu de plateau', brawler: 'Beat ’em up',

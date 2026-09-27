@@ -1,7 +1,8 @@
 /* Cartouche service worker: keeps the app shell for offline use.
    The build fills FILES with every file in dist/ and VERSION with a hash of them (see vite.config.ts).
    Box art is cached separately by the page (Cache Storage "cartouche-boxart-*"); the player's ROMs and saves live in IndexedDB.
-   The bundled ROMs in roms/ (under 1 MB together) are ordinary built files, so they are kept here too.
+   The bundled ROMs in roms/ (under 1 MB together) are ordinary built files, so they are kept here too; not roms/gbstudio/
+   (the GB Studio collection), which the page downloads into IndexedDB only when the player asks, through the network below.
    Updates: a new version installs in the background and waits. It never takes over a running page (whose lazy
    chunks would then be gone from the cache); the page asks it to take over on the next launch (see lib/pwa.ts). */
 const VERSION = 'dev';

@@ -49,6 +49,17 @@ export default {
     inSlot: 'Listo en la consola',
     pressPlay: 'Pulsa Jugar',
   },
+  gbs: {
+    title: 'GB Studio',
+    sub: { one: '{games} hechos con GB Studio · {count} se descarga aquí, los demás están en la página de sus autores', other: '{games} hechos con GB Studio · {count} se descargan aquí, los demás están en la página de sus autores' },
+    all: 'Ver todos',
+    download: { one: 'Descargar {count} juego · {size}', other: 'Descargar los {count} · {size}' },
+    downloaded: 'Todo descargado',
+    confirmTitle: { one: '¿Descargar {count} juego?', other: '¿Descargar {count} juegos?' },
+    confirmBody: 'La licencia de sus autores permite que Cartouche los aloje. Se guardan en este navegador ({size} en total) y a partir de entonces se juegan sin conexión.',
+    lowSpace: 'A este navegador le quedan unos {free} de espacio, puede que no basten.',
+    confirmOk: 'Descargar',
+  },
   first: {
     welcome: 'Bienvenida',
     title: 'Pon tus juegos en la estantería.',

@@ -66,7 +66,7 @@ export const owned = (g: GameEntry) => g.isLocal || !!g.romUrl;
 
 export type TagKind = 'need' | 'saved' | 'now' | 'rom';
 export function tagOf(g: GameEntry, saved: Set<string>): [TagKind, string] {
-  if (!owned(g)) return ['need', t('common.tag.need')];
+  if (!owned(g)) return ['need', t(g.madeWith ? 'common.tag.author' : 'common.tag.need')];
   if (g.isLocal && saved.has(g.id)) return ['saved', t('common.tag.saved')];
   if (playsNow(g)) return ['now', t('common.tag.now')];
   return ['rom', t('common.tag.rom')];
