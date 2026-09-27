@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import type { GameEntry } from '../../types/game';
 import type { StoredSaveState, StoredScreenshot } from '../../lib/db';
@@ -16,6 +16,8 @@ import { Shot } from '../game/Shot';
 import { DebugPanel } from './DebugPanel';
 import { date, rich, useT, type Key } from '../../i18n';
 import { descOf } from '../../lib/catalog-utils';
+
+const PrintsSection = lazy(() => import('../../peripherals/PrintsSection'));
 
 export type Tab = 'controls' | 'saves' | 'screen' | 'album' | 'game';
 // The Codes page of the printed manual is left out until the core can apply cheat codes.
@@ -171,7 +173,9 @@ function ScreenPage({ snapshot, romLoaded, inColor, gameId }: { snapshot: () => 
   );
 }
 
-function AlbumPage({ game, shots, romLoaded, onScreenshot }: ManualProps) {
+function AlbumPage({ game, shots: all, romLoaded, onScreenshot }: ManualProps) {
+  const shots = all.filter((s) => s.kind !== 'print');
+  const prints = all.filter((s) => s.kind === 'print');
   const t = useT();
   const file = (s: StoredScreenshot) => `${game.id}-${new Date(s.timestamp).toISOString().replace(/[:.]/g, '-')}.png`;
   const download = (s: StoredScreenshot) => {
@@ -196,6 +200,7 @@ function AlbumPage({ game, shots, romLoaded, onScreenshot }: ManualProps) {
           ))}
         </div>
       ) : <div className="empty-inline">{t('player.album.empty')}</div>}
+      {prints.length > 0 && <Suspense fallback={null}><PrintsSection prints={prints} title={game.title} /></Suspense>}
     </>
   );
 }

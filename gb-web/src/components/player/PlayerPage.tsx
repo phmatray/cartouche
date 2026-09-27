@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { GameEntry } from '../../types/game';
 import { fetchRom, recordSession, useGameLibrary } from '../../hooks/useGameLibrary';
@@ -27,6 +27,11 @@ import { useAlbum, useLinkRom, useRomHeader } from '../../hooks/useGameExtras';
 import { Manual, type Tab } from './Manual';
 import { fileAccept } from '../../lib/pwa';
 import { t as tNow, useT } from '../../i18n';
+import { usePeripherals } from '../../peripherals/usePeripherals';
+
+// Cartridge peripherals load only when a cartridge uses them.
+const CameraDock = lazy(() => import('../../peripherals/CameraDock'));
+const PrinterTray = lazy(() => import('../../peripherals/PrinterTray'));
 
 const FPS = 4194304 / 70224; // 59.73 Hz, the Game Boy's real frame rate
 const SPEEDS = [0.5, 1, 2, 4];
@@ -73,6 +78,12 @@ function Player({ game }: { game: GameEntry }) {
   const header = useRomHeader(game);
   const album = useAlbum(game.id);
   const linkRom = useLinkRom(game);
+  const onPrinted = useCallback(() => {
+    album.reload();
+    toast('Print added to the album', '', { label: 'View', run: () => { setTab('album'); setManual(true); } });
+  }, [album]);
+  const frameEl = useCallback(() => rootRef.current?.querySelector<HTMLElement>('.screen .frame') ?? null, []);
+  const periph = usePeripherals(emu.core, romLoaded, game.id, onPrinted, frameEl);
 
   // A cartridge the core runs in Game Boy Color mode keeps its own colours: DMG palettes never apply to it,
   // and it has its own default screen settings (the core decides, from header byte 0x143 bit 7).
@@ -163,6 +174,7 @@ function Player({ game }: { game: GameEntry }) {
   const dirty = useRef(false); // something ran since the last resume point
   const speedRef = useRef(speed);
   useEffect(() => { speedRef.current = speed; }, [speed]);
+  const { tick: periphTick, stop: periphStop } = periph;
   const runOne = useCallback(() => {
     const fb = runFrame();
     const samples = getAudioSamples(); // always drained; only played at ≤ 1×
@@ -193,9 +205,10 @@ function Player({ game }: { game: GameEntry }) {
     if (fb) { renderFrame(fb, false, trace, p.acc); setLit(true); }
     else if (motion) drawMotion(p.acc);
     if (n) { played.current += dt; dirty.current = true; }
-  }, [wrapRunFrame, runOne, renderFrame, isRewinding, smoothMotion, smoothMotionForce, setTraceEnabled, getTrace, setMotion, drawMotion, usesTrace]);
+    periphTick(isRewinding ? 0 : n);
+  }, [wrapRunFrame, runOne, renderFrame, isRewinding, smoothMotion, smoothMotionForce, setTraceEnabled, getTrace, setMotion, drawMotion, usesTrace, periphTick]);
   const looping = romLoaded && (isRunning || isRewinding);
-  useEffect(() => { if (!looping) { pace.current.last = 0; refresh.current = []; } }, [looping]);
+  useEffect(() => { if (!looping) { pace.current.last = 0; refresh.current = []; periphStop(); } }, [looping, periphStop]);
   useAnimationFrame(onFrame, looping);
 
   // ---- resume point + play time, written when leaving (route change, tab hidden, page closed) ----
@@ -300,6 +313,7 @@ function Player({ game }: { game: GameEntry }) {
       try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* keep going */ }
       e.currentTarget.classList.add('down');
       if (useSettingsStore.getState().haptics) navigator.vibrate?.(8);
+      periph.touch();
       pressButton(BUTTON_NUMBERS[b]);
     },
     onPointerUp: (e: React.PointerEvent<HTMLButtonElement>) => { e.currentTarget.classList.remove('down'); releaseButton(BUTTON_NUMBERS[b]); },
@@ -349,6 +363,10 @@ function Player({ game }: { game: GameEntry }) {
               )}
             </div>
           </div>
+          <Suspense fallback={null}>
+            {periph.camera && <CameraDock feed={periph.feedCamera} running={isRunning} />}
+            {periph.paper && <PrinterTray paper={periph.paper} gameId={game.id} title={game.title} onClose={periph.dismiss} />}
+          </Suspense>
           <div className="cap">
             <span>{display.custom ? t('settings.screen.custom') : t(`settings.screen.presets.${presetOf(display.cfg.preset)!.name}.label`)}</span><i /><span>{t('player.speed', { x: speed === 0.5 ? '½' : String(speed) })}</span><i /><span>{t('player.rewindReady', { s: String(Math.round(bufferFill * rewindSeconds)) })}</span>
           </div>

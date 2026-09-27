@@ -205,8 +205,8 @@ export function getGameSaveStates(gameId: string): Promise<(StoredSaveState | un
   return Promise.all([resumeStateId(gameId), ...Array.from({ length: SLOT_COUNT }, (_, i) => slotStateId(gameId, i))].map(getSaveState));
 }
 
-/** Album: 160×144 PNG screenshots, newest first. */
-export interface StoredScreenshot { id?: number; gameId: string; png: Blob; timestamp: number; }
+/** Album: 160×144 PNG screenshots, newest first; `kind: 'print'`: a Game Boy Printer strip, 160 × any height. */
+export interface StoredScreenshot { id?: number; gameId: string; png: Blob; timestamp: number; kind?: 'print'; }
 export function addScreenshot(shot: StoredScreenshot): Promise<void> { return txOp(SCREENSHOT_STORE, 'readwrite', (s) => s.add(shot)).then(() => {}); }
 export async function getScreenshots(gameId: string): Promise<StoredScreenshot[]> {
   const list: StoredScreenshot[] = await txOp(SCREENSHOT_STORE, 'readonly', (s) => s.index('gameId').getAll(gameId));

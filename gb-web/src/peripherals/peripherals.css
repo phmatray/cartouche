@@ -1,0 +1,92 @@
+/* Cartridge peripherals, in the Box & Manual world: hardware is the screen frame's black,
+   paper is thermal paper, the flood ink stays behind them. Loaded with the components that use it. */
+
+:root{--thermal:#f7f6ef;--torn:polygon(0% 5px,5% 0,10% 5px,15% 0,20% 5px,25% 0,30% 5px,35% 0,40% 5px,45% 0,50% 5px,55% 0,60% 5px,65% 0,70% 5px,75% 0,80% 5px,85% 0,90% 5px,95% 0,100% 5px,100% 100%,0 100%)}
+
+/* ---------- camera: the lens ---------- */
+.cdock{position:absolute;top:24px;left:24px;z-index:3;width:auto;background:#0b0b0b;color:var(--paper);box-shadow:0 22px 44px rgba(0,0,0,.35),0 3px 8px rgba(0,0,0,.28)}
+.cdock.open{width:236px}
+.cd-video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.cd-head{display:grid;grid-template-columns:64px auto 8px;align-items:center;gap:10px;width:100%;border:0;background:transparent;color:inherit;padding:8px 12px 8px 8px;text-align:left}
+.cdock.open .cd-head{grid-template-columns:1fr 8px;grid-template-areas:"lens lens" "t led";padding:10px 12px 10px;row-gap:10px}
+.cdock.open .cd-lens{grid-area:lens}
+.cdock.open .cd-t{grid-area:t}
+.cd-lens{display:block;background:#1d1d1d;box-shadow:inset 0 0 0 1px #2a2a2a}
+.cd-lens canvas{display:block;width:100%;height:auto;aspect-ratio:8/7;image-rendering:pixelated;opacity:.18;transition:opacity .4s var(--ease)}
+.cdock.lit .cd-lens canvas{opacity:1}
+.cd-t b{display:block;font:900 20px/1 var(--font);font-stretch:62%;text-transform:uppercase}
+.cd-t small{display:block;margin-top:4px;font:700 10px/1 var(--font);letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.cd-led{width:8px;height:8px;background:var(--dim)}
+.cdock.lit .cd-led{background:var(--m)}
+.cd-body{padding:0 12px 12px}
+.cd-body p{margin:0 0 12px;font:500 13px/1.45 var(--font);color:#d9d9d3}
+.cd-acts{display:flex;flex-wrap:wrap;gap:6px}
+.cd-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 12px;border:2px solid var(--paper);background:transparent;color:var(--paper);font:800 12px/1 var(--font);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;cursor:pointer}
+.cd-btn:hover{background:rgba(244,244,240,.12)}
+.cd-btn.y{background:var(--y);border-color:var(--y);color:#000}
+.cd-btn.y:hover{background:#ffe04d}
+.cd-btn.icon{width:36px;padding:0}
+.cd-btn[aria-pressed=true]{background:var(--paper);color:#000}
+.cd-btn[disabled]{opacity:.55;cursor:default}
+.cd-sel{flex:1 1 100px;min-width:0;height:36px;border:2px solid var(--paper);background:#0b0b0b;color:var(--paper);font:700 12px var(--font);padding:0 6px}
+
+/* ---------- printer: the output tray ---------- */
+.ptray{--px:1;--lead:10px;position:absolute;right:24px;top:24px;bottom:24px;z-index:3;display:flex;flex-direction:column;justify-content:flex-end;pointer-events:none;width:calc(160px * var(--px) + 24px)}
+.ptray>*{pointer-events:auto}
+@media (min-width:1280px) and (min-height:760px){.ptray{--px:2}}
+.pt-out{min-height:0;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;padding:0 12px;filter:drop-shadow(0 8px 12px rgba(0,0,0,.3))}
+/* The paper rises out of the slot one print band at a time, as the head works through it. */
+.pt-paper{flex:none;width:calc(160px * var(--px));height:calc(var(--rows) * var(--px) * 1px + var(--lead));padding-top:var(--lead);overflow:hidden;background:var(--thermal);animation:pt-feed var(--ms) steps(var(--bands),end) both}
+.pt-paper canvas{display:block;width:100%;image-rendering:pixelated}
+.pt-paper.torn{clip-path:var(--torn)}
+@keyframes pt-feed{from{height:calc(var(--from) * var(--px) * 1px + var(--lead))}}
+.pt-body{position:relative;background:#0b0b0b;color:var(--paper);padding:0 12px 10px;box-shadow:0 22px 44px rgba(0,0,0,.35),0 3px 8px rgba(0,0,0,.28)}
+.pt-slot{display:block;height:6px;margin:0 -12px 8px;background:#000;box-shadow:inset 0 2px 3px rgba(0,0,0,.9),0 1px 0 #2a2a2a}
+.pt-row{display:flex;align-items:center;gap:10px;min-height:36px}
+.pt-led{width:8px;height:8px;flex:none;background:var(--c)}
+.pt-led.busy{background:var(--y);animation:pt-blink .9s steps(2,jump-none) infinite}
+@keyframes pt-blink{50%{background:var(--dim)}}
+.pt-state{font:700 11px/1.2 var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--mute);font-variant-numeric:tabular-nums;min-width:0}
+.pt-x{margin-left:auto;margin-right:-8px;width:36px;height:36px;flex:none;border:0;background:transparent;color:var(--mute);display:flex;align-items:center;justify-content:center}
+.pt-x:hover{color:var(--paper)}
+.pt-acts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:4px}
+.pt-btn{height:40px;border:0;background:var(--band-3);color:var(--paper);display:flex;align-items:center;justify-content:center;gap:6px;font:800 11px/1 var(--font);letter-spacing:.06em;text-transform:uppercase;padding:0 6px}
+.pt-btn:hover{background:#333}
+.pt-btn:first-child{background:var(--y);color:#000}
+.pt-btn:first-child:hover{background:#ffe04d}
+.pt-btn .icon{width:16px;height:16px}
+
+@media (max-width:900px),(orientation:landscape) and (max-height:500px){
+  .cdock{top:8px;left:8px}
+  .cdock.open{width:min(260px,calc(100% - 16px))}
+  .cd-head{grid-template-columns:44px auto 8px;padding:6px 10px 6px 6px}
+  .cd-btn,.cd-sel{height:44px}
+  .cd-btn.icon{width:44px}
+  .cdock.open .cd-head{grid-template-columns:44px auto 8px;grid-template-areas:none;padding:6px 10px 6px 6px}
+  .cdock.open .cd-lens,.cdock.open .cd-t{grid-area:auto}
+  .ptray{right:8px;top:8px;bottom:8px}
+  .pt-btn,.pt-x{height:44px}
+  .pt-x{width:44px}
+  .pt-btn span,.pt-long{display:none}
+}
+
+/* ---------- album: prints ---------- */
+.pr-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px 14px;align-items:start}
+.pr-strip{margin:0}
+.pr-strip img{display:block;width:100%;height:auto;image-rendering:pixelated;background:var(--thermal);padding-top:6px;clip-path:var(--torn)}
+.pr-strip figcaption{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 8px;margin-top:8px;font:600 12px var(--font);color:var(--ink-3)}
+.pr-strip figcaption>span:first-child{white-space:nowrap}
+.pr-acts{display:flex;gap:4px}
+.pr-acts .sbtn{padding:0 8px;display:inline-flex;align-items:center}
+.pr-acts .sbtn .icon{width:16px;height:16px}
+
+/* ---------- a print on real paper ---------- */
+#pt-sheet{display:none}
+@media print{
+  @page{margin:14mm}
+  body>*:not(#pt-sheet){display:none!important}
+  body{background:#fff!important}
+  #pt-sheet{display:block;text-align:center;color:#000}
+  #pt-sheet img{display:block;width:76mm;margin:0 auto;image-rendering:pixelated}
+  #pt-sheet p{margin:6mm 0 0;font:600 9pt var(--font)}
+}

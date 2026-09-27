@@ -26,7 +26,7 @@ export function useAlbum(gameId: string) {
     await addScreenshot({ gameId, png, timestamp: Date.now() });
     await reload();
   }, [gameId, reload]);
-  return { shots, add };
+  return { shots, add, reload };
 }
 
 /** Cartridge header facts read from the game's ROM (stored or bundled). null when there is no ROM. */

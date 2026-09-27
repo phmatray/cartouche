@@ -267,7 +267,11 @@ export function useEmulator() {
     return emu ? emu.get_bgp() : 0;
   }, []);
 
+  /** The core itself, for the cartridge peripherals (camera, printer, rumble). */
+  const core = useCallback(() => emulatorRef.current, []);
+
   return {
+    core,
     isReady,
     isRunning,
     setIsRunning,
