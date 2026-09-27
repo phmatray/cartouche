@@ -108,7 +108,7 @@ export function PerGame({ usage, onChanged, confirm }: { usage: Map<string, Game
     <div className="pg">
       <dl className="pg-sum">
         <div><dt>{t('settings.pergame.games')}</dt><dd>{num(all.length)}</dd></div>
-        <div><dt>ROMs</dt><dd>{mb(sum.rom)}</dd></div>
+        <div><dt>{t('settings.pergame.romsCol')}</dt><dd>{mb(sum.rom)}</dd></div>
         <div><dt>{t('game.saves.title')}</dt><dd>{mb(sum.saves)}</dd></div>
         <div><dt>{t('settings.storage.shots')}</dt><dd>{mb(sum.shots)}</dd></div>
         <div><dt>{t('settings.storage.art')}</dt><dd>{mb(sum.art)}</dd></div>
@@ -216,7 +216,7 @@ function Rows({ rows, picked, toggle, open, setOpen, onChanged, remove, confirm 
                   <label className="ck"><input type="checkbox" data-f={`c${i}`} tabIndex={tab} checked={picked.has(g.id)} onChange={() => toggle(g.id)} aria-label={t('settings.pergame.select', { title: g.title })} /></label>
                   <button className="vname" data-f={`n${i}`} tabIndex={tab} aria-expanded={isOpen} aria-controls={isOpen ? `pgd-${i}` : undefined} onClick={() => setOpen(isOpen ? null : g.id)}>
                     {I.next}
-                    <span><b>{g.title}</b><small><span className="m">{g.isLocal ? mb(u.rom) : t('settings.pergame.bundled')} · {t('settings.pergame.saves', { count: u.nSaves })} · </span>{g.lastPlayed ? t('library.hero.playedAgo', { ago: ago(g.lastPlayed) }) : t('search.value.is.unplayed')}</small></span>
+                    <span><b>{g.title}</b><small><span className="m">{g.isLocal ? mb(u.rom) : t('settings.pergame.bundled')} · {t('settings.pergame.saves', { count: u.nSaves })} · </span>{g.lastPlayed ? t('library.hero.playedAgo', { ago: ago(g.lastPlayed) }) : t('settings.pergame.unplayed')}</small></span>
                   </button>
                   <span className="n">{g.isLocal ? mb(u.rom) : t('settings.pergame.bundled')}</span>
                   <span className="n">{u.nSaves ? `${u.nSaves} · ${mb(u.saves)}` : '—'}</span>

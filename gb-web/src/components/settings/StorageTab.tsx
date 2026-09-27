@@ -182,7 +182,7 @@ export function StorageTab() {
         <i style={{ width: pct(usage?.shots ?? 0), background: 'var(--c)' }} />
       </div>
       <div className="legend">
-        <span><i style={{ background: 'var(--ink)' }} />ROMs · {num(own.length)} · {mb(usage?.roms ?? 0)}</span>
+        <span><i style={{ background: 'var(--ink)' }} />{t('settings.pergame.romsCol')} · {num(own.length)} · {mb(usage?.roms ?? 0)}</span>
         <span><i style={{ background: 'var(--m)' }} />{t('game.saves.title')} · {num(usage?.nSaves ?? 0)} · {mb(usage?.saves ?? 0)}</span>
         <span><i style={{ background: 'var(--c)' }} />{t('settings.storage.shots')} · {num(usage?.nShots ?? 0)} · {mb(usage?.shots ?? 0)}</span>
         {quota && <span>{t('settings.storage.quota', { usage: mb(quota.usage), quota: mb(quota.quota) })}</span>}

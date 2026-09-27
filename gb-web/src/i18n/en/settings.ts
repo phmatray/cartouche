@@ -251,6 +251,8 @@ export default {
     list: 'Stored games',
     select: 'Select {title}',
     bundled: 'Bundled',
+    romsCol: 'ROMs',
+    unplayed: 'Never played',
     included: 'Included',
     shotDeleted: 'Screenshot deleted',
     undo: 'Undo',
