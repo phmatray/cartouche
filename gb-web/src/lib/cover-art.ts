@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { useSettingsStore } from '../store/settingsStore';
 import { t } from '../i18n/core';
 import { inkFor } from './ink';
+import { limiter } from './limit';
 
 /**
  * Box art lives in libretro-thumbnails, one repository per platform. The file name is known ahead
@@ -30,6 +31,10 @@ const inflight = new Map<string, Promise<string | null>>();
 /** Bumped by deleteBoxArt(): a download still in flight then keeps nothing. */
 let generation = 0;
 
+// ponytail: 4 downloads at a time for every caller (a big import, a grid of new covers, "Download box art"): enough
+// for a GitHub raw host without flooding it, or a phone on cellular. Cache Storage hits don't wait.
+const limited = limiter(4);
+
 async function cachedFetch(url: string): Promise<Response | null> {
   let cache: Cache | null = null;
   await migrated;
@@ -39,8 +44,11 @@ async function cachedFetch(url: string): Promise<Response | null> {
     if (hit) return hit;
   } catch { /* Cache Storage unavailable (insecure context, private mode): fall through to the network */ }
   const gen = generation;
-  const res = await fetch(url, { cache: 'no-store' }); // Cache Storage is the only copy: Delete removes it all
-  if (!res.ok) return null;
+  const res = await limited(async () => { // the body too: a slot is free once the file has arrived
+    const r = await fetch(url, { cache: 'no-store' }); // Cache Storage is the only copy: Delete removes it all
+    return r.ok ? new Response(await r.blob()) : null; // the blob keeps its type
+  });
+  if (!res) return null;
   if (gen === generation) await cache?.put(url, res.clone()).catch(() => {});
   return res;
 }
@@ -120,7 +128,7 @@ export async function fetchBoxArtFor(games: ArtGame[]): Promise<number> {
   useBoxArtProgress.setState({ n: 0, of: todo.length });
   const gen = generation;
   let n = 0;
-  // ponytail: 4 at a time, enough for a GitHub raw host without flooding it
+  // 4 workers: the downloads are limited to 4 at a time anyway (limited), and the progress counts them in order
   const worker = async () => {
     for (let g; (g = todo.shift()) && gen === generation;) {
       await getCoverArtUrl(g.libretroName, g.platform);
