@@ -1,4 +1,4 @@
-import { lazy, Suspense, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent } from 'react';
+import { lazy, Suspense, useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent } from 'react';
 import { useSettingsStore } from '../../store/settingsStore';
 import { cleanLayout, deviceClass, layoutKey, type Layout, type Orient, type Part, type Place } from '../../lib/touch-layout';
 import { holdTouches, misfit, useSkin } from './touch-dom';
@@ -47,7 +47,10 @@ export function TouchControls({ pad, online, editing, onEdit, onDone, startRewin
   const orient: Orient = useMedia(LANDSCAPE) ? 'landscape' : 'portrait';
   const key = layoutKey(deviceClass(), orient);
   const stored = useMemo(() => cleanLayout(layouts?.[key]), [layouts, key]);
-  const [draft, setDraft] = useState<Layout | null>(null);
+  // The draft belongs to one layout: turning the phone mid-edit starts on the other orientation's own.
+  const [drafted, setDrafted] = useState<{ key: string; l: Layout } | null>(null);
+  const draft = drafted?.key === key ? drafted.l : null;
+  const onDraft = useCallback((l: Layout) => setDrafted({ key, l }), [key]);
   // A layout made on a bigger phone (or imported, or synced) that doesn't fit this one: the skin's layout plays instead.
   const [misfits, setMisfits] = useState<Layout | null>(null);
   const layout = editing ? draft ?? stored : stored === misfits ? null : stored;
@@ -99,11 +102,11 @@ export function TouchControls({ pad, online, editing, onEdit, onDone, startRewin
     </div>
       {editing && (
         <Suspense fallback={null}>
-          <ControlsEditor zone={zone} layout={layout} layoutName={t(`player.edit.${deviceClass()}${orient === 'landscape' ? 'Wide' : 'Tall'}`)}
-            onDraft={setDraft}
+          <ControlsEditor key={key} zone={zone} layout={layout} layoutName={t(`player.edit.${deviceClass()}${orient === 'landscape' ? 'Wide' : 'Tall'}`)}
+            onDraft={onDraft}
             onCommit={(l) => useSettingsStore.getState().set({ touchLayouts: { ...useSettingsStore.getState().touchLayouts, [key]: l } })}
-            onReset={() => { const rest = { ...useSettingsStore.getState().touchLayouts }; delete rest[key]; useSettingsStore.getState().set({ touchLayouts: rest }); setDraft(null); }}
-            onDone={() => { setDraft(null); onDone(); }} />
+            onReset={() => { const rest = { ...useSettingsStore.getState().touchLayouts }; delete rest[key]; useSettingsStore.getState().set({ touchLayouts: rest }); setDrafted(null); }}
+            onDone={() => { setDrafted(null); onDone(); }} />
         </Suspense>
       )}
     </>
