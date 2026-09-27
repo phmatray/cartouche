@@ -313,6 +313,11 @@ impl Emulator {
         }
     }
 
+    /// After `load_state`: the state's thumbnail, shown and drawn over by the next frame.
+    pub fn set_screen(&mut self, frame: &[u8]) {
+        if let Some(gb) = &mut self.gb { gb.set_screen(frame); }
+    }
+
     /// Get a copy of the current framebuffer for save state thumbnails
     pub fn framebuffer_snapshot(&self) -> Vec<u8> {
         self.gb.as_ref()

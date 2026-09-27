@@ -366,6 +366,18 @@ impl Sgb {
         }
     }
 
+    /// Puts back a picture this machine showed (`GameBoy::set_screen`): `out`, and in `fb` (the PPU's
+    /// back buffer) the DMG shades the current palettes turn into it. A colour none gives is shade 0.
+    pub fn set_screen(&mut self, frame: &[u8], fb: &mut [u8]) {
+        self.out.copy_from_slice(frame);
+        if self.mask != 0 { return; }
+        for (i, (px, dst)) in frame.chunks(4).zip(fb.chunks_mut(4)).enumerate() {
+            let pal = self.attrs[(i / SCREEN_WIDTH / 8) * 20 + i % SCREEN_WIDTH / 8] as usize;
+            let s = (1..4).find(|&s| rgba(self.pals[pal][s])[..3] == px[..3]).unwrap_or(0);
+            dst.copy_from_slice(&PALETTE_COLORS[s]);
+        }
+    }
+
     /// Everything but the derived pictures (redrawn from the rest). The command in flight comes
     /// last, so a state without it (saved by an older version) still loads.
     pub fn export_state(&self, out: &mut Vec<u8>) {

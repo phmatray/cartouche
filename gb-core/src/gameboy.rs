@@ -116,6 +116,19 @@ impl GameBoy {
         self.bus.sgb.as_deref().map_or(&self.bus.ppu.front[..], |s| &s.out[..])
     }
 
+    /// Shows `frame` (160x144 RGBA, the thumbnail of a state just loaded) and draws the next frame
+    /// over it. States are taken mid-frame and do not hold the PPU's back buffer, so without this
+    /// the rows drawn before that point would come from a blank or older picture.
+    pub fn set_screen(&mut self, frame: &[u8]) {
+        if frame.len() != crate::ppu::FRAMEBUFFER_SIZE { return; }
+        let ppu = &mut self.bus.ppu;
+        match self.bus.sgb.as_deref_mut() {
+            Some(s) => s.set_screen(frame, &mut ppu.framebuffer),
+            None => ppu.framebuffer.copy_from_slice(frame),
+        }
+        ppu.front.copy_from_slice(&ppu.framebuffer);
+    }
+
     /// The picture is in colour: a CGB cartridge, or a DMG one colourised by the CGB.
     pub fn in_colour(&self) -> bool {
         self.console != Console::Dmg
