@@ -7,9 +7,10 @@ import game from './game.ts';
 import player from './player.ts';
 import add from './add.ts';
 import link from './link.ts';
+import online from './online.ts';
 import settings from './settings.ts';
 import legal from './legal.ts';
 import periph from './periph.ts';
 
-const es: Messages = { common, shell, library, search, game, player, add, link, settings, legal, periph };
+const es: Messages = { common, shell, library, search, game, player, add, link, online, settings, legal, periph };
 export default es;

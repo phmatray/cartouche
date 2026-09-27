@@ -20,7 +20,7 @@ Everything runs client-side: emulation, saves and the ROM library live in the pl
 
 ## Operating Context
 
-- Routes: `/` library, `/game/:id` player, `/settings`, `/link-cable` (two-player link cable lobby).
+- Routes: `/` library, `/game/:id` player, `/settings`, `/link-cable` (two-player link cable lobby), `/link-cable/online` (the same over the internet, peer to peer; see docs/ONLINE_LINK.md).
 - Input: keyboard (arrows, Z/X, Enter/Shift, F fullscreen, F5/F8 quick save/load, hold R to rewind), Gamepad API, on-screen touch controls on mobile.
 - Library sources: curated `catalog.json` (freely licensed homebrew only; Tobu Tobu Girl is the one bundled ROM) and user-imported ROMs ("My Collection"), with SHA-1 lookup against `gamedb.json`.
 - Catalog entries without a ROM open a player page that asks the user to load their own file, which is then linked to that entry.
@@ -32,7 +32,7 @@ Everything runs client-side: emulation, saves and the ROM library live in the pl
 - Settings: keybindings, display (shader, scale; Game Boy Color games always show their own colors), audio (volume, channel mutes), emulation (default speed, rewind buffer, auto-save), storage (box art switch, size and delete, backup). No boot ROM is shipped.
 - Box art is opt-in (a first-launch "Show box art?" dialog; answer stored in settings) and fetched at runtime from the libretro-thumbnails GitHub repositories, only for recognized ROMs the player added; it is usually absent, missing or slow, so every surface needs a designed no-art fallback.
 - Stack: React 19, React Router 7, Zustand, Tailwind v4, Vite; `gb-core` Rust crate built with wasm-pack.
-- No backend, no accounts, no cloud sync.
+- No backend, no accounts, no cloud sync. Online link play is browser to browser (WebRTC); public Nostr relays only introduce the peers.
 
 ## Brand Commitments
 

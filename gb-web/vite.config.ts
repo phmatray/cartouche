@@ -99,6 +99,8 @@ const licenseFiles = (): Plugin => ({
   },
 })
 
+const ONLINE_ONLY = /\/node_modules\/(trystero|@trystero-p2p|@noble|uqr)\//
+
 export default defineConfig(({ mode }) => ({
   // Deployed at https://phmatray.github.io/cartouche/ (build and preview); the dev server stays at '/'.
   base: mode === 'production' ? '/cartouche/' : '/',
@@ -112,7 +114,11 @@ export default defineConfig(({ mode }) => ({
       // Libraries change far less often than the app: their own chunk stays cached across releases.
       output: {
         codeSplitting: {
-          groups: [{ debugName: 'vendor', name: (id) => (id.includes('/node_modules/') && !id.endsWith('.css') ? 'vendor' : null) }],
+          // Online play's libraries (WebRTC rooms, QR codes) load with it, never with the library.
+          groups: [
+            { debugName: 'p2p', name: (id) => (ONLINE_ONLY.test(id) ? 'p2p' : null) },
+            { debugName: 'vendor', name: (id) => (id.includes('/node_modules/') && !id.endsWith('.css') ? 'vendor' : null) },
+          ],
         },
       },
     },

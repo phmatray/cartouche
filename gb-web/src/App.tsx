@@ -14,6 +14,7 @@ const LegalPage = lazy(() => import('./components/LegalPage').then((m) => ({ def
 const GamePage = lazy(() => loadGame().then((m) => ({ default: m.GamePage })));
 const PlayerPage = lazy(() => loadPlayer().then((m) => ({ default: m.PlayerPage })));
 const LinkCablePage = lazy(() => import('./components/LinkCablePage').then((m) => ({ default: m.LinkCablePage })));
+const OnlineLinkPage = lazy(() => import('./components/netlink/OnlineLinkPage').then((m) => ({ default: m.OnlineLinkPage })));
 const SettingsPage = lazy(() => import('./components/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const AddRomsPage = lazy(() => import('./components/add/AddRomsPage').then((m) => ({ default: m.AddRomsPage })));
 
@@ -67,6 +68,7 @@ const router = createBrowserRouter([{
         { path: '/', element: <LibraryPage /> },
         { path: '/add', element: <AddRomsPage /> },
         { path: '/link-cable', element: <LinkCablePage /> },
+        { path: '/link-cable/online', element: <OnlineLinkPage /> },
         { path: '/settings/:section?', element: <SettingsPage /> },
         { path: '/game/:id', element: <GamePage /> },
         { path: '/legal', element: <LegalPage /> },

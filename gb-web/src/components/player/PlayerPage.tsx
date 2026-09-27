@@ -32,6 +32,8 @@ import { usePeripherals } from '../../peripherals/usePeripherals';
 // Cartridge peripherals load only when a cartridge uses them.
 const CameraDock = lazy(() => import('../../peripherals/CameraDock'));
 const PrinterTray = lazy(() => import('../../peripherals/PrinterTray'));
+import { useOnlineLink } from '../../lib/netlink/useOnlineLink';
+import { LinkCap, LinkWait } from '../netlink/LinkHud';
 
 const FPS = 4194304 / 70224; // 59.73 Hz, the Game Boy's real frame rate
 const SPEEDS = [0.5, 1, 2, 4];
@@ -75,7 +77,7 @@ function Player({ game }: { game: GameEntry }) {
   const touchSize = useSettingsStore((s) => s.touchSize);
   const smoothMotion = useSettingsStore((s) => s.smoothMotion);
   const smoothMotionForce = useSettingsStore((s) => s.smoothMotionForce);
-  const [speed, setSpeed] = useState(() => useSettingsStore.getState().defaultSpeed);
+  const [speed, setSpeed] = useState(() => (q.get('online') ? 1 : useSettingsStore.getState().defaultSpeed));
   const [tab, setTab] = useState<Tab>(() => (q.get('tab') as Tab) || 'controls');
   const [manual, setManual] = useState(() => !!q.get('tab') || !matchMedia('(max-width:900px)').matches);
   const [needsRom, setNeedsRom] = useState(!owned(game));
@@ -113,6 +115,9 @@ function Player({ game }: { game: GameEntry }) {
   const saves = useSaveStates(game.id, { ...emu, loadState: loadAndShow }, saveTo);
   const { isRewinding, startRewind, stopRewind, wrapRunFrame, bufferFill } = useRewind({ saveState, loadState: loadAndShow });
   useSaveData({ saveTo, romLoaded, hasBatteryRam, exportSram });
+  // Online link cable (?online=<room>): real time only, so no speed change, rewind or state loading while plugged in.
+  const online = useOnlineLink(emu.coreRef, romLoaded, q.get('online'), isRunning);
+  const linkPump = online.pump;
 
   // No Fullscreen API on iPhone (nor in its Home Screen apps): "immersive" hides the chrome instead and gives the screen all the room.
   const [immersive, setImmersive] = useState(false);
@@ -158,7 +163,7 @@ function Player({ game }: { game: GameEntry }) {
     if (!loadRom(data)) { setBadRom(true); return; }
     setNeedsRom(false);
     if (hasBatteryRam()) {
-      const id = await getActiveProfileId(game.id).catch(() => game.id);
+      const id = q.get('save') ?? await getActiveProfileId(game.id).catch(() => game.id);
       const sram = await getSram(id).catch(() => undefined);
       if (sram) importSram(sram.sram);
       saveTo.current = id;
@@ -188,10 +193,11 @@ function Player({ game }: { game: GameEntry }) {
   const { tick: periphTick, stop: periphStop } = periph;
   const runOne = useCallback(() => {
     const fb = runFrame();
+    linkPump();
     const samples = getAudioSamples(); // always drained; only played at ≤ 1×
     if (samples && speedRef.current <= 1) feedSamples(samples);
     return fb;
-  }, [runFrame, getAudioSamples, feedSamples]);
+  }, [runFrame, getAudioSamples, feedSamples, linkPump]);
   // Display refresh rate, from the time between animation frames (median of the last 31).
   const refresh = useRef<number[]>([]);
   const onFrame = useCallback(() => {
@@ -215,9 +221,10 @@ function Player({ game }: { game: GameEntry }) {
     const trace = fb && traced && !isRewinding ? getTrace() : null; // a rewound frame has no trace of its own
     if (fb) { renderFrame(fb, false, trace, p.acc); setLit(true); }
     else if (motion) drawMotion(p.acc);
-    if (n) { played.current += dt; dirty.current = true; }
+    // Online, the resume point stays the solo game's: a mid-link state is no place to come back to alone.
+    if (n) { played.current += dt; if (!online.on) dirty.current = true; }
     periphTick(isRewinding ? 0 : n);
-  }, [wrapRunFrame, runOne, renderFrame, isRewinding, smoothMotion, smoothMotionForce, setTraceEnabled, getTrace, setMotion, drawMotion, usesTrace, periphTick]);
+  }, [wrapRunFrame, runOne, renderFrame, isRewinding, smoothMotion, smoothMotionForce, setTraceEnabled, getTrace, setMotion, drawMotion, usesTrace, periphTick, online.on]);
   const looping = romLoaded && (isRunning || isRewinding);
   useEffect(() => { if (!looping) { pace.current.last = 0; refresh.current = []; periphStop(); } }, [looping, periphStop]);
   useAnimationFrame(onFrame, looping);
@@ -293,8 +300,10 @@ function Player({ game }: { game: GameEntry }) {
   const mute = useCallback(() => { toggleMute(); toast(muted ? tNow('player.toast.soundOn') : tNow('player.toast.soundOff'), 'c'); }, [toggleMute, muted]);
 
   // ---- keyboard: game buttons from Settings, then player shortcuts ----
-  const actions = useRef({ togglePlay, saveSlot, loadSlot, screenshot, mute, toggleFullscreen, startRewind, stopRewind });
-  useEffect(() => { actions.current = { togglePlay, saveSlot, loadSlot, screenshot, mute, toggleFullscreen, startRewind, stopRewind }; });
+  const noop = () => {};
+  const rewind = online.on ? noop : startRewind, load = online.on ? async () => {} : loadSlot;
+  const actions = useRef({ togglePlay, saveSlot, loadSlot: load, screenshot, mute, toggleFullscreen, startRewind: rewind, stopRewind });
+  useEffect(() => { actions.current = { togglePlay, saveSlot, loadSlot: load, screenshot, mute, toggleFullscreen, startRewind: rewind, stopRewind }; });
   useEffect(() => {
     const buttonOf = (key: string) => {
       for (const [b, k] of Object.entries(keybindings)) if (k === key || k.toLowerCase() === key.toLowerCase()) return BUTTON_NUMBERS[b];
@@ -386,7 +395,7 @@ function Player({ game }: { game: GameEntry }) {
                       onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; const data = f && await linkRom(f); if (data) boot(data); }} />
                   </label>
                 </div>
-              ) : romLoaded && !isRunning && !isRewinding && (
+              ) : online.on && online.waiting && isRunning ? <LinkWait link={online} /> : romLoaded && !isRunning && !isRewinding && (
                 <div className="overlay"><b>{t('player.paused')}</b><p>{t('player.pausedSub')}</p></div>
               )}
             </div>
@@ -400,7 +409,7 @@ function Player({ game }: { game: GameEntry }) {
             </div>
           )}
           <div className="cap">
-            <span>{display.custom ? t('settings.screen.custom') : t(`settings.screen.presets.${presetOf(display.cfg.preset)!.name}.label`)}</span><i /><span>{t('player.speed', { x: speed === 0.5 ? '½' : String(speed) })}</span><i /><span>{t('player.rewindReady', { s: String(Math.round(bufferFill * rewindSeconds)) })}</span>
+            <span>{display.custom ? t('settings.screen.custom') : t(`settings.screen.presets.${presetOf(display.cfg.preset)!.name}.label`)}</span><i /><span>{t('player.speed', { x: speed === 0.5 ? '½' : String(speed) })}</span><i />{online.on ? <LinkCap link={online} /> : <span>{t('player.rewindReady', { s: String(Math.round(bufferFill * rewindSeconds)) })}</span>}
           </div>
         </div>
 
@@ -410,7 +419,7 @@ function Player({ game }: { game: GameEntry }) {
           onSave={(i) => (saves.states[i + 1]
             ? setConfirm({ title: t('player.overwrite.title', { n: String(i + 1) }), body: t('player.overwrite.body', { ago: ago(saves.states[i + 1]!.timestamp) }), ok: t('player.overwrite.ok'), run: () => saveSlot(i) })
             : saveSlot(i))}
-          onLoad={loadSlot} onScreenshot={screenshot}
+          onLoad={load} onScreenshot={screenshot} online={online.on}
         />
       </div>
 
@@ -418,19 +427,22 @@ function Player({ game }: { game: GameEntry }) {
         <button className="dk main" onClick={togglePlay} disabled={disabled} aria-label={isRunning ? t('player.deck.pauseP') : t('player.deck.playP')}>
           {isRunning ? <>{I.pause}<span className="lbl">{t('player.deck.pause')}</span></> : <>{I.play}<span className="lbl">{t('library.hero.play')}</span></>}<span className="k">P</span>
         </button>
-        <button className="dk" aria-label={t('player.deck.rewindR')} aria-pressed={isRewinding} disabled={disabled}
+        <button className="dk" aria-label={t('player.deck.rewindR')} aria-pressed={isRewinding} disabled={disabled || online.on}
           onPointerDown={startRewind} onPointerUp={stopRewind} onPointerLeave={stopRewind} onPointerCancel={stopRewind}>
           {I.rew}<span className="lbl">{t('player.deck.rewind')}</span><span className="k">{t('player.deck.holdR')}</span>
         </button>
         <span className="gap" />
-        <div className="speed" role="group" aria-label={t('player.deck.speed')}>
-          {SPEEDS.map((s) => <button key={s} aria-pressed={speed === s} onClick={() => setSpeed(s)}>{s === 0.5 ? '½' : s}×</button>)}
-        </div>
-        {/* Narrow phones: one button steps through the speeds (the group doesn't fit). */}
-        <button className="dk spd" onClick={() => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length])} aria-label={t('player.deck.speedChange', { x: String(speed) })}>{speed === 0.5 ? '½' : speed}×</button>
-        <span className="gap" />
+        {/* Online link cable: real time only, the speed controls give their room to the rest of the dock. */}
+        {!online.on && <>
+          <div className="speed" role="group" aria-label={t('player.deck.speed')}>
+            {SPEEDS.map((s) => <button key={s} aria-pressed={speed === s} onClick={() => setSpeed(s)}>{s === 0.5 ? '½' : s}×</button>)}
+          </div>
+          {/* Narrow phones: one button steps through the speeds (the group doesn't fit). */}
+          <button className="dk spd" onClick={() => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length])} aria-label={t('player.deck.speedChange', { x: String(speed) })}>{speed === 0.5 ? '½' : speed}×</button>
+          <span className="gap" />
+        </>}
         <button className="dk" onClick={() => saveSlot(0)} disabled={noStore} aria-label={t('player.deck.saveF5')}>{I.save}<span className="lbl">{t('common.save')}</span><span className="k">F5</span></button>
-        <button className="dk hide-m" onClick={() => loadSlot(0)} disabled={noStore} aria-label={t('player.deck.loadF8')}>{I.load}<span className="lbl">{t('common.load')}</span><span className="k">F8</span></button>
+        <button className="dk hide-m" onClick={() => loadSlot(0)} disabled={noStore || online.on} aria-label={t('player.deck.loadF8')}>{I.load}<span className="lbl">{t('common.load')}</span><span className="k">F8</span></button>
         <button className="dk hide-m" onClick={screenshot} disabled={noStore} aria-label={t('player.deck.shotF12')}>{I.cam}<span className="lbl">{t('player.deck.photo')}</span><span className="k">F12</span></button>
         <span className="push" />
         <button className="dk hide-m" onClick={mute} aria-pressed={muted} aria-label={t('player.deck.muteM')}>{muted ? I.mute : I.sound}</button>
