@@ -19,6 +19,8 @@ pub struct GameBoy {
     pub bus: MemoryBus,
     pub cgb_mode: bool,
     pub double_speed: bool,
+    /// Cycles already run of a frame cut short by a stalled remote-link transfer.
+    frame_cycles: u32,
 }
 
 impl GameBoy {
@@ -32,7 +34,7 @@ impl GameBoy {
         let cgb_mode = cartridge.cgb_mode() && model == Model::Auto;
         let bus = MemoryBus::new(cartridge, cgb_mode);
         let cpu = Cpu::new();
-        let mut gb = GameBoy { cpu, bus, cgb_mode, double_speed: false };
+        let mut gb = GameBoy { cpu, bus, cgb_mode, double_speed: false, frame_cycles: 0 };
         // The built-in boot ROM is a DMG one: it hands over with A=$01, which CGB software reads
         // as "running on a DMG" (CGB-only titles then show their "GBC only" screen, dual-mode
         // titles fall back to monochrome). CGB carts therefore start from the CGB post-boot state.
@@ -90,18 +92,23 @@ impl GameBoy {
         }
     }
 
+    /// Runs one frame's worth of cycles. With a remote link, returns early while a transfer waits
+    /// for the partner's byte (`bus.serial.stalled()`); the next call finishes that frame.
     pub fn run_frame(&mut self) -> Result<(), EmulatorError> {
-        self.bus.ppu.frame_ready = false;
-        let mut total: u32 = 0;
-
-        while total < CYCLES_PER_FRAME {
+        if self.frame_cycles == 0 {
+            self.bus.ppu.frame_ready = false;
+        }
+        while self.frame_cycles < CYCLES_PER_FRAME {
+            if self.bus.serial.stalled() {
+                return Ok(());
+            }
             self.bus.cycle_count = 0;
             self.cpu.handle_interrupts(&mut self.bus);
             self.cpu.step(&mut self.bus)?;
-            total += self.bus.cycle_count;
+            self.frame_cycles += self.bus.cycle_count;
             self.double_speed = self.bus.double_speed;
         }
-
+        self.frame_cycles = 0;
         Ok(())
     }
 

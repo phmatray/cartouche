@@ -312,6 +312,43 @@ impl Emulator {
         self.gb.as_mut().map_or(0.0, |gb| gb.bus.cartridge.take_rumble())
     }
 
+    // Remote link cable (the partner is on another machine; see serial.rs). While a transfer this
+    // console clocks waits for the partner's byte, run_frame returns early and link_stalled() is true.
+
+    pub fn set_link_remote(&mut self, on: bool) {
+        if let Some(gb) = &mut self.gb {
+            gb.bus.serial.set_remote(on);
+        }
+    }
+
+    pub fn link_stalled(&self) -> bool {
+        self.gb.as_ref().map_or(false, |gb| gb.bus.serial.stalled())
+    }
+
+    /// Once per transfer this console clocks: `byte | cycles << 8` for the partner, -1 if none.
+    pub fn link_take_request(&mut self) -> i32 {
+        self.gb.as_mut().and_then(|gb| gb.bus.serial.take_request()).map_or(-1, |(b, c)| b as i32 | (c as i32) << 8)
+    }
+
+    /// The partner's answer to our transfer.
+    pub fn link_remote_reply(&mut self, byte: u8) {
+        if let Some(gb) = &mut self.gb {
+            gb.bus.serial.remote_reply(byte);
+        }
+    }
+
+    /// The partner clocks a byte into this console; the answer comes out of link_take_reply().
+    pub fn link_remote_clock(&mut self, byte: u8, cycles: u32) {
+        if let Some(gb) = &mut self.gb {
+            gb.bus.serial.remote_clock(byte, cycles);
+        }
+    }
+
+    /// Our answer to the partner's transfer, once: the byte, or -1 if none yet.
+    pub fn link_take_reply(&mut self) -> i32 {
+        self.gb.as_mut().and_then(|gb| gb.bus.serial.take_reply()).map_or(-1, |b| b as i32)
+    }
+
     pub fn vram_ptr(&self) -> *const u8 {
         self.gb.as_ref()
             .map_or(std::ptr::null(), |gb| gb.bus.ppu.vram.as_ptr())
