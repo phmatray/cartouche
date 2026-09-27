@@ -340,7 +340,7 @@ function Player({ game }: { game: GameEntry }) {
                   <p>{t('player.insert.body', { title: game.title })}</p>
                   <label className="btn y" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
                     {I.cart}{t('game.loadRom')}
-                    <input type="file" accept={fileAccept('.gb,.gbc')} className="sr" tabIndex={-1}
+                    <input type="file" accept={fileAccept('.gb,.gbc,.zip')} className="sr" tabIndex={-1}
                       onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; const data = f && await linkRom(f); if (data) boot(data); }} />
                   </label>
                 </div>

@@ -51,7 +51,7 @@ export default {
     free: 'Gratuit',
     pwyw: 'Prix libre',
     paid: 'Payant',
-    steps: 'Son auteur le distribue sur sa propre page (elle s’ouvre dans un nouvel onglet). Téléchargez-y le fichier .gb ou .gbc (décompressez-le d’abord si c’est un .zip), puis revenez et touchez Charger votre ROM : le fichier rejoint ce jeu et reste dans ce navigateur.',
+    steps: 'Son auteur le distribue sur sa propre page (elle s’ouvre dans un nouvel onglet). Téléchargez-y le jeu (son fichier .gb, .gbc ou .zip), puis revenez et touchez Charger votre ROM : le fichier rejoint ce jeu et reste dans ce navigateur.',
   },
   hostedErase: 'Hébergé ici selon la licence de son auteur. Ses sauvegardes peuvent être effacées.',
   dump: 'Copiez la ROM de votre propre cartouche, puis chargez le fichier .gb ici ou déposez-le n’importe où sur la page. Rien ne quitte ce navigateur.',
@@ -109,6 +109,7 @@ export default {
   },
   link: {
     bad: '{file} est endommagé ou n’est pas une ROM Game Boy',
+    fromZip: '{file} contient plusieurs ROM : chargement de {rom}',
     unknown: 'Associé à {title}. Ce fichier ne figure pas parmi les copies connues : il peut s’agir d’un hack ou d’une copie défectueuse.',
     other: 'Associé, mais son empreinte indique {title}',
     ok: '{title} reconnu : la ROM est associée',

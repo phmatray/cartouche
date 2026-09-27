@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { useLinkCable, type LinkPlayer } from '../hooks/useLinkCable';
 import { fetchRom, refreshSavedIds, useGameLibrary } from '../hooks/useGameLibrary';
-import { importSav, useRomHeader } from '../hooks/useGameExtras';
+import { importSav, readRomFile, useRomHeader } from '../hooks/useGameExtras';
 import { createProfile, getActiveProfileId, getGameSaveStates, getSaveState, getSram, listProfiles, newProfileId, resumeStateId, saveSram, slotStateId, uniqueName, type StoredSave, type StoredSaveState } from '../lib/db';
 import { useSettingsStore } from '../store/settingsStore';
 import { ago, bytes, linkReady as isLinkReady, owned, PLATFORM, sortTitle } from '../lib/ui';
@@ -152,7 +152,7 @@ export function LinkCablePage() {
   };
   const romFor = async (p: LinkPlayer): Promise<Uint8Array | null> => {
     const f = fileOf(p);
-    if (sel[p] === FILE && f) return new Uint8Array(await f.arrayBuffer());
+    if (sel[p] === FILE && f) return readRomFile(f);
     const g = playable.find((x) => x.id === sel[p]);
     return g ? fetchRom(g) : null;
   };
@@ -294,7 +294,7 @@ export function LinkCablePage() {
         </div>
         {cart(p, f)}
         {saveChooser(p)}
-        <input ref={(el) => { fileInput.current[p] = el; }} type="file" accept={fileAccept('.gb,.gbc,.rom,.bin')} className="sr" tabIndex={-1} aria-hidden="true"
+        <input ref={(el) => { fileInput.current[p] = el; }} type="file" accept={fileAccept('.gb,.gbc,.rom,.bin,.zip')} className="sr" tabIndex={-1} aria-hidden="true"
           onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (!file) return; setFiles((s) => ({ ...s, [p]: file })); setPick((s) => ({ ...s, [p]: FILE })); }} />
       </section>
     );

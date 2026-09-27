@@ -50,7 +50,7 @@ export default {
     free: 'Free',
     pwyw: 'Pay what you want',
     paid: 'Paid',
-    steps: 'Its author distributes it on their own page (it opens in a new tab). Download the .gb or .gbc file there (unzip it first if it’s a .zip), then come back and tap Load your ROM: the file joins this game and stays in this browser.',
+    steps: 'Its author distributes it on their own page (it opens in a new tab). Download the game there (its .gb, .gbc or .zip file), then come back and tap Load your ROM: the file joins this game and stays in this browser.',
   },
   hostedErase: 'Hosted here under its author’s license. Its saves can be erased.',
   dump: 'Dump your own cartridge, then load the .gb file here or drop it anywhere on the page. Nothing leaves this browser.',
@@ -108,6 +108,7 @@ export default {
   },
   link: {
     bad: '{file} is damaged or isn’t a Game Boy ROM',
+    fromZip: '{file} holds several ROMs: loading {rom}',
     unknown: 'Linked to {title}. This file isn’t among the known dumps, so it could be a hack or a bad dump.',
     other: 'Linked, but its fingerprint says {title}',
     ok: '{title} recognized: your ROM is linked',

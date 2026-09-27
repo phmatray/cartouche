@@ -83,7 +83,7 @@ function GameDetails({ game }: { game: GameEntry }) {
               {need ? (
                 <label className={`btn lg ${author ? 'line' : 'play'}`} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
                   {I.cart}{t('game.loadRom')}
-                  <input type="file" accept={fileAccept('.gb,.gbc')} className="sr" tabIndex={-1}
+                  <input type="file" accept={fileAccept('.gb,.gbc,.zip')} className="sr" tabIndex={-1}
                     onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f && await linkRom(f)) navigate(paths.play(game.id)); }} />
                 </label>
               ) : (
