@@ -49,3 +49,9 @@ logs/
 !gb-web/public/roms/cgb-acid2.gbc
 !gb-web/public/roms/dmg-acid2.gb
 !gb-web/public/roms/cpu_instrs.gb
+# The GB Studio collection ROMs hosted with their authors' licenses (gb-web/public/roms/gbstudio/LICENSES.txt),
+# each also listed with its SHA-1 in scripts/rom-allowlist.sha1 (checked by scripts/check-no-game-data.sh).
+!gb-web/public/roms/gbstudio/dawn-will-come.gb
+!gb-web/public/roms/gbstudio/poltersprite.gb
+!gb-web/public/roms/gbstudio/millennium-gun.gb
+!gb-web/public/roms/gbstudio/dusky-dungeon.gb

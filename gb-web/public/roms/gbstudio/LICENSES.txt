@@ -1,0 +1,127 @@
+# GB Studio collection: hosted ROMs
+
+Cartouche lists about a hundred games made with [GB Studio](https://www.gbstudio.dev/). It hosts only the
+ones whose authors' licenses allow redistribution of the whole ROM (code and assets), each exactly as its
+author released it. Every other game in the collection links to its author's own page.
+
+Each file is a separate program that Cartouche loads as data, like a file the player adds. The app downloads
+one only when the player asks (it is not part of the offline app shell), checks its SHA-1, and stores it in the
+player's browser. Like every Game Boy ROM, each header contains the logo bitmap the original hardware checks at
+power-on; it is part of the authors' releases.
+
+| File | Game | Author | License | SHA-1 | SHA-256 |
+|------|------|--------|---------|-------|---------|
+| `dawn-will-come.gb` | Dawn Will Come | eishiya, H0lyhandgrenade, Kezia Salmon | MIT (code) + CC BY 4.0 (art, music) | `1611ddfdb9af72f20ddeca4133d8eebd0f14e424` | `3a3b9881b5a3a3708e217efd73f443f6a97782d3b0d3a2086e1a00ac176e5e9f` |
+| `poltersprite.gb` | Poltersprite 2.0.4 | Inkus Alters | CC BY-NC-SA 4.0 (game) + GPL-3.0 (code) | `0ef93a14618995915894fb90a9c80015ceee7020` | `b98036114da6cca699ad1de8a81b4b3eef9db51db9264ca739f0212bfca44e21` |
+| `millennium-gun.gb` | Millennium Gun | Finny (Gonçalo Limas) | 0BSD (code) + CC0 1.0 (graphics, audio) + MIT (plugin) | `c81c65c80f95a63818ac6cb1c46aa7250c7c8b28` | `008459a4d209e694495c98b4add746d8f7f3955b4793efc21bdb091e082cd2f5` |
+| `dusky-dungeon.gb` | Dusky Dungeon 0.2.0 | invertedHat (Jan Klečka) | MIT (project) + CC BY 4.0 (graphics) + MIT (music) + CC BY 4.0 / CC BY 3.0 (fonts) | `f3b456d6318bee05150403efa5a933996e1d744a` | `6e9dbac346dd6cbff6d01d00e58875e30e4c3f12cbf308f69a7a926295f196f2` |
+
+Total: 3,407,872 bytes (3.25 MB).
+
+## Dawn Will Come
+
+- Authors: art, writing and design by H0lyhandgrenade; programming and art by eishiya; music by Kezia Salmon
+  (Les Beaux Plastiques). A GB Compo 2021 entry.
+- Official page: https://eishiya.itch.io/dawn-will-come
+- Source: https://github.com/eishiya/DawnWillCome
+- Licenses, as stated in the source repository README ("Licenses") and on the official page:
+  - Artwork and music: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Artwork © H0lyhandgrenade
+    and eishiya, music © Kezia Salmon.
+  - All of the code, including the scripts built in the GB Studio editor: MIT License. "Original GBS engine code
+    © 2020 Chris Maltby, Dawn Will Come-specific code © 2021 eishiya" (MIT text below).
+- File: `DawnWillCome.gb` from its Homebrew Hub entry
+  (https://github.com/gbdev/database/tree/master/entries/dawn-will-come), byte for byte identical to the ROM the
+  authors serve in their own itch.io build. Changes: none (renamed to `dawn-will-come.gb`).
+
+## Poltersprite
+
+- Author: Inkus Alters, © 2024-2025. A GitHub Game Off 2024 entry, updated to 2.0.4 in 2025.
+- Official page: https://inkusalters.itch.io/poltersprite
+- Source: https://github.com/inkusalters/Poltersprite. The complete corresponding source of this version is
+  `Polterspritev2.0.4.zip` in that repository.
+- Licenses, as stated in the source repository README and on the official page:
+  - The game: [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/). Cartouche is free,
+    without ads or sales; it redistributes the game unmodified and non-commercially.
+  - The code: [GNU GPL v3](https://www.gnu.org/licenses/gpl-3.0.html) (full text also at https://phmatray.github.io/cartouche/licenses/GPL-3.0-ucity.txt).
+- File: `Poltersprite2.0.4.gb` from the official v2.0.4 release
+  (https://github.com/inkusalters/Poltersprite/releases/tag/v2.0.4). Changes: none (renamed to `poltersprite.gb`).
+
+## Millennium Gun
+
+- Author: Finny (Gonçalo Limas, @flightbun). A GB Compo 2025 entry.
+- Official page: https://flightbun.itch.io/millennium-gun
+- Source: https://github.com/gbcompo25/millennium-gun-gbcompo25
+- Licenses, as stated in the repository's `CREDITS.txt`: the game code under Zero-Clause BSD (0BSD), the
+  graphics and audio under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). It uses a modified
+  version of the OnlyPlatforms plugin, © 2022 becomingplural (Peter McDonald), modified by KirbyKing186 and
+  Finny, under the MIT License (text below).
+- File: `build/rom/millennium-gun_jam.gb` from the GB Compo 2025 organisers' import of the author's submitted source (its
+  `CREDITS.txt` written by the author), identical to the ROM of the author's
+  itch.io build. Changes: none (renamed to `millennium-gun.gb`).
+
+## Dusky Dungeon
+
+- Author: invertedHat (Jan Klečka), © 2021. A GB Compo 2021 entry (version 0.2.0).
+- Official page: https://invertedhat.itch.io/dusky-dungeon
+- Source: https://github.com/inverted-hat/duskyDungeon
+- Licenses, as stated in the source repository README and license files:
+  - The GB Studio project: MIT License, "Copyright 2021 Jan Klečka" (text below).
+  - The graphics: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+  - Fonts: Gothic Pixel Font by Leoda (dacosta.itch.io/gothic-pixel-font), CC BY 4.0; Romulus by Pix3M
+    (opengameart.org/content/pixel-fonts-by-pix3m), [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/),
+    with some character widths adapted by invertedHat.
+  - Music, from the GB Studio Community Assets (github.com/DeerTears/GB-Studio-Community-Assets), MIT License,
+    © 2019 Ember Bland and contributors: "Monty's Overheating Spaceship" and "Boss Fight 1" by krümel,
+    "Short Hauntings" by DeerTears, "Darkstone Remix" by Tronimal (original by DeerTears).
+- File: `DuskyDungeon-0.2.0.gb` from its Homebrew Hub entry
+  (https://github.com/gbdev/database/tree/master/entries/dusky-dungeon), identical to the ROM of the author's
+  itch.io build. Changes: none (renamed to `dusky-dungeon.gb`).
+
+## GB Studio engine
+
+Each of these ROMs contains the GB Studio engine, MIT License, © 2019-2026 Chris Maltby
+(https://github.com/chrismaltby/gb-studio).
+
+## MIT License
+
+The MIT License applies, with the copyright notices named above (Dawn Will Come code, the GB Studio engine,
+the OnlyPlatforms plugin, the Dusky Dungeon project and the GB Studio Community Assets music):
+
+```
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## Zero-Clause BSD (Millennium Gun code)
+
+```
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+```
+
+## Removal
+
+Any of these games is removed on its author's request: open an issue at https://github.com/phmatray/cartouche.

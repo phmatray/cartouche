@@ -41,12 +41,15 @@ function Snake({ text }: { text: string }) {
   return <>{text.split('_').map((part, i) => <span key={i}>{i > 0 && <><wbr />_</>}{part}</span>)}</>;
 }
 
-/** The printed card every box sits on: always there, so a missing or slow cover still looks designed. */
+/**
+ * The printed card every box sits on: always there, so a missing or slow cover still looks designed.
+ * GB Studio games (no box art is ever fetched for them) print the four shades of a Game Boy screen instead of the process inks.
+ */
 export function NoArt({ game }: { game: GameEntry }) {
   return (
-    <div className="noart">
-      <div><b data-long={game.title.length > 18 || undefined}><Title text={game.title} /></b></div>
-      <div><small>{game.developer || genreLabel(game)}</small><span className="bar"><i /><i /><i /></span></div>
+    <div className={game.madeWith ? 'noart gbs' : 'noart'}>
+      <div><b data-long={game.title.length > 18 || /[^\s_-]{10}/.test(game.title) || undefined}><Title text={game.title} /></b></div>
+      <div><small>{game.developer || genreLabel(game)}</small><span className="bar">{Array.from({ length: game.madeWith ? 4 : 3 }, (_, i) => <i key={i} />)}</span></div>
     </div>
   );
 }

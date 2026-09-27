@@ -80,21 +80,6 @@
     "isLocal": false
   },
   {
-    "id": "deadeus",
-    "title": "Deadeus",
-    "description": "A horror adventure with multiple endings, set in a cursed village.",
-    "descriptions": {"fr": "Une aventure horrifique à fins multiples, dans un village maudit.", "es": "Una aventura de terror con varios finales, ambientada en un pueblo maldito."},
-    "genre": "Adventure",
-    "category": "Homebrew Highlights",
-    "coverArt": "",
-    "screenshots": [],
-    "developer": "-IZMA-",
-    "year": "2019",
-    "license": "Freeware, all rights reserved by the author",
-    "homepage": "https://izma.itch.io/deadeus",
-    "isLocal": false
-  },
-  {
     "id": "cgb-acid2",
     "title": "cgb-acid2",
     "description": "A Game Boy Color graphics test. Success: a smiling face that matches the reference image exactly, every feature in its color, with \"cgb-acid2 by Matt Currie\" underneath.",

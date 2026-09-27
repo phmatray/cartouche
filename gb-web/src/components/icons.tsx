@@ -36,6 +36,7 @@ export const I = {
   check: svg(<><path d="m5 12.5 4.5 4.5L19 7" fill="none" stroke="currentColor" strokeWidth="3" /></>),
   left: svg(<><path d="M6 12l10-7v14z" fill="currentColor" /></>),
   right: svg(<><path d="M18 12 8 19V5z" fill="currentColor" /></>),
+  ext: svg(<><path d="M14 4h6v6m0-6-9 9M18 14v6H4V6h6" fill="none" stroke="currentColor" strokeWidth="2.2" /></>),
   link: svg(<><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1.2 1.2M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1.2-1.2" fill="none" stroke="currentColor" strokeWidth="2.2" /></>),
   github: <svg className="icon" viewBox="0 0 16 16" aria-hidden="true"><path d={GITHUB} fill="currentColor" /></svg>,
   /** iOS Share: a tray with an arrow out of it (where Add to Home Screen lives). */

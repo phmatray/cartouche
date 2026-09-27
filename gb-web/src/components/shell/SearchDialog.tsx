@@ -10,7 +10,7 @@ import { num, rich, t as tNow, useT } from '../../i18n';
 const MAX_RESULTS = 60;
 const MAX_VALUES = 60;
 // The facet bar, in order; the year range lives in the Decade sheet.
-const BAR: Key[] = ['is', 'genre', 'players', 'region', 'platform', 'decade', 'developer', 'publisher', 'language', 'save'];
+const BAR: Key[] = ['is', 'genre', 'players', 'region', 'platform', 'decade', 'developer', 'publisher', 'language', 'save', 'made'];
 
 /** `text` with the first match of each query word (from `searchKey`) marked, accents and punctuation ignored. */
 export function Hl({ text, q }: { text: string; q: string }): ReactNode {

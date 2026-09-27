@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { importRom, isRomFile, MAX_ROM_SIZE, type ImportOutcome, type ImportStatus } from '../hooks/useGameLibrary';
+import { FetchError, fetchHosted, importRom, isRomFile, MAX_ROM_SIZE, type ImportOutcome, type ImportStatus } from '../hooks/useGameLibrary';
+import type { GameEntry } from '../types/game';
 import { toast } from '../components/shell/actions';
 import { listZip, readEntry, ZipError } from './zip';
 import { t } from '../i18n';
@@ -73,14 +74,25 @@ let current: string | null = null;
 const stopWaiting = () => useImports.setState((s) => ({ rows: s.rows.map((r) => (r.st === 'work' && r.key !== current ? { ...r, st: 'stop' } : r)) }));
 
 export function queueImport(files: File[]) {
-  if (!files.length) return;
+  if (files.length) run(() => expand(files));
+}
+
+/** Download hosted catalog games (the GB Studio collection) through the same queue: one at a time, Stop, full-disk handling. */
+export function queueDownloads(games: GameEntry[]) {
+  if (games.length) run(async () => ({
+    rows: games.map((g): ImportRow => ({ key: String(++seq), name: `${g.id}.gb`, size: g.size ?? 0, title: g.title, st: 'work', read: () => fetchHosted(g) })),
+    ignored: 0,
+  }));
+}
+
+function run(list: () => Promise<{ rows: ImportRow[]; ignored: number }>) {
   const my = gen;
   // Dropped while another import runs: its rows join the list instead of replacing it.
   const append = queued > 0;
   queued++;
   chain = chain.then(async () => {
     if (my !== gen) return;
-    const { rows: fresh, ignored } = await expand(files);
+    const { rows: fresh, ignored } = await list();
     flush();
     useImports.setState((s) => (append
       ? { rows: [...s.rows, ...fresh], ignored: s.ignored + ignored }
@@ -96,7 +108,7 @@ export function queueImport(files: File[]) {
         if (isRomFile(r.name) && r.size <= MAX_ROM_SIZE) data = await r.read!();
         out = { st: 'bad' };
       } catch (e) {
-        out = { st: 'bad', note: e instanceof ZipError ? e.message.toLowerCase() : t('add.unreadable') };
+        out = { st: 'bad', note: e instanceof ZipError ? e.message.toLowerCase() : e instanceof FetchError ? e.message : t('add.unreadable') };
       }
       if (data) {
         // A file that was read but couldn't be stored: the storage is failing, so every next ROM would too.

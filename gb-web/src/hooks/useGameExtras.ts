@@ -33,7 +33,7 @@ export function useAlbum(gameId: string) {
 export function useRomHeader(game: GameEntry | undefined) {
   const [header, setHeader] = useState<{ id: string; meta: RomMetadata | null } | null>(null);
   useEffect(() => {
-    if (!game || !owned(game)) return;
+    if (!game || !owned(game) || (game.madeWith && !game.isLocal)) return; // a hosted game's header waits for its download
     let cancelled = false;
     fetchRom(game).then((d) => { if (!cancelled) setHeader({ id: game.id, meta: parseRomHeader(d) }); }).catch(() => {});
     return () => { cancelled = true; };
@@ -70,7 +70,7 @@ export function useLinkRom(game: GameEntry | undefined) {
     const sha1 = await computeSha1(data);
     const known = await lookupByHash(sha1);
     await linkRomToGame(game, data, sha1);
-    if (!known) toast(t('game.link.unknown', { title: game.title }), 'm');
+    if (!known) toast(t(game.madeWith ? 'game.link.ok' : 'game.link.unknown', { title: game.title }), game.madeWith ? 'c' : 'm'); // GB Studio games aren't in the GameDB
     else if (titleKey(known.title) !== titleKey(game.title)) toast(t('game.link.other', { title: known.title }), 'm');
     else toast(t('game.link.ok', { title: game.title }), 'c');
     return data;

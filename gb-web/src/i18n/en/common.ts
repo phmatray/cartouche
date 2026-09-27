@@ -33,7 +33,7 @@ export default {
     on: '{date}',
   },
   keys: { space: 'Space' },
-  tag: { need: 'Needs your ROM', saved: 'Saved', now: 'Play now', rom: 'Your ROM' },
+  tag: { need: 'Needs your ROM', saved: 'Saved', now: 'Play now', rom: 'Your ROM', author: 'From the author' },
   games: { one: '{count} game', other: '{count} games' },
   played: '{time} played',
 };

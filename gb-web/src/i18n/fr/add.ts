@@ -14,6 +14,7 @@ export default {
   renamed: 'Renommé',
   notRom: 'endommagé ou pas une ROM Game Boy',
   unreadable: 'illisible',
+  mismatch: 'pas le fichier attendu (son SHA-1 diffère)',
   anyway: 'Importer quand même',
   st: { work: 'Vérification…', ok: 'Ajouté', dup: 'Déjà dans la bibliothèque', unk: 'Ajouté, non reconnu', bad: 'Ignoré', stop: 'Non importé' },
   sum: {

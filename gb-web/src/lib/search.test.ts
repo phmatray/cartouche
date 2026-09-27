@@ -37,6 +37,8 @@ test('normalizes synonyms, accents and case', () => {
   assert.equal(normValue('language', 'Français'), 'fr'); // a value typed in French or Spanish counts too
   assert.equal(normValue('genre', 'plateformes'), 'platformer');
   assert.equal(normValue('is', 'favoris'), 'favorite');
+  assert.equal(normValue('made', 'GB Studio'), 'gbstudio');
+  assert.equal(normValue('made', 'gb-studio'), 'gbstudio');
   assert.equal(valueLabel('genre', 'rpg'), 'RPG');
 });
 

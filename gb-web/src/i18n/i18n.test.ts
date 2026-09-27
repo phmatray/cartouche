@@ -6,6 +6,7 @@ import { LEGAL_SECTIONS } from '../content/legal.ts';
 import { LEGAL_FR } from '../content/legal.fr.ts';
 import { LEGAL_ES } from '../content/legal.es.ts';
 import catalog from '../data/catalog.json' with { type: 'json' };
+import gbstudio from '../data/gbstudio.json' with { type: 'json' };
 
 await loadLang('fr');
 await loadLang('es');
@@ -100,7 +101,7 @@ test('the legal translations keep every section, link and URL of the English tex
 });
 
 test('every catalog description and hint is translated', () => {
-  for (const g of catalog as { id: string; hint?: string; descriptions?: Record<string, string>; hints?: Record<string, string> }[]) {
+  for (const g of [...catalog, ...gbstudio] as { id: string; hint?: string; descriptions?: Record<string, string>; hints?: Record<string, string> }[]) {
     for (const l of ['fr', 'es']) {
       assert.ok(g.descriptions?.[l], `${g.id}: description ${l}`);
       if (g.hint) assert.ok(g.hints?.[l], `${g.id}: hint ${l}`);

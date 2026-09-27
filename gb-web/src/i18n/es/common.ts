@@ -34,7 +34,7 @@ export default {
     on: 'el {date}',
   },
   keys: { space: 'Espacio' },
-  tag: { need: 'Falta tu ROM', saved: 'Guardado', now: 'Jugar ya', rom: 'Tu ROM' },
+  tag: { need: 'Falta tu ROM', saved: 'Guardado', now: 'Jugar ya', rom: 'Tu ROM', author: 'Del autor' },
   games: { one: '{count} juego', other: '{count} juegos' },
   played: '{time} de juego',
 } satisfies Messages['common'];

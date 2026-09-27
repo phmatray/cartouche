@@ -104,7 +104,7 @@ jobs:
 
       - name: Check that no unexpected ROM is bundled
         run: |
-          found=$(find gb-web/dist gb-web/public -type f \( -iname '*.gb' -o -iname '*.gbc' -o -iname '*.sgb' \) | grep -Ev 'roms/(tobutobugirl\.gb|tobutobugirldx\.gb|ucity\.gbc|cgb-acid2\.gbc|dmg-acid2\.gb|cpu_instrs\.gb)$' || true)
+          found=$(find gb-web/dist gb-web/public -type f \( -iname '*.gb' -o -iname '*.gbc' -o -iname '*.sgb' \) | grep -Ev 'roms/(tobutobugirl\.gb|tobutobugirldx\.gb|ucity\.gbc|cgb-acid2\.gbc|dmg-acid2\.gb|cpu_instrs\.gb|gbstudio/(dawn-will-come|dusky-dungeon|millennium-gun|poltersprite)\.gb)$' || true)
           if [ -n "$found" ]; then
             echo "Unexpected ROM files:"; echo "$found"; exit 1
           fi
@@ -120,6 +120,10 @@ jobs:
           197fb0bcec544f0400527fc707e0a94f55435974986e6986b424ace5de81720e  cgb-acid2.gbc
           464e14b7d42e7feea0b7ede42be7071dc88913f75b9ffa444299424b63d1dff1  dmg-acid2.gb
           8c5e12f41e0ba5bbca796944f92ffe6de28809198682c4332e38d1b3cf56fcf2  cpu_instrs.gb
+          3a3b9881b5a3a3708e217efd73f443f6a97782d3b0d3a2086e1a00ac176e5e9f  gbstudio/dawn-will-come.gb
+          6e9dbac346dd6cbff6d01d00e58875e30e4c3f12cbf308f69a7a926295f196f2  gbstudio/dusky-dungeon.gb
+          008459a4d209e694495c98b4add746d8f7f3955b4793efc21bdb091e082cd2f5  gbstudio/millennium-gun.gb
+          b98036114da6cca699ad1de8a81b4b3eef9db51db9264ca739f0212bfca44e21  gbstudio/poltersprite.gb
           EOF
             ) || exit 1
           done

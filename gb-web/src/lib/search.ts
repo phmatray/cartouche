@@ -8,7 +8,7 @@ import { DICTS, getLang, LANGS, langName, t, tOr, type Key as MsgKey } from '../
  * as a filter is free text, searched with `score` (titles, developer, publisher…). Pure: no React, no DOM.
  */
 
-export type Key = 'genre' | 'players' | 'region' | 'platform' | 'decade' | 'year' | 'developer' | 'publisher' | 'language' | 'save' | 'is';
+export type Key = 'genre' | 'players' | 'region' | 'platform' | 'decade' | 'year' | 'developer' | 'publisher' | 'language' | 'save' | 'made' | 'is';
 export interface Filter { key: Key; value: string; neg?: boolean }
 export interface Query { text: string; filters: Filter[] }
 
@@ -24,6 +24,7 @@ export const FACETS: { key: Key; alias: string[] }[] = [
   { key: 'publisher', alias: ['pub'] },
   { key: 'language', alias: ['lang'] },
   { key: 'save', alias: ['savetype'] },
+  { key: 'made', alias: ['engine', 'tool', 'collection'] },
   { key: 'is', alias: ['has', 'status'] },
 ];
 const KEY_OF = new Map(FACETS.flatMap((f) => [f.key, ...f.alias].map((a) => [a, f.key] as const)));
@@ -38,10 +39,11 @@ const CLOSED: Partial<Record<Key, string[]>> = {
   region: ['us', 'eu', 'jp', 'world', 'other'],
   platform: ['gb', 'gbc', 'dual'],
   save: ['battery', 'none'],
+  made: ['gbstudio'],
   language: ['en', 'ja', 'fr', 'de', 'es', 'it', 'nl', 'pt', 'sv', 'no', 'da', 'fi', 'zh', 'ca'],
   is: ['favorite', 'saved', 'now', 'need', 'unplayed', 'recent', 'art', 'mine', 'homebrew'],
 };
-const NAMES: Record<string, string> = { us: 'US', eu: 'EU', jp: 'JP', gb: 'Game Boy', gbc: 'Game Boy Color' };
+const NAMES: Record<string, string> = { us: 'US', eu: 'EU', jp: 'JP', gb: 'Game Boy', gbc: 'Game Boy Color', gbstudio: 'GB Studio' };
 const SYN: Partial<Record<Key, Record<string, string>>> = {
   genre: {
     'role playing': 'rpg', roleplaying: 'rpg', 'role playing game': 'rpg', rpgs: 'rpg', jrpg: 'rpg',
@@ -54,6 +56,7 @@ const SYN: Partial<Record<Key, Record<string, string>>> = {
   region: { usa: 'us', america: 'us', na: 'us', ntsc: 'us', europe: 'eu', eur: 'eu', pal: 'eu', japan: 'jp', jpn: 'jp', ja: 'jp' },
   platform: { dmg: 'gb', gameboy: 'gb', 'game boy': 'gb', mono: 'gb', cgb: 'gbc', color: 'gbc', colour: 'gbc', 'game boy color': 'gbc', both: 'dual' },
   save: { yes: 'battery', sram: 'battery', sav: 'battery', no: 'none' },
+  made: { 'gb studio': 'gbstudio', gbs: 'gbstudio' },
   language: { english: 'en', japanese: 'ja', jp: 'ja', french: 'fr', german: 'de', spanish: 'es', italian: 'it', dutch: 'nl', portuguese: 'pt', swedish: 'sv', norwegian: 'no', danish: 'da', finnish: 'fi', chinese: 'zh' },
   is: {
     fav: 'favorite', favorites: 'favorite', favourite: 'favorite', starred: 'favorite', saves: 'saved', save: 'saved',
@@ -133,7 +136,7 @@ export function valueLabel(key: Key, value: string, labels?: Map<string, string>
   if (key === 'players') return value === '2+' ? t('search.players.link') : t('search.players.n', { count: Number(value) });
   if (key === 'language') return langName(value);
   if (key === 'genre') return tOr(`search.genre.${value}`, labels?.get(`genre\0${value}`) ?? value.replace(/\b\w/g, (c) => c.toUpperCase()));
-  if (NAMES[value] && (key === 'region' || key === 'platform')) return NAMES[value];
+  if (NAMES[value] && (key === 'region' || key === 'platform' || key === 'made')) return NAMES[value];
   if (key === 'is' || key === 'save' || key === 'region' || key === 'platform') return t(`search.value.${key}.${value}` as MsgKey);
   return labels?.get(`${key}\0${value}`) ?? value.replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -211,6 +214,7 @@ export function buildIndex(games: GameEntry[], ctx: IndexContext): SearchIndex {
         publisher: credits(g.publisher).map(([v, l]) => label('publisher', v, l)),
         language: languagesOf(g, region),
         save: g.saveType ? [g.saveType] : [],
+        made: g.madeWith === 'GB Studio' ? ['gbstudio'] : [],
         is,
       },
     };
@@ -359,6 +363,7 @@ export function gameTags(g: GameEntry): { key: Key; label: string; filter: Filte
   if (regions.includes('world')) add('region', 'world', valueLabel('region', 'world'));
   else for (const r of regions) add('region', r, valueLabel('region', r));
   if (g.platform) add('platform', g.compatibility === 'dual' ? 'dual' : g.platform, g.compatibility === 'dual' ? 'Game Boy & Color' : valueLabel('platform', g.platform));
+  if (g.madeWith === 'GB Studio') add('made', 'gbstudio', 'GB Studio');
   if (isHomebrew(g)) add('is', 'homebrew', valueLabel('is', 'homebrew'));
   return out;
 }

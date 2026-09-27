@@ -48,6 +48,17 @@ export default {
     inSlot: 'Ready in the slot',
     pressPlay: 'Press play',
   },
+  gbs: {
+    title: 'GB Studio',
+    sub: { one: '{games} made with GB Studio · {count} downloads here, the others come from their authors', other: '{games} made with GB Studio · {count} download here, the others come from their authors' },
+    all: 'See all',
+    download: { one: 'Download {count} game · {size}', other: 'Download all {count} · {size}' },
+    downloaded: 'All downloaded',
+    confirmTitle: { one: 'Download {count} game?', other: 'Download {count} games?' },
+    confirmBody: 'Their authors’ licenses let Cartouche host them. They are saved in this browser ({size} in all) and play offline from then on.',
+    lowSpace: 'This browser has about {free} of space left, which may not be enough.',
+    confirmOk: 'Download',
+  },
   first: {
     welcome: 'Welcome',
     title: 'Put your games on the shelf.',
