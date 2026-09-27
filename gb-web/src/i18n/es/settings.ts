@@ -146,7 +146,7 @@ export default {
     rewind: 'Duración del rebobinado',
     rewindSub: 'Más segundos usan más memoria mientras juegas',
     startup: 'Animación de inicio',
-    startupSub: 'Suena con su melodía cuando un juego empieza de cero. Start la salta.',
+    startupSub: 'Se reproduce con su melodía cuando un juego empieza de cero. Start la salta.',
     anims: {
       off: { label: 'Ninguna', description: 'El juego empieza en el acto.' },
       registration: { label: 'Registro', description: 'Tres planchas de color caen desalineadas, encajan y el nombre se imprime en negro.' },

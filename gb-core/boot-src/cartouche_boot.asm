@@ -202,6 +202,14 @@ IF CONCEPT != 0
     ld c, 160
     call Fill
     call ClearShadowOAM
+; HRAM from hFrame up (the animation's variables, the DMA routine, the stack) back to zeros, as "Off" leaves it
+    xor a
+    lb bc, $FF - LOW(hFrame), LOW(hFrame)
+.clearHRAM
+    ldh [c], a
+    inc c
+    dec b
+    jr nz, .clearHRAM
 ENDC
 
 ; Registers the animation may have changed, back to their post-boot values (the ch1 frequency is SameBoy's last note)

@@ -146,7 +146,7 @@ export default {
     rewind: 'Durée du retour arrière',
     rewindSub: 'Plus de secondes demandent plus de mémoire en jeu',
     startup: 'Animation de démarrage',
-    startupSub: 'Jouée avec son carillon quand un jeu démarre de zéro. Start la passe.',
+    startupSub: 'L’animation se joue avec son carillon quand un jeu démarre de zéro. Start la passe.',
     anims: {
       off: { label: 'Aucune', description: 'Le jeu démarre tout de suite.' },
       registration: { label: 'Repérage', description: 'Trois plaques de couleur tombent hors repérage, se calent, puis le nom s’imprime en noir.' },

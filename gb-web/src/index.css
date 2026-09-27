@@ -954,6 +954,7 @@ body{font-family:var(--font)}
 @media (max-width:480px){.artdlg .in{padding:22px 20px 20px}.artdlg .acts .btn{flex:1 1 100%}}
 /* settings, add ROMs, link cable (part 3) */
 .presets-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.presets-4 .preset{display:flex;flex-direction:column;justify-content:flex-start}
 .boot-acts{display:flex;flex-wrap:wrap;gap:8px}
 .boot-acts .sbtn{display:inline-flex;align-items:center;gap:8px;min-height:44px}
 .boot-acts .sbtn .icon{width:16px;height:16px}

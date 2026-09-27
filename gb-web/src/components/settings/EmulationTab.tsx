@@ -18,6 +18,10 @@ const PREVIEW_ROM = (() => {
 })();
 /** Frames run before the still is taken: the animation's steady picture (its frame ~140 of 160). */
 const STILL_AT = 142;
+/** Steady pictures, made once per session (by animation and colour): 142 frames each is too long to redo on every visit. */
+const stills = new Map<string, Uint8Array>();
+/** Frames run per animation frame while a still is made, so the page never stalls on it. */
+const STILL_STEP = 24;
 
 let core: Promise<{ wasm: typeof import('gb-core'); memory: WebAssembly.Memory }> | null = null;
 const loadCore = () => (core ??= import('gb-core').then(async (wasm) => ({ wasm, memory: (await wasm.default()).memory })));
@@ -46,6 +50,13 @@ function playSamples(samples: Float32Array, volume: number) {
   src.start(audio.at);
   audio.at += n / 44100;
 }
+/** Lets the audio device go once the queued sound has played (a running one keeps iOS rendering silence). */
+function releaseAudio(close = false) {
+  const a = audio;
+  if (!a) return;
+  if (close) { audio = null; void a.ctx.close(); return; }
+  setTimeout(() => { if (a.ctx.state === 'running' && a.at <= a.ctx.currentTime) void a.ctx.suspend(); }, Math.max(0, a.at - a.ctx.currentTime) * 1000 + 100);
+}
 
 /**
  * One start-up animation, played by the real core and boot ROM on its own small screen: its steady picture while
@@ -66,18 +77,30 @@ function StartupPreview({ animation, color, play, sound }: { animation: number; 
       ctx.putImageData(img, 0, 0);
       return;
     }
+    const key = `${animation}:${color}`;
+    const show = (px: Uint8Array) => { img.data.set(px); ctx.putImageData(img, 0, 0); };
+    const cached = stills.get(key);
+    if (cached) show(cached);
     loadCore().then(({ wasm, memory }) => {
       if (stopped) return;
       const e = new wasm.Emulator();
       emu = e;
-      const start = () => e.load_rom_with(PREVIEW_ROM, color, 0, animation);
-      if (!start()) return;
-      for (let i = 0; i < STILL_AT; i++) { e.run_frame(); e.clear_audio_buffer(); }
-      const still = e.framebuffer_snapshot();
-      img.data.set(still);
-      ctx.putImageData(img, 0, 0);
-      if (!play) return;
-      start();
+      if (!e.load_rom_with(PREVIEW_ROM, color, 0, animation)) return;
+      if (!play) {
+        if (cached) return;
+        // Not played: the steady picture, made a few frames at a time.
+        let i = 0;
+        const make = () => {
+          if (stopped) return;
+          for (const end = Math.min(STILL_AT, i + STILL_STEP); i < end; i++) { e.run_frame(); e.clear_audio_buffer(); }
+          if (i < STILL_AT) { raf = requestAnimationFrame(make); return; }
+          const still = e.framebuffer_snapshot();
+          stills.set(key, still);
+          show(still);
+        };
+        make();
+        return;
+      }
       const due = pacer();
       let frames = 0;
       const tick = (now: number) => {
@@ -85,15 +108,15 @@ function StartupPreview({ animation, color, play, sound }: { animation: number; 
         for (let n = due(now); n > 0; n--) {
           e.run_frame();
           frames++;
+          if (frames === STILL_AT && !stills.has(key)) stills.set(key, e.framebuffer_snapshot());
           const len = e.audio_buffer_len(), ptr = e.audio_buffer_ptr();
           if (soundRef.current && len && ptr) playSamples(new Float32Array(memory.buffer, ptr, len), useSettingsStore.getState().masterVolume / 100);
           e.clear_audio_buffer();
         }
         // Played to its end (the boot ROM hands over to the cartridge): back to the steady picture.
         const done = !e.booting() || frames > 400;
-        img.data.set(done ? still : e.framebuffer_snapshot());
-        ctx.putImageData(img, 0, 0);
-        if (!done) raf = requestAnimationFrame(tick);
+        show(done ? stills.get(key) ?? e.framebuffer_snapshot() : e.framebuffer_snapshot());
+        if (done) releaseAudio(); else raf = requestAnimationFrame(tick);
       };
       raf = requestAnimationFrame(tick);
     }).catch(() => { /* no WASM: the preview stays dark */ });
@@ -126,6 +149,7 @@ function StartupRows() {
     io.observe(el);
     return () => io.disconnect();
   }, []);
+  useEffect(() => () => releaseAudio(true), []);
   const selected = Math.max(0, STARTUP.indexOf(value));
   return (
     <div className="row col">
@@ -140,7 +164,7 @@ function StartupRows() {
       </div>
       <div className="boot-acts">
         <button className="sbtn" disabled={selected === 0} onClick={() => replay(selected)}>{I.play}{t('settings.emu.replay')}</button>
-        <button className="sbtn" aria-pressed={sound} onClick={() => { if (!sound && selected) replay(selected); setSound(!sound); }}>
+        <button className="sbtn" aria-pressed={sound} disabled={selected === 0} onClick={() => { if (!sound && selected) replay(selected); setSound(!sound); }}>
           {sound ? I.mute : I.sound}{sound ? t('settings.emu.mute') : t('settings.emu.withSound')}
         </button>
       </div>

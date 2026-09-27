@@ -135,6 +135,10 @@ const DEFAULT_KEYBINDINGS: Record<GameBoyButton, string> = {
   Select: 'Shift',
 };
 
+/** The start-up animation a new (or migrated) player gets: none for anyone who asked for reduced motion. */
+const startupDefault = (): Startup =>
+  typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'off' : 'registration';
+
 const DEFAULT_STATE = {
   keybindings: DEFAULT_KEYBINDINGS,
   display: DEFAULT_DISPLAY,
@@ -148,7 +152,7 @@ const DEFAULT_STATE = {
   rewindBufferSeconds: 10,
   autoSaveEnabled: true,
   autoSaveIntervalSeconds: 60,
-  startupAnimation: 'registration' as Startup,
+  startupAnimation: startupDefault(),
   console: 'dmg' as ConsoleChoice,
   gameConsole: {} as Record<string, ConsoleChoice>,
   gameSgb: {} as Record<string, boolean>,
@@ -226,8 +230,9 @@ export const useSettingsStore = create<SettingsState>()(
           const { shaderPreset, pixelGrid, ...rest } = s as SettingsValues & { shaderPreset?: string; pixelGrid?: boolean };
           s = { ...rest, display: displayFromV3(shaderPreset, pixelGrid), gameDisplay: {} };
         }
-        // v5: Cartouche's own start-up animations replace the console logo that kept it off by default: on for everyone.
-        if (version < 5) s = { ...s, startupAnimation: 'registration' };
+        // v5: Cartouche's own start-up animations replace the console logo that kept it off by default: on for everyone
+        // (but those who asked for reduced motion).
+        if (version < 5) s = { ...s, startupAnimation: startupDefault() };
         return s;
       },
       partialize: (state) => Object.fromEntries(SETTINGS_KEYS.map((k) => [k, state[k]])) as SettingsValues,

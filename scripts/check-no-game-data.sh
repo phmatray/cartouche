@@ -16,16 +16,16 @@ allowlist=scripts/rom-allowlist.sha1
 banned_ext='\.(gb|gbc|sgb|sav|srm|state|npz|npy|pt|pth|ckpt|safetensors|onnx|h5|pkl|zip|7z|rar|gz|tgz|bz2|xz|zst|tar|br|lz|lz4|lzma|zlib|z|cartouche|cartshelf)$'
 # Boot ROMs / BIOS dumps: only Cartouche's own boot ROMs (a fork of SameBoy's, MIT; gb-core/boot-src/build.sh
 # rebuilds them byte for byte), at these paths with exactly this content (THIRD_PARTY_NOTICES.md). Any other file named like a boot ROM or BIOS image fails.
-boot_roms='a1217b1969ea479f39264c04c0473f47fcaedafcc50c7bd6d8c5cc641a11f2b7  gb-core/boot/cgb_insert.bin
+boot_roms='9e1a9b3600a4691715a164c945871a868744d20fac9a914cc369d5d55e82ca82  gb-core/boot/cgb_insert.bin
 c60342c84a3eaccfedcd017dc83b6742f11e67f46300daec7dec8a0b2f8e684b  gb-core/boot/cgb_plain.bin
-a5e7053186ee33c6b8b692c498247fb6a0e9119b041ada239d827ffea0024cb3  gb-core/boot/cgb_registration.bin
-90925e83dc5e8835431ce631f15f0d79749e97746f0aea6edffd9057a8e6ef6d  gb-core/boot/cgb_shelf.bin
-01bcbdd80449926f3ca043578814356ad9e17ed9678a9e2d6726905c14a3cf4f  gb-core/boot/dmg_insert.bin
-cd2a0138c7d22c23b8430bf4d38a12940ae840b31681e2a8bb880aac497062d9  gb-core/boot/dmg_registration.bin
-0eb1eafcff00428b50b848719d2b3f4679399ce971d10541d12c539701105fa0  gb-core/boot/dmg_shelf.bin
-e349cfdf6779a050a1f7dd6039afbd1e5b9b485a8f653053f0e2c1c2566ba8ee  gb-core/boot/sgb_insert.bin
-0e81f71c2caa729db9ace794445b88fe64dcdbac16f4b8febf212cfd2f5ec557  gb-core/boot/sgb_registration.bin
-9bfe3d15bdd8160679f890611a80d38f33f5e38a0e2721d70d5c3bdb0fbd3510  gb-core/boot/sgb_shelf.bin'
+79a8651c12beee62d4ba545f8083897323579251f5ffd01df349bca529046fc6  gb-core/boot/cgb_registration.bin
+2eac192764a8e87311829438b526547032bd1e28ffb7b2e9ec9bfc2f8d080d2f  gb-core/boot/cgb_shelf.bin
+5a0b71323549fb43ad8f99d4bf08f2745f59f3484e7d4d3bd95be4eef893eb54  gb-core/boot/dmg_insert.bin
+0c5f6687b9ec059c779243e4c809394e8bff2972d5e8667e8b3abce4c12881dd  gb-core/boot/dmg_registration.bin
+90757cccc731af2c27c95dcb8aa11864dc1d0258daf7cfa36081ca483cffecea  gb-core/boot/dmg_shelf.bin
+c88c90cd3a70e8b6083a9f7ed05365e229858a66c3ac43d465cb6c6ddba05d3c  gb-core/boot/sgb_insert.bin
+8e00273125221a8c3d4d61ee2eeb88eed7fe66cdf22da6a8472d578941e51902  gb-core/boot/sgb_registration.bin
+921d048bcfd67a7add0d56622024e9ba9cc86ba0ffec00edc3973615c69ebf6b  gb-core/boot/sgb_shelf.bin'
 boot_like='(boot|bios).*\.(bin|rom|gb|gbc)$|(^|/)[^/]*(rom|dmg0|cgb0)[^/]*\.(bin|rom)$|^gb-core/boot/'
 fail=0
 

@@ -185,6 +185,8 @@ fn every_animation_hands_over_like_the_skipped_start() {
         assert_eq!(dmg.bus.ppu.vram, skipped.bus.ppu.vram, "DMG {a}: VRAM blank, no animation left behind");
         assert_eq!(dmg.bus.ppu.oam, skipped.bus.ppu.oam);
         assert_eq!(dmg.bus.wram, skipped.bus.wram);
+        // Below the stack's last return address, HRAM is left as the skipped start leaves it.
+        assert_eq!(dmg.bus.hram[..0x7C], skipped.bus.hram[..0x7C], "DMG {a}: HRAM cleared");
         let p = &dmg.bus.ppu;
         assert_eq!((p.lcdc, p.scy, p.scx, p.wy, p.wx, p.bgp), (0x91, 0, 0, 0, 0, 0xFC));
 
@@ -203,6 +205,8 @@ fn every_animation_hands_over_like_the_skipped_start() {
         let plain = GameBoy::with_boot(rom(false), true, 0, 0).unwrap();
         assert!(compat.bus.ppu.compat && compat.console == Console::Compat);
         assert_eq!((compat.bus.ppu.bg_cram, compat.bus.ppu.obj_cram), (plain.bus.ppu.bg_cram, plain.bus.ppu.obj_cram), "compat {a}: same colours as without the animation");
+        // (the stack, $FFF4 up, holds return addresses, which differ between the two images)
+        assert_eq!(compat.bus.hram[..0x74], plain.bus.hram[..0x74], "compat {a}: HRAM as without the animation");
     }
 }
 

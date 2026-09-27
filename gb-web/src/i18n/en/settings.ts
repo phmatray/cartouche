@@ -145,7 +145,7 @@ export default {
     rewind: 'Rewind length',
     rewindSub: 'More seconds use more memory while playing',
     startup: 'Start-up animation',
-    startupSub: 'Plays with its chime when a game starts fresh. Press Start to skip it.',
+    startupSub: 'The animation plays with its chime when a game starts fresh. Press Start to skip it.',
     anims: {
       off: { label: 'Off', description: 'The game starts at once.' },
       registration: { label: 'Registration', description: 'Three colour plates drop in off register, snap true, and the name prints in black.' },
