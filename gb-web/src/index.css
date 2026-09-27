@@ -251,7 +251,8 @@ canvas.lcd,img.lcd{display:block;width:100%;height:auto;image-rendering:pixelate
 .star{width:44px;height:44px;border:0;background:transparent;display:flex;align-items:center;justify-content:center;color:var(--dim)}
 .star[aria-pressed=true]{color:var(--y)}
 .star:hover{color:var(--paper)}
-@media (max-width:760px){.lrow,.lhead{grid-template-columns:48px minmax(0,1fr) auto 44px}.lrow .c,.lhead .c{display:none}.lrow .cv{width:48px;height:48px}}
+/* narrow: the status tag goes under the title (a column of its own left the title a few pixels wide on a small phone) */
+@media (max-width:760px){.lrow,.lhead{grid-template-columns:48px minmax(0,1fr) 44px}.lrow{grid-template-areas:"cv t st" "cv tag st";row-gap:6px}.lrow>:first-child{grid-area:cv}.lrow>.t{grid-area:t}.lrow>.tag{grid-area:tag}.lrow>.star{grid-area:st}.lrow .c,.lhead .c,.lhead>:nth-child(5){display:none}.lrow .cv{width:48px;height:48px}}
 
 /* first launch */
 .first{background:var(--paper);color:var(--ink)}
