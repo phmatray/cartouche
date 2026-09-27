@@ -539,6 +539,10 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .deck .push{margin-left:auto}
 .dk.spd{display:none;font-size:15px;font-variant-numeric:tabular-nums;min-width:52px}
 @media (max-width:389px){.deck .speed{display:none}.deck .dk.spd{display:inline-flex}}
+/* Laptops: the dock's labels and key hints (French is the longest) don't fit under ~1400 px and ran into each other;
+   the hints go first, then the labels (the buttons keep them as accessible names). */
+@media (max-width:1399px){.deck .dk .k{display:none}}
+@media (max-width:1239px){.deck .dk:not(.main) .lbl{display:none}}
 .touch{display:none}
 .pl:fullscreen,.stage:fullscreen{height:100vh}
 /* Fullscreen: only the screen, as large as it fits; the deck overlays it and hides when idle. */
