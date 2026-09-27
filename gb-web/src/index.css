@@ -697,7 +697,9 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .shortcuts .key{height:32px;min-width:32px;font-size:12px}
 @media (max-width:900px){
   .manual{grid-template-columns:minmax(0,1fr)}
-  .toc{position:static;flex-direction:row;overflow-x:auto;scrollbar-width:none;border-top:0;margin:0 -16px;padding:0 16px}
+  .toc{position:static;flex-direction:row;overflow-x:auto;scrollbar-width:none;border-top:0;margin:0 -16px;padding:0 40px 0 16px;
+    /* more sections past the edge: they fade out rather than stop dead mid-word */
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 40px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 40px),transparent)}
   .toc a{flex:none;border:0;padding:14px 16px 14px 0;font-size:22px}
   .toc a small{display:none}
   .toc a[aria-current]::after{left:0;right:16px;top:auto;bottom:4px;height:4px;width:auto}
