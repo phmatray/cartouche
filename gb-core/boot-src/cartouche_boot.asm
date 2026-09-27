@@ -228,7 +228,15 @@ ENDC
     ldh [rLCDC], a
 
 IF DEF(CGB)
-; Every BG palette white and OBJ palettes 0-1 cleared, as SameBoy leaves them (its fade leaves colour 0 at $FFFF)
+    call GetInputPaletteIndex
+; Every BG palette white and OBJ palettes 0-1 cleared, as SameBoy leaves them. Its fade leaves colour 0 at $FFFF,
+; or $7FFF when a combination was held (its logo then took that palette's colour 0 in every palette).
+    ld e, $FF
+    ldh a, [hInputPalette]
+    and a
+    jr z, .noCombination
+    ld e, $7F
+.noCombination
     ld c, LOW(rBGPI)
     ld a, $80
     ldh [c], a
@@ -237,6 +245,7 @@ IF DEF(CGB)
 .whiteLoop
     ld a, $FF
     ldh [c], a
+    ld a, e
     ldh [c], a
     ld d, 3
 .whiteColor
@@ -259,7 +268,6 @@ IF DEF(CGB)
     dec b
     jr nz, .objLoop
 
-    call GetInputPaletteIndex
     call Preboot
     jp BootGame
 
@@ -755,7 +763,7 @@ GetPaletteIndex:
 
     ; We might have a match, Do duplicate/4th letter check
     ld a, l
-    sub FirstChecksumWithDuplicate - TitleChecksums + 1
+    sub LOW(FirstChecksumWithDuplicate) + 1 ; (SameBoy: - TitleChecksums, its tables start a page)
     jr c, .match ; Does not have a duplicate, must be a match!
     ; Has a duplicate; check 4th letter
     push hl

@@ -16,10 +16,10 @@ allowlist=scripts/rom-allowlist.sha1
 banned_ext='\.(gb|gbc|sgb|sav|srm|state|npz|npy|pt|pth|ckpt|safetensors|onnx|h5|pkl|zip|7z|rar|gz|tgz|bz2|xz|zst|tar|br|lz|lz4|lzma|zlib|z|cartouche|cartshelf)$'
 # Boot ROMs / BIOS dumps: only Cartouche's own boot ROMs (a fork of SameBoy's, MIT; gb-core/boot-src/build.sh
 # rebuilds them byte for byte), at these paths with exactly this content (THIRD_PARTY_NOTICES.md). Any other file named like a boot ROM or BIOS image fails.
-boot_roms='2702dbe577c818e0e54a16c17b5b7e50f96be339b3bcc28cc37020582d24c1a7  gb-core/boot/cgb_insert.bin
-99c49a4b6240603a00bd28f40f9f713abdc09c735be374c4d1b0a8dc596dc981  gb-core/boot/cgb_plain.bin
-39a492850913e1f8afb53c5956b88ff9797c9badd8ff27ed10a346c3892f197c  gb-core/boot/cgb_registration.bin
-16958515cebd136353df14fe023af3106c7ba8fca6099adb7e026b72b7db8a66  gb-core/boot/cgb_shelf.bin
+boot_roms='a1217b1969ea479f39264c04c0473f47fcaedafcc50c7bd6d8c5cc641a11f2b7  gb-core/boot/cgb_insert.bin
+c60342c84a3eaccfedcd017dc83b6742f11e67f46300daec7dec8a0b2f8e684b  gb-core/boot/cgb_plain.bin
+a5e7053186ee33c6b8b692c498247fb6a0e9119b041ada239d827ffea0024cb3  gb-core/boot/cgb_registration.bin
+90925e83dc5e8835431ce631f15f0d79749e97746f0aea6edffd9057a8e6ef6d  gb-core/boot/cgb_shelf.bin
 01bcbdd80449926f3ca043578814356ad9e17ed9678a9e2d6726905c14a3cf4f  gb-core/boot/dmg_insert.bin
 cd2a0138c7d22c23b8430bf4d38a12940ae840b31681e2a8bb880aac497062d9  gb-core/boot/dmg_registration.bin
 0eb1eafcff00428b50b848719d2b3f4679399ce971d10541d12c539701105fa0  gb-core/boot/dmg_shelf.bin

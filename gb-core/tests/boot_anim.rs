@@ -254,3 +254,29 @@ fn super_game_boy_plays_it_then_sends_the_header() {
         assert_eq!((x.a, x.f, x.b, x.c, x.d, x.e, x.h, x.l), (0x01, 0x00, 0, 0x14, 0, 0, 0xC0, 0x60), "SGB {a}");
     }
 }
+
+/// SameBoy's palette for an original cartridge by its title checksum (licensee 01), with and without the 4th-letter
+/// check, from every CGB boot ROM (its tables and lookup carried over unchanged).
+#[test]
+fn title_checksums_pick_sameboys_palettes() {
+    let cart = |sum: u8, fourth: u8| {
+        let mut r = vec![0u8; 0x8000];
+        r[0x100..0x104].copy_from_slice(&[0x00, 0x18, 0xFE, 0x00]);
+        let mut t = [b'A'; 16];
+        t[3] = fourth;
+        t[14] = 0;
+        t[14] = sum.wrapping_sub(t.iter().fold(0u8, |a, &b| a.wrapping_add(b)));
+        r[0x134..0x144].copy_from_slice(&t);
+        r[0x14B] = 0x01;
+        r[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(r[i]).wrapping_sub(1));
+        r
+    };
+    // $6B: the last without a duplicate, palette 39 (BG $7FFF $6E31 $454A $0000). $B3 + 'B': the first duplicate, palette 36 (BG: palette 9).
+    for (sum, fourth, bg) in [(0x6B, b'A', [0xFF, 0x7F, 0x31, 0x6E, 0x4A, 0x45, 0x00, 0x00]), (0xB3, b'B', [0x74, 0x7E, 0xFF, 0x03, 0x80, 0x01, 0x00, 0x00])] {
+        for a in 0..=3 {
+            let mut gb = GameBoy::with_boot(cart(sum, fourth), true, 0, a).unwrap();
+            gb.finish_boot().unwrap();
+            assert_eq!(gb.bus.ppu.bg_cram[..8], bg, "checksum {sum:02X}, animation {a}");
+        }
+    }
+}
