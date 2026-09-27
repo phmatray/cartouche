@@ -890,7 +890,7 @@ a.fact:hover{background:var(--paper);color:#000}
 @media (max-width:900px){.toasts{left:12px;right:12px;bottom:12px}}
 
 .nf{padding:120px 0}
-.nf h1{font:900 clamp(64px,10vw,160px)/.82 var(--font);font-stretch:62%;text-transform:uppercase;margin:0 0 24px}
+.nf h1{font:900 clamp(48px,10vw,160px)/.82 var(--font);font-stretch:62%;text-transform:uppercase;margin:0 0 24px}
 
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
 
