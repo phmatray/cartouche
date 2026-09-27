@@ -597,7 +597,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .paper .chip{border-color:var(--ink-3);color:var(--ink);background:transparent}
 .paper .chip:hover{border-color:var(--ink)}
 .paper .chip[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
-.pg-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:2px solid var(--ink)}
+.pg-bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:2px solid var(--ink)}
 .ck{display:inline-flex;align-items:center;gap:8px;min-width:44px;min-height:44px;justify-content:center;font:700 13px var(--font);cursor:pointer}
 .pg-bar .ck{justify-content:flex-start}
 .ck input{width:18px;height:18px;margin:0;accent-color:var(--ink);cursor:pointer}

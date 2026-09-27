@@ -209,7 +209,7 @@ export async function importRom(name: string, data: Uint8Array, force = false, i
   const summary = { title, genre, sha1, head: data.slice(0, 0x150), size: data.length };
   const cat = catalogMatch(useLibraryStore.getState().games, localEntry('', title, genre, data, sha1, dbEntry));
   // A catalog game keeps its id (and its page's address) once its file is here.
-  const stored = await addRom(cat?.id ?? id ?? (slugify(title) || 'rom'), { title, genre, data }, { ...(id && !cat ? await getGameMeta(id) : undefined), importedAt, rom: summary });
+  const stored = await addRom(cat?.id ?? id ?? (slugify(title) || 'rom'), { title, genre, data }, { importedAt, rom: summary });
   const entry = localEntry(stored, title, genre, data, sha1, dbEntry, importedAt);
   const added = withLocal(cat ? [cat] : [], entry).at(-1)!; // as it will show on the shelf
   pending.push(entry);

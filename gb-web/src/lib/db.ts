@@ -89,7 +89,7 @@ function inTx<T>(stores: string[], fn: (tx: IDBTransaction, done: (v: T) => void
   }));
 }
 
-/** Store a new ROM and its meta together, under `base` or the first free `base-2`, `base-3`… (never overwrites). Resolves to its id. */
+/** Store a new ROM and its meta together, under `base` or the first free `base-2`, `base-3`… (never overwrites a ROM; merges into that id's meta). Resolves to its id. */
 export function addRom(base: string, rom: Omit<StoredRom, 'id'>, meta: Omit<StoredGameMeta, 'id'>): Promise<string> {
   return inTx([ROM_STORE, GAME_META_STORE], (tx, done) => {
     const roms = tx.objectStore(ROM_STORE);
@@ -97,7 +97,9 @@ export function addRom(base: string, rom: Omit<StoredRom, 'id'>, meta: Omit<Stor
       roms.getKey(id).onsuccess = (e) => {
         if ((e.target as IDBRequest).result !== undefined) return attempt(`${base}-${n}`, n + 1);
         roms.add({ ...rom, id });
-        tx.objectStore(GAME_META_STORE).put({ ...meta, id });
+        // A game already known under this id (hosted, bundled, removed, or synced) keeps its favorite, play time and save.
+        const metas = tx.objectStore(GAME_META_STORE);
+        metas.get(id).onsuccess = (m) => { metas.put({ ...(m.target as IDBRequest<StoredGameMeta | undefined>).result, ...meta, id }); };
         done(id);
       };
     };
