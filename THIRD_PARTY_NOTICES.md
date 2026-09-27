@@ -288,6 +288,53 @@ linked into the WebAssembly core. Every build (the Pages site and the release
 zip) also carries this notice file as `THIRD_PARTY_NOTICES.txt` and the
 Cartouche license as `LICENSE.txt`; the in-app Legal page links to all three.
 
+### SameBoy boot ROMs (compiled into the WebAssembly core)
+
+- Files: `gb-core/boot/sameboy_dmg_boot.bin` (256 bytes, Game Boy) and
+  `gb-core/boot/sameboy_cgb_boot.bin` (2304 bytes, Game Boy Color), embedded
+  in the core with `include_bytes!` (`gb-core/src/boot_rom.rs`).
+- Work: the boot ROMs of SameBoy, © 2015-2026 Lior Halphon. Original code
+  written for SameBoy, not Nintendo's boot ROMs: they read the logo from the
+  cartridge header (`$0104`-`$0133`), and neither binary contains Nintendo's
+  boot ROM or its logo bytes (checked against a cartridge header before
+  inclusion). The Game Boy Color one also holds SameBoy's table of per-game
+  palettes and the 12 palettes chosen with a button combination.
+- Source: https://github.com/LIJI32/SameBoy, tag `v1.0.3`, `BootROMs/dmg_boot.asm`
+  and `BootROMs/cgb_boot.asm`. Built from that tag with rgbds 1.0.4
+  (`make build/bin/BootROMs/dmg_boot.bin build/bin/BootROMs/cgb_boot.bin`);
+  the result is byte-identical to `dmg_boot.bin` and `cgb_boot.bin` in the
+  official `sameboy_winsdl_v1.0.3.zip` release asset.
+- SHA-256:
+  - `sameboy_dmg_boot.bin`: `6f64da4cecd7e54e2f928eb3e3ba7810a7a567d0d247cc71737d1771e073a916`
+  - `sameboy_cgb_boot.bin`: `f767b8e7e510a255f81328c89dba6e0c996b370e1bc86aebb8584a7da47a5bba`
+- Changes: none (renamed from `dmg_boot.bin` / `cgb_boot.bin`).
+- License: Expat (MIT), which covers every file of the SameBoy repository
+  except its `iOS` and `HexFiend` directories, so the boot ROMs included:
+
+```
+Expat License
+
+Copyright (c) 2015-2026 Lior Halphon
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ### Rust crates compiled into the WebAssembly core
 
 `wasm-bindgen`, `js-sys`, `thiserror` and `log`, and their dependencies

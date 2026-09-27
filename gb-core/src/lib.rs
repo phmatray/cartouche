@@ -37,11 +37,16 @@ impl Emulator {
         }
     }
 
+    /// Starts from the post-boot state, each cartridge on its own console.
     pub fn load_rom(&mut self, rom_data: &[u8]) -> bool {
-        match GameBoy::new(rom_data.to_vec()) {
-            Ok(mut gb) => {
-                // No boot ROM is shipped: start directly in the post-boot state.
-                gb.skip_boot_rom();
+        self.load_rom_with(rom_data, false, 0, false)
+    }
+
+    /// `colorize`: run a DMG-only cartridge on a Game Boy Color, `palette` 0 automatic or 1-12
+    /// (see `GameBoy::with_boot`); `animation`: play the boot ROM's start-up animation.
+    pub fn load_rom_with(&mut self, rom_data: &[u8], colorize: bool, palette: u8, animation: bool) -> bool {
+        match GameBoy::with_boot(rom_data.to_vec(), colorize, palette, animation) {
+            Ok(gb) => {
                 self.gb = Some(gb);
                 self.last_error = None;
                 true
@@ -168,9 +173,44 @@ impl Emulator {
         self.gb.is_some()
     }
 
-    /// True when the loaded cartridge runs in Game Boy Color mode (header byte 0x143, bit 7).
+    /// True when the picture is in colour: a Game Boy Color cartridge (header byte 0x143, bit 7),
+    /// or an original Game Boy one colourised by the Game Boy Color.
     pub fn is_cgb(&self) -> bool {
-        self.gb.as_ref().map_or(false, |gb| gb.cgb_mode)
+        self.gb.as_ref().map_or(false, |gb| gb.in_colour())
+    }
+
+    /// 0 original Game Boy, 1 Game Boy Color, 2 original Game Boy cartridge on a Game Boy Color.
+    pub fn console(&self) -> u8 {
+        self.gb.as_ref().map_or(255, |gb| gb.console as u8)
+    }
+
+    /// The console a save state was made on (as `console()`), 255 when it is not a state.
+    /// `load_state` refuses a state from another console.
+    pub fn state_console(&self, data: &[u8]) -> u8 {
+        self.gb.as_ref().and_then(|gb| gb.state_console(data)).map_or(255, |c| c as u8)
+    }
+
+    /// The palette an original Game Boy cartridge is colourised with: 0 automatic, 1-12 (see
+    /// `load_rom_with`); a loaded state brings back its own.
+    pub fn palette(&self) -> u8 {
+        self.gb.as_ref().map_or(0, |gb| gb.palette)
+    }
+
+    /// The start-up animation is playing.
+    pub fn booting(&self) -> bool {
+        self.gb.as_ref().map_or(false, |gb| gb.bus.boot_rom_active)
+    }
+
+    /// Skips the rest of the start-up animation.
+    pub fn finish_boot(&mut self) -> bool {
+        let Some(gb) = &mut self.gb else { return false };
+        match gb.finish_boot() {
+            Ok(()) => true,
+            Err(e) => {
+                self.last_error = Some(e.to_string());
+                false
+            }
+        }
     }
 
     pub fn has_battery_ram(&self) -> bool {

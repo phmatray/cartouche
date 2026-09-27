@@ -59,6 +59,8 @@ pub struct Ppu {
 
     // CGB color support
     pub cgb_mode: bool,
+    /// A CGB running a DMG cartridge: drawn like a DMG, coloured through BG palette 0 and OBJ palettes 0-1.
+    pub compat: bool,
     pub bg_cram: [u8; 64],
     pub obj_cram: [u8; 64],
     pub bcps: u8,
@@ -98,6 +100,7 @@ impl Ppu {
             bg_color_ids: [0; SCREEN_WIDTH],
             stat_irq_line: false,
             cgb_mode: false,
+            compat: false,
             bg_cram: [0; 64],
             obj_cram: [0; 64],
             bcps: 0,
@@ -246,7 +249,7 @@ impl Ppu {
                         self.mode = PpuMode::VBlank;
                         self.frame_ready = true;
                         if let Some(t) = self.trace.as_deref_mut() {
-                            t.finish_frame(&self.framebuffer, &self.oam, &self.bg_cram, &self.obj_cram, &self.vram, self.cgb_mode);
+                            t.finish_frame(&self.framebuffer, &self.oam, &self.bg_cram, &self.obj_cram, &self.vram, self.cgb_mode, self.compat);
                         }
                         self.window_line_counter = 0;
                         self.window_was_active = false;
@@ -291,7 +294,7 @@ impl Ppu {
     /// ended, if an access to $FE00-$FEFF would corrupt OAM now. Row 0 and the
     /// last M-cycle of mode 2 (row 20) never corrupt. CGB is unaffected.
     fn oam_bug_row(&self) -> Option<usize> {
-        if self.cgb_mode || self.lcdc & 0x80 == 0 || self.mode != PpuMode::OamScan || self.lcd_on_line0 {
+        if self.cgb_mode || self.compat || self.lcdc & 0x80 == 0 || self.mode != PpuMode::OamScan || self.lcd_on_line0 {
             return None;
         }
         let row = (self.mode_clock / 4) as usize;
@@ -381,7 +384,7 @@ impl Ppu {
             } else if self.cgb_mode {
                 self.get_obj_cram_color(attr & 0x07, cid)
             } else {
-                self.apply_palette(if attr & 0x10 != 0 { self.obp1 } else { self.obp0 }, cid)
+                self.apply_palette(if attr & 0x10 != 0 { self.obp1 } else { self.obp0 }, cid, 1 + (attr >> 4 & 1))
             };
             b.obj[p..p + 4].copy_from_slice(&obj);
             let layer = if drawn != 0 { LAYER_OBJ } else if covered { LAYER_WIN } else { LAYER_BG };
@@ -428,9 +431,10 @@ impl Ppu {
 
     fn render_scanline_dmg(&mut self, line: usize) {
         let line_start = line * SCREEN_WIDTH * 4;
+        let blank = if self.compat { self.get_bg_cram_color(0, 0) } else { PALETTE_COLORS[0] };
         for x in 0..SCREEN_WIDTH {
             let offset = line_start + x * 4;
-            self.framebuffer[offset..offset + 4].copy_from_slice(&PALETTE_COLORS[0]);
+            self.framebuffer[offset..offset + 4].copy_from_slice(&blank);
             self.bg_color_ids[x] = 0;
         }
 
@@ -475,7 +479,7 @@ impl Ppu {
 
             let color_id = self.get_tile_pixel(tile_addr as usize, pixel_row, pixel_col);
             self.bg_color_ids[screen_x] = color_id;
-            let color = self.apply_palette(self.bgp, color_id);
+            let color = self.apply_palette(self.bgp, color_id, 0);
             self.set_pixel(screen_x, line, color);
         }
     }
@@ -518,7 +522,7 @@ impl Ppu {
 
             let color_id = self.get_tile_pixel(tile_addr as usize, pixel_row, pixel_col);
             self.bg_color_ids[screen_x] = color_id;
-            let color = self.apply_palette(self.bgp, color_id);
+            let color = self.apply_palette(self.bgp, color_id, 0);
             self.set_pixel(screen_x, line, color);
         }
 
@@ -579,7 +583,7 @@ impl Ppu {
                     continue;
                 }
 
-                let color = self.apply_palette(palette, color_id);
+                let color = self.apply_palette(palette, color_id, 1 + (flags >> 4 & 1));
                 self.set_pixel(px as usize, line, color);
                 if traced {
                     self.line_obj[px as usize][3] = 1;
@@ -740,9 +744,14 @@ impl Ppu {
         ((hi >> bit) & 1) << 1 | ((lo >> bit) & 1)
     }
 
-    fn apply_palette(&self, palette: u8, color_id: u8) -> [u8; 4] {
+    /// `which`: 0 BG/window, 1 OBP0, 2 OBP1 (the CRAM palette used in compatibility mode).
+    fn apply_palette(&self, palette: u8, color_id: u8, which: u8) -> [u8; 4] {
         let shade = (palette >> (color_id * 2)) & 0x03;
-        PALETTE_COLORS[shade as usize]
+        match (self.compat, which) {
+            (false, _) => PALETTE_COLORS[shade as usize],
+            (true, 0) => self.get_bg_cram_color(0, shade),
+            (true, _) => self.get_obj_cram_color(which - 1, shade),
+        }
     }
 
     fn rgb555_to_rgba8888(lo: u8, hi: u8) -> [u8; 4] {

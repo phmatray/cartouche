@@ -5,8 +5,8 @@ import type { StoredSaveState, StoredScreenshot } from '../../lib/db';
 import type { RomMetadata } from '../../lib/rom-utils';
 import type { useEmulator } from '../../hooks/useEmulator';
 import type { SlotKey } from '../../hooks/useSaveStates';
-import { useSettingsStore, type ScreenSize } from '../../store/settingsStore';
-import { MotionRows, ScreenFilters } from '../settings/ScreenFilters';
+import { consoleFor, useSettingsStore, type ConsoleChoice, type ScreenSize } from '../../store/settingsStore';
+import { ConsoleRows, MotionRows, ScreenFilters } from '../settings/ScreenFilters';
 import { ago, dur, keyLabel, paths } from '../../lib/ui';
 import { I } from '../icons';
 import { Frame } from '../library/Heroes';
@@ -40,6 +40,9 @@ interface ManualProps {
   onScreenshot: () => void;
   /** Online link cable plugged in: rewind and state loading are off. */
   online?: boolean;
+  /** The console the game was switched on with (null: not yet). */
+  running: ConsoleChoice | null;
+  onRestart: () => void;
 }
 
 /** The paper manual beside the screen (a bottom sheet on phones). */
@@ -49,7 +52,8 @@ export function Manual(p: ManualProps) {
   const page: Record<Tab, () => ReactNode> = {
     controls: () => <ControlsPage online={p.online} />,
     saves: () => <SavesPage {...p} />,
-    screen: () => <ScreenPage snapshot={p.emu.framebufferSnapshot} romLoaded={p.romLoaded} inColor={!!p.inColor} gameId={p.game.id} />,
+    screen: () => <ScreenPage snapshot={p.emu.framebufferSnapshot} romLoaded={p.romLoaded} inColor={!!p.inColor} gameId={p.game.id}
+      dmgCart={p.header?.cgbFlag === 'DMG Only'} running={p.running} onRestart={p.onRestart} />,
     album: () => <AlbumPage {...p} />,
     game: () => <GamePageTab {...p} />,
   };
@@ -149,8 +153,11 @@ function SavesPage({ header, states, romLoaded, onSave, onLoad }: ManualProps) {
   );
 }
 
-function ScreenPage({ snapshot, romLoaded, inColor, gameId }: { snapshot: () => Uint8Array | null; romLoaded: boolean; inColor: boolean; gameId: string }) {
+function ScreenPage({ snapshot, romLoaded, inColor, gameId, dmgCart, running, onRestart }: {
+  snapshot: () => Uint8Array | null; romLoaded: boolean; inColor: boolean; gameId: string; dmgCart: boolean; running: ConsoleChoice | null; onRestart: () => void;
+}) {
   const { screenSize, setScreenSize } = useSettingsStore();
+  const chosen = useSettingsStore((s) => consoleFor(s, gameId));
   const t = useT();
   const grab = useRef(() => null as Uint8ClampedArray | null);
   useEffect(() => { grab.current = () => { const s = romLoaded ? snapshot() : null; return s ? new Uint8ClampedArray(s) : null; }; });
@@ -163,9 +170,16 @@ function ScreenPage({ snapshot, romLoaded, inColor, gameId }: { snapshot: () => 
     <>
       <h2>{t('player.tabs.screen')}</h2>
       <p>{t(inColor ? 'player.screen.introCgb' : 'player.screen.introDmg')}</p>
-      {inColor && (
+      {inColor && !dmgCart && (
         <div className="notice"><span className="ic">i</span><span>{t('player.screen.cgb')}</span></div>
       )}
+      {dmgCart && romLoaded && running !== null && running !== chosen && (
+        <div className="notice">
+          <span className="ic">i</span>
+          <span>{t('player.screen.restartNote')} <button className="sbtn" onClick={onRestart}>{t('player.screen.restart')}</button></span>
+        </div>
+      )}
+      {dmgCart && <ConsoleRows gameId={gameId} />}
       <ScreenFilters kind={inColor ? 'cgb' : 'dmg'} gameId={gameId} frame={frame} />
       <h3>{t('settings.display.motion')}</h3>
       <MotionRows />

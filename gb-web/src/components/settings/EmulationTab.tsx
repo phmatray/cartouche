@@ -18,6 +18,7 @@ export function EmulationTab() {
           <output>{s.rewindBufferSeconds} s</output>
         </span>
       </Row>
+      <SwitchRow label={t('settings.emu.startup')} sub={t('settings.emu.startupSub')} on={s.startupAnimation} set={(v) => s.set({ startupAnimation: v })} />
       <h3>{t('settings.emu.progress')}</h3>
       <SwitchRow label={t('settings.emu.resume')} sub={t('settings.emu.resumeSub')} on={s.resumePoints} set={(v) => s.set({ resumePoints: v })} />
       <SwitchRow label={t('settings.emu.auto')} sub={t('settings.emu.autoSub')} on={s.autoSaveEnabled} set={s.setAutoSaveEnabled} />

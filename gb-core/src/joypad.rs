@@ -17,6 +17,9 @@ pub struct Joypad {
     pub select: u8,
     pub button_state: u8, // bits 0-3: A, B, Select, Start (0=pressed)
     pub dpad_state: u8,   // bits 0-3: Right, Left, Up, Down (0=pressed)
+    /// `[d-pad, buttons]` held down on top of the player's input (1=pressed) until the boot ROM
+    /// unmaps: a GBC palette chosen in the settings instead of with the button combination.
+    pub boot_hold: [u8; 2],
 }
 
 impl Joypad {
@@ -25,6 +28,7 @@ impl Joypad {
             select: 0x30,
             button_state: 0x0F, // all released
             dpad_state: 0x0F,   // all released
+            boot_hold: [0, 0],
         }
     }
 
@@ -32,10 +36,10 @@ impl Joypad {
         let mut result = self.select | 0xC0;
 
         if self.select & 0x10 == 0 {
-            result = (result & 0xF0) | (self.dpad_state & 0x0F);
+            result = (result & 0xF0) | (self.dpad_state & !self.boot_hold[0] & 0x0F);
         }
         if self.select & 0x20 == 0 {
-            result = (result & 0xF0) | (self.button_state & 0x0F);
+            result = (result & 0xF0) | (self.button_state & !self.boot_hold[1] & 0x0F);
         }
 
         result

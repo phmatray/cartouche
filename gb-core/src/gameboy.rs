@@ -14,6 +14,15 @@ pub enum Model {
     Dmg,
 }
 
+/// The machine a save state belongs to: a state from one never loads into another.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Console {
+    Dmg = 0,
+    Cgb = 1,
+    /// A CGB running a DMG-only cartridge in compatibility mode (colourised by its boot ROM).
+    Compat = 2,
+}
+
 pub struct GameBoy {
     pub cpu: Cpu,
     pub bus: MemoryBus,
@@ -21,11 +30,71 @@ pub struct GameBoy {
     pub double_speed: bool,
     /// Cycles already run of a frame cut short by a stalled remote-link transfer.
     frame_cycles: u32,
+    pub console: Console,
+    /// The palette a colourised DMG cartridge was switched on with (`with_boot`), else 0.
+    pub palette: u8,
 }
 
 impl GameBoy {
     pub fn new(rom_data: Vec<u8>) -> Result<Self, EmulatorError> {
         Self::with_model(rom_data, Model::Auto)
+    }
+
+    /// Starts like the real console, with SameBoy's boot ROMs mapped (see boot_rom.rs).
+    /// `colorize`: a DMG-only cartridge runs on a CGB, whose boot ROM picks its colours (always
+    /// run: the palettes come from it). `palette`: 0 automatic, 1-12 the palette a real GBC gives
+    /// when a combination is held during the logo (1-4 Right, Left, Up, Down; 5-8 the same + A;
+    /// 9-12 + B). `animation`: false starts from the post-boot state (DMG and CGB cartridges) or
+    /// runs the boot ROM unseen (`finish_boot`, colourised DMG cartridges).
+    pub fn with_boot(rom_data: Vec<u8>, colorize: bool, palette: u8, animation: bool) -> Result<Self, EmulatorError> {
+        let cartridge = Cartridge::from_rom(rom_data)?;
+        let cgb_cart = cartridge.cgb_mode();
+        let cgb = cgb_cart || colorize;
+        let mut gb = GameBoy {
+            cpu: Cpu::new(),
+            bus: MemoryBus::new(cartridge, cgb),
+            cgb_mode: cgb,
+            double_speed: false,
+            frame_cycles: 0,
+            console: if cgb_cart { Console::Cgb } else if cgb { Console::Compat } else { Console::Dmg },
+            palette: 0,
+        };
+        gb.bus.boot_rom = if cgb { &crate::boot_rom::SAMEBOY_CGB[..] } else { &crate::boot_rom::SAMEBOY_DMG[..] };
+        if gb.console == Console::Compat {
+            gb.palette = if palette <= 12 { palette } else { 0 };
+            gb.hold_palette();
+            if !animation {
+                gb.finish_boot()?;
+            }
+        } else if !animation {
+            gb.skip_boot_rom();
+        }
+        Ok(gb)
+    }
+
+    /// Runs the boot ROM to its end without showing it (a skipped start-up animation).
+    pub fn finish_boot(&mut self) -> Result<(), EmulatorError> {
+        for _ in 0..900 {
+            if !self.bus.boot_rom_active {
+                break;
+            }
+            self.run_frame()?;
+        }
+        self.bus.apu.clear_samples();
+        Ok(())
+    }
+
+    /// Holds the direction/A/B combination of `palette` until the boot ROM unmaps itself.
+    fn hold_palette(&mut self) {
+        self.bus.joypad.boot_hold = match self.palette {
+            p @ 1..=12 => [1 << ((p - 1) % 4), [0, 1, 2][(p - 1) as usize / 4]],
+            _ => [0, 0],
+        };
+    }
+
+    /// The picture is in colour: a CGB cartridge, or a DMG one colourised by the CGB.
+    pub fn in_colour(&self) -> bool {
+        self.console != Console::Dmg
     }
 
     /// The model is fixed here, before any post-boot state is applied.
@@ -34,7 +103,8 @@ impl GameBoy {
         let cgb_mode = cartridge.cgb_mode() && model == Model::Auto;
         let bus = MemoryBus::new(cartridge, cgb_mode);
         let cpu = Cpu::new();
-        let mut gb = GameBoy { cpu, bus, cgb_mode, double_speed: false, frame_cycles: 0 };
+        let console = if cgb_mode { Console::Cgb } else { Console::Dmg };
+        let mut gb = GameBoy { cpu, bus, cgb_mode, double_speed: false, frame_cycles: 0, console, palette: 0 };
         // The built-in boot ROM is a DMG one: it hands over with A=$01, which CGB software reads
         // as "running on a DMG" (CGB-only titles then show their "GBC only" screen, dual-mode
         // titles fall back to monochrome). CGB carts therefore start from the CGB post-boot state.
@@ -139,6 +209,8 @@ impl GameBoy {
 
         data.extend_from_slice(SAVE_MAGIC);
         data.extend_from_slice(&SAVE_VERSION.to_le_bytes());
+        data.push(self.console as u8);
+        data.push(self.palette);
 
         data.push(self.cpu.regs.a);
         data.push(self.cpu.regs.f);
@@ -222,13 +294,23 @@ impl GameBoy {
         data
     }
 
-    pub fn load_state(&mut self, data: &[u8]) -> bool {
-        if data.len() < 8 { return false; }
-        if &data[0..4] != SAVE_MAGIC { return false; }
-        let version = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
-        if version != SAVE_VERSION { return false; }
+    /// The console a state was saved on (`None`: not a state this core reads). A v3 state
+    /// predates colourised DMG cartridges: it was saved on the cartridge's own console.
+    pub fn state_console(&self, data: &[u8]) -> Option<Console> {
+        if data.len() < 9 || &data[0..4] != SAVE_MAGIC { return None; }
+        match u32::from_le_bytes([data[4], data[5], data[6], data[7]]) {
+            3 => Some(if self.bus.cartridge.cgb_mode() { Console::Cgb } else { Console::Dmg }),
+            SAVE_VERSION => [Console::Dmg, Console::Cgb, Console::Compat].get(data[8] as usize).copied(),
+            _ => None,
+        }
+    }
 
-        let mut pos = 8;
+    pub fn load_state(&mut self, data: &[u8]) -> bool {
+        if self.state_console(data) != Some(self.console) { return false; }
+        let version = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
+
+        let mut pos = if version == 3 { 8 } else { 10 };
+        self.palette = if version == 3 { 0 } else { *data.get(9).unwrap_or(&0) };
 
         macro_rules! read_u8 {
             () => {{
@@ -324,6 +406,9 @@ impl GameBoy {
         self.bus.cgb_mode = read_u8!() != 0;
         self.cgb_mode = self.bus.cgb_mode;
         self.bus.ppu.cgb_mode = self.cgb_mode;
+        self.bus.ppu.compat = self.console == Console::Compat && !self.bus.boot_rom_active;
+        self.bus.joypad.boot_hold = [0, 0];
+        if self.bus.boot_rom_active { self.hold_palette(); } // a state saved during the animation keeps its colours
         self.bus.double_speed = read_u8!() != 0;
         self.double_speed = self.bus.double_speed;
         self.bus.ppu.bg_cram.copy_from_slice(read_bytes!(64));
@@ -392,4 +477,5 @@ fn connect(master: &mut GameBoy, slave: &mut GameBoy) {
 const SAVE_MAGIC: &[u8; 4] = b"GBSS";
 // v3 (1.0.0) adds the mapper, HDMA/KEY1/OAM-DMA, serial, PPU/CPU latch and APU state; v2 states are
 // rejected because loading them into a freshly booted ROM maps the wrong banks.
-const SAVE_VERSION: u32 = 3;
+// v4 adds the console and palette bytes after the version (v3 states still load: see `state_console`).
+const SAVE_VERSION: u32 = 4;
