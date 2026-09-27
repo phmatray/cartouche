@@ -20,7 +20,8 @@ export const LEGAL_FR: LegalSection[] = [
       'original, pas celui de Nintendo. Par défaut, les jeux démarrent directement dans l’état documenté qui suit ' +
       'le démarrage ; les couleurs Game Boy Color d’un jeu Game Boy d’origine, si vous les choisissez, sont calculées ' +
       'par cette boot ROM sans être affichée. L’animation de démarrage est désactivée par défaut. Une fois activée ' +
-      '(Réglages > Émulation), elle affiche le logo lu dans la cartouche du jeu, comme la console.\n\n' +
+      '(Réglages > Émulation), elle affiche le logo lu dans la cartouche du jeu, comme la console. Les cadres et couleurs Super Game Boy ' +
+      'sont dessinés à partir des données envoyées par chaque jeu ; aucun logiciel Super Game Boy ou SNES n’est inclus.\n\n' +
       'Trois jeux homebrew gratuits, redistribués sans modification à partir des versions officielles de leurs auteurs :\n\n' +
       'Tobu Tobu Girl et Tobu Tobu Girl Deluxe, © 2017 Tangram Games (sources : ' +
       'https://github.com/SimonLarsen/tobutobugirl et https://github.com/SimonLarsen/tobutobugirl-dx). ' +

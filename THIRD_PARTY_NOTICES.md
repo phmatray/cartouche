@@ -290,24 +290,30 @@ Cartouche license as `LICENSE.txt`; the in-app Legal page links to all three.
 
 ### SameBoy boot ROMs (compiled into the WebAssembly core)
 
-- Files: `gb-core/boot/sameboy_dmg_boot.bin` (256 bytes, Game Boy) and
-  `gb-core/boot/sameboy_cgb_boot.bin` (2304 bytes, Game Boy Color), embedded
+- Files: `gb-core/boot/sameboy_dmg_boot.bin` (256 bytes, Game Boy),
+  `gb-core/boot/sameboy_cgb_boot.bin` (2304 bytes, Game Boy Color) and
+  `gb-core/boot/sameboy_sgb_boot.bin` (256 bytes, Super Game Boy), embedded
   in the core with `include_bytes!` (`gb-core/src/boot_rom.rs`).
 - Work: the boot ROMs of SameBoy, © 2015-2026 Lior Halphon. Original code
   written for SameBoy, not Nintendo's boot ROMs: they read the logo from the
-  cartridge header (`$0104`-`$0133`), and neither binary contains Nintendo's
+  cartridge header (`$0104`-`$0133`), and none of the binaries contains Nintendo's
   boot ROM or its logo bytes (checked against a cartridge header before
   inclusion). The Game Boy Color one also holds SameBoy's table of per-game
-  palettes and the 12 palettes chosen with a button combination.
-- Source: https://github.com/LIJI32/SameBoy, tag `v1.0.3`, `BootROMs/dmg_boot.asm`
-  and `BootROMs/cgb_boot.asm`. Built from that tag with rgbds 1.0.4
-  (`make build/bin/BootROMs/dmg_boot.bin build/bin/BootROMs/cgb_boot.bin`);
-  the result is byte-identical to `dmg_boot.bin` and `cgb_boot.bin` in the
-  official `sameboy_winsdl_v1.0.3.zip` release asset.
+  palettes and the 12 palettes chosen with a button combination. The Super
+  Game Boy one sends the cartridge header to the (emulated) SNES side as
+  command packets, like the original; no Super Game Boy or SNES software is
+  included.
+- Source: https://github.com/LIJI32/SameBoy, tag `v1.0.3`, `BootROMs/dmg_boot.asm`,
+  `BootROMs/cgb_boot.asm` and `BootROMs/sgb_boot.asm`. Built from that tag with
+  rgbds 1.0.4 (`make build/bin/BootROMs/dmg_boot.bin build/bin/BootROMs/cgb_boot.bin
+  build/bin/BootROMs/sgb_boot.bin`); the result is byte-identical to
+  `dmg_boot.bin`, `cgb_boot.bin` and `sgb_boot.bin` in the official
+  `sameboy_winsdl_v1.0.3.zip` release asset.
 - SHA-256:
   - `sameboy_dmg_boot.bin`: `6f64da4cecd7e54e2f928eb3e3ba7810a7a567d0d247cc71737d1771e073a916`
   - `sameboy_cgb_boot.bin`: `f767b8e7e510a255f81328c89dba6e0c996b370e1bc86aebb8584a7da47a5bba`
-- Changes: none (renamed from `dmg_boot.bin` / `cgb_boot.bin`).
+  - `sameboy_sgb_boot.bin`: `b60d493a7944ccf74c81f1e7b6bf38c2c7029e296648ea0e74cb22b10dd1fcb8`
+- Changes: none (renamed from `dmg_boot.bin` / `cgb_boot.bin` / `sgb_boot.bin`).
 - License: Expat (MIT), which covers every file of the SameBoy repository
   except its `iOS` and `HexFiend` directories, so the boot ROMs included:
 

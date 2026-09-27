@@ -20,7 +20,8 @@ export const LEGAL_ES: LegalSection[] = [
       'código original, no el de Nintendo. Por defecto, los juegos arrancan directamente en el estado documentado ' +
       'posterior al arranque; los colores de Game Boy Color de un juego de Game Boy original, si los eliges, los ' +
       'calcula esa boot ROM sin mostrarse. La animación de inicio está desactivada por defecto. Si la activas ' +
-      '(Ajustes > Emulación), muestra el logo leído del propio cartucho del juego, como la consola.\n\n' +
+      '(Ajustes > Emulación), muestra el logo leído del propio cartucho del juego, como la consola. Los marcos y colores de Super Game Boy ' +
+      'se dibujan a partir de los datos que envía cada juego; no se incluye ningún software de Super Game Boy ni de SNES.\n\n' +
       'Tres juegos homebrew gratuitos, redistribuidos sin modificar a partir de las versiones oficiales de sus autores:\n\n' +
       'Tobu Tobu Girl y Tobu Tobu Girl Deluxe, © 2017 Tangram Games (código fuente: ' +
       'https://github.com/SimonLarsen/tobutobugirl y https://github.com/SimonLarsen/tobutobugirl-dx). ' +

@@ -33,8 +33,10 @@ export default {
     gone: 'That save is gone. Starting fresh.',
     madeOnDmg: 'That save was made on the Game Boy. Set Console to Game Boy to load it.',
     madeOnGbc: 'That save was made on the Game Boy Color. Set Console to Game Boy Color to load it.',
+    madeOnSgb: 'That save was made on the Super Game Boy. Turn on Super Game Boy borders and colors on the Screen page to load it.',
     resumedOnDmg: 'Resumed on the Game Boy, where this save was made. Restart from the Screen page to switch.',
     resumedOnGbc: 'Resumed on the Game Boy Color, where this save was made. Restart from the Screen page to switch.',
+    resumedOnSgb: 'Resumed on the Super Game Boy, where this save was made. Restart from the Screen page to switch.',
     loadFailed: 'Couldn’t load the ROM: {error}',
     resumeSaved: 'Resume point saved for {title}',
     saved: 'Saved to slot {n}',
@@ -107,6 +109,7 @@ export default {
   screen: {
     introDmg: 'Pick the handheld you remember, then fine-tune it. Original Game Boy games share these settings unless one has its own.',
     introCgb: 'Pick the handheld you remember, then fine-tune it. Game Boy Color games share these settings unless one has its own.',
+    introSgb: 'Pick the handheld you remember, then fine-tune it. Super Game Boy games share the Color games’ settings unless one has its own.',
     restartNote: 'The new console takes over when the game restarts. Your in-game save carries over; progress made since doesn’t.',
     restart: 'Restart now',
     cgb: 'This is a Game Boy Color game: it keeps its own colors, so palettes don’t apply. Color correction does.',

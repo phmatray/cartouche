@@ -33,16 +33,15 @@ impl Joypad {
     }
 
     pub fn read(&self) -> u8 {
-        let mut result = self.select | 0xC0;
-
+        // Unselected lines read high; with both groups selected a line is low if either button is down.
+        let mut low = 0x0F;
         if self.select & 0x10 == 0 {
-            result = (result & 0xF0) | (self.dpad_state & !self.boot_hold[0] & 0x0F);
+            low &= self.dpad_state & !self.boot_hold[0];
         }
         if self.select & 0x20 == 0 {
-            result = (result & 0xF0) | (self.button_state & !self.boot_hold[1] & 0x0F);
+            low &= self.button_state & !self.boot_hold[1];
         }
-
-        result
+        self.select | 0xC0 | low
     }
 
     pub fn write(&mut self, value: u8) {

@@ -21,6 +21,17 @@ export const paletteOf = (c: ConsoleChoice) => (c.length > 3 ? +c.slice(3) : 0);
 /** The console a game runs on: its own choice, else the default. */
 export const consoleFor = (s: Pick<SettingsValues, 'console' | 'gameConsole'>, gameId: string) => consoleOf(s.gameConsole?.[gameId] ?? s.console);
 
+/**
+ * A cartridge's Super Game Boy functions: 'dmg' an original Game Boy game (Super Game Boy on by default),
+ * 'cgb' a Color game that also has them (off by default: it has its own colours), null none.
+ */
+export type SgbCart = 'dmg' | 'cgb' | null;
+/** What the game is switched on with: the Super Game Boy when it has its switch on, else its console. */
+export type Machine = ConsoleChoice | 'sgb';
+export const sgbOn = (s: Pick<SettingsValues, 'gameSgb'>, gameId: string, cart: SgbCart) => !!cart && (s.gameSgb?.[gameId] ?? cart === 'dmg');
+export const machineFor = (s: Pick<SettingsValues, 'console' | 'gameConsole' | 'gameSgb'>, gameId: string, cart: SgbCart): Machine =>
+  sgbOn(s, gameId, cart) ? 'sgb' : consoleFor(s, gameId);
+
 export type ScreenSize = 'fit' | '2' | '3' | '4';
 export type TouchSize = 'S' | 'M' | 'L';
 
@@ -64,6 +75,8 @@ export interface SettingsState {
   /** The console original Game Boy games run on, and a game’s own choice (by game id). */
   console: ConsoleChoice;
   gameConsole: Record<string, ConsoleChoice>;
+  /** A game's "Super Game Boy borders and colours" switch (by game id; unset: see `sgbOn`). */
+  gameSgb: Record<string, boolean>;
   /** Keep a resume point every time the player is left. */
   resumePoints: boolean;
   muteWhenHidden: boolean;
@@ -131,6 +144,7 @@ const DEFAULT_STATE = {
   startupAnimation: false,
   console: 'dmg' as ConsoleChoice,
   gameConsole: {} as Record<string, ConsoleChoice>,
+  gameSgb: {} as Record<string, boolean>,
   showTests: false,
   showBoxArt: false, // opt-in: box art is third-party content fetched from GitHub
   boxArtAnswer: null as BoxArtAnswer | null,

@@ -129,7 +129,7 @@ function GameDetails({ game }: { game: GameEntry }) {
               <div><dt>{t('game.cart.ram')}</dt><dd>{sizeText(header.ramSize)}</dd></div>
               <div><dt>{t('game.cart.headerTitle')}</dt><dd>{header.title || '—'}</dd></div>
               <div><dt>{t('game.cart.source')}</dt><dd>{game.isLocal ? t('game.cart.yourFile') : game.madeWith ? t('game.cart.hosted') : game.romUrl ? t('game.cart.bundled') : t('game.cart.free')}</dd></div>
-              <div><dt>Super Game Boy</dt><dd>{header.sgbFlag === 'SGB Supported' ? t('game.cart.supported') : t('game.cart.no')}</dd></div>
+              <div><dt>Super Game Boy</dt><dd>{header.sgbFlag !== 'SGB Supported' ? t('game.cart.no') : header.cgbFlag === 'CGB Only' ? t('game.cart.supported') : t('game.cart.sgbPlays')}</dd></div>
               <div><dt>{t('game.cart.revision')}</dt><dd>{header.romVersion ? `1.${header.romVersion}` : '1.0'}</dd></div>
             </dl>
           ) : (

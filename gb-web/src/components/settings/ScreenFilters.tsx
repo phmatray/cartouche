@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { useLcdShader } from '../../hooks/useLcdShader';
-import { consoleFor, consoleOf, useDisplay, useSettingsStore, type ConsoleChoice } from '../../store/settingsStore';
+import { consoleFor, consoleOf, sgbOn, useDisplay, useSettingsStore, type ConsoleChoice, type SgbCart } from '../../store/settingsStore';
 import { supportsWebGL2 } from '../../shaders/lcd-engine';
 import { neuralStatus } from '../../neural/governor';
 import { PALETTES, presetOf, presetsFor, type Correction, type Filters, type ScreenKind, type Upscale } from '../../shaders/filters';
@@ -70,36 +70,46 @@ const AUTO_SWATCH = ['#8b8bde', '#7bff31', '#ff4100', '#62a4ff'];
 const DIRS = ['right', 'left', 'up', 'down'] as const;
 const buttonOf = (n: number) => (n > 8 ? ' + B' : n > 4 ? ' + A' : '');
 
-/** What original Game Boy games run on: the game's own choice (from its manual) or, with no game, the default. */
-export function ConsoleRows({ gameId }: { gameId?: string }) {
+/**
+ * What original Game Boy games run on: the game's own choice (from its manual) or, with no game, the default.
+ * `sgb`: the game's cartridge has Super Game Boy functions (its switch comes first, and replaces the console while on).
+ */
+export function ConsoleRows({ gameId, sgb = null }: { gameId?: string; sgb?: SgbCart }) {
   const value = useSettingsStore((s) => (gameId !== undefined ? consoleFor(s, gameId) : consoleOf(s.console)));
+  const onSgb = useSettingsStore((s) => gameId !== undefined && sgbOn(s, gameId, sgb));
   const set = useSettingsStore((s) => s.set);
   const t = useT();
   const choose = (c: ConsoleChoice) => set(gameId === undefined ? { console: c } : { gameConsole: { ...useSettingsStore.getState().gameConsole, [gameId]: c } });
   return (
     <>
-      <div className="row col">
-        <span>{t('settings.console.label')}<small>{t('settings.console.sub')}</small></span>
-        <Seg<'dmg' | 'gbc'> label={t('settings.console.label')} value={value === 'dmg' ? 'dmg' : 'gbc'} options={[['dmg', 'Game Boy'], ['gbc', 'Game Boy Color']]} set={choose} />
-      </div>
-      {value !== 'dmg' && (
-        <div className="row col">
-          <span>{t('settings.console.colors')}<small>{t('settings.console.colorsSub')}</small></span>
-          <div className="swatches" role="group" aria-label={t('settings.console.colors')}>
-            {[AUTO_SWATCH, ...GBC_PALETTES].map((colors, n) => {
-              const c: ConsoleChoice = n ? `gbc${n}` : 'gbc';
-              const dir = DIRS[(n + 3) % 4];
-              return (
-                <button key={c} className="swatch" aria-pressed={value === c} onClick={() => choose(c)}
-                  aria-label={n ? t(`player.touch.${dir}`) + buttonOf(n) : undefined}>
-                  <span>{colors.map((x, i) => <i key={i} style={{ background: x }} />)}</span>
-                  {n ? <b className="combo">{I[dir]}{buttonOf(n)}</b> : t('settings.console.auto')}
-                </button>
-              );
-            })}
-          </div>
-        </div>
+      {sgb && gameId !== undefined && (
+        <SwitchRow label={t('settings.console.sgb')} sub={t(sgb === 'cgb' ? 'settings.console.sgbSubCgb' : 'settings.console.sgbSub')} on={onSgb}
+          set={(v) => set({ gameSgb: { ...useSettingsStore.getState().gameSgb, [gameId]: v } })} />
       )}
+      {!onSgb && sgb !== 'cgb' && <>
+        <div className="row col">
+          <span>{t('settings.console.label')}<small>{t('settings.console.sub')}</small></span>
+          <Seg<'dmg' | 'gbc'> label={t('settings.console.label')} value={value === 'dmg' ? 'dmg' : 'gbc'} options={[['dmg', 'Game Boy'], ['gbc', 'Game Boy Color']]} set={choose} />
+        </div>
+        {value !== 'dmg' && (
+          <div className="row col">
+            <span>{t('settings.console.colors')}<small>{t('settings.console.colorsSub')}</small></span>
+            <div className="swatches" role="group" aria-label={t('settings.console.colors')}>
+              {[AUTO_SWATCH, ...GBC_PALETTES].map((colors, n) => {
+                const c: ConsoleChoice = n ? `gbc${n}` : 'gbc';
+                const dir = DIRS[(n + 3) % 4];
+                return (
+                  <button key={c} className="swatch" aria-pressed={value === c} onClick={() => choose(c)}
+                    aria-label={n ? t(`player.touch.${dir}`) + buttonOf(n) : undefined}>
+                    <span>{colors.map((x, i) => <i key={i} style={{ background: x }} />)}</span>
+                    {n ? <b className="combo">{I[dir]}{buttonOf(n)}</b> : t('settings.console.auto')}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </>}
     </>
   );
 }

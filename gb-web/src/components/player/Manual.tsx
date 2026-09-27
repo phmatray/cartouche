@@ -2,10 +2,10 @@ import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'rea
 import { Link } from 'react-router';
 import type { GameEntry } from '../../types/game';
 import type { StoredSaveState, StoredScreenshot } from '../../lib/db';
-import type { RomMetadata } from '../../lib/rom-utils';
+import { sgbCartOf, type RomMetadata } from '../../lib/rom-utils';
 import type { useEmulator } from '../../hooks/useEmulator';
 import type { SlotKey } from '../../hooks/useSaveStates';
-import { consoleFor, useSettingsStore, type ConsoleChoice, type ScreenSize } from '../../store/settingsStore';
+import { machineFor, useSettingsStore, type Machine, type ScreenSize, type SgbCart } from '../../store/settingsStore';
 import { ConsoleRows, MotionRows, ScreenFilters } from '../settings/ScreenFilters';
 import { ago, dur, keyLabel, paths } from '../../lib/ui';
 import { I } from '../icons';
@@ -41,7 +41,7 @@ interface ManualProps {
   /** Online link cable plugged in: rewind and state loading are off. */
   online?: boolean;
   /** The console the game was switched on with (null: not yet). */
-  running: ConsoleChoice | null;
+  running: Machine | null;
   onRestart: () => void;
 }
 
@@ -53,7 +53,7 @@ export function Manual(p: ManualProps) {
     controls: () => <ControlsPage online={p.online} />,
     saves: () => <SavesPage {...p} />,
     screen: () => <ScreenPage snapshot={p.emu.framebufferSnapshot} romLoaded={p.romLoaded} inColor={!!p.inColor} gameId={p.game.id}
-      dmgCart={p.header?.cgbFlag === 'DMG Only'} running={p.running} onRestart={p.onRestart} />,
+      dmgCart={p.header?.cgbFlag === 'DMG Only'} sgb={sgbCartOf(p.header)} running={p.running} onRestart={p.onRestart} />,
     album: () => <AlbumPage {...p} />,
     game: () => <GamePageTab {...p} />,
   };
@@ -153,11 +153,12 @@ function SavesPage({ header, states, romLoaded, onSave, onLoad }: ManualProps) {
   );
 }
 
-function ScreenPage({ snapshot, romLoaded, inColor, gameId, dmgCart, running, onRestart }: {
-  snapshot: () => Uint8Array | null; romLoaded: boolean; inColor: boolean; gameId: string; dmgCart: boolean; running: ConsoleChoice | null; onRestart: () => void;
+function ScreenPage({ snapshot, romLoaded, inColor, gameId, dmgCart, sgb, running, onRestart }: {
+  snapshot: () => Uint8Array | null; romLoaded: boolean; inColor: boolean; gameId: string; dmgCart: boolean; sgb: SgbCart; running: Machine | null; onRestart: () => void;
 }) {
   const { screenSize, setScreenSize } = useSettingsStore();
-  const chosen = useSettingsStore((s) => consoleFor(s, gameId));
+  const chosen = useSettingsStore((s) => machineFor(s, gameId, sgb));
+  const choosable = dmgCart || !!sgb; // the game can run on another console
   const t = useT();
   const grab = useRef(() => null as Uint8ClampedArray | null);
   useEffect(() => { grab.current = () => { const s = romLoaded ? snapshot() : null; return s ? new Uint8ClampedArray(s) : null; }; });
@@ -169,17 +170,17 @@ function ScreenPage({ snapshot, romLoaded, inColor, gameId, dmgCart, running, on
   return (
     <>
       <h2>{t('player.tabs.screen')}</h2>
-      <p>{t(inColor ? 'player.screen.introCgb' : 'player.screen.introDmg')}</p>
-      {inColor && !dmgCart && (
+      <p>{t(running === 'sgb' ? 'player.screen.introSgb' : inColor ? 'player.screen.introCgb' : 'player.screen.introDmg')}</p>
+      {inColor && !dmgCart && running !== 'sgb' && (
         <div className="notice"><span className="ic">i</span><span>{t('player.screen.cgb')}</span></div>
       )}
-      {dmgCart && romLoaded && running !== null && running !== chosen && (
+      {choosable && romLoaded && running !== null && running !== chosen && (
         <div className="notice">
           <span className="ic">i</span>
           <span>{t('player.screen.restartNote')} <button className="sbtn" onClick={onRestart}>{t('player.screen.restart')}</button></span>
         </div>
       )}
-      {dmgCart && <ConsoleRows gameId={gameId} />}
+      {choosable && <ConsoleRows gameId={gameId} sgb={sgb} />}
       <ScreenFilters kind={inColor ? 'cgb' : 'dmg'} gameId={gameId} frame={frame} />
       <h3>{t('settings.display.motion')}</h3>
       <MotionRows />

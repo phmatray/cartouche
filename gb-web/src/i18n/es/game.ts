@@ -27,6 +27,7 @@ export default {
     bundled: 'Incluido con la app',
     free: 'Descarga gratuita (homebrew)',
     supported: 'Compatible',
+    sgbPlays: 'Compatible: marcos y colores',
     no: 'No',
     revision: 'Revisión',
     later: 'La cabecera del cartucho se lee de tu ROM cuando la cargas: mapper, tamaño de la ROM y del guardado, compatibilidad con color.',

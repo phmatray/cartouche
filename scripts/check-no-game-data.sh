@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fails if the tracked tree (index included) contains game data or training material:
 # ROMs other than the six bundled homebrew ones and the allowlisted GB Studio ones, saves and save states,
-# datasets, model checkpoints, boot ROM / BIOS images other than the two hash-pinned SameBoy ones, any file
+# datasets, model checkpoints, boot ROM / BIOS images other than the three hash-pinned SameBoy ones, any file
 # over 2 MB, a copy of the Nintendo logo outside the bundled ROMs, or anything referring to a local training directory.
 # The only model data allowed in the repository is gb-web/src/neural/weights/*.bin.
 # scripts/rom-allowlist.sha1 lists each hosted GB Studio ROM ("<sha1>  <path>", shasum format): a ROM is allowed
@@ -16,7 +16,8 @@ banned_ext='\.(gb|gbc|sgb|sav|srm|state|npz|npy|pt|pth|ckpt|safetensors|onnx|h5|
 # Boot ROMs / BIOS dumps: only SameBoy's open-source (MIT) boot ROMs, at these paths with exactly this content
 # (THIRD_PARTY_NOTICES.md). Any other file named like a boot ROM or BIOS image fails.
 boot_roms='6f64da4cecd7e54e2f928eb3e3ba7810a7a567d0d247cc71737d1771e073a916  gb-core/boot/sameboy_dmg_boot.bin
-f767b8e7e510a255f81328c89dba6e0c996b370e1bc86aebb8584a7da47a5bba  gb-core/boot/sameboy_cgb_boot.bin'
+f767b8e7e510a255f81328c89dba6e0c996b370e1bc86aebb8584a7da47a5bba  gb-core/boot/sameboy_cgb_boot.bin
+b60d493a7944ccf74c81f1e7b6bf38c2c7029e296648ea0e74cb22b10dd1fcb8  gb-core/boot/sameboy_sgb_boot.bin'
 boot_like='(boot|bios).*\.(bin|rom|gb|gbc)$|(^|/)[^/]*(rom|dmg0|cgb0)[^/]*\.(bin|rom)$|^gb-core/boot/'
 fail=0
 

@@ -27,6 +27,7 @@ export default {
     bundled: 'Fourni avec l’app',
     free: 'Téléchargement gratuit (homebrew)',
     supported: 'Pris en charge',
+    sgbPlays: 'Pris en charge : cadres et couleurs',
     no: 'Non',
     revision: 'Révision',
     later: 'L’en-tête de la cartouche est lu dans la ROM une fois chargée : mapper, taille de la ROM et de la sauvegarde, prise en charge de la couleur.',

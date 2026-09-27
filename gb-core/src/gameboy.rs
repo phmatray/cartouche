@@ -21,6 +21,8 @@ pub enum Console {
     Cgb = 1,
     /// A CGB running a DMG-only cartridge in compatibility mode (colourised by its boot ROM).
     Compat = 2,
+    /// A Super Game Boy (a DMG with the SNES side's palettes and border, see sgb.rs).
+    Sgb = 3,
 }
 
 pub struct GameBoy {
@@ -72,6 +74,23 @@ impl GameBoy {
         Ok(gb)
     }
 
+    /// A Super Game Boy, from its boot ROM (`animation`) or its post-boot state. The cartridge
+    /// runs as on a DMG, even a Game Boy Color one; without SGB support it is an ordinary DMG.
+    pub fn with_sgb(rom_data: Vec<u8>, animation: bool) -> Result<Self, EmulatorError> {
+        // Header $0146 = $03 with the old licensee $33, as the SGB checks.
+        if rom_data.get(0x146) != Some(&0x03) || rom_data.get(0x14B) != Some(&0x33) {
+            return Self::with_boot(rom_data, false, 0, animation);
+        }
+        let mut gb = Self::with_model(rom_data, Model::Dmg)?;
+        gb.console = Console::Sgb;
+        gb.bus.sgb = Some(Box::default());
+        gb.bus.boot_rom = &crate::boot_rom::SAMEBOY_SGB[..];
+        if !animation {
+            gb.skip_boot_rom();
+        }
+        Ok(gb)
+    }
+
     /// Runs the boot ROM to its end without showing it (a skipped start-up animation).
     pub fn finish_boot(&mut self) -> Result<(), EmulatorError> {
         for _ in 0..900 {
@@ -90,6 +109,11 @@ impl GameBoy {
             p @ 1..=12 => [1 << ((p - 1) % 4), [0, 1, 2][(p - 1) as usize / 4]],
             _ => [0, 0],
         };
+    }
+
+    /// The picture shown, 160x144 RGBA: the PPU's, or on a Super Game Boy the one it coloured.
+    pub fn screen(&self) -> &[u8] {
+        self.bus.sgb.as_deref().map_or(&self.bus.ppu.framebuffer[..], |s| &s.out[..])
     }
 
     /// The picture is in colour: a CGB cartridge, or a DMG one colourised by the CGB.
@@ -124,6 +148,15 @@ impl GameBoy {
             self.cpu.regs.e = 0x56;
             self.cpu.regs.h = 0x00;
             self.cpu.regs.l = 0x0D;
+        } else if self.console == Console::Sgb {
+            self.cpu.regs.a = 0x01;
+            self.cpu.regs.f = 0x00;
+            self.cpu.regs.b = 0x00;
+            self.cpu.regs.c = 0x14;
+            self.cpu.regs.d = 0x00;
+            self.cpu.regs.e = 0x00;
+            self.cpu.regs.h = 0xC0;
+            self.cpu.regs.l = 0x60;
         } else {
             self.cpu.regs.a = 0x01;
             self.cpu.regs.f = 0xB0;
@@ -290,6 +323,7 @@ impl GameBoy {
         data.extend_from_slice(&[sr.data, sr.control, sr.incoming]);
         data.extend_from_slice(&sr.remaining.to_le_bytes());
         self.bus.apu.export_state(&mut data);
+        if let Some(s) = &self.bus.sgb { s.export_state(&mut data); }
 
         data
     }
@@ -300,13 +334,19 @@ impl GameBoy {
         if data.len() < 9 || &data[0..4] != SAVE_MAGIC { return None; }
         match u32::from_le_bytes([data[4], data[5], data[6], data[7]]) {
             3 => Some(if self.bus.cartridge.cgb_mode() { Console::Cgb } else { Console::Dmg }),
-            SAVE_VERSION => [Console::Dmg, Console::Cgb, Console::Compat].get(data[8] as usize).copied(),
+            SAVE_VERSION => [Console::Dmg, Console::Cgb, Console::Compat, Console::Sgb].get(data[8] as usize).copied(),
             _ => None,
         }
     }
 
+    /// A state loads on the console it was saved on, or a Game Boy one on a Super Game Boy
+    /// (the same machine; the SGB side then starts fresh).
     pub fn load_state(&mut self, data: &[u8]) -> bool {
-        if self.state_console(data) != Some(self.console) { return false; }
+        match (self.state_console(data), self.console) {
+            (Some(a), b) if a == b => {}
+            (Some(Console::Dmg), Console::Sgb) => {}
+            _ => return false,
+        }
         let version = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
 
         let mut pos = if version == 3 { 8 } else { 10 };
@@ -436,6 +476,9 @@ impl GameBoy {
         self.bus.serial.incoming = read_u8!();
         self.bus.serial.remaining = read_u32!();
         if !self.bus.apu.import_state(data, &mut pos) { return false; }
+        if let Some(s) = self.bus.sgb.as_deref_mut() {
+            if !s.import_state(data, &mut pos) { return false; }
+        }
 
         let _ = pos;
         true

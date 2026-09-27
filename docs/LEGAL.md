@@ -26,7 +26,9 @@ load into it are ones you have the right to use.
   post-boot state; the Game Boy Color colours of an original Game Boy game, when
   chosen, are worked out by that boot ROM out of sight. The start-up animation
   is **off by default**. Turned on (Settings › Emulation), it shows the logo read
-  from the game's own cartridge, as the console does.
+  from the game's own cartridge, as the console does. Super Game Boy borders and
+  colors are drawn from the data each game sends; no Super Game Boy or SNES
+  software is included.
 - Three free homebrew games, redistributed unmodified from their authors'
   official releases:
   - *Tobu Tobu Girl* and *Tobu Tobu Girl Deluxe*, © 2017 Tangram Games

@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSPrope
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { GameEntry } from '../../types/game';
 import { fetchRom, recordSession, useGameLibrary } from '../../hooks/useGameLibrary';
-import { CONSOLE_COMPAT, CONSOLE_DMG, useEmulator } from '../../hooks/useEmulator';
+import { CONSOLE_COMPAT, CONSOLE_DMG, CONSOLE_SGB, useEmulator } from '../../hooks/useEmulator';
 import { useAudio } from '../../hooks/useAudio';
 import { useGamepad } from '../../hooks/useGamepad';
 import { useLcdShader } from '../../hooks/useLcdShader';
@@ -10,7 +10,8 @@ import { useRewind } from '../../hooks/useRewind';
 import { useSaveData } from '../../hooks/useSaveData';
 import { useSaveStates, type SlotKey } from '../../hooks/useSaveStates';
 import { useAnimationFrame } from '../../hooks/useAnimationFrame';
-import { CHANNEL_KEYS, consoleFor, paletteOf, useDisplay, useSettingsStore, type ConsoleChoice } from '../../store/settingsStore';
+import { CHANNEL_KEYS, machineFor, paletteOf, useDisplay, useSettingsStore, type Machine } from '../../store/settingsStore';
+import { parseRomHeader, sgbCartOf } from '../../lib/rom-utils';
 import { presetOf } from '../../shaders/filters';
 import { BUTTON_NUMBERS } from '../../utils/keybindings';
 import { getActiveProfileId, getSram } from '../../lib/db';
@@ -36,6 +37,11 @@ import { useOnlineLink } from '../../lib/netlink/useOnlineLink';
 import { LinkCap, LinkWait } from '../netlink/LinkHud';
 
 const FPS = 4194304 / 70224; // 59.73 Hz, the Game Boy's real frame rate
+/** By console number (see useEmulator): what to switch on for a state made there, and the name in its messages. */
+const MADE_ON: Machine[] = ['dmg', 'dmg', 'gbc', 'sgb'];
+const ON = ['Dmg', 'Gbc', 'Gbc', 'Sgb'] as const;
+/** What a game is switched on with, from its settings and its cartridge. */
+const machineOf = (data: Uint8Array, gameId: string) => machineFor(useSettingsStore.getState(), gameId, sgbCartOf(parseRomHeader(data)));
 const SPEEDS = [0.5, 1, 2, 4];
 const typing = () => {
   const el = document.activeElement as HTMLElement | null;
@@ -70,7 +76,7 @@ function Player({ game }: { game: GameEntry }) {
   const emu = useEmulator();
   const { isReady, isRunning, setIsRunning, romLoaded, isCgb, loadRom, runFrame, getAudioSamples, pressButton, releaseButton,
     errors, hasBatteryRam, exportSram, importSram, saveState, loadState, framebufferSnapshot, setTraceEnabled, getTrace,
-    consoleNow, stateConsole, paletteNow, skipBoot } = emu;
+    consoleNow, stateConsole, paletteNow, skipBoot, sgbBorder } = emu;
   const keybindings = useSettingsStore((s) => s.keybindings);
   const rewindSeconds = useSettingsStore((s) => s.rewindBufferSeconds);
   const screenSize = useSettingsStore((s) => s.screenSize);
@@ -107,36 +113,54 @@ function Player({ game }: { game: GameEntry }) {
   const { ensureStarted, feedSamples, muted, toggleMute } = useAudio();
   const saveTo = useRef<string | null>(null); // the save profile played solo (the game's active one)
 
-  // ---- the console: an original Game Boy cartridge runs on the Game Boy or, colourised, on the Game Boy Color ----
+  // ---- the Super Game Boy border: drawn behind the screen once the game sent one ----
+  const borderRef = useRef<HTMLCanvasElement>(null);
+  const borderVersion = useRef(0);
+  const [bordered, setBordered] = useState(false);
+  const syncBorder = useCallback(() => {
+    const b = sgbBorder(borderVersion.current);
+    if (!b) return;
+    borderVersion.current = b.version;
+    setBordered(!!b.rgba);
+    if (b.rgba) borderRef.current?.getContext('2d')?.putImageData(new ImageData(new Uint8ClampedArray(b.rgba), 256, 224), 0, 0);
+  }, [sgbBorder]);
+
+  // ---- the console: an original Game Boy cartridge runs on the Game Boy or, colourised, on the Game Boy Color; one with
+  // Super Game Boy functions on the Super Game Boy ----
   const romData = useRef<Uint8Array | null>(null);
-  const [running, setRunning] = useState<ConsoleChoice | null>(null); // what the core was powered on with
+  const [running, setRunning] = useState<Machine | null>(null); // what the core was powered on with
   const switchOk = useRef(false); // only the resume at start-up may follow its state onto another console
   const refused = useRef(false); // the last load was a state from another console (already explained)
-  const powerOn = useCallback((data: Uint8Array, c: ConsoleChoice, animation: boolean) => {
-    if (!loadRom(data, { colorize: c !== 'dmg', palette: paletteOf(c), animation })) return false;
+  const powerOn = useCallback((data: Uint8Array, c: Machine, animation: boolean) => {
+    const sgb = c === 'sgb';
+    if (!loadRom(data, { colorize: !sgb && c !== 'dmg', palette: sgb ? 0 : paletteOf(c), animation, sgb })) return false;
     romData.current = data;
     setRunning(c);
+    syncBorder();
     return true;
-  }, [loadRom]);
+  }, [loadRom, syncBorder]);
 
   // Every state load (slot, resume point, rewind step) draws its picture at once, paused or not, with no ghosting from before the jump.
   const loadAndShow = useCallback((data: Uint8Array, frame?: Uint8Array | Uint8ClampedArray) => {
     refused.current = false;
     const made = stateConsole(data);
-    if (made !== consoleNow() && (made === CONSOLE_DMG || made === CONSOLE_COMPAT)) {
-      if (!switchOk.current || !romData.current || !powerOn(romData.current, made === CONSOLE_DMG ? 'dmg' : 'gbc', true)) {
+    const now = consoleNow();
+    // A Game Boy state also loads on the Super Game Boy (the same machine; the game sends its colours again).
+    if (made !== now && MADE_ON[made] && !(made === CONSOLE_DMG && now === CONSOLE_SGB)) {
+      if (!switchOk.current || !romData.current || !powerOn(romData.current, MADE_ON[made], true)) {
         refused.current = true;
-        toast(tNow(made === CONSOLE_DMG ? 'player.toast.madeOnDmg' : 'player.toast.madeOnGbc'), 'm');
+        toast(tNow(`player.toast.madeOn${ON[made]}`), 'm');
         return false;
       }
     }
     if (!loadState(data, frame)) return false;
     // A colourised state brings back its own palette: the Screen page then offers a restart if the game's choice differs.
     if (consoleNow() === CONSOLE_COMPAT) { const p = paletteNow(); setRunning(p ? `gbc${p}` : 'gbc'); }
+    syncBorder();
     const fb = framebufferSnapshot();
     if (fb) { renderFrame(new Uint8ClampedArray(fb.buffer, fb.byteOffset, fb.length), true); setLit(true); }
     return true;
-  }, [loadState, framebufferSnapshot, renderFrame, stateConsole, consoleNow, powerOn, paletteNow]);
+  }, [loadState, framebufferSnapshot, renderFrame, stateConsole, consoleNow, powerOn, paletteNow, syncBorder]);
   const saves = useSaveStates(game.id, { ...emu, loadState: loadAndShow }, saveTo);
   // Rewinding stops quietly at a restart onto another console.
   const rewindLoad = useCallback((data: Uint8Array, frame?: Uint8ClampedArray) => stateConsole(data) === consoleNow() && loadAndShow(data, frame), [stateConsole, consoleNow, loadAndShow]);
@@ -191,7 +215,7 @@ function Player({ game }: { game: GameEntry }) {
     const slot = q.get('slot');
     const from: SlotKey | null = q.get('resume') ? 'auto' : slot !== null ? +slot : null;
     // A state replaces the start-up at once: the animation then costs nothing (and plays if the state is gone).
-    if (!powerOn(data, consoleFor(s, game.id), s.startupAnimation || from !== null)) { setBadRom(true); return; }
+    if (!powerOn(data, machineOf(data, game.id), s.startupAnimation || from !== null)) { setBadRom(true); return; }
     setNeedsRom(false);
     if (hasBatteryRam()) {
       const id = q.get('save') ?? await getActiveProfileId(game.id).catch(() => game.id);
@@ -206,7 +230,7 @@ function Player({ game }: { game: GameEntry }) {
       switchOk.current = false;
       if (!ok && !s.startupAnimation) skipBoot();
       const moved = ok && consoleNow() !== before;
-      if (moved) toast(tNow(consoleNow() === CONSOLE_DMG ? 'player.toast.resumedOnDmg' : 'player.toast.resumedOnGbc'), 'm');
+      if (moved) toast(tNow(`player.toast.resumedOn${ON[consoleNow()] ?? 'Dmg'}`), 'm');
       else if (!refused.current) toast(ok ? (from === 'auto' ? tNow('player.toast.resumed') : tNow('player.toast.loadedSlot', { n: String(+from + 1) })) : tNow('player.toast.gone'), ok ? 'c' : 'm');
     }
     setIsRunning(true);
@@ -249,17 +273,19 @@ function Player({ game }: { game: GameEntry }) {
     const hz = refresh.current.length >= 15 ? 1 / [...refresh.current].sort((a, b) => a - b)[refresh.current.length >> 1] : 60;
     const motion = smoothMotion && (smoothMotionForce || hz > 75) && speedRef.current === 1 && !isRewinding;
     setMotion(motion);
-    const traced = usesTrace(); // only while Neural 4× really runs its tile path, or Smooth motion is on
+    // Only while Neural 4× really runs its tile path, or Smooth motion is on. Never on the Super Game Boy: the trace
+    // has the Game Boy's shades, not the picture's colours (Neural 4× then works from the picture alone, motion rests).
+    const traced = usesTrace() && consoleNow() !== CONSOLE_SGB;
     setTraceEnabled(traced);
     let fb: Uint8ClampedArray | null = null;
     for (let i = 0; i < n; i++) fb = wrapRunFrame(runOne) ?? fb;
     const trace = fb && traced && !isRewinding ? getTrace() : null; // a rewound frame has no trace of its own
-    if (fb) { renderFrame(fb, false, trace, p.acc); setLit(true); }
+    if (fb) { renderFrame(fb, false, trace, p.acc); setLit(true); syncBorder(); }
     else if (motion) drawMotion(p.acc);
     // Online, the resume point stays the solo game's: a mid-link state is no place to come back to alone.
     if (n) { played.current += dt; if (!online.on) dirty.current = true; }
     periphTick(isRewinding ? 0 : n);
-  }, [wrapRunFrame, runOne, renderFrame, isRewinding, smoothMotion, smoothMotionForce, setTraceEnabled, getTrace, setMotion, drawMotion, usesTrace, periphTick, online.on]);
+  }, [wrapRunFrame, runOne, renderFrame, isRewinding, smoothMotion, smoothMotionForce, setTraceEnabled, getTrace, setMotion, drawMotion, usesTrace, periphTick, online.on, consoleNow, syncBorder]);
   const looping = romLoaded && (isRunning || isRewinding);
   useEffect(() => { if (!looping) { pace.current.last = 0; refresh.current = []; periphStop(); } }, [looping, periphStop]);
   useAnimationFrame(onFrame, looping);
@@ -321,8 +347,7 @@ function Player({ game }: { game: GameEntry }) {
     const data = romData.current;
     if (!data) return;
     const sram = hasBatteryRam() ? exportSram() : null;
-    const s = useSettingsStore.getState();
-    if (!powerOn(data, consoleFor(s, game.id), s.startupAnimation)) return;
+    if (!powerOn(data, machineOf(data, game.id), useSettingsStore.getState().startupAnimation)) return;
     if (sram) importSram(sram);
     play();
   }, [hasBatteryRam, exportSram, importSram, powerOn, game.id, play]);
@@ -381,7 +406,7 @@ function Player({ game }: { game: GameEntry }) {
   const [kind, label] = tagOf(game, savedIds);
   const status = needsRom ? label : savedJustNow ? t('player.savedNow') : auto ? t('player.resumeAgo', { ago: ago(auto.timestamp) }) : label;
   // A fixed size (2×–4×) is the most the screen takes: the CSS still shrinks it to the room there is.
-  const screenStyle = screenSize === 'fit' ? undefined : { '--sw': `${160 * +screenSize + 24}px` } as CSSProperties;
+  const screenStyle = screenSize === 'fit' ? undefined : { '--sw': `${(bordered ? 256 : 160) * +screenSize + 24}px` } as CSSProperties;
   const disabled = !romLoaded;
   const noStore = disabled || storageError; // save slots and the album need IndexedDB
   const pad = (b: string) => ({
@@ -404,7 +429,7 @@ function Player({ game }: { game: GameEntry }) {
   });
 
   return (
-    <div ref={rootRef} className={`pl${manual ? '' : ' closed'}${idle ? ' idle' : ''}${immersive ? ' imm' : ''}`} style={{ '--flood': ink } as CSSProperties}>
+    <div ref={rootRef} className={`pl${manual ? '' : ' closed'}${idle ? ' idle' : ''}${immersive ? ' imm' : ''}${bordered ? ' sgb' : ''}`} style={{ '--flood': ink } as CSSProperties}>
       <header className="pl-top">
         <Link className="back" to={paths.game(game.id)}>{I.back}<span className="lbl">{t('common.back')}</span></Link>
         <h1><Link to={paths.game(game.id)} title={game.title}><Title text={game.title} /></Link></h1>
@@ -420,6 +445,7 @@ function Player({ game }: { game: GameEntry }) {
           <div className={`rw${isRewinding ? ' on' : ''}`}>{I.rew}{t('player.rewinding')}<span className="meter"><i style={{ width: `${bufferFill * 100}%` }} /></span></div>
           <div className="screen">
             <div className="frame">
+              <canvas ref={borderRef} className="sgb-border" width={256} height={224} hidden={!bordered} aria-hidden="true" />
               <canvas key={canvasKey} ref={canvasRef} className={`lcd${lit ? ' lit' : ''}`} width={800} height={720} aria-label={t('player.screenOf', { title: game.title })} />
               {badRom ? (
                 <div className="overlay">

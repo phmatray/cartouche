@@ -40,6 +40,9 @@ export default {
     auto: 'Automatic',
     usesColor: 'On the Game Boy Color, they use the Color games’ screen style.',
     editColor: 'Edit the Color style',
+    sgb: 'Super Game Boy borders and colors',
+    sgbSub: 'Plays it as on a Super Game Boy: the border the game draws around the screen, and the colors it picks for each scene.',
+    sgbSubCgb: 'This Color game also works on a Super Game Boy: turn this on for its border and its Super Game Boy colors instead of its own.',
   },
   display: {
     intro: 'The screen every game starts with. Original Game Boy and Game Boy Color games each have their own default; a game can keep its own settings from its manual.',
@@ -250,6 +253,6 @@ export default {
     asAppSub: 'Opens in its own window and works offline after the first visit',
     installBtn: 'Install',
     lookFor: 'Look for “Install” in your browser’s address bar or menu',
-    credits: 'Optional box art of your own games from the libretro-thumbnails project. Game details from GameDataBase © 2024 by PigSaint (<ccby>CC BY 4.0</ccby>), modified, and No-Intro names from libretro-database (<ccbysa>CC BY-SA 4.0</ccbysa>). Typeface: Archivo, © 2020 The Archivo Project Authors (<ofl>SIL Open Font License 1.1</ofl>), served from this site. Bundled games: <tobu>Tobu Tobu Girl</tobu> and <tobudx>Tobu Tobu Girl Deluxe</tobudx> © 2017 Tangram Games (code MIT, assets <ccby>CC BY 4.0</ccby>; their box art is the official key art from the <itch>Tobu Tobu Girl</itch> and <itchdx>Deluxe</itchdx> itch.io pages, cropped and resized); <ucity>µCity</ucity> © 2017-2018 Antonio Niño Díaz (<gpl>GPL-3.0-or-later</gpl>; graphics and music <ccbysa>CC BY-SA 4.0</ccbysa>; <src>source</src>). Boot ROMs: <sameboy>SameBoy</sameboy> © 2015-2026 Lior Halphon (MIT). Test cartridges: dmg-acid2 and cgb-acid2 © 2020 Matt Currie (MIT); cpu_instrs by Shay Green (Blargg), no license stated, will be removed on the author’s request. Each is credited on its game page. Open-source licenses: <notices>third-party notices</notices> and <licenses>full license texts</licenses>. Game Boy and Game Boy Color are trademarks of Nintendo; Cartouche is not affiliated with Nintendo. See <legal>Legal</legal>.',
+    credits: 'Optional box art of your own games from the libretro-thumbnails project. Game details from GameDataBase © 2024 by PigSaint (<ccby>CC BY 4.0</ccby>), modified, and No-Intro names from libretro-database (<ccbysa>CC BY-SA 4.0</ccbysa>). Typeface: Archivo, © 2020 The Archivo Project Authors (<ofl>SIL Open Font License 1.1</ofl>), served from this site. Bundled games: <tobu>Tobu Tobu Girl</tobu> and <tobudx>Tobu Tobu Girl Deluxe</tobudx> © 2017 Tangram Games (code MIT, assets <ccby>CC BY 4.0</ccby>; their box art is the official key art from the <itch>Tobu Tobu Girl</itch> and <itchdx>Deluxe</itchdx> itch.io pages, cropped and resized); <ucity>µCity</ucity> © 2017-2018 Antonio Niño Díaz (<gpl>GPL-3.0-or-later</gpl>; graphics and music <ccbysa>CC BY-SA 4.0</ccbysa>; <src>source</src>). Boot ROMs (Game Boy, Game Boy Color, Super Game Boy): <sameboy>SameBoy</sameboy> © 2015-2026 Lior Halphon (MIT). Test cartridges: dmg-acid2 and cgb-acid2 © 2020 Matt Currie (MIT); cpu_instrs by Shay Green (Blargg), no license stated, will be removed on the author’s request. Each is credited on its game page. Open-source licenses: <notices>third-party notices</notices> and <licenses>full license texts</licenses>. Game Boy and Game Boy Color are trademarks of Nintendo; Cartouche is not affiliated with Nintendo. See <legal>Legal</legal>.',
   },
 };

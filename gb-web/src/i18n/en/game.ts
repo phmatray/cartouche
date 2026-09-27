@@ -26,6 +26,7 @@ export default {
     bundled: 'Bundled with the app',
     free: 'Free download (homebrew)',
     supported: 'Supported',
+    sgbPlays: 'Supported: borders and colors',
     no: 'No',
     revision: 'Revision',
     later: 'The cartridge header is read from your ROM once you load it: mapper, ROM and save size, color support.',
