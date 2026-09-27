@@ -122,3 +122,13 @@ test('a save kept without its ROM gets the same key as on the device that has th
   assert.deepEqual(plan(onPhone, onMac, { [k]: 'h1' }).pull.map((x) => x.k), [k]);
   assert.deepEqual(plan(onMac, onPhone, { [k]: 'h1' }).pull, []);
 });
+
+test('a ROM stored twice: each copy keeps a key of its own, whatever order the games are listed in', () => {
+  const a = { id: 'x', rom: { sha1: 'f00d' } }, b = { id: 'x-2', rom: { sha1: 'f00d' } };
+  for (const g of [gamesOf([a, b]), gamesOf([b, a])]) {
+    assert.equal(g.key('x'), 'f00d');
+    assert.equal(g.key('x-2'), '@x-2');
+    assert.equal(g.id('f00d'), 'x');
+    assert.equal(g.id('@x-2'), 'x-2');
+  }
+});

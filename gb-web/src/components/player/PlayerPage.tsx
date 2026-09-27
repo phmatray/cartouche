@@ -355,14 +355,21 @@ function Player({ game }: { game: GameEntry }) {
   // can be cut off by the unload, so a reload or closed tab would otherwise lose the session.
   const sessionCounted = useRef(false);
   useEffect(() => { sessionCounted.current = false; }, [game.id]);
-  const leave = useCallback(() => {
-    if (dirty.current && useSettingsStore.getState().resumePoints) { dirty.current = false; saveAuto('auto'); }
+  /** Resolves true once a resume point was written (false: nothing to write, or it failed and the player was told). */
+  const leave = useCallback((): Promise<boolean> => {
+    let wrote = Promise.resolve(false);
+    if (dirty.current && useSettingsStore.getState().resumePoints) {
+      dirty.current = false;
+      // A failed write leaves it dirty: the next leave tries again.
+      wrote = saveAuto('auto').then((ok) => { if (!ok) dirty.current = true; return ok; });
+    }
     const seconds = Math.floor(played.current);
     if (seconds >= 1) {
       played.current -= seconds;
       recordSession(game.id, seconds, !sessionCounted.current);
       sessionCounted.current = true;
     }
+    return wrote;
   }, [saveAuto, game.id]);
   const leaveRef = useRef(leave);
   useEffect(() => { leaveRef.current = leave; }, [leave]);
@@ -394,9 +401,8 @@ function Player({ game }: { game: GameEntry }) {
       document.removeEventListener('visibilitychange', onHide);
       window.removeEventListener('pagehide', onPageHide);
       window.removeEventListener('beforeunload', onPageHide);
-      const wasDirty = dirty.current && useSettingsStore.getState().resumePoints;
-      leaveRef.current();
-      if (wasDirty) toast(tNow('player.toast.resumeSaved', { title: game.title }), 'm');
+      // Told only once it is stored: a failed write shows its own warning instead.
+      leaveRef.current().then((ok) => { if (ok) toast(tNow('player.toast.resumeSaved', { title: game.title }), 'm'); });
     };
   }, [game.title]);
 

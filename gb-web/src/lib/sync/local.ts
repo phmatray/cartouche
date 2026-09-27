@@ -78,7 +78,7 @@ export async function readLocal(me: { id: string; name: string }, roms: boolean)
   const have = new Set(romIds);
   let romBytes = 0, romCount = 0;
   for (const m of metas) {
-    if (!m.rom?.sha1 || !have.has(m.id)) continue;
+    if (!m.rom?.sha1 || !have.has(m.id) || games.key(m.id) !== m.rom.sha1) continue; // a second copy: listed once
     shas[m.rom.sha1] = m.id;
     // The header's size byte: 32 KB << n (no need to read megabytes to know it).
     const n = 0x8000 << Math.min(m.rom.head[0x148] ?? 0, 8);
@@ -176,7 +176,8 @@ export async function storeRecord(k: string, dest: string, hash: string, bytes: 
     case 'rom': {
       const r = unpack<RomRec>(bytes);
       if (!(r.data instanceof Uint8Array) || (await computeSha1(r.data)) !== hash) return false;
-      const out = await importRom(`${String(r.title || 'ROM').replace(/[/\\]/g, ' ')}.${r.data[0x143] & 0x80 ? 'gbc' : 'gb'}`, r.data);
+      // Under the id its saves are kept under here (alias), when it has one: they stay the game's own.
+      const out = await importRom(`${String(r.title || 'ROM').replace(/[/\\]/g, ' ')}.${r.data[0x143] & 0x80 ? 'gbc' : 'gb'}`, r.data, false, loadAlias()[hash]);
       return out.status !== 'bad';
     }
     case 'sram': {

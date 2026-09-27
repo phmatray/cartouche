@@ -59,6 +59,8 @@ export default {
     resumedOnGbc: 'Reanudado en Game Boy Color, donde se hizo este guardado. Reinicia desde la página Pantalla para cambiar.',
     resumedOnSgb: 'Reanudado en Super Game Boy, donde se hizo este guardado. Reinicia desde la página Pantalla para cambiar.',
     loadFailed: 'No se pudo cargar la ROM: {error}',
+    saveFull: 'No se pudo guardar: el almacenamiento está lleno. Libera espacio en Ajustes › Almacenamiento o perderás tu progreso al cerrar la app.',
+    saveFailed: 'No se pudo guardar tu progreso: el almacenamiento no responde. Mantén la app abierta y vuelve a intentarlo.',
     resumeSaved: 'Punto de reanudación guardado para {title}',
     saved: 'Guardado en la ranura {n}',
     noResume: 'Aún no hay punto de reanudación',

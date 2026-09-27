@@ -58,6 +58,8 @@ export default {
     resumedOnGbc: 'Resumed on the Game Boy Color, where this save was made. Restart from the Screen page to switch.',
     resumedOnSgb: 'Resumed on the Super Game Boy, where this save was made. Restart from the Screen page to switch.',
     loadFailed: 'Couldn’t load the ROM: {error}',
+    saveFull: 'Couldn’t save: storage is full. Free up space in Settings › Storage, or your progress will be lost when the app closes.',
+    saveFailed: 'Couldn’t save your progress: storage isn’t working. Keep the app open and try again.',
     resumeSaved: 'Resume point saved for {title}',
     saved: 'Saved to slot {n}',
     noResume: 'No resume point yet',

@@ -4,6 +4,7 @@ import { createProfile, getGameSaveStates, getSaveState, getSram, listProfiles, 
 import { refreshSavedIds } from './useGameLibrary';
 import { toast } from '../components/shell/actions';
 import { resumeOlderThan } from '../lib/sram-writer';
+import { warnSaveFailed } from './useSaveData';
 
 /** 'auto' is the resume point written when leaving; numbers are the 5 slots. */
 export type SlotKey = 'auto' | number;
@@ -44,8 +45,13 @@ export function useSaveStates(
     const data = saveState();
     if (!data) return false;
     const thumbnail = framebufferSnapshot();
-    await saveSaveState({ id: idOf(k), data: new Uint8Array(data), thumbnail: new Uint8Array(thumbnail ?? []), timestamp: Date.now(), profile: profileRef?.current ?? undefined });
-    await Promise.all([reload(), refreshSavedIds()]);
+    try {
+      await saveSaveState({ id: idOf(k), data: new Uint8Array(data), thumbnail: new Uint8Array(thumbnail ?? []), timestamp: Date.now(), profile: profileRef?.current ?? undefined });
+    } catch (e) {
+      warnSaveFailed(e);
+      return false;
+    }
+    await Promise.all([reload(), refreshSavedIds()]).catch(() => {});
     return true;
   }, [gameId, idOf, saveState, framebufferSnapshot, reload, profileRef]);
 
