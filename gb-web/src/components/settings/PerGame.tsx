@@ -27,7 +27,7 @@ const OVERSCAN = 6;
  * 3,000 cartridges scroll the same). Rows can be selected and deleted together after a confirmation.
  */
 export function PerGame({ usage, onChanged, confirm }: { usage: Map<string, GameUsage> | null; onChanged: () => Promise<void>; confirm: (r: ConfirmRequest) => void }) {
-  const { games, deleteGame, eraseSaves } = useGameLibrary();
+  const { games, removeGames } = useGameLibrary();
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<Sort>('size');
   const [withSaves, setWithSaves] = useState(false);
@@ -90,7 +90,7 @@ export function PerGame({ usage, onChanged, confirm }: { usage: Map<string, Game
         </>
       ),
       run: async () => {
-        await Promise.all(list.map((l) => Promise.all([l.game.isLocal ? deleteGame(l.game.id) : eraseSaves(l.game.id), forgetBoxArt(l.game)])));
+        await Promise.all([removeGames(list.map((l) => l.game)), ...list.map((l) => forgetBoxArt(l.game))]);
         setPicked(new Set());
         if (list.some((l) => l.game.id === open)) setOpen(null);
         await onChanged();

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { create } from 'zustand';
 import type { GameEntry, GameLibrary } from '../types/game';
-import { addRom, getRomIds, saveRom, deleteRom, getRom, getAllGameMeta, getGameMeta, setGameMeta, deleteSave, deleteSaveState, deleteScreenshots, getSavedGameIds, listProfiles, resumeStateId, slotStateId, SLOT_COUNT, type RomSummary, type StoredGameMeta } from '../lib/db';
-import { parseRomTitle, parseRomHeader, computeSha1, isGameBoyRom, withoutCopierHeader } from '../lib/rom-utils';
+import { addRom, getRomIds, saveRom, getRom, getAllGameMeta, getGameMeta, setGameMeta, eraseGames, getSavedGameIds, type RomSummary, type StoredGameMeta } from '../lib/db';
+import { parseRomTitle, parseRomHeader, computeSha1, isGameBoyRom, withoutCopierHeader, titleKey } from '../lib/rom-utils';
 import { lookupByHash, type GameDbEntry } from '../lib/gamedb';
 import { parseRegion } from '../lib/catalog-utils';
 import { assetUrl, TEST_CATEGORY } from '../lib/ui';
@@ -27,7 +27,7 @@ function groupByCategory(games: GameEntry[]): GameLibrary {
   return games.reduce<GameLibrary>((acc,g)=>{ const c=g.category; if(!acc[c])acc[c]=[]; acc[c].push(g); return acc; },{});
 }
 
-export const titleKey = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+export { titleKey };
 
 /** `data`: the ROM, or just its header (the first 0x150 bytes): nothing past it is read. */
 function localEntry(id: string, title: string, genre: string, data: Uint8Array, sha1: string, dbEntry: GameDbEntry | undefined, importedAt?: number): GameEntry {
@@ -291,28 +291,26 @@ export function useGameLibrary() {
 
   useEffect(() => { loadPromise ??= loadLibrary(); }, []);
 
-  /** Erase a game's cartridge save, resume point, slots and album; the game stays on the shelf. */
-  const eraseSaves = useCallback(async (gameId: string) => {
-    await Promise.all([
-      listProfiles(gameId).then((ps) => Promise.all(ps.map((p) => deleteSave(p.id)))),
-      deleteSaveState(resumeStateId(gameId)),
-      ...Array.from({ length: SLOT_COUNT }, (_, i) => deleteSaveState(slotStateId(gameId, i))),
-      deleteScreenshots(gameId),
-    ]);
-    await refreshSavedIds();
-  }, []);
-
-  /** Remove the user's ROM and everything saved for it. */
-  const deleteGame = useCallback(async (gameId: string) => {
-    await Promise.all([deleteRom(gameId), eraseSaves(gameId)]);
+  /**
+   * Erase games' cartridge saves, resume points, slots and albums; the user ROMs among them are removed too, the others
+   * stay on the shelf. Any number of games in one pass (one transaction, one library update).
+   */
+  const removeGames = useCallback(async (list: Pick<GameEntry, 'id' | 'isLocal'>[]) => {
+    const roms = new Set(list.filter((g) => g.isLocal).map((g) => g.id));
+    await eraseGames(list.map((g) => g.id), [...roms]);
     // A catalog game (a downloaded GB Studio ROM keeps the catalog id) goes back to its catalog entry, "on the server".
     // ponytail: a ROM that replaced a catalog entry under another id (same title) brings it back on the next load only.
-    setGames((prev) => prev.flatMap((g) => {
-      if (g.id !== gameId) return [g];
-      const cat = catalogList.find((c) => c.id === gameId);
+    if (roms.size) setGames((prev) => prev.flatMap((g) => {
+      if (!roms.has(g.id)) return [g];
+      const cat = catalogList.find((c) => c.id === g.id);
       return cat ? [{ ...cat, isFavorite: g.isFavorite, lastPlayed: g.lastPlayed, totalPlayTime: g.totalPlayTime, sessions: g.sessions, importedAt: g.importedAt }] : [];
     }));
-  }, [eraseSaves]);
+    await refreshSavedIds();
+  }, []);
+  /** Erase a game's cartridge save, resume point, slots and album; the game stays on the shelf. */
+  const eraseSaves = useCallback((gameId: string) => removeGames([{ id: gameId, isLocal: false }]), [removeGames]);
+  /** Remove the user's ROM and everything saved for it. */
+  const deleteGame = useCallback((gameId: string) => removeGames([{ id: gameId, isLocal: true }]), [removeGames]);
 
   const toggleFavorite = useCallback(async (gameId: string) => {
     const meta = (await getGameMeta(gameId)) ?? { id: gameId };
@@ -333,7 +331,7 @@ export function useGameLibrary() {
 
   const getGameById = useCallback((id: string): GameEntry | undefined => games.find((g) => g.id === id), [games]);
 
-  return { library, games, savedIds, loading, storageError, deleteGame, eraseSaves, linkRomToGame, fetchRomData, getGameById, toggleFavorite };
+  return { library, games, savedIds, loading, storageError, deleteGame, eraseSaves, removeGames, linkRomToGame, fetchRomData, getGameById, toggleFavorite };
 }
 
 /** The search index of the library (shared: built once per library change). */
