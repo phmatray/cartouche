@@ -15,8 +15,10 @@ export const LEGAL_ES: LegalSection[] = [
   {
     title: 'Qué contiene Cartouche',
     body:
-      'Un emulador que no contiene código de Nintendo: no incluye ninguna BIOS ni boot ROM, y los juegos arrancan ' +
-      'directamente en el estado documentado posterior al arranque.\n\n' +
+      'Un emulador que no contiene código de Nintendo. Los juegos arrancan con las boot ROM de código abierto de SameBoy, ' +
+      '© 2015-2026 Lior Halphon, licencia MIT (https://github.com/LIJI32/SameBoy): código original, no el de ' +
+      'Nintendo, que lee el logo del propio cartucho del juego, como la consola. Sin la animación de inicio, ' +
+      'los juegos arrancan directamente en el estado documentado posterior al arranque.\n\n' +
       'Tres juegos homebrew gratuitos, redistribuidos sin modificar a partir de las versiones oficiales de sus autores:\n\n' +
       'Tobu Tobu Girl y Tobu Tobu Girl Deluxe, © 2017 Tangram Games (código fuente: ' +
       'https://github.com/SimonLarsen/tobutobugirl y https://github.com/SimonLarsen/tobutobugirl-dx). ' +

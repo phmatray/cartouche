@@ -15,8 +15,12 @@ pub struct MemoryBus {
     pub joypad: Joypad,
     pub apu: Apu,
     pub serial: Serial,
-    boot_rom: [u8; 256],
+    /// 256 bytes (DMG) or 0x900 (CGB: $0000-$00FF and $0200-$08FF).
+    pub boot_rom: &'static [u8],
     pub boot_rom_active: bool,
+    /// KEY0 ($FF4C), written by the CGB boot ROM only: bit 2 = run the cartridge as a DMG
+    /// ("compatibility mode") once the boot ROM unmaps itself.
+    pub(crate) key0: u8,
     /// 32 KB WRAM (8 banks x 4 KB); DMG uses banks 0+1 only
     pub wram: [u8; 0x8000],
     /// Currently mapped WRAM bank for 0xD000-0xDFFF (1-7; writing 0 selects bank 1)
@@ -52,8 +56,9 @@ impl MemoryBus {
             joypad: Joypad::new(),
             apu: Apu::new(),
             serial: Serial::new(),
-            boot_rom: DMG_BOOT_ROM,
+            boot_rom: &DMG_BOOT_ROM,
             boot_rom_active: true,
+            key0: 0,
             wram: [0; 0x8000],
             wram_bank: 1,
             hram: [0; 0x7F],
@@ -95,7 +100,7 @@ impl MemoryBus {
         }
         match addr {
             0x0000..=0x7FFF => {
-                if self.boot_rom_active && addr <= 0x00FF {
+                if self.boot_rom_active && (addr < 0x100 || (0x200..0x900).contains(&addr) && self.boot_rom.len() > 0x100) {
                     self.boot_rom[addr as usize]
                 } else {
                     self.cartridge.read_rom(addr)
@@ -171,9 +176,18 @@ impl MemoryBus {
                     self.ppu.write_register(addr, value);
                 }
             }
+            0xFF4C => {
+                if self.boot_rom_active && self.cgb_mode {
+                    self.key0 = value;
+                }
+            }
             0xFF50 => {
                 if self.boot_rom_active && value != 0 {
                     self.boot_rom_active = false;
+                    self.joypad.boot_hold = [0, 0];
+                    if self.cgb_mode && self.key0 & 0x04 != 0 {
+                        self.enter_compat();
+                    }
                 }
             }
             // HDMA1-4 write straight into the transfer's address counters, which advance as
@@ -197,6 +211,17 @@ impl MemoryBus {
             0xFFFF => self.interrupts.interrupt_enable = value,
             _ => {}
         }
+    }
+
+    /// A CGB running a DMG cartridge (Pan Docs, "CGB Registers" / KEY0): the CGB registers lock
+    /// (VBK, SVBK, palette RAM, HDMA, KEY1) and the PPU draws like a DMG, with BGP/OBP0/OBP1
+    /// picking colours from the palettes the boot ROM left in BG palette 0 and OBJ palettes 0-1.
+    pub(crate) fn enter_compat(&mut self) {
+        self.cgb_mode = false;
+        self.ppu.cgb_mode = false;
+        self.ppu.compat = true;
+        self.ppu.vram_bank = 0;
+        self.wram_bank = 1;
     }
 
     /// Attempt a CGB speed switch (triggered by STOP with KEY1 bit 0 armed).
@@ -237,7 +262,7 @@ impl MemoryBus {
             self.interrupts.request(SERIAL_BIT);
         }
         self.cartridge.tick();
-        self.apu.cgb_mode = self.cgb_mode;
+        self.apu.cgb_mode = self.cgb_mode || self.ppu.compat; // CGB hardware, whatever the mode
         self.apu.step(ppu_step);
         self.cycle_count += ppu_step;
 

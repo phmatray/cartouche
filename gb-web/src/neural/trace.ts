@@ -203,12 +203,14 @@ export function linePalettes(t: FrameTrace, maps: MapState[], out: Uint8Array): 
   const meta = t.meta, cgb = isCgb(meta);
   const cram = new Uint8Array(128);
   const seen = new Uint8Array(H * 32);
-  if (cgb) cramRgb(meta.subarray(BG_CRAM_OFF, BG_CRAM_OFF + 64), cram);
+  // A DMG cartridge coloured by a CGB (header byte 7): BGP picks from BG palette 0 instead of the core's shades.
+  if (cgb || meta[7]) cramRgb(meta.subarray(BG_CRAM_OFF, BG_CRAM_OFF + 64), cram);
+  const shades = meta[7] ? [0, 1, 2, 3].map((i) => [...cram.subarray(i * 4, i * 4 + 3)]) : DMG_RGB;
   for (let y = 0; y < H; y++) {
     const row = y * 128;
     if (!cgb) {
       const bgp = lineReg(meta, y, L.BGP);
-      for (let id = 0; id < 4; id++) out.set([...DMG_RGB[(bgp >> (2 * id)) & 3], 255], row + id * 4);
+      for (let id = 0; id < 4; id++) out.set([...shades[(bgp >> (2 * id)) & 3], 255], row + id * 4);
       continue;
     }
     out.set(cram, row);

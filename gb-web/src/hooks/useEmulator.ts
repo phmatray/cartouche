@@ -7,6 +7,11 @@ import type { FrameTrace } from '../neural/trace';
 let wasmMemory: WebAssembly.Memory | null = null;
 const textDecoder = new TextDecoder();
 const VRAM_SIZE = 0x2000; // 8192 bytes
+const START = 3; // JoypadButton.Start
+
+export interface BootOptions { colorize: boolean; palette: number; animation: boolean }
+/** Console numbers, as the core reports them. */
+export const CONSOLE_DMG = 0, CONSOLE_COMPAT = 2;
 
 export function useEmulator() {
   const emulatorRef = useRef<import('gb-core').Emulator | null>(null);
@@ -44,7 +49,9 @@ export function useEmulator() {
     setErrors(prev => [...prev, { timestamp: Date.now(), message }]);
   }, []);
 
-  const loadRom = useCallback((data: Uint8Array): boolean => {
+  /** `colorize`/`palette`: an original Game Boy cartridge on a Game Boy Color (palette 0 automatic, 1-12);
+   *  `animation`: play the start-up animation (Start skips it). */
+  const loadRom = useCallback((data: Uint8Array, boot: BootOptions = { colorize: false, palette: 0, animation: false }): boolean => {
     const emu = emulatorRef.current;
     if (!emu) {
       addError(t('player.error.init'));
@@ -52,7 +59,7 @@ export function useEmulator() {
     }
 
     try {
-      const success = emu.load_rom(data);
+      const success = emu.load_rom_with(data, boot.colorize, boot.palette, boot.animation);
       if (!success) {
         const err = emu.get_error();
         addError(err || t('player.error.unknown'));
@@ -160,8 +167,14 @@ export function useEmulator() {
   const pressButton = useCallback((button: number) => {
     const emu = emulatorRef.current;
     if (!emu) return;
+    if (button === START && emu.booting()) { emu.finish_boot(); return; } // Start skips the start-up animation
     emu.press_button(button);
   }, []);
+
+  /** The console the core runs (0 Game Boy, 1 Game Boy Color, 2 Game Boy cartridge on a Game Boy Color), and a state's. */
+  const consoleNow = useCallback((): number => emulatorRef.current?.console() ?? 255, []);
+  const stateConsole = useCallback((data: Uint8Array): number => emulatorRef.current?.state_console(data) ?? 255, []);
+  const skipBoot = useCallback(() => { emulatorRef.current?.finish_boot(); }, []);
 
   const releaseButton = useCallback((button: number) => {
     const emu = emulatorRef.current;
@@ -288,6 +301,9 @@ export function useEmulator() {
     readMemory,
     pressButton,
     releaseButton,
+    consoleNow,
+    stateConsole,
+    skipBoot,
     errors,
     setErrors,
     hasBatteryRam,

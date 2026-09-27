@@ -1,10 +1,16 @@
+/// SameBoy's open-source boot ROMs (Lior Halphon, Expat/MIT licence, v1.0.3, built from
+/// BootROMs/*.asm with rgbds; tag, source and SHA-256 in THIRD_PARTY_NOTICES.md). They are
+/// original code: the logo they show is read from the cartridge header at $0104, and neither
+/// binary contains Nintendo's boot ROM or its logo bytes. `GameBoy::with_boot` runs them.
+pub static SAMEBOY_DMG: &[u8; 0x100] = include_bytes!("../boot/sameboy_dmg_boot.bin");
+/// Mapped at $0000-$00FF and $0200-$08FF (the cartridge header shows through at $0100-$01FF).
+pub static SAMEBOY_CGB: &[u8; 0x900] = include_bytes!("../boot/sameboy_cgb_boot.bin");
+
 /// Original minimal DMG boot stub (256 bytes), written for Cartouche.
 ///
 /// Cartouche does not ship, embed or reproduce Nintendo's boot ROM (its code,
-/// its logo animation, or the 48-byte logo bitmap). By default the emulator
-/// never runs this stub at all: `Emulator::load_rom` calls
-/// `GameBoy::skip_boot_rom()`, which sets the documented post-boot register
-/// and I/O state directly (the approach used by most open-source emulators).
+/// its logo animation, or the 48-byte logo bitmap). `GameBoy::new` maps this
+/// stub (the test suites run from it); the web app uses `GameBoy::with_boot`.
 ///
 /// The stub only exists so that a `GameBoy` created without skipping still
 /// reaches the cartridge entry point instead of executing garbage:

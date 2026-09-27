@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSPrope
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { GameEntry } from '../../types/game';
 import { fetchRom, recordSession, useGameLibrary } from '../../hooks/useGameLibrary';
-import { useEmulator } from '../../hooks/useEmulator';
+import { CONSOLE_COMPAT, CONSOLE_DMG, useEmulator } from '../../hooks/useEmulator';
 import { useAudio } from '../../hooks/useAudio';
 import { useGamepad } from '../../hooks/useGamepad';
 import { useLcdShader } from '../../hooks/useLcdShader';
@@ -10,7 +10,7 @@ import { useRewind } from '../../hooks/useRewind';
 import { useSaveData } from '../../hooks/useSaveData';
 import { useSaveStates, type SlotKey } from '../../hooks/useSaveStates';
 import { useAnimationFrame } from '../../hooks/useAnimationFrame';
-import { CHANNEL_KEYS, useDisplay, useSettingsStore } from '../../store/settingsStore';
+import { CHANNEL_KEYS, consoleFor, paletteOf, useDisplay, useSettingsStore, type ConsoleChoice } from '../../store/settingsStore';
 import { presetOf } from '../../shaders/filters';
 import { BUTTON_NUMBERS } from '../../utils/keybindings';
 import { getActiveProfileId, getSram } from '../../lib/db';
@@ -69,7 +69,8 @@ function Player({ game }: { game: GameEntry }) {
   const t = useT();
   const emu = useEmulator();
   const { isReady, isRunning, setIsRunning, romLoaded, isCgb, loadRom, runFrame, getAudioSamples, pressButton, releaseButton,
-    errors, hasBatteryRam, exportSram, importSram, saveState, loadState, framebufferSnapshot, setTraceEnabled, getTrace } = emu;
+    errors, hasBatteryRam, exportSram, importSram, saveState, loadState, framebufferSnapshot, setTraceEnabled, getTrace,
+    consoleNow, stateConsole, skipBoot } = emu;
   const keybindings = useSettingsStore((s) => s.keybindings);
   const rewindSeconds = useSettingsStore((s) => s.rewindBufferSeconds);
   const screenSize = useSettingsStore((s) => s.screenSize);
@@ -105,15 +106,39 @@ function Player({ game }: { game: GameEntry }) {
   const { canvasRef, canvasKey, renderFrame, setMotion, drawMotion, usesTrace } = useLcdShader(display.cfg.filters, inColor);
   const { ensureStarted, feedSamples, muted, toggleMute } = useAudio();
   const saveTo = useRef<string | null>(null); // the save profile played solo (the game's active one)
+
+  // ---- the console: an original Game Boy cartridge runs on the Game Boy or, colourised, on the Game Boy Color ----
+  const romData = useRef<Uint8Array | null>(null);
+  const [running, setRunning] = useState<ConsoleChoice | null>(null); // what the core was powered on with
+  const switchOk = useRef(false); // only the resume at start-up may follow its state onto another console
+  const refused = useRef(false); // the last load was a state from another console (already explained)
+  const powerOn = useCallback((data: Uint8Array, c: ConsoleChoice, animation: boolean) => {
+    if (!loadRom(data, { colorize: c !== 'dmg', palette: paletteOf(c), animation })) return false;
+    romData.current = data;
+    setRunning(c);
+    return true;
+  }, [loadRom]);
+
   // Every state load (slot, resume point, rewind step) draws its picture at once, paused or not, with no ghosting from before the jump.
   const loadAndShow = useCallback((data: Uint8Array, frame?: Uint8Array | Uint8ClampedArray) => {
+    refused.current = false;
+    const made = stateConsole(data);
+    if (made !== consoleNow() && (made === CONSOLE_DMG || made === CONSOLE_COMPAT)) {
+      if (!switchOk.current || !romData.current || !powerOn(romData.current, made === CONSOLE_DMG ? 'dmg' : 'gbc', true)) {
+        refused.current = true;
+        toast(tNow(made === CONSOLE_DMG ? 'player.toast.madeOnDmg' : 'player.toast.madeOnGbc'), 'm');
+        return false;
+      }
+    }
     if (!loadState(data, frame)) return false;
     const fb = framebufferSnapshot();
     if (fb) { renderFrame(new Uint8ClampedArray(fb.buffer, fb.byteOffset, fb.length), true); setLit(true); }
     return true;
-  }, [loadState, framebufferSnapshot, renderFrame]);
+  }, [loadState, framebufferSnapshot, renderFrame, stateConsole, consoleNow, powerOn]);
   const saves = useSaveStates(game.id, { ...emu, loadState: loadAndShow }, saveTo);
-  const { isRewinding, startRewind, stopRewind, wrapRunFrame, bufferFill } = useRewind({ saveState, loadState: loadAndShow });
+  // Rewinding stops quietly at a restart onto another console.
+  const rewindLoad = useCallback((data: Uint8Array, frame?: Uint8ClampedArray) => stateConsole(data) === consoleNow() && loadAndShow(data, frame), [stateConsole, consoleNow, loadAndShow]);
+  const { isRewinding, startRewind, stopRewind, wrapRunFrame, bufferFill } = useRewind({ saveState, loadState: rewindLoad });
   useSaveData({ saveTo, romLoaded, hasBatteryRam, exportSram });
   // Online link cable (?online=<room>): real time only, so no speed change, rewind or state loading while plugged in.
   const online = useOnlineLink(emu.coreRef, romLoaded, q.get('online'), isRunning);
@@ -160,7 +185,11 @@ function Player({ game }: { game: GameEntry }) {
 
   /** Boot a ROM: cartridge save first, then the requested resume point or slot, then run. */
   const boot = useCallback(async (data: Uint8Array) => {
-    if (!loadRom(data)) { setBadRom(true); return; }
+    const s = useSettingsStore.getState();
+    const slot = q.get('slot');
+    const from: SlotKey | null = q.get('resume') ? 'auto' : slot !== null ? +slot : null;
+    // A state replaces the start-up at once: the animation then costs nothing (and plays if the state is gone).
+    if (!powerOn(data, consoleFor(s, game.id), s.startupAnimation || from !== null)) { setBadRom(true); return; }
     setNeedsRom(false);
     if (hasBatteryRam()) {
       const id = q.get('save') ?? await getActiveProfileId(game.id).catch(() => game.id);
@@ -168,14 +197,18 @@ function Player({ game }: { game: GameEntry }) {
       if (sram) importSram(sram.sram);
       saveTo.current = id;
     }
-    const slot = q.get('slot');
-    const from: SlotKey | null = q.get('resume') ? 'auto' : slot !== null ? +slot : null;
     if (from !== null) {
+      const before = consoleNow();
+      switchOk.current = true;
       const ok = await saves.load(from);
-      toast(ok ? (from === 'auto' ? tNow('player.toast.resumed') : tNow('player.toast.loadedSlot', { n: String(+from + 1) })) : tNow('player.toast.gone'), ok ? 'c' : 'm');
+      switchOk.current = false;
+      if (!ok && !s.startupAnimation) skipBoot();
+      const moved = ok && consoleNow() !== before;
+      if (moved) toast(tNow(consoleNow() === CONSOLE_DMG ? 'player.toast.resumedOnDmg' : 'player.toast.resumedOnGbc'), 'm');
+      else if (!refused.current) toast(ok ? (from === 'auto' ? tNow('player.toast.resumed') : tNow('player.toast.loadedSlot', { n: String(+from + 1) })) : tNow('player.toast.gone'), ok ? 'c' : 'm');
     }
     setIsRunning(true);
-  }, [loadRom, hasBatteryRam, importSram, game.id, q, saves, setIsRunning]);
+  }, [powerOn, hasBatteryRam, importSram, game.id, q, saves, setIsRunning, consoleNow, skipBoot]);
 
   const booted = useRef(false);
   useEffect(() => {
@@ -281,6 +314,16 @@ function Player({ game }: { game: GameEntry }) {
   // ---- actions ----
   const play = useCallback(() => { ensureStarted().catch(() => {}); setIsRunning(true); }, [ensureStarted, setIsRunning]);
   const togglePlay = useCallback(() => (isRunning ? setIsRunning(false) : play()), [isRunning, setIsRunning, play]);
+  /** Switch the console off and on with the game's chosen one: the battery save carries over, like the cartridge. */
+  const restart = useCallback(() => {
+    const data = romData.current;
+    if (!data) return;
+    const sram = hasBatteryRam() ? exportSram() : null;
+    const s = useSettingsStore.getState();
+    if (!powerOn(data, consoleFor(s, game.id), s.startupAnimation)) return;
+    if (sram) importSram(sram);
+    play();
+  }, [hasBatteryRam, exportSram, importSram, powerOn, game.id, play]);
   const saveSlot = useCallback(async (i: number) => {
     if (!romLoaded || !(await saves.save(i))) return;
     setSavedJustNow(true);
@@ -289,7 +332,7 @@ function Player({ game }: { game: GameEntry }) {
   const loadSlot = useCallback(async (k: SlotKey) => {
     if (!romLoaded) return;
     if (await saves.load(k)) toast(k === 'auto' ? tNow('player.toast.loadedResume') : tNow('player.toast.loadedSlot', { n: String(k + 1) }), 'c');
-    else toast(k === 'auto' ? tNow('player.toast.noResume') : tNow('player.toast.emptySlot', { n: String(k + 1) }), 'm');
+    else if (!refused.current) toast(k === 'auto' ? tNow('player.toast.noResume') : tNow('player.toast.emptySlot', { n: String(k + 1) }), 'm');
   }, [romLoaded, saves]);
   const screenshot = useCallback(async () => {
     const rgba = romLoaded && framebufferSnapshot();
@@ -419,7 +462,7 @@ function Player({ game }: { game: GameEntry }) {
           onSave={(i) => (saves.states[i + 1]
             ? setConfirm({ title: t('player.overwrite.title', { n: String(i + 1) }), body: t('player.overwrite.body', { ago: ago(saves.states[i + 1]!.timestamp) }), ok: t('player.overwrite.ok'), run: () => saveSlot(i) })
             : saveSlot(i))}
-          onLoad={load} onScreenshot={screenshot} online={online.on}
+          onLoad={load} onScreenshot={screenshot} online={online.on} running={running} onRestart={restart}
         />
       </div>
 

@@ -33,6 +33,15 @@ export default {
     vibrate: 'Vibrar al pulsar',
     vibrateSub: 'Una vibración corta al pulsar un botón táctil',
   },
+  console: {
+    label: 'Consola',
+    sub: 'Dónde se juegan los juegos de Game Boy original. La Game Boy Color les da color.',
+    colors: 'Colores',
+    colorsSub: 'Automático da a cada juego los colores que la Game Boy Color elige para él. Los demás son las paletas que salían al mantener una dirección, sola o con A o B, durante el logo.',
+    auto: 'Automático',
+    usesColor: 'En la Game Boy Color usan el estilo de pantalla de los juegos Color.',
+    editColor: 'Editar el estilo Color',
+  },
   display: {
     intro: 'La pantalla con la que empieza cada juego. Los juegos de Game Boy original y de Game Boy Color tienen cada uno su valor predeterminado; un juego puede tener sus propios ajustes desde su manual.',
     style: 'Estilo de pantalla',
@@ -121,6 +130,8 @@ export default {
     speedSub: 'La barra de reproducción puede cambiarla mientras juegas',
     rewind: 'Duración del rebobinado',
     rewindSub: 'Más segundos usan más memoria mientras juegas',
+    startup: 'Animación de inicio',
+    startupSub: 'El logo y el sonido de la consola cuando un juego empieza de cero. Start la salta.',
     progress: 'Progreso',
     resume: 'Reanudar donde lo dejé',
     resumeSub: 'Guarda un punto de reanudación cada vez que sales de un juego',
@@ -240,6 +251,6 @@ export default {
     asAppSub: 'Se abre en su propia ventana y funciona sin conexión tras la primera visita',
     installBtn: 'Instalar',
     lookFor: 'Busca «Instalar» en la barra de direcciones o el menú de tu navegador',
-    credits: 'Carátulas opcionales de tus propios juegos del proyecto libretro-thumbnails. Datos de los juegos de GameDataBase © 2024 de PigSaint (<ccby>CC BY 4.0</ccby>), modificada, y nombres No-Intro de libretro-database (<ccbysa>CC BY-SA 4.0</ccbysa>). Tipografía: Archivo, © 2020 The Archivo Project Authors (<ofl>SIL Open Font License 1.1</ofl>), servida desde este sitio. Juegos incluidos: <tobu>Tobu Tobu Girl</tobu> y <tobudx>Tobu Tobu Girl Deluxe</tobudx> © 2017 Tangram Games (código MIT, recursos <ccby>CC BY 4.0</ccby>; sus carátulas son el arte oficial de las páginas de itch.io de <itch>Tobu Tobu Girl</itch> y <itchdx>Deluxe</itchdx>, recortado y redimensionado); <ucity>µCity</ucity> © 2017-2018 Antonio Niño Díaz (<gpl>GPL-3.0-or-later</gpl>; gráficos y música <ccbysa>CC BY-SA 4.0</ccbysa>; <src>código fuente</src>). Cartuchos de prueba: dmg-acid2 y cgb-acid2 © 2020 Matt Currie (MIT); cpu_instrs de Shay Green (Blargg), sin licencia indicada, se retirará a petición del autor. Cada uno se acredita en la página de su juego. Licencias de código abierto: <notices>avisos de terceros</notices> y <licenses>textos completos de las licencias</licenses>. Game Boy y Game Boy Color son marcas de Nintendo; Cartouche no está afiliado a Nintendo. Consulta el <legal>aviso legal</legal>.',
+    credits: 'Carátulas opcionales de tus propios juegos del proyecto libretro-thumbnails. Datos de los juegos de GameDataBase © 2024 de PigSaint (<ccby>CC BY 4.0</ccby>), modificada, y nombres No-Intro de libretro-database (<ccbysa>CC BY-SA 4.0</ccbysa>). Tipografía: Archivo, © 2020 The Archivo Project Authors (<ofl>SIL Open Font License 1.1</ofl>), servida desde este sitio. Juegos incluidos: <tobu>Tobu Tobu Girl</tobu> y <tobudx>Tobu Tobu Girl Deluxe</tobudx> © 2017 Tangram Games (código MIT, recursos <ccby>CC BY 4.0</ccby>; sus carátulas son el arte oficial de las páginas de itch.io de <itch>Tobu Tobu Girl</itch> y <itchdx>Deluxe</itchdx>, recortado y redimensionado); <ucity>µCity</ucity> © 2017-2018 Antonio Niño Díaz (<gpl>GPL-3.0-or-later</gpl>; gráficos y música <ccbysa>CC BY-SA 4.0</ccbysa>; <src>código fuente</src>). Boot ROM: <sameboy>SameBoy</sameboy> © 2015-2026 Lior Halphon (MIT). Cartuchos de prueba: dmg-acid2 y cgb-acid2 © 2020 Matt Currie (MIT); cpu_instrs de Shay Green (Blargg), sin licencia indicada, se retirará a petición del autor. Cada uno se acredita en la página de su juego. Licencias de código abierto: <notices>avisos de terceros</notices> y <licenses>textos completos de las licencias</licenses>. Game Boy y Game Boy Color son marcas de Nintendo; Cartouche no está afiliado a Nintendo. Consulta el <legal>aviso legal</legal>.',
   },
 } satisfies Messages['settings'];

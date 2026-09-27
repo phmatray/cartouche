@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Fails if the tracked tree (index included) contains game data or training material:
 # ROMs other than the six bundled homebrew ones and the allowlisted GB Studio ones, saves and save states,
-# datasets, model checkpoints, any file over 2 MB, or anything referring to a local training directory.
+# datasets, model checkpoints, boot ROM / BIOS images other than the two hash-pinned SameBoy ones, any file
+# over 2 MB, or anything referring to a local training directory.
 # The only model data allowed in the repository is gb-web/src/neural/weights/*.bin.
 # scripts/rom-allowlist.sha1 lists each hosted GB Studio ROM ("<sha1>  <path>", shasum format): a ROM is allowed
 # there only with that exact content, and only a listed ROM is exempt from the 2 MB limit.
@@ -12,6 +13,11 @@ max_bytes=$((2 * 1024 * 1024))
 allowed_roms='^gb-web/public/roms/(tobutobugirl\.gb|tobutobugirldx\.gb|ucity\.gbc|cgb-acid2\.gbc|dmg-acid2\.gb|cpu_instrs\.gb)$'
 allowlist=scripts/rom-allowlist.sha1
 banned_ext='\.(gb|gbc|sgb|sav|srm|state|npz|npy|pt|pth|ckpt|safetensors|onnx|h5|pkl)$'
+# Boot ROMs / BIOS dumps: only SameBoy's open-source (MIT) boot ROMs, at these paths with exactly this content
+# (THIRD_PARTY_NOTICES.md). Any other file named like a boot ROM or BIOS image fails.
+boot_roms='6f64da4cecd7e54e2f928eb3e3ba7810a7a567d0d247cc71737d1771e073a916  gb-core/boot/sameboy_dmg_boot.bin
+f767b8e7e510a255f81328c89dba6e0c996b370e1bc86aebb8584a7da47a5bba  gb-core/boot/sameboy_cgb_boot.bin'
+boot_like='(boot|bios).*\.(bin|rom|gb|gbc)$|^gb-core/boot/'
 fail=0
 
 # Listed with its SHA-1, and the file has exactly that content.
@@ -23,6 +29,9 @@ while IFS= read -r -d '' f; do
   if [[ $lower =~ $banned_ext ]] && listed "$f"; then ok_rom=1; fi
   if [[ $lower =~ $banned_ext && ! $f =~ $allowed_roms ]] && (( ! ok_rom )); then
     echo "game data / model file not allowed: $f"; fail=1
+  fi
+  if [[ $lower =~ $boot_like ]] && ! { [[ -f $f ]] && grep -qxF "$(shasum -a 256 "$f" | cut -d' ' -f1)  $f" <<< "$boot_roms"; }; then
+    echo "boot ROM / BIOS file not allowed: $f"; fail=1
   fi
   if [[ $lower == *cartouche-training* ]]; then
     echo "training path not allowed: $f"; fail=1
@@ -38,6 +47,11 @@ while read -r _ path; do
     echo "allowlisted but not tracked: $path"; fail=1
   fi
 done < "$allowlist"
+while read -r _ path; do
+  if ! git ls-files --error-unmatch -- "$path" >/dev/null 2>&1; then
+    echo "allowlisted boot ROM not tracked: $path"; fail=1
+  fi
+done <<< "$boot_roms"
 
 # Content: no reference to the local training directory (its files name the games).
 if git grep -I -l -i 'cartouche-training' -- ':!scripts/check-no-game-data.sh'; then

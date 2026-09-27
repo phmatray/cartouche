@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { useSettingsStore, type ScreenSize } from '../../store/settingsStore';
+import { consoleOf, useSettingsStore, type ScreenSize } from '../../store/settingsStore';
 import type { ScreenKind } from '../../shaders/filters';
-import { MotionRows, ScreenFilters } from './ScreenFilters';
+import { ConsoleRows, MotionRows, ScreenFilters } from './ScreenFilters';
 import { Row, Seg } from './parts';
 import { rich, useT } from '../../i18n';
 
@@ -28,6 +28,7 @@ const SAMPLES: Record<ScreenKind, Uint8ClampedArray> = (() => {
 
 export function DisplayTab() {
   const { screenSize, setScreenSize } = useSettingsStore();
+  const colorized = useSettingsStore((s) => consoleOf(s.console) !== 'dmg');
   const [kind, setKind] = useState<ScreenKind>('dmg');
   const t = useT();
   return (
@@ -38,7 +39,12 @@ export function DisplayTab() {
       <Row label={t('settings.display.defaults')} sub={kind === 'dmg' ? t('settings.display.dmgSub') : t('settings.display.cgbSub')}>
         <Seg<ScreenKind> label={t('settings.display.defaults')} value={kind} options={[['dmg', 'Game Boy'], ['cgb', 'Color']]} set={setKind} />
       </Row>
-      <ScreenFilters key={kind} kind={kind} frame={SAMPLES[kind]} />
+      {kind === 'dmg' && <ConsoleRows />}
+      {kind === 'dmg' && colorized ? (
+        <p className="intro" style={{ margin: '8px 0 0' }}>
+          {t('settings.console.usesColor')} <button className="sbtn" onClick={() => setKind('cgb')}>{t('settings.console.editColor')}</button>
+        </p>
+      ) : <ScreenFilters key={kind} kind={kind} frame={SAMPLES[kind]} />}
       <h3>{t('settings.display.motion')}</h3>
       <MotionRows />
       <h3>{t('settings.display.size')}</h3>

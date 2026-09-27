@@ -181,8 +181,9 @@ Game Boy and Game Boy Color are trademarks of Nintendo. Cartouche is not
 affiliated with, sponsored by or endorsed by Nintendo. Game titles belong to
 their owners and are used only to identify games.
 
-Cartouche contains no Nintendo code and no BIOS or boot ROM; games start
-directly in the documented post-boot state. **No commercial ROMs are provided,
+Cartouche contains no Nintendo code and no Nintendo BIOS or boot ROM; games
+start with SameBoy's open-source (MIT) boot ROMs, or directly in the documented
+post-boot state. **No commercial ROMs are provided,
 hosted or linked.** The six ROMs bundled with the app are redistributed under
 their authors' licenses, listed with checksums in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

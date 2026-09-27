@@ -13,7 +13,7 @@ import { copyName, gamesOf, kindOf, type Entry, type Games, type Manifest, type 
 
 /** Settings that follow the player from device to device. Screen size, touch controls, volume, keys, smooth motion
  * (it depends on the display), box art consent and haptics stay with each device. */
-export const SYNCED_SETTINGS = ['display', 'channelMutes', 'defaultSpeed', 'rewindBufferSeconds', 'autoSaveEnabled', 'autoSaveIntervalSeconds', 'resumePoints', 'bootRomEnabled'] as const satisfies readonly (keyof SettingsValues)[];
+export const SYNCED_SETTINGS = ['display', 'channelMutes', 'defaultSpeed', 'rewindBufferSeconds', 'autoSaveEnabled', 'autoSaveIntervalSeconds', 'resumePoints', 'startupAnimation', 'console'] as const satisfies readonly (keyof SettingsValues)[];
 
 /* ---------- games: this device's ids ↔ the keys both devices share ---------- */
 

@@ -1,10 +1,11 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { useLcdShader } from '../../hooks/useLcdShader';
-import { useDisplay, useSettingsStore } from '../../store/settingsStore';
+import { consoleFor, consoleOf, useDisplay, useSettingsStore, type ConsoleChoice } from '../../store/settingsStore';
 import { supportsWebGL2 } from '../../shaders/lcd-engine';
 import { neuralStatus } from '../../neural/governor';
 import { PALETTES, presetOf, presetsFor, type Correction, type Filters, type ScreenKind, type Upscale } from '../../shaders/filters';
 import { Row, Seg, Slider, SwitchRow } from './parts';
+import { I } from '../icons';
 import { useT } from '../../i18n';
 
 /** A frame drawn through the actual filter chain, on its own small canvas. */
@@ -51,6 +52,56 @@ export function MotionRows() {
   );
 }
 const SHADES = ['lightest', 'light', 'dark', 'darkest'] as const;
+
+/**
+ * The 12 palettes a Game Boy Color gives an original Game Boy game when a combination is held during the logo
+ * (background colours, as SameBoy's boot ROM sets them), in the core's order: → ← ↑ ↓, then with A, then with B.
+ */
+const GBC_PALETTES = [
+  ['#ffffff', '#52ff00', '#ff4100', '#000000'], ['#ffffff', '#62a4ff', '#0000ff', '#000000'],
+  ['#ffffff', '#ffac62', '#833100', '#000000'], ['#ffffa4', '#ff9494', '#9494ff', '#000000'],
+  ['#ffffff', '#7bff31', '#0062c5', '#000000'], ['#ffffff', '#8b8bde', '#52528b', '#000000'],
+  ['#ffffff', '#ff8383', '#943939', '#000000'], ['#ffffff', '#ffff00', '#ff0000', '#000000'],
+  ['#000000', '#008383', '#ffde00', '#ffffff'], ['#ffffff', '#a4a4a4', '#525252', '#000000'],
+  ['#ffe6c5', '#cd9c83', '#836a29', '#5a3108'], ['#ffffff', '#ffff00', '#7b4a00', '#000000'],
+];
+/** Automatic: a hint of the per-game palettes, not one of them. */
+const AUTO_SWATCH = ['#8b8bde', '#7bff31', '#ff4100', '#62a4ff'];
+const DIRS = ['right', 'left', 'up', 'down'] as const;
+const buttonOf = (n: number) => (n > 8 ? ' + B' : n > 4 ? ' + A' : '');
+
+/** What original Game Boy games run on: the game's own choice (from its manual) or, with no game, the default. */
+export function ConsoleRows({ gameId }: { gameId?: string }) {
+  const value = useSettingsStore((s) => (gameId !== undefined ? consoleFor(s, gameId) : consoleOf(s.console)));
+  const set = useSettingsStore((s) => s.set);
+  const t = useT();
+  const choose = (c: ConsoleChoice) => set(gameId === undefined ? { console: c } : { gameConsole: { ...useSettingsStore.getState().gameConsole, [gameId]: c } });
+  return (
+    <>
+      <Row label={t('settings.console.label')} sub={t('settings.console.sub')}>
+        <Seg<'dmg' | 'gbc'> label={t('settings.console.label')} value={value === 'dmg' ? 'dmg' : 'gbc'} options={[['dmg', 'Game Boy'], ['gbc', 'Game Boy Color']]} set={choose} />
+      </Row>
+      {value !== 'dmg' && (
+        <div className="row col">
+          <span>{t('settings.console.colors')}<small>{t('settings.console.colorsSub')}</small></span>
+          <div className="swatches" role="group" aria-label={t('settings.console.colors')}>
+            {[AUTO_SWATCH, ...GBC_PALETTES].map((colors, n) => {
+              const c: ConsoleChoice = n ? `gbc${n}` : 'gbc';
+              const dir = DIRS[(n + 3) % 4];
+              return (
+                <button key={c} className="swatch" aria-pressed={value === c} onClick={() => choose(c)}
+                  aria-label={n ? t(`player.touch.${dir}`) + buttonOf(n) : undefined}>
+                  <span>{colors.map((x, i) => <i key={i} style={{ background: x }} />)}</span>
+                  {n ? <b className="combo">{I[dir]}{buttonOf(n)}</b> : t('settings.console.auto')}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 /**
  * Presets with live previews, then every filter. Edits the game's own settings when it has them,

@@ -32,6 +32,15 @@ export default {
     vibrate: 'Vibrate on press',
     vibrateSub: 'Short buzz when a touch button is pressed',
   },
+  console: {
+    label: 'Console',
+    sub: 'What original Game Boy games play on. A Game Boy Color colors them in.',
+    colors: 'Colors',
+    colorsSub: 'Automatic gives each game the colors a Game Boy Color picks for it. The others are the palettes you got by holding a direction, alone or with A or B, during the logo.',
+    auto: 'Automatic',
+    usesColor: 'On the Game Boy Color, they use the Color games’ screen style.',
+    editColor: 'Edit the Color style',
+  },
   display: {
     intro: 'The screen every game starts with. Original Game Boy and Game Boy Color games each have their own default; a game can keep its own settings from its manual.',
     style: 'Screen style',
@@ -120,6 +129,8 @@ export default {
     speedSub: 'The playback bar can change it while playing',
     rewind: 'Rewind length',
     rewindSub: 'More seconds use more memory while playing',
+    startup: 'Start-up animation',
+    startupSub: 'The console’s logo and chime when a game starts fresh. Press Start to skip it.',
     progress: 'Progress',
     resume: 'Resume where I left off',
     resumeSub: 'Keeps a resume point every time you leave a game',
@@ -239,6 +250,6 @@ export default {
     asAppSub: 'Opens in its own window and works offline after the first visit',
     installBtn: 'Install',
     lookFor: 'Look for “Install” in your browser’s address bar or menu',
-    credits: 'Optional box art of your own games from the libretro-thumbnails project. Game details from GameDataBase © 2024 by PigSaint (<ccby>CC BY 4.0</ccby>), modified, and No-Intro names from libretro-database (<ccbysa>CC BY-SA 4.0</ccbysa>). Typeface: Archivo, © 2020 The Archivo Project Authors (<ofl>SIL Open Font License 1.1</ofl>), served from this site. Bundled games: <tobu>Tobu Tobu Girl</tobu> and <tobudx>Tobu Tobu Girl Deluxe</tobudx> © 2017 Tangram Games (code MIT, assets <ccby>CC BY 4.0</ccby>; their box art is the official key art from the <itch>Tobu Tobu Girl</itch> and <itchdx>Deluxe</itchdx> itch.io pages, cropped and resized); <ucity>µCity</ucity> © 2017-2018 Antonio Niño Díaz (<gpl>GPL-3.0-or-later</gpl>; graphics and music <ccbysa>CC BY-SA 4.0</ccbysa>; <src>source</src>). Test cartridges: dmg-acid2 and cgb-acid2 © 2020 Matt Currie (MIT); cpu_instrs by Shay Green (Blargg), no license stated, will be removed on the author’s request. Each is credited on its game page. Open-source licenses: <notices>third-party notices</notices> and <licenses>full license texts</licenses>. Game Boy and Game Boy Color are trademarks of Nintendo; Cartouche is not affiliated with Nintendo. See <legal>Legal</legal>.',
+    credits: 'Optional box art of your own games from the libretro-thumbnails project. Game details from GameDataBase © 2024 by PigSaint (<ccby>CC BY 4.0</ccby>), modified, and No-Intro names from libretro-database (<ccbysa>CC BY-SA 4.0</ccbysa>). Typeface: Archivo, © 2020 The Archivo Project Authors (<ofl>SIL Open Font License 1.1</ofl>), served from this site. Bundled games: <tobu>Tobu Tobu Girl</tobu> and <tobudx>Tobu Tobu Girl Deluxe</tobudx> © 2017 Tangram Games (code MIT, assets <ccby>CC BY 4.0</ccby>; their box art is the official key art from the <itch>Tobu Tobu Girl</itch> and <itchdx>Deluxe</itchdx> itch.io pages, cropped and resized); <ucity>µCity</ucity> © 2017-2018 Antonio Niño Díaz (<gpl>GPL-3.0-or-later</gpl>; graphics and music <ccbysa>CC BY-SA 4.0</ccbysa>; <src>source</src>). Boot ROMs: <sameboy>SameBoy</sameboy> © 2015-2026 Lior Halphon (MIT). Test cartridges: dmg-acid2 and cgb-acid2 © 2020 Matt Currie (MIT); cpu_instrs by Shay Green (Blargg), no license stated, will be removed on the author’s request. Each is credited on its game page. Open-source licenses: <notices>third-party notices</notices> and <licenses>full license texts</licenses>. Game Boy and Game Boy Color are trademarks of Nintendo; Cartouche is not affiliated with Nintendo. See <legal>Legal</legal>.',
   },
 };

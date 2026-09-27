@@ -6,6 +6,21 @@ import { DEFAULT_DISPLAY, normalizeDisplay, presetOf, sameFilters, type DisplayC
 
 export type GameBoyButton = 'A' | 'B' | 'Select' | 'Start' | 'Right' | 'Left' | 'Up' | 'Down';
 
+/**
+ * What an original Game Boy (DMG-only) cartridge runs on: the original Game Boy, or the Game Boy Color
+ * with its automatic colours ('gbc') or one of the 12 palettes a held button combination gives ('gbc1'…'gbc12').
+ */
+export type ConsoleChoice = 'dmg' | 'gbc' | `gbc${number}`;
+
+/** A stored choice made safe ('dmg' for anything unknown), and the core's `palette` argument for it. */
+export function consoleOf(v: unknown): ConsoleChoice {
+  return v === 'dmg' || v === 'gbc' || (typeof v === 'string' && /^gbc([1-9]|1[0-2])$/.test(v)) ? (v as ConsoleChoice) : 'dmg';
+}
+export const paletteOf = (c: ConsoleChoice) => (c.length > 3 ? +c.slice(3) : 0);
+
+/** The console a game runs on: its own choice, else the default. */
+export const consoleFor = (s: Pick<SettingsValues, 'console' | 'gameConsole'>, gameId: string) => consoleOf(s.gameConsole?.[gameId] ?? s.console);
+
 export type ScreenSize = 'fit' | '2' | '3' | '4';
 export type TouchSize = 'S' | 'M' | 'L';
 
@@ -44,7 +59,11 @@ export interface SettingsState {
   rewindBufferSeconds: number;
   autoSaveEnabled: boolean;
   autoSaveIntervalSeconds: number;
-  bootRomEnabled: boolean;
+  /** Play the boot ROM’s start-up logo and chime when a game starts fresh (Start skips it). */
+  startupAnimation: boolean;
+  /** The console original Game Boy games run on, and a game’s own choice (by game id). */
+  console: ConsoleChoice;
+  gameConsole: Record<string, ConsoleChoice>;
   /** Keep a resume point every time the player is left. */
   resumePoints: boolean;
   muteWhenHidden: boolean;
@@ -78,7 +97,6 @@ export interface SettingsState {
   setRewindBufferSeconds: (seconds: number) => void;
   setAutoSaveEnabled: (enabled: boolean) => void;
   setAutoSaveIntervalSeconds: (seconds: number) => void;
-  setBootRomEnabled: (enabled: boolean) => void;
   setShowBoxArt: (show: boolean) => void;
   /** Set any plain value (the newer switches use this instead of one setter each). */
   set: (patch: Partial<SettingsValues>) => void;
@@ -110,7 +128,9 @@ const DEFAULT_STATE = {
   rewindBufferSeconds: 10,
   autoSaveEnabled: true,
   autoSaveIntervalSeconds: 60,
-  bootRomEnabled: false,
+  startupAnimation: false,
+  console: 'dmg' as ConsoleChoice,
+  gameConsole: {} as Record<string, ConsoleChoice>,
   showTests: false,
   showBoxArt: false, // opt-in: box art is third-party content fetched from GitHub
   boxArtAnswer: null as BoxArtAnswer | null,
@@ -162,7 +182,6 @@ export const useSettingsStore = create<SettingsState>()(
       setRewindBufferSeconds: (seconds) => set({ rewindBufferSeconds: seconds }),
       setAutoSaveEnabled: (enabled) => set({ autoSaveEnabled: enabled }),
       setAutoSaveIntervalSeconds: (seconds) => set({ autoSaveIntervalSeconds: seconds }),
-      setBootRomEnabled: (enabled) => set({ bootRomEnabled: enabled }),
       setShowBoxArt: (show) => set({ showBoxArt: show }),
 
       set: (patch) => set(patch),

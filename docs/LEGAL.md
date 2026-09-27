@@ -19,9 +19,12 @@ load into it are ones you have the right to use.
 ## What Cartouche contains
 
 - An emulator written from public hardware documentation. It contains **no
-  Nintendo code**: no BIOS or boot ROM is included, and games start directly
-  in the documented post-boot state. Cartouche does not display the Nintendo
-  logo boot animation.
+  Nintendo code**: no Nintendo BIOS or boot ROM is included. Games start with
+  the open-source boot ROMs of [SameBoy](https://github.com/LIJI32/SameBoy)
+  (© 2015-2026 Lior Halphon, MIT License), original code that reads the logo
+  from the game's own cartridge, as the console does; Cartouche holds no copy
+  of that logo. With the start-up animation off, games start directly in the
+  documented post-boot state.
 - Three free homebrew games, redistributed unmodified from their authors'
   official releases:
   - *Tobu Tobu Girl* and *Tobu Tobu Girl Deluxe*, © 2017 Tangram Games

@@ -16,7 +16,8 @@
 //!   - ids: bits 0-1 BG/window colour id, bit 2 CGB BG-to-OBJ tile priority, bits 4-5 OBJ colour id
 //!   - attr: OAM attribute byte of the claiming OBJ
 //! - `meta`: `META_LEN` bytes. Header (`HEADER_LEN`): "CTRC", version, cgb, rendered line count,
-//!   0, frame number (u32 LE). Then one `LINE_LEN` record per scanline (see [`line`]), then the
+//!   compat (a DMG cartridge coloured by a CGB: BGP picks from BG CRAM palette 0), frame number
+//!   (u32 LE). Then one `LINE_LEN` record per scanline (see [`line`]), then the
 //!   VBlank snapshot: OAM (160), BG CRAM (64), OBJ CRAM (64), VRAM (16 KiB: bank 0 then bank 1;
 //!   tiles at 0x0000-0x17FF, maps at 0x1800/0x1C00, CGB map attributes at the same offsets in bank 1).
 //!   The BG/window map base and tile-data mode of each line come from its LCDC bits 3, 6 and 4.
@@ -168,7 +169,7 @@ pub struct Tracer {
 
 impl Tracer {
     /// VBlank entry: snapshot the frame-level state, publish `building` as `done`.
-    pub(crate) fn finish_frame(&mut self, fb: &[u8], oam: &[u8], bg_cram: &[u8], obj_cram: &[u8], vram: &[u8], cgb: bool) {
+    pub(crate) fn finish_frame(&mut self, fb: &[u8], oam: &[u8], bg_cram: &[u8], obj_cram: &[u8], vram: &[u8], cgb: bool, compat: bool) {
         self.frames = self.frames.wrapping_add(1);
         let b = &mut self.building;
         b.final_.copy_from_slice(fb);
@@ -179,6 +180,7 @@ impl Tracer {
         m[4] = VERSION;
         m[5] = cgb as u8;
         m[6] = rendered;
+        m[7] = compat as u8;
         m[8..12].copy_from_slice(&self.frames.to_le_bytes());
         m[OAM_OFF..BG_CRAM_OFF].copy_from_slice(oam);
         m[BG_CRAM_OFF..OBJ_CRAM_OFF].copy_from_slice(bg_cram);

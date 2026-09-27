@@ -4,6 +4,7 @@
 //!
 //! Buttons: a, b, select, start, up, down, left, right. Each press is held for HOLD_FRAMES frames.
 //! Example: --buttons "120:start,200:a,260:right"
+//! --gbc <0-12>: an original Game Boy cartridge on a Game Boy Color (0 automatic colours, 1-12 a palette).
 //!
 //! Write output to ../screenshots/ (git-ignored): screenshots of commercial games must never be committed.
 
@@ -45,8 +46,8 @@ fn main() {
     }
 
     let rom = std::fs::read(&args[0]).expect("cannot read ROM");
-    let mut gb = GameBoy::new(rom).expect("cannot load ROM");
-    gb.skip_boot_rom();
+    let gbc = args.iter().position(|a| a == "--gbc").map(|i| args[i + 1].parse::<u8>().expect("palette 0-12"));
+    let mut gb = GameBoy::with_boot(rom, gbc.is_some(), gbc.unwrap_or(0), false).expect("cannot load ROM");
 
     for frame in 0..frames {
         for &(at, b) in &presses {
@@ -68,5 +69,5 @@ fn main() {
     enc.set_color(png::ColorType::Rgba);
     enc.set_depth(png::BitDepth::Eight);
     enc.write_header().unwrap().write_image_data(&gb.bus.ppu.framebuffer).unwrap();
-    println!("{} ({} mode, {frames} frames)", args[2], if gb.cgb_mode { "CGB" } else { "DMG" });
+    println!("{} ({} mode, {frames} frames)", args[2], format!("{:?}", gb.console));
 }
