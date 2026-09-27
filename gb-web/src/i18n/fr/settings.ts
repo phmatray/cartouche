@@ -3,7 +3,7 @@ import type { Messages } from '../core.ts';
 export default {
   intro: 'Enregistrés dans ce navigateur et appliqués à tous les jeux.',
   sections: 'Sections des réglages',
-  tabs: { controls: 'Commandes', display: 'Affichage', audio: 'Audio', emulation: 'Émulation', storage: 'Stockage', about: 'À propos' },
+  tabs: { controls: 'Commandes', display: 'Affichage', audio: 'Audio', emulation: 'Émulation', storage: 'Stockage', sync: 'Synchro', about: 'À propos' },
   language: {
     intro: 'La langue de toute l’interface. Les titres des jeux et les informations des ROM restent tels quels.',
     sub: 'Automatique suit les langues du navigateur',

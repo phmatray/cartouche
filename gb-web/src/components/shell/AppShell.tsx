@@ -15,6 +15,7 @@ import { Toasts } from './Toasts';
 import { LANG_NAMES, LANGS, rich, useLang, useT, type Key } from '../../i18n';
 import { useSettingsStore } from '../../store/settingsStore';
 import { version } from '../../../package.json';
+import { SyncSlot } from '../sync/SyncSlot';
 
 const NAV: [string, Key][] = [['/', 'shell.nav.library'], ['/link-cable', 'shell.nav.link'], ['/settings', 'shell.nav.settings']];
 const typing = () => {
@@ -110,6 +111,7 @@ export function AppShell() {
             {I.search}<span>{games.length ? t('shell.searchN', { count: games.length }) : t('shell.search')}</span><kbd>/</kbd>
           </button>
           <Link className="btn y" aria-label={t('shell.addRoms')} to="/add">{I.plus}<span className="lbl">{t('shell.addRoms')}</span></Link>
+          <SyncSlot />
           <a className="gh" href={REPO_URL} target="_blank" rel="noopener" aria-label={t('shell.github')} title={t('shell.github')}>{I.github}</a>
           <button ref={menuBtn} className="menu" aria-label={menu ? t('shell.closeMenu') : t('shell.menu')} aria-expanded={menu} aria-controls="mnav" onClick={() => (menu ? closeMenu() : setMenu(true))}>{menu ? I.close : I.menu}</button>
         </div>

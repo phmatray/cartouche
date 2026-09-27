@@ -117,6 +117,8 @@ export default defineConfig(({ mode }) => ({
           // Online play's libraries (WebRTC rooms, QR codes) load with it, never with the library.
           groups: [
             { debugName: 'p2p', name: (id) => (ONLINE_ONLY.test(id) ? 'p2p' : null) },
+            // Device sync's QR reader: loaded when the camera opens.
+            { debugName: 'qr-scan', name: (id) => (/\/node_modules\/qr\//.test(id) ? 'qr-scan' : null) },
             { debugName: 'vendor', name: (id) => (id.includes('/node_modules/') && !id.endsWith('.css') ? 'vendor' : null) },
           ],
         },

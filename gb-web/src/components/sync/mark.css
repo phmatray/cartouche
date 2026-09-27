@@ -1,0 +1,17 @@
+/* The header's sync light: two little screens and the cable between them. Sized like the GitHub link beside it. */
+.sy-mark{position:relative;display:flex;width:44px;height:44px;flex:none;align-items:center;justify-content:center;border:1px solid #3a3a3a;color:var(--mute)}
+.sy-mark:hover{color:var(--paper);border-color:#5a5a5a}
+@media (min-width:641px){.top .sy-mark{margin-left:-16px}}
+/* A fifth button doesn't fit a phone's header: the sync light takes GitHub's place (GitHub stays in the menu and the footer). */
+@media (max-width:441px){.top .sy-mark~.gh{display:none}}
+/* Four buttons and the wordmark: tighter at 360 px; under that the light goes too (Settings › Sync, in the menu, still shows it all). */
+@media (max-width:389px){.top .wrap:has(.sy-mark){gap:6px}}
+@media (max-width:359px){.top .sy-mark{display:none}}
+.sy-mark svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linejoin:miter}
+.sy-mark .w{stroke-dasharray:1.6 1.2}
+.sy-mark.on{color:var(--paper)}
+.sy-mark.on rect{fill:#9ba86e}
+.sy-mark.busy .w{stroke:var(--y);animation:sy-flow .45s linear infinite}
+@keyframes sy-flow{to{stroke-dashoffset:-2.8}}
+.sy-dot{position:absolute;top:7px;right:7px;width:8px;height:8px;background:var(--m);box-shadow:0 0 0 2px var(--band)}
+@media (prefers-reduced-motion:reduce){.sy-mark.busy .w{animation:none}}
