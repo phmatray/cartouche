@@ -254,7 +254,7 @@ canvas.lcd,img.lcd{display:block;width:100%;height:auto;image-rendering:pixelate
 .lrow .t small{display:block;font:500 13px var(--font);font-stretch:100%;text-transform:none;color:var(--mute);margin-top:3px}
 .lrow .c{font:600 14px var(--font);color:var(--mute);font-variant-numeric:tabular-nums}
 .lrow .tag{margin:0}
-.lhead{display:grid;grid-template-columns:56px minmax(0,1fr) 140px 110px 150px 44px;gap:16px;padding:0 0 10px;font:800 11px var(--font);text-transform:uppercase;letter-spacing:.08em;color:var(--dim)}
+.lhead{display:grid;grid-template-columns:56px minmax(0,1fr) 140px 110px 150px 44px;gap:16px;align-items:end;padding:0 0 10px;font:800 11px var(--font);text-transform:uppercase;letter-spacing:.08em;color:var(--dim)}
 .star{width:44px;height:44px;border:0;background:transparent;display:flex;align-items:center;justify-content:center;color:var(--dim)}
 .star[aria-pressed=true]{color:var(--y)}
 .star:hover{color:var(--paper)}
