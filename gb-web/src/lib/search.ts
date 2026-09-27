@@ -1,5 +1,6 @@
 import type { GameEntry } from '../types/game';
 import { folded, owned, score, searchFields, sortTitle } from './ui.ts';
+import { DICTS, getLang, LANGS, langName, t, tOr, type Key as MsgKey } from '../i18n/core.ts';
 
 /**
  * Faceted search: a query is free text plus `key:value` filters (`genre:rpg players:2 -region:jp year:1990..1995`).
@@ -11,33 +12,36 @@ export type Key = 'genre' | 'players' | 'region' | 'platform' | 'decade' | 'year
 export interface Filter { key: Key; value: string; neg?: boolean }
 export interface Query { text: string; filters: Filter[] }
 
-export const FACETS: { key: Key; label: string; alias: string[] }[] = [
-  { key: 'genre', label: 'Genre', alias: ['g'] },
-  { key: 'players', label: 'Players', alias: ['player', 'p'] },
-  { key: 'region', label: 'Region', alias: ['r'] },
-  { key: 'platform', label: 'Platform', alias: ['system', 'sys'] },
-  { key: 'decade', label: 'Decade', alias: [] },
-  { key: 'year', label: 'Year', alias: ['y'] },
-  { key: 'developer', label: 'Developer', alias: ['dev', 'by'] },
-  { key: 'publisher', label: 'Publisher', alias: ['pub'] },
-  { key: 'language', label: 'Language', alias: ['lang'] },
-  { key: 'save', label: 'Save', alias: ['savetype'] },
-  { key: 'is', label: 'Your games', alias: ['has', 'status'] },
+// The keys of the syntax stay English in every language (`genre:`); their labels are translated.
+export const FACETS: { key: Key; alias: string[] }[] = [
+  { key: 'genre', alias: ['g'] },
+  { key: 'players', alias: ['player', 'p'] },
+  { key: 'region', alias: ['r'] },
+  { key: 'platform', alias: ['system', 'sys'] },
+  { key: 'decade', alias: [] },
+  { key: 'year', alias: ['y'] },
+  { key: 'developer', alias: ['dev', 'by'] },
+  { key: 'publisher', alias: ['pub'] },
+  { key: 'language', alias: ['lang'] },
+  { key: 'save', alias: ['savetype'] },
+  { key: 'is', alias: ['has', 'status'] },
 ];
 const KEY_OF = new Map(FACETS.flatMap((f) => [f.key, ...f.alias].map((a) => [a, f.key] as const)));
-export const facetLabel = (k: Key) => FACETS.find((f) => f.key === k)!.label;
+export const facetLabel = (k: Key) => t(`search.facet.${k}`);
 /** The facet a typed key names (`dev` → developer), if any. */
 export const facetKey = (raw: string) => KEY_OF.get(raw.toLowerCase());
 
 // Closed facets: a value outside these (after synonyms) isn't a filter, the token stays free text.
-const CLOSED: Partial<Record<Key, Record<string, string>>> = {
-  players: { 1: '1 player', 2: '2 players', '2+': '2+ players · link', 4: '4 players' },
-  region: { us: 'US', eu: 'EU', jp: 'JP', world: 'World', other: 'Other' },
-  platform: { gb: 'Game Boy', gbc: 'Game Boy Color', dual: 'Both (dual)' },
-  save: { battery: 'Battery save', none: 'No save' },
-  language: { en: 'English', ja: 'Japanese', fr: 'French', de: 'German', es: 'Spanish', it: 'Italian', nl: 'Dutch', pt: 'Portuguese', sv: 'Swedish', no: 'Norwegian', da: 'Danish', fi: 'Finnish', zh: 'Chinese', ca: 'Catalan' },
-  is: { favorite: 'Favorites', saved: 'Saved', now: 'Playable now', need: 'Needs your ROM', unplayed: 'Never played', recent: 'Recently played', art: 'Has box art', mine: 'My ROMs', homebrew: 'Homebrew' },
+// Labels: `search.value.*` in the dictionaries (languages: Intl.DisplayNames; regions US/EU/JP and platforms are names).
+const CLOSED: Partial<Record<Key, string[]>> = {
+  players: ['1', '2', '2+', '4'],
+  region: ['us', 'eu', 'jp', 'world', 'other'],
+  platform: ['gb', 'gbc', 'dual'],
+  save: ['battery', 'none'],
+  language: ['en', 'ja', 'fr', 'de', 'es', 'it', 'nl', 'pt', 'sv', 'no', 'da', 'fi', 'zh', 'ca'],
+  is: ['favorite', 'saved', 'now', 'need', 'unplayed', 'recent', 'art', 'mine', 'homebrew'],
 };
+const NAMES: Record<string, string> = { us: 'US', eu: 'EU', jp: 'JP', gb: 'Game Boy', gbc: 'Game Boy Color' };
 const SYN: Partial<Record<Key, Record<string, string>>> = {
   genre: {
     'role playing': 'rpg', roleplaying: 'rpg', 'role playing game': 'rpg', rpgs: 'rpg', jrpg: 'rpg',
@@ -60,7 +64,7 @@ const SYN: Partial<Record<Key, Record<string, string>>> = {
 };
 // Studio name variants seen across the GameDB and ROM headers.
 const NAME_SYN: Record<string, string> = { 'hal labs': 'hal laboratory', hal: 'hal laboratory', ea: 'electronic arts', squaresoft: 'square', 'konami computer entertainment nagoya': 'kcen' };
-const GENRE_LABEL: Record<string, string> = { rpg: 'RPG', shmup: 'Shoot ’em up', sim: 'Simulation', notagame: 'Not a game', minigames: 'Minigames', 'action rpg': 'Action RPG' };
+// Genre labels: `search.genre.*` (the GameDB's fixed vocabulary); any other genre keeps its own spelling.
 const EU = /\b(europe|germany|france|spain|italy|united kingdom|uk|sweden|netherlands|scandinavia|australia|denmark|norway|finland|portugal)\b/i;
 
 const f = (s: string) => folded(s).s;
@@ -83,7 +87,7 @@ export function normValue(key: Key, raw: string): string {
     return m[2] ? `${m[1] ?? ''}..${m[3] ?? ''}` : m[1];
   }
   let v = raw.trim().toLowerCase();
-  if (key === 'players') v = v.replace(/\s*players?$/, '');
+  if (key === 'players') v = v.replace(/\s*(players?|joueurs?|jugador(es)?)$/, '');
   if (key === 'decade') {
     const m = v.match(/^(\d{2}|\d{4})s?$/);
     if (!m) return '';
@@ -91,17 +95,47 @@ export function normValue(key: Key, raw: string): string {
     return `${m[1].length === 4 ? n - (n % 10) : n < 50 ? 2000 + n - (n % 10) : 1900 + n - (n % 10)}s`;
   }
   if (key !== 'players') v = f(v);
-  v = SYN[key]?.[v] ?? v;
+  v = SYN[key]?.[v] ?? translated(key, v) ?? v;
   const closed = CLOSED[key];
-  if (closed) return v in closed || (key === 'players' && /^\d$/.test(v)) ? v : '';
+  if (closed) return closed.includes(v) || (key === 'players' && /^\d$/.test(v)) ? v : '';
   return v;
+}
+
+let aliases: Map<string, string> | null = null;
+let aliasLangs = '';
+/** A value typed as its label in any of our (loaded) languages (`genre:plateformes`, `is:favoris`, `lang:japonés`). */
+function translated(key: Key, v: string): string | undefined {
+  const loaded = Object.keys(DICTS).join();
+  if (!aliases || aliasLangs !== loaded) {
+    aliases = new Map();
+    aliasLangs = loaded;
+    for (const l of LANGS) {
+      const s = DICTS[l]?.search;
+      if (!s) continue;
+      const add = (k: Key, labels: Record<string, string>) => { for (const [val, label] of Object.entries(labels)) aliases!.set(`${k}\0${f(label)}`, val); };
+      add('genre', s.genre);
+      for (const k of ['is', 'save', 'region', 'platform'] as const) add(k, s.value[k]);
+      try {
+        const dn = new Intl.DisplayNames(l, { type: 'language' });
+        for (const c of CLOSED.language!) aliases.set(`language\0${f(dn.of(c) ?? c)}`, c);
+      } catch { /* no Intl.DisplayNames: codes and English names only */ }
+    }
+  }
+  return aliases.get(`${key}\0${v}`);
 }
 
 /** How a value reads on a chip or in a list. `labels` has the original spelling of open values (developers…). */
 export function valueLabel(key: Key, value: string, labels?: Map<string, string>): string {
-  if (key === 'year') return value.includes('..') ? value.replace(/^\.\./, 'up to ').replace(/\.\.$/, ' and later').replace('..', '–') : value;
-  if (key === 'players' && !CLOSED.players![value]) return `${value} players`;
-  return CLOSED[key]?.[value] ?? labels?.get(`${key}\0${value}`) ?? GENRE_LABEL[value] ?? value.replace(/\b\w/g, (c) => c.toUpperCase());
+  if (key === 'year') {
+    const [a, b] = value.split('..');
+    return b === undefined ? value : !a ? t('search.year.upTo', { y: b }) : !b ? t('search.year.from', { y: a }) : `${a}–${b}`;
+  }
+  if (key === 'players') return value === '2+' ? t('search.players.link') : t('search.players.n', { count: Number(value) });
+  if (key === 'language') return langName(value);
+  if (key === 'genre') return tOr(`search.genre.${value}`, labels?.get(`genre\0${value}`) ?? value.replace(/\b\w/g, (c) => c.toUpperCase()));
+  if (NAMES[value] && (key === 'region' || key === 'platform')) return NAMES[value];
+  if (key === 'is' || key === 'save' || key === 'region' || key === 'platform') return t(`search.value.${key}.${value}` as MsgKey);
+  return labels?.get(`${key}\0${value}`) ?? value.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 // ---------------------------------------------------------------------------
@@ -163,7 +197,7 @@ export function buildIndex(games: GameEntry[], ctx: IndexContext): SearchIndex {
     if (g.isLocal) is.push('mine');
     if (isHomebrew(g)) is.push('homebrew');
     const genre = genresOf(g.genre, genres);
-    if (genre[0]) label('genre', genre[0], GENRE_LABEL[genre[0]] ?? g.genre);
+    if (genre[0]) label('genre', genre[0], g.genre);
     return {
       g, ...searchFields(g), year,
       v: {
@@ -294,7 +328,7 @@ const countMemo = new WeakMap<SearchIndex, Map<string, FacetValue[]>>();
  * other facet's filters (so picking a second genre shows what it adds). Most common first.
  */
 export function facetCounts(index: SearchIndex, q: Query, key: Key): FacetValue[] {
-  const memoKey = `${key}|${f(q.text)}|${q.filters.filter((x) => x.key !== key).map(formatFilter).sort().join(' ')}`;
+  const memoKey = `${getLang()}|${key}|${f(q.text)}|${q.filters.filter((x) => x.key !== key).map(formatFilter).sort().join(' ')}`;
   let memo = countMemo.get(index);
   if (!memo) countMemo.set(index, (memo = new Map()));
   const cached = memo.get(memoKey);
@@ -319,13 +353,13 @@ export function gameTags(g: GameEntry): { key: Key; label: string; filter: Filte
   for (const [v, l] of devs) add('developer', v, l);
   for (const [v, l] of credits(g.publisher)) if (!devs.some(([d]) => d === v)) add('publisher', v, l);
   const genre = genreKey(g.genre);
-  if (genre) add('genre', genre, GENRE_LABEL[genre] ?? g.genre);
-  if (g.players) add('players', g.players > 1 ? '2+' : '1', g.players > 1 ? `1–${g.players} players · link cable` : '1 player');
+  if (genre) add('genre', genre, tOr(`search.genre.${genre}`, g.genre));
+  if (g.players) add('players', g.players > 1 ? '2+' : '1', g.players > 1 ? t('search.players.upTo', { count: g.players }) : t('search.players.n', { count: 1 }));
   const regions = regionsOf(g);
-  if (regions.includes('world')) add('region', 'world', 'World');
+  if (regions.includes('world')) add('region', 'world', valueLabel('region', 'world'));
   else for (const r of regions) add('region', r, valueLabel('region', r));
   if (g.platform) add('platform', g.compatibility === 'dual' ? 'dual' : g.platform, g.compatibility === 'dual' ? 'Game Boy & Color' : valueLabel('platform', g.platform));
-  if (isHomebrew(g)) add('is', 'homebrew', 'Homebrew');
+  if (isHomebrew(g)) add('is', 'homebrew', valueLabel('is', 'homebrew'));
   return out;
 }
 
@@ -349,18 +383,18 @@ export function suggest(index: SearchIndex, q: Query, partial: string, max = 8):
   if (!m || !partial.replace('-', '')) return [];
   const [, neg, rawKey, rawVal] = m;
   const values = (key: Key, typed: string, strict: boolean) => {
-    const t = f(typed);
+    const w = f(typed);
     return facetCounts(index, q, key)
       .filter((v) => !q.filters.some((x) => x.key === key && x.value === v.value))
-      .filter((v) => !t || f(v.label).startsWith(t) || v.value.startsWith(t) || (!strict && ` ${f(v.label)}`.includes(` ${t}`)))
-      .map((v) => ({ insert: `${neg}${key}:${quote(v.value)} `, label: `${neg ? 'not ' : ''}${v.label}`, hint: facetLabel(key), count: v.count }));
+      .filter((v) => !w || f(v.label).startsWith(w) || v.value.startsWith(w) || (!strict && ` ${f(v.label)}`.includes(` ${w}`)))
+      .map((v) => ({ insert: `${neg}${key}:${quote(v.value)} `, label: neg ? t('search.not', { label: v.label }) : v.label, hint: facetLabel(key), count: v.count }));
   };
   if (rawVal !== undefined) {
     const key = KEY_OF.get(rawKey.toLowerCase());
     return key ? values(key, rawVal, false).slice(0, max) : [];
   }
   const keys = FACETS.filter((x) => [x.key, ...x.alias].some((a) => a.startsWith(rawKey.toLowerCase())) && x.key.length > rawKey.length)
-    .map((x) => ({ insert: `${neg}${x.key}:`, label: `${neg}${x.key}:`, hint: x.label }));
+    .map((x) => ({ insert: `${neg}${x.key}:`, label: `${neg}${x.key}:`, hint: facetLabel(x.key) }));
   if (rawKey.length < 2) return keys.slice(0, max);
   const vals = FACETS.filter((x) => x.key !== 'developer' && x.key !== 'publisher' && x.key !== 'year')
     .flatMap((x) => values(x.key, rawKey, true)).sort((a, b) => b.count! - a.count!);

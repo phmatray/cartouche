@@ -4,6 +4,7 @@ import { useSettingsStore, type ScreenSize } from '../../store/settingsStore';
 import type { ScreenKind } from '../../shaders/filters';
 import { MotionRows, ScreenFilters } from './ScreenFilters';
 import { Row, Seg } from './parts';
+import { rich, useT } from '../../i18n';
 
 /** Sample frames for the previews, drawn in the core's own colours so each filter treats them as a game frame. */
 const SAMPLES: Record<ScreenKind, Uint8ClampedArray> = (() => {
@@ -28,23 +29,24 @@ const SAMPLES: Record<ScreenKind, Uint8ClampedArray> = (() => {
 export function DisplayTab() {
   const { screenSize, setScreenSize } = useSettingsStore();
   const [kind, setKind] = useState<ScreenKind>('dmg');
+  const t = useT();
   return (
     <>
-      <h2>Display</h2>
-      <p className="intro">The screen every game starts with. Original Game Boy and Game Boy Color games each have their own default; a game can keep its own settings from its manual.</p>
-      <h3>Screen style</h3>
-      <Row label="Defaults for" sub={kind === 'dmg' ? 'Palettes recolor the four shades of an original Game Boy' : 'Color games keep their own colors; palettes never apply'}>
-        <Seg<ScreenKind> label="Defaults for" value={kind} options={[['dmg', 'Game Boy'], ['cgb', 'Color']]} set={setKind} />
+      <h2>{t('settings.tabs.display')}</h2>
+      <p className="intro">{t('settings.display.intro')}</p>
+      <h3>{t('settings.display.style')}</h3>
+      <Row label={t('settings.display.defaults')} sub={kind === 'dmg' ? t('settings.display.dmgSub') : t('settings.display.cgbSub')}>
+        <Seg<ScreenKind> label={t('settings.display.defaults')} value={kind} options={[['dmg', 'Game Boy'], ['cgb', 'Color']]} set={setKind} />
       </Row>
       <ScreenFilters key={kind} kind={kind} frame={SAMPLES[kind]} />
-      <h3>Motion</h3>
+      <h3>{t('settings.display.motion')}</h3>
       <MotionRows />
-      <h3>Size</h3>
-      <Row label="Default size" sub="Fit fills the stage; fixed sizes stay pixel-perfect">
-        <Seg<ScreenSize> label="Default size" value={screenSize} options={[['fit', 'Fit'], ['2', '2×'], ['3', '3×'], ['4', '4×']]} set={setScreenSize} />
+      <h3>{t('settings.display.size')}</h3>
+      <Row label={t('settings.display.defaultSize')} sub={t('settings.display.sizeSub')}>
+        <Seg<ScreenSize> label={t('settings.display.defaultSize')} value={screenSize} options={[['fit', t('settings.display.fit')], ['2', '2×'], ['3', '3×'], ['4', '4×']]} set={setScreenSize} />
       </Row>
-      <h3>Box art</h3>
-      <p className="intro" style={{ margin: '8px 0 0' }}>Box art is off by default. Turn it on, see its size or delete it in <Link to="/settings/storage" style={{ color: 'var(--ink)' }}>Storage</Link>.</p>
+      <h3>{t('settings.storage.art')}</h3>
+      <p className="intro" style={{ margin: '8px 0 0' }}>{rich(t('settings.display.art'), { a: (s) => <Link to="/settings/storage" style={{ color: 'var(--ink)' }}>{s}</Link> })}</p>
     </>
   );
 }

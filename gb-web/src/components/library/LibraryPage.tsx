@@ -8,16 +8,17 @@ import { I } from '../icons';
 import { ContinueHero, FirstHero } from './Heroes';
 import { useImports } from '../../lib/import-queue';
 import { Item, ListRow } from './GameItem';
+import { useT, type Key } from '../../i18n';
 
 type Sort = 'name' | 'recent' | 'most' | 'year';
 // Shortcuts into the search model (the same filters as `is:mine`, `region:us`… in the search overlay).
 const FILTERS = {
-  all: ['All', []], mine: ['In my library', [{ key: 'is', value: 'mine' }]], now: ['Play now', [{ key: 'is', value: 'now' }]],
-  fav: ['Favorites', [{ key: 'is', value: 'favorite' }]], US: ['US', [{ key: 'region', value: 'us' }]],
+  all: ['library.filter.all', []], mine: ['library.filter.mine', [{ key: 'is', value: 'mine' }]], now: ['common.tag.now', [{ key: 'is', value: 'now' }]],
+  fav: ['library.filter.fav', [{ key: 'is', value: 'favorite' }]], US: ['US', [{ key: 'region', value: 'us' }]],
   EU: ['EU', [{ key: 'region', value: 'eu' }]], JP: ['JP', [{ key: 'region', value: 'jp' }]],
-} satisfies Record<string, [string, SearchFilter[]]>;
+} satisfies Record<string, [Key | 'US' | 'EU' | 'JP', SearchFilter[]]>;
 type Filter = keyof typeof FILTERS;
-const SORTS: [Sort, string][] = [['name', 'Name A–Z'], ['recent', 'Recently played'], ['most', 'Most played'], ['year', 'Release year']];
+const SORTS: [Sort, Key][] = [['name', 'library.sort.name'], ['recent', 'library.sort.recent'], ['most', 'library.sort.most'], ['year', 'library.sort.year']];
 const LETTERS = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 
 const byName = (a: GameEntry, b: GameEntry) => sortTitle(a.title).localeCompare(sortTitle(b.title));
@@ -81,7 +82,8 @@ export function LibraryPage() {
   const catalogRef = useRef<HTMLElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   useSpatialFocus();
-  useEffect(() => { document.title = 'Library · Cartouche'; }, []);
+  const t = useT();
+  useEffect(() => { document.title = t('common.docTitle', { page: t('shell.nav.library') }); }, [t]);
 
   // While an import runs the hero keeps its game: following each new ROM would restart its live demo every flush.
   const importing = useImports((s) => s.rows.some((r) => r.st === 'work'));
@@ -120,7 +122,7 @@ export function LibraryPage() {
     setTimeout(() => (el.matches('a') ? el : el.querySelector<HTMLElement>('a.t'))?.focus({ preventScroll: true }), 400);
   };
 
-  if (loading) return <main className="wrap loading" aria-busy="true">Loading your library…</main>;
+  if (loading) return <main className="wrap loading" aria-busy="true">{t('common.loadingLibrary')}</main>;
 
   return (
     <main>
@@ -129,76 +131,76 @@ export function LibraryPage() {
         {storageError && <StorageNotice />}
         <section className="sec" aria-labelledby="h-shelf">
           <div className="sec-h">
-            <h2 id="h-shelf">Your shelf</h2>
-            <span className="count">{shelf.length ? `${shelf.length}${cont ? ' more' : ''} · recently played first` : 'Nothing here yet'}</span>
-            {hasRoms && <button className="linkbtn end" onClick={() => pickFilter('mine', true)}>Only mine {I.next}</button>}
+            <h2 id="h-shelf">{t('library.shelf')}</h2>
+            <span className="count">{shelf.length ? t(cont ? 'library.shelfMore' : 'library.shelfCount', { count: shelf.length }) : t('library.shelfEmpty')}</span>
+            {hasRoms && <button className="linkbtn end" onClick={() => pickFilter('mine', true)}>{t('library.onlyMine')} {I.next}</button>}
           </div>
           {shelf.length ? (
             <div className="shelf rail">{shelf.map((g) => <Item key={g.id} game={g} saved={savedIds} />)}</div>
           ) : (
             <>
               <div className="slotrow">
-                <Link to="/add">{I.plus}Add ROMs</Link>
+                <Link to="/add">{I.plus}{t('shell.addRoms')}</Link>
                 {Array.from({ length: 6 }, (_, i) => <span key={i} />)}
               </div>
-              <p className="shelf-empty">Games you add or play stand here, most recent first.{cont ? '' : ' Your files are read in this browser and never uploaded.'}</p>
+              <p className="shelf-empty">{t('library.shelfHint')}{cont ? '' : ` ${t('shell.dropSub')}`}</p>
             </>
           )}
         </section>
 
         {free.length > 0 && (
           <section className="sec" aria-labelledby="h-free">
-            <div className="sec-h"><h2 id="h-free">Play right now</h2><span className="count">No file needed: free homebrew that comes with the app</span></div>
+            <div className="sec-h"><h2 id="h-free">{t('library.free')}</h2><span className="count">{t('library.freeSub')}</span></div>
             <div className="shelf">{free.map((g) => <Item key={g.id} game={g} saved={savedIds} />)}</div>
           </section>
         )}
 
         {tests.length > 0 && (
           <section className="sec" aria-labelledby="h-tests">
-            <div className="sec-h"><h2 id="h-tests">Test cartridges</h2><span className="count">Hardware tests that come with the app: see if the emulator passes</span></div>
+            <div className="sec-h"><h2 id="h-tests">{t('library.tests')}</h2><span className="count">{t('library.testsSub')}</span></div>
             <div className="shelf">{tests.map((g) => <Item key={g.id} game={g} saved={savedIds} />)}</div>
           </section>
         )}
 
         <section className="sec" aria-labelledby="h-cat" id="catalog" ref={catalogRef}>
           <div className="sec-h">
-            <h2 id="h-cat">All games</h2>
-            <span className="count">{games.length.toLocaleString('en-US')} {games.length === 1 ? 'game' : 'games'} · free homebrew, test cartridges and your own ROMs</span>
+            <h2 id="h-cat">{t('library.all')}</h2>
+            <span className="count">{t('library.allSub', { games: t('common.games', { count: games.length }) })}</span>
           </div>
           <div className="tools">
-            <div className="chips" role="group" aria-label="Filter">
-              {(Object.keys(FILTERS) as Filter[]).map((v) => <button key={v} className="chip" aria-pressed={filter === v} onClick={() => pickFilter(v)}>{FILTERS[v][0]}</button>)}
-              <Link className="chip more" to={paths.search(formatQuery({ text: '', filters: FILTERS[filter][1] }))} state={searchState()}>{I.search}More filters</Link>
+            <div className="chips" role="group" aria-label={t('library.filterLabel')}>
+              {(Object.keys(FILTERS) as Filter[]).map((v) => { const l = FILTERS[v][0]; return <button key={v} className="chip" aria-pressed={filter === v} onClick={() => pickFilter(v)}>{l.includes('.') ? t(l as Key) : l}</button>; })}
+              <Link className="chip more" to={paths.search(formatQuery({ text: '', filters: FILTERS[filter][1] }))} state={searchState()}>{I.search}{t('library.moreFilters')}</Link>
             </div>
             <div className="right">
-              <label className="sel">Sort
+              <label className="sel">{t('library.sortLabel')}
                 <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-                  {SORTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                  {SORTS.map(([v, l]) => <option key={v} value={v}>{t(l)}</option>)}
                 </select>
               </label>
-              <div className="vt" role="group" aria-label="View">
-                <button aria-pressed={view === 'grid'} aria-label="Grid" onClick={() => setView('grid')}>{I.grid}</button>
-                <button aria-pressed={view === 'list'} aria-label="List" onClick={() => setView('list')}>{I.list}</button>
+              <div className="vt" role="group" aria-label={t('library.view')}>
+                <button aria-pressed={view === 'grid'} aria-label={t('library.grid')} onClick={() => setView('grid')}>{I.grid}</button>
+                <button aria-pressed={view === 'list'} aria-label={t('library.list')} onClick={() => setView('list')}>{I.list}</button>
               </div>
             </div>
           </div>
           {sort === 'name' && list.length > 0 && (
-            <nav className="index" aria-label="Jump to letter">
+            <nav className="index" aria-label={t('library.jump')}>
               {LETTERS.map((l) => (
-                <button key={l} disabled={!present.has(l)} aria-current={letter === l || undefined} aria-label={`Jump to ${l}`} onClick={() => jumpTo(l)}>{l}</button>
+                <button key={l} disabled={!present.has(l)} aria-current={letter === l || undefined} aria-label={t('library.jumpTo', { letter: l })} onClick={() => jumpTo(l)}>{l}</button>
               ))}
             </nav>
           )}
           <div ref={bodyRef}>
             {!list.length ? (
               <div className="empty-inline" style={{ borderColor: '#3a3a3a', color: 'var(--mute)' }}>
-                No games match this filter. <button className="linkbtn" onClick={() => pickFilter('all')}>Show all</button>
+                {t('library.noMatch')} <button className="linkbtn" onClick={() => pickFilter('all')}>{t('library.showAll')}</button>
               </div>
             ) : view === 'grid' ? (
               <div className="shelf cat">{list.map((g) => <Item key={g.id} game={g} saved={savedIds} />)}</div>
             ) : (
               <>
-                <div className="lhead"><span /><span>Title</span><span className="c">Played</span><span className="c">Last played</span><span>Status</span><span /></div>
+                <div className="lhead"><span /><span>{t('library.col.title')}</span><span className="c">{t('library.col.played')}</span><span className="c">{t('library.col.last')}</span><span>{t('library.col.status')}</span><span /></div>
                 <div className="list">{list.map((g) => <ListRow key={g.id} game={g} saved={savedIds} onFavorite={toggleFavorite} />)}</div>
               </>
             )}
@@ -211,10 +213,11 @@ export function LibraryPage() {
 
 /** Shown when the browser blocks IndexedDB: nothing can be kept, but the bundled games still play. */
 export function StorageNotice() {
+  const t = useT();
   return (
     <div className="notice" role="status" style={{ marginTop: 24 }}>
       <span className="ic">i</span>
-      <span>This browser is blocking storage. You can browse and play the bundled games, but ROMs and saves can’t be kept.</span>
+      <span>{t('library.storageBlocked')}</span>
     </div>
   );
 }

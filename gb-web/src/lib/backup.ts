@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { asProfile, getAllFrom, putInto, STORES, type StoredGameMeta, type StoredRom, type StoredSave, type StoredSaveState, type StoredScreenshot } from './db';
 import { SETTINGS_KEYS, displayFromV3, useSettingsStore, type SettingsValues } from '../store/settingsStore';
 
@@ -69,11 +70,11 @@ export const backupFileName = () => `cartouche-backup-${new Date().toISOString()
 /** Read and check a backup file. Throws with a readable message when it isn't one. */
 export async function readBackup(file: File): Promise<Backup> {
   let raw: unknown;
-  try { raw = JSON.parse(await file.text()); } catch { throw new Error(`${file.name} isn’t a Cartouche backup`); }
+  try { raw = JSON.parse(await file.text()); } catch { throw new Error(t('settings.storage.notBackup', { file: file.name })); }
   const b = decode(raw) as Partial<Backup>;
   // 'cartshelf': backups exported before the app was renamed.
-  if (!b || (b.app !== APP && b.app !== 'cartshelf')) throw new Error(`${file.name} isn’t a Cartouche backup`);
-  if (b.version !== VERSION) throw new Error(`This backup was made by a newer version of Cartouche`);
+  if (!b || (b.app !== APP && b.app !== 'cartshelf')) throw new Error(t('settings.storage.notBackup', { file: file.name }));
+  if (b.version !== VERSION) throw new Error(t('settings.storage.newer'));
   const list = <T,>(x: unknown, ok: (r: T) => boolean) => (Array.isArray(x) ? (x as T[]).filter((r) => r && typeof r === 'object' && ok(r)) : []);
   const str = (x: unknown) => typeof x === 'string' && x.length > 0;
   return {

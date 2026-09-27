@@ -4,10 +4,11 @@ import type { GameEntry } from '../types/game';
 import { I } from './icons';
 import { Cover } from './library/Cover';
 import { Hl } from './shell/SearchDialog';
+import { num, rich, useT, type Key } from '../i18n';
 
 type Chip = 'all' | 'link' | 'gb' | 'gbc';
 // [key, label, short label for narrow screens]
-const CHIPS: [Chip, string, string][] = [['all', 'All', 'All'], ['link', 'Link-ready', 'Link-ready'], ['gb', 'Game Boy', 'GB'], ['gbc', 'Game Boy Color', 'GBC']];
+const CHIPS: [Chip, Key | string, string][] = [['all', 'library.filter.all', ''], ['link', 'link.ready', ''], ['gb', 'Game Boy', 'GB'], ['gbc', 'Game Boy Color', 'GBC']];
 const KEEP: Record<Chip, (g: GameEntry) => boolean> = { all: () => true, link: linkReady, gb: (g) => g.platform === 'gb', gbc: (g) => g.platform === 'gbc' };
 const RECENT = 5;
 // Fixed heights let the list render only the rows in view (300+ games stay instant).
@@ -33,23 +34,25 @@ export function CartridgePicker({ open, player, games, current, onPick, onFile, 
   const [chip, setChip] = useState<Chip>('all');
   const [active, setActive] = useState(0);
   const [view, setView] = useState({ top: 0, h: 600 });
+  const t = useT();
+  const chipLabel = (l: string) => (l.includes('.') ? t(l as Key) : l);
 
   const q = searchKey(query);
   const entries = useMemo<Entry[]>(() => {
     const pool = games.filter(KEEP[chip]);
-    const rows = (s: string, gs: GameEntry[]): Entry[] => (gs.length ? [{ h: `${s} · ${gs.length}` }, ...gs.map((g) => ({ g, key: `${s}:${g.id}`, s }))] : []);
+    const rows = (s: string, gs: GameEntry[]): Entry[] => (gs.length ? [{ h: `${s} · ${num(gs.length)}` }, ...gs.map((g) => ({ g, key: `${s}:${g.id}`, s }))] : []);
     if (q) {
       const hits = pool.map((g) => [g, score(g, q)] as const).filter(([, n]) => n > 0)
         .sort(([a, x], [b, y]) => y - x || sortTitle(a.title).localeCompare(sortTitle(b.title))).map(([g]) => g);
-      return rows('Results', hits);
+      return rows(t('search.resultsLabel'), hits);
     }
     const az = [...pool].sort((a, b) => sortTitle(a.title).localeCompare(sortTitle(b.title)));
     return [
-      ...(chip === 'link' ? [] : rows('Link-ready', az.filter(linkReady))),
-      ...rows('Recently played', pool.filter((g) => g.lastPlayed).sort((a, b) => b.lastPlayed! - a.lastPlayed!).slice(0, RECENT)),
-      ...rows('All games A–Z', az),
+      ...(chip === 'link' ? [] : rows(t('link.ready'), az.filter(linkReady))),
+      ...rows(t('library.sort.recent'), pool.filter((g) => g.lastPlayed).sort((a, b) => b.lastPlayed! - a.lastPlayed!).slice(0, RECENT)),
+      ...rows(t('link.pick.az'), az),
     ];
-  }, [games, chip, q]);
+  }, [games, chip, q, t]);
   const tops = useMemo(() => { let y = 0; return entries.map((e) => { const t = y; y += isRow(e) ? ROW : HEAD; return t; }).concat(y); }, [entries]);
   const rowIdx = useMemo(() => entries.flatMap((e, i) => (isRow(e) ? [i] : [])), [entries]);
   const sel = rowIdx.length ? rowIdx[Math.min(active, rowIdx.length - 1)] : -1;
@@ -134,27 +137,27 @@ export function CartridgePicker({ open, player, games, current, onPick, onFile, 
         <>
           <span className="bar" aria-hidden="true"><i /><i /><i /></span>
           <div className="pk-head">
-            <h2 id="pick-t">Player {player} cartridge</h2>
-            <button className="pk-x" aria-label="Close" onClick={() => ref.current?.close()}>{I.close}</button>
+            <h2 id="pick-t">{t('link.pick.title', { p: String(player) })}</h2>
+            <button className="pk-x" aria-label={t('common.close')} onClick={() => ref.current?.close()}>{I.close}</button>
           </div>
           <div className="pk-q">
-            <input ref={input} type="search" placeholder="Title, developer or year" autoComplete="off" spellCheck={false}
-              role="combobox" aria-expanded="true" aria-controls="pk-list" aria-autocomplete="list" aria-label="Search cartridges"
+            <input ref={input} type="search" placeholder={t('link.pick.placeholder')} autoComplete="off" spellCheck={false}
+              role="combobox" aria-expanded="true" aria-controls="pk-list" aria-autocomplete="list" aria-label={t('link.pick.search')}
               aria-activedescendant={selEntry ? `pk-${selEntry.key}` : undefined}
               value={query} onChange={(e) => { setQuery(e.target.value); reset(); }} />
           </div>
-          <div className="pk-chips" role="group" aria-label="Filter">
+          <div className="pk-chips" role="group" aria-label={t('library.filterLabel')}>
             {CHIPS.map(([k, label, short]) => (
               <button key={k} className="pk-chip" aria-pressed={chip === k} onClick={() => { setChip(k); reset(); }}>
-                <span className="pk-l">{label}</span><span className="pk-s">{short}</span>
+                <span className="pk-l">{chipLabel(label)}</span><span className="pk-s">{short || chipLabel(label)}</span>
               </button>
             ))}
           </div>
           <div className="shint pk-hint" aria-hidden="true">
-            <span><kbd>↑</kbd> <kbd>↓</kbd> to move</span><span><kbd>Enter</kbd> to insert</span><span><kbd>Esc</kbd> to close</span>
-            <span>{q ? `${rowIdx.length.toLocaleString('en-US')} result${rowIdx.length === 1 ? '' : 's'}` : `${games.length.toLocaleString('en-US')} cartridges`}</span>
+            <span>{rich(t('search.hint.move'), { keys: <><kbd>↑</kbd> <kbd>↓</kbd></> })}</span><span>{rich(t('link.pick.insert'), { keys: <kbd>Enter</kbd> })}</span><span>{rich(t('search.hint.close'), { keys: <kbd>Esc</kbd> })}</span>
+            <span>{q ? t('search.results', { count: rowIdx.length }) : t('link.pick.count', { count: games.length })}</span>
           </div>
-          <div ref={list} className="pk-list" id="pk-list" role="listbox" aria-label="Cartridges" tabIndex={-1} onScroll={measure}>
+          <div ref={list} className="pk-list" id="pk-list" role="listbox" aria-label={t('link.pick.list')} tabIndex={-1} onScroll={measure}>
             {rowIdx.length ? (
               <div style={{ height: tops[entries.length], position: 'relative' }}>
                 {shown.map((i) => {
@@ -167,11 +170,11 @@ export function CartridgePicker({ open, player, games, current, onPick, onFile, 
                       onPointerDown={(ev) => ev.preventDefault()} onClick={() => pick(g)} onMouseMove={() => i !== sel && setActive(n)}>
                       <Cover game={g} aria-hidden />
                       <span className="t"><Hl text={g.title} q={q} />{sub && <small><Hl text={sub} q={q} /></small>}</span>
-                      {e.s !== 'Results' && <span className="sr">, {e.s}</span>}
+                      {e.s !== t('search.resultsLabel') && <span className="sr">, {e.s}</span>}
                       <span className="pk-tags">
-                        {linkReady(g) && <span className="tag now" title="Two players over the link cable">{I.link}<span className="pk-tl" aria-hidden="true">Link</span><span className="sr">Link-ready</span></span>}
+                        {linkReady(g) && <span className="tag now" title={t('link.pick.twoPlayers')}>{I.link}<span className="pk-tl" aria-hidden="true">{t('link.pick.link')}</span><span className="sr">{t('link.ready')}</span></span>}
                         {g.platform && <span className="tag rom">{g.platform === 'gbc' ? 'GBC' : 'GB'}</span>}
-                        {g.id === current && <span className="pk-cur">In slot</span>}
+                        {g.id === current && <span className="pk-cur">{t('link.pick.inSlot')}</span>}
                       </span>
                     </div>
                   );
@@ -179,13 +182,13 @@ export function CartridgePicker({ open, player, games, current, onPick, onFile, 
               </div>
             ) : (
               <p className="pk-empty">
-                {q ? <>No cartridge matches “{query.trim()}”.</> : <>No {CHIPS.find(([k]) => k === chip)![1]} cartridges in your library.</>}
-                <small>Try a developer or a year, pick another filter, or load the ROM file below.</small>
+                {q ? t('link.pick.noMatch', { text: query.trim() }) : t('link.pick.noneOf', { filter: chipLabel(CHIPS.find(([k]) => k === chip)![1]) })}
+                <small>{t('link.pick.try')}</small>
               </p>
             )}
           </div>
           <button className="pk-file" onClick={() => { ref.current?.close(); onFile(); }}>
-            {I.load}<span>Load a file…<small>A .gb or .gbc ROM that isn’t in your library</small></span>
+            {I.load}<span>{t('link.pick.file')}<small>{t('link.pick.fileSub')}</small></span>
           </button>
         </>
       )}

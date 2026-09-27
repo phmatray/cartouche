@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { importRom, isRomFile, MAX_ROM_SIZE, type ImportOutcome, type ImportStatus } from '../hooks/useGameLibrary';
 import { toast } from '../components/shell/actions';
 import { listZip, readEntry, ZipError } from './zip';
+import { t } from '../i18n';
 
 /**
  * The import queue: files dropped anywhere in the app or chosen on the Add ROMs page, and the ROMs inside
@@ -57,7 +58,7 @@ async function expand(files: File[]): Promise<{ rows: ImportRow[]; ignored: numb
         rows.push({ key: String(++seq), name: e.name.split('/').pop()!, size: e.size, from: f.name, st: 'work', read: () => readEntry(f, e) });
       }
     } catch (err) {
-      rows.push({ key: String(++seq), name: f.name, size: f.size, st: 'bad', note: err instanceof ZipError ? err.message : 'couldn’t be read' });
+      rows.push({ key: String(++seq), name: f.name, size: f.size, st: 'bad', note: err instanceof ZipError ? err.message : t('add.unreadable') });
     }
   }
   return { rows, ignored };
@@ -95,7 +96,7 @@ export function queueImport(files: File[]) {
         if (isRomFile(r.name) && r.size <= MAX_ROM_SIZE) data = await r.read!();
         out = { st: 'bad' };
       } catch (e) {
-        out = { st: 'bad', note: e instanceof ZipError ? e.message.toLowerCase() : 'couldn’t be read' };
+        out = { st: 'bad', note: e instanceof ZipError ? e.message.toLowerCase() : t('add.unreadable') };
       }
       if (data) {
         // A file that was read but couldn't be stored: the storage is failing, so every next ROM would too.
@@ -107,7 +108,7 @@ export function queueImport(files: File[]) {
     current = null;
     flush();
     if (my !== gen) stopWaiting(); // stopped while this batch was being listed
-    if (added) toast(`${added.toLocaleString('en-US')} ROM${added > 1 ? 's' : ''} added to your library`, 'c');
+    if (added) toast(t('add.toast.added', { count: added }), 'c');
   }).catch(() => {}).finally(() => { queued--; });
 }
 
@@ -130,10 +131,10 @@ export async function importAnyway(r: ImportRow) {
   if (!r.read) return;
   patchRow(r.key, { st: 'work' }, true);
   const data = await r.read().catch(() => null);
-  if (!data) { patchRow(r.key, { st: 'dup' }, true); toast('Couldn’t read the file again', 'm'); return; }
+  if (!data) { patchRow(r.key, { st: 'dup' }, true); toast(t('add.toast.reread'), 'm'); return; }
   try {
     patchRow(r.key, asRow(await importRom(r.name, data, true)), true);
-    toast('Imported as a second copy', 'c');
+    toast(t('add.toast.copy'), 'c');
   } catch (e) {
     patchRow(r.key, { st: 'dup' }, true);
     await storageFull(e);

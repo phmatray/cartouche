@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { GameEntry } from '../types/game';
+import { loadLang } from '../i18n/core.ts';
 import { buildIndex, facetCounts, formatQuery, normValue, parseQuery, search, suggest, valueLabel, withoutEach } from './search.ts';
 
 const game = (id: string, o: Partial<GameEntry>): GameEntry => ({ id, title: id, description: '', genre: 'Unknown', category: 'My Collection', coverArt: '', screenshots: [], isLocal: true, ...o });
@@ -13,6 +14,7 @@ const GAMES = [
   game('Homebrew', { genre: 'Platformer', category: 'Homebrew Highlights', license: 'MIT', year: '2017', isLocal: false, romUrl: 'roms/x.gb' }),
   game('Unknown dump', { isLocal: false }),
 ];
+await loadLang('fr'); // French values typed in the search count too
 const index = buildIndex(GAMES, { saved: new Set(['Pokemon Gold']), art: false, now: 2000 });
 const titles = (q: string) => search(index, parseQuery(q)).map((g) => g.title);
 
@@ -31,7 +33,10 @@ test('normalizes synonyms, accents and case', () => {
   assert.equal(normValue('developer', 'HAL'), 'hal laboratory');
   assert.equal(normValue('is', 'fav'), 'favorite');
   assert.equal(normValue('platform', 'Game Boy Color'), 'gbc');
-  assert.equal(normValue('language', 'Français'), '');
+  assert.equal(normValue('language', 'Klingon'), '');
+  assert.equal(normValue('language', 'Français'), 'fr'); // a value typed in French or Spanish counts too
+  assert.equal(normValue('genre', 'plateformes'), 'platformer');
+  assert.equal(normValue('is', 'favoris'), 'favorite');
   assert.equal(valueLabel('genre', 'rpg'), 'RPG');
 });
 

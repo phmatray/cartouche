@@ -5,6 +5,7 @@ import { answerBoxArt, fetchBoxArtFor, NO_COVERS, useBoxArtPrompt } from '../../
 import { toast } from './actions';
 import { trapTab } from '../../lib/ui';
 import { useSettingsStore } from '../../store/settingsStore';
+import { rich, t as tNow, useT } from '../../i18n';
 
 const GITHUB_PRIVACY = 'https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement';
 
@@ -20,6 +21,7 @@ export function BoxArtDialog() {
   const onLegal = useLocation().pathname === '/legal';
   const open = asked || (unanswered && !onLegal);
   const ref = useRef<HTMLDialogElement>(null);
+  const t = useT();
   const back = useRef<HTMLElement | null>(null); // focused before opening, focused again on close
 
   useEffect(() => {
@@ -35,7 +37,7 @@ export function BoxArtDialog() {
   const yes = async () => {
     answerBoxArt(true);
     const n = await fetchBoxArtFor(games.filter((g) => g.isLocal));
-    toast(n ? `Box art ready for ${n} game${n === 1 ? '' : 's'}` : NO_COVERS, 'c');
+    toast(n ? tNow('shell.art.ready', { count: n }) : NO_COVERS(), 'c');
   };
   // Closed some other way (Escape): the same as "Continue without".
   const onClose = () => {
@@ -49,19 +51,14 @@ export function BoxArtDialog() {
         <>
           <span className="bar" aria-hidden="true"><i /><i /><i /></span>
           <div className="in">
-            <h2 id="boxart-t">Show box art?</h2>
+            <h2 id="boxart-t">{t('shell.art.title')}</h2>
             <div id="boxart-d">
-              <p>Box art is copyrighted by the game publishers. Cartouche doesn’t host or ship any (only the freely licensed covers of its bundled games).</p>
-              <p>
-                If you agree, your browser downloads the covers of recognized games you add directly from the libretro-thumbnails
-                project on GitHub, so GitHub sees your IP address and browser details (see <a href={GITHUB_PRIVACY} target="_blank" rel="noreferrer">GitHub’s privacy statement</a>),
-                and keeps them in this browser’s storage. Nothing is shared with us. You can delete them anytime
-                in Settings › Storage.
-              </p>
+              <p>{t('shell.art.p1')}</p>
+              <p>{rich(t('shell.art.p2'), { a: (s) => <a href={GITHUB_PRIVACY} target="_blank" rel="noreferrer">{s}</a> })}</p>
             </div>
             <div className="acts">
-              <button className="btn line" onClick={() => answerBoxArt(false)}>Continue without</button>
-              <button className="btn k" onClick={yes}>Download box art</button>
+              <button className="btn line" onClick={() => answerBoxArt(false)}>{t('shell.art.no')}</button>
+              <button className="btn k" onClick={yes}>{t('shell.art.yes')}</button>
             </div>
           </div>
         </>

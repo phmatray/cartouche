@@ -9,6 +9,7 @@ import { assetUrl } from '../lib/ui';
 import { boxArtAllowed, getCoverArtUrl, needsDownload } from '../lib/cover-art';
 import { indexFor } from '../lib/search';
 import { useSettingsStore } from '../store/settingsStore';
+import { t } from '../i18n';
 import catalogData from '../data/catalog.json';
 
 /** ok: added and identified · unk: added, not a known dump · dup: same file already on the shelf · bad: not a Game Boy ROM */
@@ -32,7 +33,7 @@ export const titleKey = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, ''
 function localEntry(id: string, title: string, genre: string, data: Uint8Array, sha1: string, dbEntry: GameDbEntry | undefined, importedAt?: number): GameEntry {
   const h = parseRomHeader(data);
   return {
-    id, title, description: dbEntry ? `${dbEntry.developer} · ${dbEntry.region}` : 'User-added ROM',
+    id, title, description: dbEntry ? `${dbEntry.developer} · ${dbEntry.region}` : '', // '': "User-added ROM" (descOf)
     genre, category: 'My Collection', coverArt: '', screenshots: [],
     romHeaderTitle: parseRomTitle(data) || undefined,
     isLocal: true, importedAt, sha1,
@@ -65,6 +66,7 @@ function withLocal(list: GameEntry[], e: GameEntry): GameEntry[] {
     ...cat, ...e,
     title: e.developer ? e.title : cat.title, // no GameDB match: the catalog title beats a file name
     description: e.developer ? e.description : cat.description || e.description,
+    descriptions: e.developer ? undefined : cat.descriptions,
     regions: e.regions?.length ? e.regions : cat.regions,
     genre: e.genre !== 'Unknown' ? e.genre : cat.genre,
     developer: e.developer ?? cat.developer,
@@ -210,10 +212,10 @@ export async function recordSession(gameId: string, seconds: number, newSession 
 export async function fetchRom(game: GameEntry): Promise<Uint8Array> {
   const stored = await getRom(game.id).catch(() => undefined); // storage blocked: bundled ROMs still load
   if (stored) return stored.data;
-  if (game.isLocal) throw new Error(`ROM not found in storage: ${game.id}`);
+  if (game.isLocal) throw new Error(t('player.error.notStored'));
   if (!game.romUrl) throw new Error(`NO_ROM_URL`);
-  const response = await fetch(assetUrl(game.romUrl));
-  if (!response.ok) throw new Error(`Failed to fetch ROM: ${response.status}`);
+  const response = await fetch(assetUrl(game.romUrl)).catch(() => null); // offline: a TypeError in the browser's language
+  if (!response?.ok) throw new Error(t('player.error.download'));
   return new Uint8Array(await response.arrayBuffer());
 }
 

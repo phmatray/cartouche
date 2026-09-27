@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useState, useCallback, useEffect, type RefObject } from 'react';
 import { createProfile, getGameSaveStates, getSaveState, getSram, listProfiles, saveSaveState, resumeStateId, setActiveProfile, slotStateId, uniqueName, type StoredSaveState } from '../lib/db';
 import { refreshSavedIds } from './useGameLibrary';
@@ -60,17 +61,17 @@ export function useSaveStates(
     if (other) {
       profileRef.current = other.id;
       setActiveProfile(gameId, other.id).catch(() => {});
-      toast(`This save belongs to “${other.name}”: saving there now`, 'c');
+      toast(t('player.toast.belongs', { name: other.name }), 'c');
       return true;
     }
     // Its save was deleted: never let it overwrite the one being played; it becomes a save of its own.
     try {
-      const name = uniqueName(await listProfiles(gameId), k === 'auto' ? 'From the resume point' : `From save slot ${k + 1}`);
+      const name = uniqueName(await listProfiles(gameId), k === 'auto' ? t('player.saves.fromResume') : t('player.saves.fromSlot', { n: String(k + 1) }));
       const p = await createProfile(gameId, name, exportSram() ?? new Uint8Array());
       profileRef.current = p.id;
       await setActiveProfile(gameId, p.id);
       refreshSavedIds();
-      toast(`This save’s game was deleted: saving to a new one, “${p.name}”`, 'c');
+      toast(t('player.toast.newSave', { name: p.name }), 'c');
     } catch {
       profileRef.current = null; // storage failed: write nowhere rather than over another save
     }

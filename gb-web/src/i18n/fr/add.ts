@@ -1,0 +1,53 @@
+import type { Messages } from '../core.ts';
+
+export default {
+  intro: 'Déposez des fichiers .gb et .gbc, ou un .zip qui les contient. Chacun est identifié par son empreinte SHA-1 parmi les copies connues et arrive avec ses informations. Les fichiers ne quittent jamais ce navigateur.',
+  drop: 'Déposer les fichiers ici',
+  dropSub: 'Plusieurs à la fois, ou un .zip entier. Les doublons sont repérés avant d’être stockés.',
+  choose: 'Choisir des fichiers',
+  iphone: '<b>Depuis un iPhone</b> Placez les ROM dans un dossier d’iCloud Drive. Dans l’app Fichiers, appuyez longuement sur le dossier et choisissez Compresser, puis choisissez ce .zip ici. Vous pouvez aussi sélectionner plusieurs fichiers.',
+  import: 'Cet import',
+  checked: '{done} sur {total} vérifiés',
+  stop: 'Arrêter',
+  progress: 'Progression de l’import',
+  goLibrary: 'Aller à la bibliothèque',
+  renamed: 'Renommé',
+  notRom: 'endommagé ou pas une ROM Game Boy',
+  unreadable: 'illisible',
+  anyway: 'Importer quand même',
+  st: { work: 'Vérification…', ok: 'Ajouté', dup: 'Déjà dans la bibliothèque', unk: 'Ajouté, non reconnu', bad: 'Ignoré', stop: 'Non importé' },
+  sum: {
+    added: { one: '<b>{count}</b> ajouté', other: '<b>{count}</b> ajoutés' },
+    dup: { one: '<b>{count}</b> doublon', other: '<b>{count}</b> doublons' },
+    bad: { one: '<b>{count}</b> ignoré', other: '<b>{count}</b> ignorés' },
+    stop: { one: '<b>{count}</b> non importé', other: '<b>{count}</b> non importés' },
+    ignored: { one: '<b>{count}</b> fichier système ignoré', other: '<b>{count}</b> fichiers système ignorés' },
+    ignoredTitle: 'Dossiers et fichiers système comme __MACOSX et .DS_Store',
+  },
+  toast: {
+    added: { one: '{count} ROM ajoutée à la bibliothèque', other: '{count} ROM ajoutées à la bibliothèque' },
+    reread: 'Impossible de relire le fichier',
+    copy: 'Importé comme seconde copie',
+  },
+  full: {
+    title: 'Le stockage est plein',
+    other: 'Impossible d’enregistrer dans le stockage de ce navigateur',
+    stopped: 'L’import s’est arrêté. Toutes les ROM ajoutées avant sont en sécurité ; les autres n’ont pas été importées.',
+    using: 'Cartouche utilise {usage} sur les {quota} autorisés par ce navigateur.',
+    free: 'Libérez de l’espace sur cet appareil et conservez son stockage, puis ajoutez à nouveau les mêmes fichiers : ceux déjà présents sont ignorés comme doublons.',
+    freeInstall: 'Libérez de l’espace sur cet appareil, installez l’app et conservez son stockage, puis ajoutez à nouveau les mêmes fichiers : ceux déjà présents sont ignorés comme doublons.',
+    keep: 'Conserver le stockage',
+    kept: 'Stockage conservé : le navigateur ne l’effacera pas',
+    refused: 'Le navigateur a refusé',
+  },
+  rename: {
+    title: 'Nommer cette ROM',
+    body: 'Elle n’a pas été reconnue, elle n’a donc pas de jaquette. Donnez-lui un titre pour l’étagère.',
+  },
+  zip: {
+    not: 'Pas une archive zip',
+    damaged: 'Archive zip endommagée',
+    incomplete: 'Archive zip endommagée ou incomplète',
+    method: 'Compression non prise en charge (méthode {method})',
+  },
+} satisfies Messages['add'];

@@ -3,6 +3,7 @@
     "id": "tobu-tobu-girl",
     "title": "Tobu Tobu Girl",
     "description": "An arcade platformer: bounce off enemies to climb the tower and bring your cat back home.",
+    "descriptions": {"fr": "Un jeu de plateformes arcade : rebondir sur les ennemis pour gravir la tour et ramener son chat à la maison.", "es": "Un plataformas arcade: rebota sobre los enemigos para subir la torre y llevar a tu gato de vuelta a casa."},
     "genre": "Platformer",
     "category": "Homebrew Highlights",
     "coverArt": "covers/tobu-tobu-girl.webp",
@@ -24,6 +25,7 @@
     "id": "tobu-tobu-girl-deluxe",
     "title": "Tobu Tobu Girl Deluxe",
     "description": "The full-color remaster of Tobu Tobu Girl: jump, dash and flap your way up the sky to bring your cat back home.",
+    "descriptions": {"fr": "Le remaster tout en couleurs de Tobu Tobu Girl : sauter, foncer et battre des ailes jusqu’au ciel pour ramener son chat à la maison.", "es": "La remasterización a todo color de Tobu Tobu Girl: salta, embiste y aletea cielo arriba para llevar a tu gato de vuelta a casa."},
     "genre": "Platformer",
     "category": "Homebrew Highlights",
     "coverArt": "covers/tobu-tobu-girl-deluxe.webp",
@@ -45,6 +47,7 @@
     "id": "ucity",
     "title": "µCity",
     "description": "An open-source city builder for the Game Boy Color: zone land, lay roads and power lines, balance the budget and watch the city grow.",
+    "descriptions": {"fr": "Un jeu de construction de ville open source pour la Game Boy Color : délimiter des zones, tracer routes et lignes électriques, équilibrer le budget et regarder la ville grandir.", "es": "Un constructor de ciudades de código abierto para Game Boy Color: delimita zonas, traza carreteras y tendidos eléctricos, equilibra el presupuesto y mira crecer la ciudad."},
     "genre": "Strategy",
     "category": "Homebrew Highlights",
     "coverArt": "",
@@ -65,13 +68,14 @@
     "id": "libbet-and-the-magic-floor",
     "title": "Libbet and the Magic Floor",
     "description": "A puzzle game: roll Libbet across the hall until every floor tile is lit.",
+    "descriptions": {"fr": "Un jeu de réflexion : faire rouler Libbet dans la salle jusqu’à allumer toutes les dalles du sol.", "es": "Un juego de puzles: haz rodar a Libbet por la sala hasta que se ilumine cada baldosa del suelo."},
     "genre": "Puzzle",
     "category": "Puzzle & Strategy",
     "coverArt": "",
     "screenshots": [],
     "developer": "Damian Yerrick",
     "year": "2018",
-    "license": "zlib License (not bundled: get it from the author)",
+    "license": "zlib License",
     "homepage": "https://github.com/pinobatch/libbet",
     "isLocal": false
   },
@@ -79,13 +83,14 @@
     "id": "deadeus",
     "title": "Deadeus",
     "description": "A horror adventure with multiple endings, set in a cursed village.",
+    "descriptions": {"fr": "Une aventure horrifique à fins multiples, dans un village maudit.", "es": "Una aventura de terror con varios finales, ambientada en un pueblo maldito."},
     "genre": "Adventure",
     "category": "Homebrew Highlights",
     "coverArt": "",
     "screenshots": [],
     "developer": "-IZMA-",
     "year": "2019",
-    "license": "Freeware, all rights reserved by the author (not bundled: download it from the author)",
+    "license": "Freeware, all rights reserved by the author",
     "homepage": "https://izma.itch.io/deadeus",
     "isLocal": false
   },
@@ -93,6 +98,7 @@
     "id": "cgb-acid2",
     "title": "cgb-acid2",
     "description": "A Game Boy Color graphics test. Success: a smiling face that matches the reference image exactly, every feature in its color, with \"cgb-acid2 by Matt Currie\" underneath.",
+    "descriptions": {"fr": "Un test graphique Game Boy Color. Réussite : un visage souriant identique à l’image de référence, chaque élément dans sa couleur, avec « cgb-acid2 by Matt Currie » en dessous.", "es": "Una prueba gráfica de Game Boy Color. Éxito: una cara sonriente idéntica a la imagen de referencia, cada rasgo en su color, con «cgb-acid2 by Matt Currie» debajo."},
     "genre": "Test",
     "category": "Test cartridges",
     "coverArt": "",
@@ -108,12 +114,14 @@
     "changes": "Unmodified: cgb-acid2.gbc from the official v1.1 release.",
     "homepage": "https://github.com/mattcurrie/cgb-acid2/releases/tag/v1.1",
     "isLocal": false,
-    "hint": "Pass: the color smiley matches the reference exactly"
+    "hint": "Pass: the color smiley matches the reference exactly",
+    "hints": {"fr": "Réussi : le smiley couleur est identique à la référence", "es": "Superada: el emoticono en color es idéntico a la referencia"}
   },
   {
     "id": "dmg-acid2",
     "title": "dmg-acid2",
     "description": "A Game Boy graphics test. Success: a smiling face that matches the reference image exactly, with \"dmg-acid2 by Matt Currie\" underneath.",
+    "descriptions": {"fr": "Un test graphique Game Boy. Réussite : un visage souriant identique à l’image de référence, avec « dmg-acid2 by Matt Currie » en dessous.", "es": "Una prueba gráfica de Game Boy. Éxito: una cara sonriente idéntica a la imagen de referencia, con «dmg-acid2 by Matt Currie» debajo."},
     "genre": "Test",
     "category": "Test cartridges",
     "coverArt": "",
@@ -129,12 +137,14 @@
     "changes": "Unmodified: dmg-acid2.gb from the official v1.0 release.",
     "homepage": "https://github.com/mattcurrie/dmg-acid2/releases/tag/v1.0",
     "isLocal": false,
-    "hint": "Pass: the smiley matches the reference exactly"
+    "hint": "Pass: the smiley matches the reference exactly",
+    "hints": {"fr": "Réussi : le smiley est identique à la référence", "es": "Superada: el emoticono es idéntico a la referencia"}
   },
   {
     "id": "cpu-instrs",
     "title": "cpu_instrs",
     "description": "Blargg's CPU instruction test. Success: it prints the test numbers 01 to 11, each followed by \"ok\", then \"Passed all tests\", within about a minute.",
+    "descriptions": {"fr": "Le test des instructions CPU de Blargg. Réussite : il affiche les numéros de test 01 à 11, chacun suivi de « ok », puis « Passed all tests », en une minute environ.", "es": "La prueba de instrucciones de CPU de Blargg. Éxito: muestra los números de prueba del 01 al 11, cada uno seguido de «ok», y luego «Passed all tests», en un minuto aproximadamente."},
     "genre": "Test",
     "category": "Test cartridges",
     "coverArt": "",
@@ -147,6 +157,7 @@
     "source": "https://github.com/retrio/gb-test-roms/tree/c240dd7d700e5c0b00a7bbba52b53e4ee67b5f15/cpu_instrs",
     "changes": "Unmodified: cpu_instrs/cpu_instrs.gb from the retrio/gb-test-roms collection.",
     "isLocal": false,
-    "hint": "Pass: 01 to 11 \"ok\", then \"Passed\" (about a minute)"
+    "hint": "Pass: 01 to 11 \"ok\", then \"Passed\" (about a minute)",
+    "hints": {"fr": "Réussi : 01 à 11 « ok », puis « Passed » (environ une minute)", "es": "Superada: del 01 al 11 «ok», luego «Passed» (un minuto aprox.)"}
   }
 ]

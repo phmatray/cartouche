@@ -4,11 +4,13 @@ import { trapTab } from '../../lib/ui';
 import { useSettingsStore } from '../../store/settingsStore';
 import { I } from '../icons';
 import { HINT_SEEN as SEEN, toast, useInstallSheet } from './actions';
+import { rich, t as tNow, useT } from '../../i18n';
 
 /** The Share › Add to Home Screen step: on iPhone and iPad, Safari has no install button. */
-export const IosStep = ({ safari }: { safari?: boolean }) => (
-  <span className="ios-step">{safari ? 'Tap' : 'In Safari, tap'} <span className="glyph" aria-hidden="true">{I.share}</span><b>Share</b>, then <b>Add to Home Screen</b>.</span>
-);
+export function IosStep({ safari }: { safari?: boolean }) {
+  const t = useT();
+  return <span className="ios-step">{rich(t(safari ? 'shell.install.stepSafari' : 'shell.install.step'), { icon: <span className="glyph" aria-hidden="true">{I.share}</span>, b: (s) => <b>{s}</b> })}</span>;
+}
 
 /**
  * A one-time, non-blocking card on iPhone and iPad, in Safari only (never in the installed app), shown
@@ -16,6 +18,7 @@ export const IosStep = ({ safari }: { safari?: boolean }) => (
  */
 export function InstallHint() {
   const answered = useSettingsStore((s) => s.boxArtAnswer !== null);
+  const t = useT();
   const [show] = useState(() => {
     try { return isIosSafari() && !isInstalled() && !localStorage.getItem(SEEN); } catch { return false; }
   });
@@ -28,10 +31,10 @@ export function InstallHint() {
     <aside className="ihint paper" aria-labelledby="ihint-t">
       <span className="bar" aria-hidden="true"><i /><i /><i /></span>
       <div className="in">
-        <button className="x" aria-label="Close" onClick={() => setOpen(false)}>{I.close}</button>
-        <h2 id="ihint-t">Install on your {device()}</h2>
-        <p><IosStep safari /><small>It opens full screen, plays offline and keeps your saves. On recent iOS, Share is in the ⋯ menu.</small></p>
-        <button className="btn k" onClick={() => setOpen(false)}>Got it</button>
+        <button className="x" aria-label={t('common.close')} onClick={() => setOpen(false)}>{I.close}</button>
+        <h2 id="ihint-t">{t('shell.install.title', { device: device() })}</h2>
+        <p><IosStep safari /><small>{t('shell.install.hint')}</small></p>
+        <button className="btn k" onClick={() => setOpen(false)}>{t('common.gotIt')}</button>
       </div>
     </aside>
   );
@@ -43,6 +46,7 @@ export function InstallHint() {
  */
 export function InstallSheet() {
   const open = useInstallSheet((s) => s.open);
+  const t = useT();
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const d = ref.current;
@@ -54,9 +58,9 @@ export function InstallSheet() {
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(new URL(import.meta.env.BASE_URL, location.href).href);
-      toast('Link copied: paste it in Safari’s address bar', 'c');
+      toast(tNow('shell.install.copied'), 'c');
     } catch {
-      toast('Couldn’t copy: open the Share menu and choose Open in Safari', 'm');
+      toast(tNow('shell.install.copyFailed'), 'm');
     }
   };
   return (
@@ -66,20 +70,20 @@ export function InstallSheet() {
         <>
           <span className="bar" aria-hidden="true"><i /><i /><i /></span>
           <div className="in">
-            <h2 id="isheet-t">Install on your {device()}</h2>
+            <h2 id="isheet-t">{t('shell.install.title', { device: device() })}</h2>
             {safari ? (
-              <p><IosStep safari /><small>On recent iOS, Share is in the ⋯ menu. Cartouche then opens full screen from its icon, plays offline and keeps your saves.</small></p>
+              <p><IosStep safari /><small>{t('shell.install.safari')}</small></p>
             ) : browser ? (
-              <p><IosStep safari /><small>Share is in the address bar or the browser’s menu. Cartouche then opens full screen from its icon, plays offline and keeps your saves.</small></p>
+              <p><IosStep safari /><small>{t('shell.install.browser')}</small></p>
             ) : (
               <>
-                <p><b>Open this page in Safari first.</b> This browser can’t add an app to the Home Screen.</p>
-                <p><IosStep /><small>It then opens full screen from its icon, plays offline and keeps your saves.</small></p>
+                <p>{rich(t('shell.install.openSafari'), { b: (s) => <b>{s}</b> })}</p>
+                <p><IosStep /><small>{t('shell.install.then')}</small></p>
               </>
             )}
             <div className="acts">
-              {!safari && !browser && <button className="btn line" onClick={copy}>{I.link}Copy link</button>}
-              <button className="btn k" onClick={close} autoFocus>Got it</button>
+              {!safari && !browser && <button className="btn line" onClick={copy}>{I.link}{t('shell.install.copy')}</button>}
+              <button className="btn k" onClick={close} autoFocus>{t('common.gotIt')}</button>
             </div>
           </div>
         </>

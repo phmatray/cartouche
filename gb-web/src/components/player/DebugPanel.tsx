@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { useEmulator } from '../../hooks/useEmulator';
+import { useT } from '../../i18n';
 
 function hex8(v: number): string {
   return v.toString(16).toUpperCase().padStart(2, '0');
@@ -63,6 +64,7 @@ export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmula
   const [memView, setMemView] = useState<number[]>([]);
   const [serial, setSerial] = useState('');
   const tileCanvasRef = useRef<HTMLCanvasElement>(null);
+  const t = useT();
 
   const refresh = useCallback(() => {
     updateRegisters();
@@ -82,8 +84,8 @@ export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmula
   const mono = { font: '600 12px/1.5 ui-monospace,Menlo,monospace' };
   return (
     <div style={{ marginTop: 16 }}>
-      <div className="seg" role="group" aria-label="Debug view" style={{ marginBottom: 14 }}>
-        {(['cpu', 'serial', 'tiles'] as const).map((t) => <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)}>{t}</button>)}
+      <div className="seg" role="group" aria-label={t('player.debug.view')} style={{ marginBottom: 14 }}>
+        {(['cpu', 'serial', 'tiles'] as const).map((v) => <button key={v} aria-pressed={tab === v} onClick={() => setTab(v)}>{t(`player.debug.${v}`)}</button>)}
       </div>
       {tab === 'cpu' && (
         <div style={mono}>
@@ -93,12 +95,12 @@ export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmula
                 {(['af', 'bc', 'de', 'hl', 'sp', 'pc'] as const).map((r) => <span key={r}>{r.toUpperCase()} <b>{hex16(registers[r])}</b></span>)}
               </div>
               <div style={{ margin: '8px 0 12px' }}>
-                Flags {(['z', 'n', 'h', 'c'] as const).map((f) => <b key={f} style={{ opacity: registers.flags[f] ? 1 : 0.25, marginRight: 8 }}>{f.toUpperCase()}</b>)}
+                {t('player.debug.flags')} {(['z', 'n', 'h', 'c'] as const).map((f) => <b key={f} style={{ opacity: registers.flags[f] ? 1 : 0.25, marginRight: 8 }}>{f.toUpperCase()}</b>)}
               </div>
             </>
-          ) : <p>No ROM</p>}
+          ) : <p>{t('player.debug.noRom')}</p>}
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-            Address 0x
+            {t('player.debug.address')} 0x
             <input className="field" style={{ width: 90, height: 34 }} defaultValue={hex16(memAddr)} maxLength={4}
               onChange={(e) => { const v = parseInt(e.target.value, 16); if (!isNaN(v) && v >= 0 && v <= 0xffff) setMemAddr(v); }} />
           </label>
@@ -109,8 +111,8 @@ export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmula
       )}
       {tab === 'serial' && (
         <>
-          <button className="sbtn" onClick={() => { clearSerialOutput(); setSerial(''); }}>Clear</button>
-          <pre style={{ ...mono, whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 400, overflowY: 'auto' }}>{serial || '(no output)'}</pre>
+          <button className="sbtn" onClick={() => { clearSerialOutput(); setSerial(''); }}>{t('player.debug.clear')}</button>
+          <pre style={{ ...mono, whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 400, overflowY: 'auto' }}>{serial || t('player.debug.noOutput')}</pre>
         </>
       )}
       {tab === 'tiles' && <canvas ref={tileCanvasRef} width={128} height={192} style={{ width: 256, height: 384, imageRendering: 'pixelated', background: '#0b0b0b' }} />}

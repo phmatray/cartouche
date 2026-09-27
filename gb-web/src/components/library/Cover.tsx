@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import type { GameEntry } from '../../types/game';
 import { useCoverArt } from '../../hooks/useCoverArt';
+import { genreLabel } from '../../lib/search';
 
 // One shared observer: a card asks for its box art only once it comes near the viewport
 // (or scrolls into view inside a horizontal shelf).
@@ -45,7 +46,7 @@ export function NoArt({ game }: { game: GameEntry }) {
   return (
     <div className="noart">
       <div><b data-long={game.title.length > 18 || undefined}><Title text={game.title} /></b></div>
-      <div><small>{game.developer || (game.genre !== 'Unknown' ? game.genre : '')}</small><span className="bar"><i /><i /><i /></span></div>
+      <div><small>{game.developer || genreLabel(game)}</small><span className="bar"><i /><i /><i /></span></div>
     </div>
   );
 }

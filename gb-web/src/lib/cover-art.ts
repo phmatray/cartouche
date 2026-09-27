@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useSettingsStore } from '../store/settingsStore';
+import { t } from '../i18n/core';
 
 /**
  * Box art lives in libretro-thumbnails, one repository per platform. The file name is known ahead
@@ -105,7 +106,7 @@ type ArtGame = { libretroName?: string; platform?: Platform; coverArt?: string }
 /** A game whose cover would come from libretro-thumbnails: recognized, and without a bundled cover of its own. */
 export const needsDownload = (g: ArtGame) => !!g.libretroName && !g.coverArt;
 /** Said (toast and Settings › Storage) when a download finds nothing to fetch. */
-export const NO_COVERS = 'No covers to fetch yet. Covers appear for recognized games you add; bundled games use their own art.';
+export const NO_COVERS = () => t('shell.art.none');
 
 /**
  * Download the box art of every recognized game now (it lands in Cache Storage; covers fade in).

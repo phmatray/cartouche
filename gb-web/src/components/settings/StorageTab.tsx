@@ -11,6 +11,7 @@ import { isInstalled, isIos, fileAccept } from '../../lib/pwa';
 import type { GameEntry } from '../../types/game';
 import { Row, SwitchRow } from './parts';
 import { PerGame, type GameUsage } from './PerGame';
+import { date, num, t as tNow, useT } from '../../i18n';
 
 interface Usage { roms: number; saves: number; shots: number; perGame: Map<string, GameUsage>; nSaves: number; nShots: number }
 const gameOf = (stateId: string) => stateId.replace(/-(slot-\d+|auto)$/, '');
@@ -49,6 +50,7 @@ export function StorageTab() {
   const { showBoxArt, boxArtAnswer, setShowBoxArt } = useSettingsStore();
   const artProgress = useBoxArtProgress();
   const [art, setArt] = useState<{ bytes: number; games: Set<string> }>({ bytes: 0, games: new Set() });
+  const t = useT();
 
   const own = games.filter((g) => g.isLocal);
   const recognized = own.filter(needsDownload);
@@ -84,13 +86,13 @@ export function StorageTab() {
     if (!boxArtAnswer?.consent) return askBoxArt(); // a yes there downloads the whole library (or says there is nothing to fetch)
     setShowBoxArt(true);
     const n = await fetchBoxArtFor(recognized);
-    toast(n ? `Box art ready for ${n} game${n === 1 ? '' : 's'}` : NO_COVERS, 'c');
+    toast(n ? tNow('shell.art.ready', { count: n }) : NO_COVERS(), 'c');
   };
   const removeArt = async () => {
     await deleteBoxArt();
     setArt({ bytes: await boxArtBytes(), games: new Set() });
     await refresh();
-    toast('Downloaded box art deleted', 'm');
+    toast(tNow('settings.storage.artDeleted'), 'm');
   };
   const total = usage ? usage.roms + usage.saves + usage.shots : 0;
   const pct = (n: number) => `${total ? (n / total) * 100 : 0}%`;
@@ -98,7 +100,7 @@ export function StorageTab() {
   const persist = async () => {
     const ok = !!(await navigator.storage?.persist?.().catch(() => false));
     setPersisted(ok);
-    toast(ok ? 'Your library is protected from cleanup' : 'The browser declined. It often agrees once the app is installed or used more.', ok ? 'c' : 'm');
+    toast(ok ? tNow('settings.storage.protectedToast') : tNow('settings.storage.declined'), ok ? 'c' : 'm');
   };
   const doExport = async () => {
     const a = document.createElement('a');
@@ -106,40 +108,42 @@ export function StorageTab() {
     a.download = backupFileName();
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-    toast('Backup exported', 'c');
+    toast(tNow('settings.storage.exported'), 'c');
   };
   const doImport = async (file: File) => {
     try {
       const b = await readBackup(file);
       withSettings.current = false;
       setConfirm({
-        title: 'Restore this backup?',
+        title: tNow('settings.storage.restoreTitle'),
         body: (
           <>
-            {b.roms.length} ROM{b.roms.length === 1 ? '' : 's'}, {b.saves.length + b.states.length} saves and {b.screenshots.length} screenshots
-            {b.exported ? `, from ${new Date(b.exported).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}` : ''}.
-            {' '}They are merged into this library: nothing here is removed, and a save is only replaced by a newer one.
+            {tNow(b.exported ? 'settings.storage.restoreWhat' : 'settings.storage.restoreWhatNoDate', {
+              roms: tNow('settings.storage.nRoms', { count: b.roms.length }), saves: tNow('settings.storage.nSaves', { count: b.saves.length + b.states.length }),
+              shots: tNow('settings.storage.nShots', { count: b.screenshots.length }), date: b.exported ? date(new Date(b.exported).getTime(), { day: 'numeric', month: 'long', year: 'numeric' }) : '',
+            })}
+            {' '}{tNow('settings.storage.restoreMerge')}
             <label style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 14, fontWeight: 700 }}>
-              <input type="checkbox" onChange={(e) => { withSettings.current = e.target.checked; }} /> Also use the backup’s settings
+              <input type="checkbox" onChange={(e) => { withSettings.current = e.target.checked; }} /> {tNow('settings.storage.restoreSettings')}
             </label>
           </>
         ),
-        ok: 'Restore',
+        ok: tNow('settings.storage.restore'),
         run: async () => {
           const n = await restoreBackup(b, withSettings.current);
           await reloadLibrary();
           await refreshSavedIds();
           await refresh();
-          toast(`Restored ${n.roms} ROM${n.roms === 1 ? '' : 's'}, ${n.saves} saves, ${n.screenshots} screenshots`, 'c');
+          toast(tNow('settings.storage.restored', { roms: tNow('settings.storage.nRoms', { count: n.roms }), saves: tNow('settings.storage.nSaves', { count: n.saves }), shots: tNow('settings.storage.nShots', { count: n.screenshots }) }), 'c');
         },
       });
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'That file couldn’t be read', 'm');
+      toast(e instanceof Error ? e.message : tNow('settings.storage.unreadable'), 'm');
     }
   };
   const wipe = () => setConfirm({
-    title: 'Erase everything?', danger: true, ok: 'Erase everything',
-    body: 'Every ROM, save slot, resume point, screenshot and setting will be deleted from this browser. Export a backup first if you might want them back.',
+    title: t('settings.storage.wipeTitle'), danger: true, ok: t('settings.storage.wipe'),
+    body: t('settings.storage.wipeBody'),
     run: async () => {
       await clearAll();
       useSettingsStore.getState().resetToDefaults();
@@ -151,60 +155,60 @@ export function StorageTab() {
 
   return (
     <>
-      <h2>Storage</h2>
-      <p className="intro">Your library lives in this browser only. Clearing site data or switching browsers loses it, so keep a backup.</p>
-      <div className="usage" role="img" aria-label={`ROMs ${mb(usage?.roms ?? 0)}, saves ${mb(usage?.saves ?? 0)}, screenshots ${mb(usage?.shots ?? 0)}`}>
+      <h2>{t('settings.tabs.storage')}</h2>
+      <p className="intro">{t('settings.storage.intro')}</p>
+      <div className="usage" role="img" aria-label={t('settings.storage.usage', { roms: mb(usage?.roms ?? 0), saves: mb(usage?.saves ?? 0), shots: mb(usage?.shots ?? 0) })}>
         <i style={{ width: pct(usage?.roms ?? 0), background: 'var(--ink)' }} />
         <i style={{ width: pct(usage?.saves ?? 0), background: 'var(--m)' }} />
         <i style={{ width: pct(usage?.shots ?? 0), background: 'var(--c)' }} />
       </div>
       <div className="legend">
-        <span><i style={{ background: 'var(--ink)' }} />ROMs · {own.length.toLocaleString('en-US')} · {mb(usage?.roms ?? 0)}</span>
-        <span><i style={{ background: 'var(--m)' }} />Saves · {usage?.nSaves ?? 0} · {mb(usage?.saves ?? 0)}</span>
-        <span><i style={{ background: 'var(--c)' }} />Screenshots · {usage?.nShots ?? 0} · {mb(usage?.shots ?? 0)}</span>
-        {quota && <span>{mb(quota.usage)} used by this site, of about {mb(quota.quota)} this browser allows (estimate)</span>}
+        <span><i style={{ background: 'var(--ink)' }} />ROMs · {num(own.length)} · {mb(usage?.roms ?? 0)}</span>
+        <span><i style={{ background: 'var(--m)' }} />{t('game.saves.title')} · {num(usage?.nSaves ?? 0)} · {mb(usage?.saves ?? 0)}</span>
+        <span><i style={{ background: 'var(--c)' }} />{t('settings.storage.shots')} · {num(usage?.nShots ?? 0)} · {mb(usage?.shots ?? 0)}</span>
+        {quota && <span>{t('settings.storage.quota', { usage: mb(quota.usage), quota: mb(quota.quota) })}</span>}
       </div>
-      <Row label="Protect my data from automatic cleanup"
+      <Row label={t('settings.storage.protectLabel')}
         sub={<>
-          {persisted ? 'Granted: the browser won’t evict your library when space runs low.' : 'Asks the browser not to evict your library when space runs low.'}
-          {isIos() && !isInstalled() && ' Safari can also delete a website’s data after 7 days of use without a visit. Add Cartouche to your Home Screen (Settings › About) to keep it: Home Screen apps aren’t subject to that.'}
+          {persisted ? t('settings.storage.granted') : t('settings.storage.asks')}
+          {isIos() && !isInstalled() && ` ${t('settings.storage.ios')}`}
         </>}>
-        <button className={`btn ${persisted ? 'line' : 'k'}`} style={persisted ? { color: 'var(--ink)' } : undefined} disabled={persisted} onClick={persist}>{persisted ? 'Protected' : 'Protect'}</button>
+        <button className={`btn ${persisted ? 'line' : 'k'}`} style={persisted ? { color: 'var(--ink)' } : undefined} disabled={persisted} onClick={persist}>{persisted ? t('settings.storage.protected') : t('settings.storage.protect')}</button>
       </Row>
 
-      <h3>Box art</h3>
-      <SwitchRow label="Show box art"
-        sub="Off by default. Covers of recognized games you added, downloaded by your browser from the libretro-thumbnails project on GitHub (which sees your IP address and browser details) and kept in this browser. Cartouche hosts none of them. Off: no request is made. The bundled Tobu Tobu Girl games always show their own freely licensed covers, which come with the app."
+      <h3>{t('settings.storage.art')}</h3>
+      <SwitchRow label={t('settings.storage.showArt')}
+        sub={t('settings.storage.showArtSub')}
         on={showBoxArt && !!boxArtAnswer?.consent} set={switchArt} />
-      <Row label="Covers" sub={artProgress.of
-        ? <span className="artprog"><span className="progress" role="progressbar" aria-label="Fetching box art" aria-valuemin={0} aria-valuemax={artProgress.of} aria-valuenow={artProgress.n}><i style={{ width: `${(artProgress.n / artProgress.of) * 100}%` }} /></span>Fetching box art · {artProgress.n} of {artProgress.of}</span>
-        : `${covered} of ${shelf.length} games have covers · ${mb(art.bytes)} downloaded, kept in this browser`}>
-        <button className="btn danger" disabled={!art.bytes && !showBoxArt} onClick={removeArt}>Delete downloaded box art</button>
+      <Row label={t('settings.storage.covers')} sub={artProgress.of
+        ? <span className="artprog"><span className="progress" role="progressbar" aria-label={t('shell.fetchingArt')} aria-valuemin={0} aria-valuemax={artProgress.of} aria-valuenow={artProgress.n}><i style={{ width: `${(artProgress.n / artProgress.of) * 100}%` }} /></span>{t('shell.progress', { label: t('shell.fetchingArt'), n: artProgress.n, of: artProgress.of })}</span>
+        : t('settings.storage.coversSub', { covered, total: shelf.length, size: mb(art.bytes) })}>
+        <button className="btn danger" disabled={!art.bytes && !showBoxArt} onClick={removeArt}>{t('settings.storage.deleteArt')}</button>
       </Row>
-      <Row label="Download box art for my library now"
-        sub={recognized.length ? `${recognized.length.toLocaleString('en-US')} recognized game${recognized.length === 1 ? '' : 's'} you added can get a cover` : NO_COVERS}>
-        <button className="btn line" style={{ color: 'var(--ink)' }} disabled={artProgress.of > 0} onClick={downloadArt}>Download</button>
+      <Row label={t('settings.storage.downloadLabel')}
+        sub={recognized.length ? t('settings.storage.canGet', { count: recognized.length }) : NO_COVERS()}>
+        <button className="btn line" style={{ color: 'var(--ink)' }} disabled={artProgress.of > 0} onClick={downloadArt}>{t('settings.storage.download')}</button>
       </Row>
 
-      <h3>Backup</h3>
-      <Row label="Export everything" sub="ROMs, saves, save states, screenshots, favorites, play time and settings in one .cartouche file">
-        <button className="btn k" onClick={doExport}>Export backup</button>
+      <h3>{t('settings.storage.backup')}</h3>
+      <Row label={t('settings.storage.exportLabel')} sub={t('settings.storage.exportSub')}>
+        <button className="btn k" onClick={doExport}>{t('settings.storage.export')}</button>
       </Row>
-      <Row label="Restore from a backup" sub="Merges into this library; nothing is overwritten without asking">
+      <Row label={t('settings.storage.restoreLabel')} sub={t('settings.storage.restoreSub')}>
         <label className="btn line" style={{ color: 'var(--ink)' }} tabIndex={0}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
-          Import backup
+          {t('settings.storage.import')}
           <input type="file" accept={fileAccept('.cartouche,.cartshelf,application/json')} className="sr" tabIndex={-1}
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) doImport(f); }} />
         </label>
       </Row>
 
-      <h3>Per game</h3>
+      <h3>{t('settings.storage.perGame')}</h3>
       <PerGame usage={usage?.perGame ?? null} onChanged={refresh} confirm={setConfirm} />
 
-      <h3>Start over</h3>
-      <Row label="Erase everything" sub="Removes every ROM, save, screenshot and setting from this browser">
-        <button className="btn danger" onClick={wipe}>Erase everything</button>
+      <h3>{t('settings.storage.startOver')}</h3>
+      <Row label={t('settings.storage.wipe')} sub={t('settings.storage.wipeSub')}>
+        <button className="btn danger" onClick={wipe}>{t('settings.storage.wipe')}</button>
       </Row>
       <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
     </>

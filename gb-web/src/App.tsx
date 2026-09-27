@@ -4,6 +4,7 @@ import { committed, install } from './lib/transitions';
 import { warmAudio } from './audio/AudioEngine';
 import { AppShell, NotFound } from './components/shell/AppShell';
 import { LibraryPage } from './components/library/LibraryPage';
+import { t } from './i18n';
 
 // Every screen but the library loads on first visit, so the first paint only ships what it shows.
 // The game page and the player are fetched once the library is idle: opening a game never waits for its code.
@@ -24,9 +25,9 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean
     if (!this.state.failed) return this.props.children;
     return (
       <main className="wrap nf">
-        <h1>Nothing in this slot.</h1>
-        <p className="lede" style={{ color: 'var(--mute)' }}>Something went wrong while showing this page. Your games and saves are untouched.</p>
-        <div className="acts" style={{ marginTop: 28 }}><a className="btn y" href={import.meta.env.BASE_URL}>Back to the library</a></div>
+        <h1>{t('common.notFound.title')}</h1>
+        <p className="lede" style={{ color: 'var(--mute)' }}>{t('common.crash')}</p>
+        <div className="acts" style={{ marginTop: 28 }}><a className="btn y" href={import.meta.env.BASE_URL}>{t('common.notFound.back')}</a></div>
       </main>
     );
   }

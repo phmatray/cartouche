@@ -6,6 +6,7 @@ import { lookupByHash } from '../lib/gamedb';
 import { owned } from '../lib/ui';
 import { toast } from '../components/shell/actions';
 import { fetchRom, titleKey, useGameLibrary } from './useGameLibrary';
+import { t } from '../i18n';
 
 /** A game's album, newest first, and a way to add to it. */
 export function useAlbum(gameId: string) {
@@ -48,12 +49,12 @@ export async function importSav(game: GameEntry, file: File): Promise<StoredSave
   const [rom, data] = await Promise.all([fetchRom(game), file.arrayBuffer().then((b) => new Uint8Array(b))]);
   const err = savSizeError(rom, data.length);
   if (err) return `${file.name}: ${err}`;
-  const name = uniqueName(await listProfiles(game.id), file.name.replace(/\.[^.]+$/, '').slice(0, 40) || 'Imported');
+  const name = uniqueName(await listProfiles(game.id), file.name.replace(/\.[^.]+$/, '').slice(0, 40) || t('game.saves.importedName'));
   return createProfile(game.id, name, data);
 }
 
 /** "Game Boy", "Game Boy Color" or both, from the header's CGB flag. */
-export const hardwareOf = (m: RomMetadata) => (m.cgbFlag === 'CGB Only' ? 'Game Boy Color' : m.cgbFlag === 'CGB Compatible' ? 'Game Boy + Color' : 'Game Boy');
+export const hardwareOf = (m: RomMetadata) => (m.cgbFlag === 'CGB Only' ? 'Game Boy Color' : m.cgbFlag === 'CGB Compatible' ? 'Game Boy + Color' : 'Game Boy'); // names: not translated
 
 /**
  * Link the user's own file to a catalog entry. The file's SHA-1 is looked up among known dumps:
@@ -65,13 +66,13 @@ export function useLinkRom(game: GameEntry | undefined) {
   return useCallback(async (file: File): Promise<Uint8Array | null> => {
     if (!game) return null;
     const data = new Uint8Array(await file.arrayBuffer());
-    if (!isGameBoyRom(data)) { toast(`${file.name} is damaged or isn’t a Game Boy ROM`, 'm'); return null; }
+    if (!isGameBoyRom(data)) { toast(t('game.link.bad', { file: file.name }), 'm'); return null; }
     const sha1 = await computeSha1(data);
     const known = await lookupByHash(sha1);
     await linkRomToGame(game, data, sha1);
-    if (!known) toast(`Linked to ${game.title}. This file isn’t among the known dumps, so it could be a hack or a bad dump.`, 'm');
-    else if (titleKey(known.title) !== titleKey(game.title)) toast(`Linked, but its fingerprint says ${known.title}`, 'm');
-    else toast(`${game.title} recognized: your ROM is linked`, 'c');
+    if (!known) toast(t('game.link.unknown', { title: game.title }), 'm');
+    else if (titleKey(known.title) !== titleKey(game.title)) toast(t('game.link.other', { title: known.title }), 'm');
+    else toast(t('game.link.ok', { title: game.title }), 'c');
     return data;
   }, [game, linkRomToGame]);
 }
