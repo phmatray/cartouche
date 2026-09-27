@@ -86,6 +86,12 @@ impl Emulator {
         self.sgb().filter(|s| s.has_border).map_or(0, |s| s.border_version.max(1))
     }
 
+    /// The game plays its music on the Super Game Boy's SNES sound chip, which isn't emulated:
+    /// silent here, or nearly, where the Game Boy plays its own (known about 10 s after it starts).
+    pub fn sgb_snes_music(&self) -> bool {
+        self.sgb().is_some_and(|s| s.snes_music())
+    }
+
     /// Buttons of Super Game Boy players 2-4 (`player` 1-3), read once the game asks for them (MLT_REQ).
     pub fn press_button_player(&mut self, player: u8, button: JoypadButton) {
         self.set_player_button(player, button, true);

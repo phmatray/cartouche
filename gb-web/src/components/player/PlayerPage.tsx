@@ -72,7 +72,7 @@ function Player({ game }: { game: GameEntry }) {
   const emu = useEmulator();
   const { isReady, isRunning, setIsRunning, romLoaded, isCgb, loadRom, runFrame, getAudioSamples, pressButton, releaseButton,
     errors, hasBatteryRam, exportSram, importSram, saveState, loadState, framebufferSnapshot, setTraceEnabled, getTrace,
-    consoleNow, stateConsole, paletteNow, skipBoot, sgbBorder, power } = emu;
+    consoleNow, stateConsole, paletteNow, skipBoot, sgbBorder, sgbSnesMusic, power } = emu;
   const keybindings = useSettingsStore((s) => s.keybindings);
   const rewindSeconds = useSettingsStore((s) => s.rewindBufferSeconds);
   const screenSize = useSettingsStore((s) => s.screenSize);
@@ -115,13 +115,24 @@ function Player({ game }: { game: GameEntry }) {
   const borderRef = useRef<HTMLCanvasElement>(null);
   const borderVersion = useRef(0);
   const [bordered, setBordered] = useState(false);
+  const snesTold = useRef(false);
   const syncBorder = useCallback(() => {
+    // Its music on the SNES sound chip, which isn't emulated: unless the player chose the Super Game Boy, the game
+    // starts on the Game Boy from now on, with its sound (the Screen page offers the restart).
+    if (!snesTold.current && sgbSnesMusic()) {
+      snesTold.current = true;
+      const s = useSettingsStore.getState();
+      if (s.gameSgb[game.id] === undefined) {
+        s.set({ gameSgb: { ...s.gameSgb, [game.id]: false } });
+        toast(tNow('player.toast.snesMusic'), 'm', { label: tNow('player.tabs.screen'), run: () => { setTab('screen'); setManual(true); } });
+      }
+    }
     const b = sgbBorder(borderVersion.current);
     if (!b) return;
     borderVersion.current = b.version;
     setBordered(!!b.rgba);
     if (b.rgba) borderRef.current?.getContext('2d')?.putImageData(new ImageData(new Uint8ClampedArray(b.rgba), 256, 224), 0, 0);
-  }, [sgbBorder]);
+  }, [sgbBorder, sgbSnesMusic, game.id]);
 
   // ---- the console: an original Game Boy cartridge runs on the Game Boy or, colourised, on the Game Boy Color; one with
   // Super Game Boy functions on the Super Game Boy ----

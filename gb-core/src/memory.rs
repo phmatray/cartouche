@@ -276,7 +276,7 @@ impl MemoryBus {
         let (vblank_irq, stat_irq, hblank_entry) = self.ppu.step(ppu_step);
         if vblank_irq {
             self.interrupts.request(VBLANK_BIT);
-            if let Some(s) = self.sgb.as_deref_mut() { s.vblank(&self.ppu.framebuffer); }
+            if let Some(s) = self.sgb.as_deref_mut() { s.vblank(&self.ppu.framebuffer, self.apu.read_register(0xFF26) & 0x0F != 0); }
         }
         if stat_irq {
             self.interrupts.request(STAT_BIT);

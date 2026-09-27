@@ -153,6 +153,29 @@ fn mask_en_black_then_off() {
 }
 
 #[test]
+fn snes_music_is_sou_trn_then_game_boy_channels_off() {
+    // `frame` runs two frames.
+    let music = |gb: &GameBoy| gb.bus.sgb.as_ref().unwrap().snes_music();
+    let mut gb = sgb();
+    send(&mut gb, 0x08, &[1, 0, 0, 0]); // SOUND: a built-in effect only
+    for _ in 0..350 { frame(&mut gb); }
+    assert!(!music(&gb), "no SOU_TRN");
+    transfer(&mut gb, 0x09, 0, &[0; 4096]); // SOU_TRN
+    for _ in 0..150 { frame(&mut gb); }
+    assert!(!music(&gb), "not known before 10 s");
+    for _ in 0..150 { frame(&mut gb); }
+    assert!(music(&gb), "silent Game Boy side: the music is on the SNES");
+    let state = gb.save_state();
+    assert!(gb.load_state(&state) && music(&gb), "kept for the session");
+    // A game with a Game Boy channel playing all along: SNES sound on top of its own music.
+    let mut gb = sgb();
+    for (reg, v) in [(0xFF26, 0x80), (0xFF17, 0xF0), (0xFF19, 0x80)] { gb.bus.write_byte(reg, v); }
+    transfer(&mut gb, 0x09, 0, &[0; 4096]);
+    for _ in 0..300 { frame(&mut gb); }
+    assert!(!music(&gb), "the Game Boy plays its own music");
+}
+
+#[test]
 fn mlt_req_reports_player_ids() {
     let mut gb = sgb();
     let id = |gb: &mut GameBoy| {
