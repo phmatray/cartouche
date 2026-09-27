@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.1](https://github.com/phmatray/cartouche/compare/v1.2.0...v1.2.1) (2026-09-27)
+
+
+### Fixed
+
+* **web:** mobile design pass: menu, player and long titles ([#34](https://github.com/phmatray/cartouche/issues/34)) ([2d4ea0d](https://github.com/phmatray/cartouche/commit/2d4ea0d8e8b6227ec7e5fb2d41275cea60b60412))
+
 ## [1.2.0](https://github.com/phmatray/cartouche/compare/v1.1.0...v1.2.0) (2026-09-27)
 
 
