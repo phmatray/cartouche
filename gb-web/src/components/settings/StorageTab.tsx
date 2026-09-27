@@ -119,7 +119,7 @@ export function StorageTab() {
         body: (
           <>
             {tNow(b.exported ? 'settings.storage.restoreWhat' : 'settings.storage.restoreWhatNoDate', {
-              roms: tNow('settings.storage.nRoms', { count: b.roms.length }), saves: tNow('settings.storage.nSaves', { count: b.saves.length + b.states.length }),
+              roms: tNow('settings.storage.nRoms', { count: b.romCount }), saves: tNow('settings.storage.nSaves', { count: b.saves.length + b.states.length }),
               shots: tNow('settings.storage.nShots', { count: b.screenshots.length }), date: b.exported ? date(new Date(b.exported).getTime(), { day: 'numeric', month: 'long', year: 'numeric' }) : '',
             })}
             {' '}{tNow('settings.storage.restoreMerge')}

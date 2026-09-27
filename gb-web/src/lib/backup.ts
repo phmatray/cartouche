@@ -1,5 +1,5 @@
 import { t } from '../i18n';
-import { decode, jsonBlob } from './backup-json';
+import { decode, jsonBlob, readStreamed } from './backup-json';
 import { asProfile, getAllFrom, getRom, getRomIds, putInto, STORES, type StoredGameMeta, type StoredRom, type StoredSave, type StoredSaveState, type StoredScreenshot } from './db';
 import { cleanSetting } from './settings-clean';
 import { SETTINGS_KEYS, displayFromV3, useSettingsStore, type SettingsValues } from '../store/settingsStore';
@@ -13,7 +13,9 @@ interface Backup {
   version: number;
   exported: string;
   settings: Partial<SettingsValues>;
-  roms: StoredRom[];
+  /** How many ROMs the file holds, and a fresh read of them, one at a time (a library can be gigabytes). */
+  romCount: number;
+  roms: () => AsyncIterable<StoredRom>;
   saves: StoredSave[];
   states: StoredSaveState[];
   meta: StoredGameMeta[];
@@ -38,20 +40,39 @@ export async function exportBackup(): Promise<Blob> {
 
 export const backupFileName = () => `cartouche-backup-${new Date().toISOString().slice(0, 10)}.cartouche`;
 
+const str = (x: unknown) => typeof x === 'string' && x.length > 0;
+
 /** Read and check a backup file. Throws with a readable message when it isn't one. */
 export async function readBackup(file: File): Promise<Backup> {
-  let raw: unknown;
-  try { raw = JSON.parse(await file.text()); } catch { throw new Error(t('settings.storage.notBackup', { file: file.name })); }
-  const b = decode(raw) as Partial<Backup>;
+  const notBackup = () => new Error(t('settings.storage.notBackup', { file: file.name }));
+  const isRom = (r: StoredRom) => !!r && typeof r === 'object' && str(r.id) && r.data instanceof Uint8Array;
+  let b: Partial<Omit<Backup, 'roms'>> & { roms?: unknown };
+  let roms: () => AsyncIterable<StoredRom>;
+  let romCount = 0;
+  try {
+    // Written by exportBackup: the ROMs come last, read one at a time (the whole file can pass a string's size limit).
+    const streamed = await readStreamed(file, 'roms', 'saves');
+    if (streamed) {
+      b = streamed.head;
+      for await (const r of streamed.items()) if (str((r as { id?: unknown })?.id)) romCount++; // counted without decoding them
+      roms = async function* () { for await (const r of streamed.items()) { const rom = decode(r) as StoredRom; if (isRom(rom)) yield rom; } };
+    } else {
+      b = decode(JSON.parse(await file.text())) as typeof b; // older backups: ROMs first, never that big
+      const list = Array.isArray(b?.roms) ? (b.roms as StoredRom[]).filter(isRom) : [];
+      romCount = list.length;
+      roms = async function* () { yield* list; };
+    }
+  } catch (e) {
+    throw e instanceof SyntaxError ? notBackup() : new Error(t('settings.storage.unreadable'));
+  }
   // 'cartshelf': backups exported before the app was renamed.
-  if (!b || (b.app !== APP && b.app !== 'cartshelf')) throw new Error(t('settings.storage.notBackup', { file: file.name }));
+  if (!b || (b.app !== APP && b.app !== 'cartshelf')) throw notBackup();
   if (b.version !== VERSION) throw new Error(t('settings.storage.newer'));
   const list = <T,>(x: unknown, ok: (r: T) => boolean) => (Array.isArray(x) ? (x as T[]).filter((r) => r && typeof r === 'object' && ok(r)) : []);
-  const str = (x: unknown) => typeof x === 'string' && x.length > 0;
   return {
     app: APP, version: VERSION, exported: String(b.exported ?? ''),
     settings: b.settings && typeof b.settings === 'object' ? b.settings : {},
-    roms: list<StoredRom>(b.roms, (r) => str(r.id) && r.data instanceof Uint8Array),
+    romCount, roms,
     // Save profiles; a backup from before profiles has one save per game, which becomes its "Main".
     saves: list<StoredSave>(b.saves, (r) => str(r.id) && r.sram instanceof Uint8Array).map(asProfile),
     states: list<StoredSaveState>(b.states, (r) => str(r.id) && r.data instanceof Uint8Array && (r.profile === undefined || str(r.profile))),
@@ -73,7 +94,7 @@ export async function restoreBackup(b: Backup, withSettings: boolean): Promise<R
     getRomIds().then((ids) => new Set(ids)), getAllFrom<StoredSave>(STORES.saves), getAllFrom<StoredSaveState>(STORES.states),
     getAllFrom<StoredGameMeta>(STORES.meta), getAllFrom<StoredScreenshot>(STORES.screenshots),
   ]);
-  for (const r of b.roms) if (!romIds.has(r.id)) { await putInto(STORES.roms, r); count.roms++; }
+  for await (const r of b.roms()) if (!romIds.has(r.id)) { await putInto(STORES.roms, r); count.roms++; }
 
   const newer = async <T extends { id: string; timestamp: number }>(store: typeof STORES.saves | typeof STORES.states, mine: T[], theirs: T[]) => {
     const at = new Map(mine.map((x) => [x.id, x.timestamp]));
