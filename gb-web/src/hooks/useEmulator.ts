@@ -49,8 +49,8 @@ export function useEmulator() {
     return () => { setTimeout(() => { emulatorRef.current?.free(); emulatorRef.current = null; }); };
   }, [initialize]);
 
-  const addError = useCallback((message: string) => {
-    setErrors(prev => [...prev, { timestamp: Date.now(), message }]);
+  const addError = useCallback((message: string, detail?: string) => {
+    setErrors(prev => [...prev, { timestamp: Date.now(), message, detail }]);
   }, []);
 
   /** `colorize`/`palette`: an original Game Boy cartridge on a Game Boy Color (palette 0 automatic, 1-12);
@@ -66,7 +66,7 @@ export function useEmulator() {
       const success = boot.sgb ? emu.load_rom_sgb(data, boot.animation) : emu.load_rom_with(data, boot.colorize, boot.palette, boot.animation);
       if (!success) {
         const err = emu.get_error();
-        addError(err || t('player.error.unknown'));
+        addError(t('player.error.unknown'), err);
         setPower(0);
         return false;
       }
@@ -88,7 +88,7 @@ export function useEmulator() {
     const success = emu.run_frame();
     if (!success) {
       const err = emu.get_error();
-      if (err) addError(err);
+      if (err) addError(t('player.error.crashed'), err);
       setIsRunning(false);
       return null;
     }
@@ -136,7 +136,7 @@ export function useEmulator() {
     const cycles = emu.step();
     if (cycles === 0) {
       const err = emu.get_error();
-      if (err) addError(err);
+      if (err) addError(t('player.error.crashed'), err);
     }
     return cycles;
   }, [addError]);

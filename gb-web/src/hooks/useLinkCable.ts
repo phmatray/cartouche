@@ -11,7 +11,8 @@ export interface LinkCableState {
   p1RomLoaded: boolean;
   p2RomLoaded: boolean;
   isRunning: boolean;
-  error: string | null;
+  /** `text`: translated; `detail`: the core's own (English) text, when it gave one. */
+  error: { text: string; detail?: string } | null;
 }
 
 export interface LinkCableControls {
@@ -78,7 +79,7 @@ export function useLinkCable(onSram?: (saves: [Uint8Array | null, Uint8Array | n
           break;
         case 'romLoaded':
           if (!msg.success) {
-            setState(s => ({ ...s, error: t('link.romError', { p: String(msg.player), error: String(msg.error) }) }));
+            setState(s => ({ ...s, error: { text: t('link.romError', { player: t('link.player', { p: String(msg.player) }) }), detail: msg.error } }));
           } else {
             setState(s => msg.player === 1
               ? { ...s, p1RomLoaded: true, error: null }
@@ -98,7 +99,10 @@ export function useLinkCable(onSram?: (saves: [Uint8Array | null, Uint8Array | n
           break;
         case 'error':
           waitingFrame.current = false;
-          setState(s => ({ ...s, error: msg.message }));
+          setState(s => ({ ...s, error: {
+            text: msg.code === 'init' ? t('link.initError') : t('link.crashed', { player: t('link.player', { p: String(msg.player ?? 1) }) }),
+            detail: msg.detail,
+          } }));
           break;
       }
     };

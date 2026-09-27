@@ -16,4 +16,6 @@ export interface RegisterState {
 export interface EmulatorError {
   timestamp: number;
   message: string;
+  /** The core's own text of a crash (English, technical): shown under the translated message. */
+  detail?: string;
 }

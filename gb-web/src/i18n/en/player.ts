@@ -9,6 +9,11 @@ export default {
   resumeAgo: 'Resume point {ago}',
   paused: 'Paused',
   pausedSub: 'Press P or the play button to continue.',
+  crashed: {
+    title: 'The game stopped',
+    body: 'The console hit an instruction it can’t run. Restart the game; if it stops again, the file may be damaged or need a feature Cartouche doesn’t emulate.',
+    restart: 'Restart the game',
+  },
   speed: '{x}× speed',
   rewindReady: 'Rewind {s} s ready',
   page: 'p. {n}',
@@ -52,6 +57,7 @@ export default {
     changedElsewhere: 'This save changed elsewhere (another tab or device): saving to a new one, “{name}”, so both are kept',
   },
   error: {
+    crashed: 'The game stopped: the console hit an instruction it can’t run.',
     init: 'Emulator not initialized',
     unknown: 'Unknown error loading ROM',
     exception: 'ROM load exception: {error}',
@@ -152,6 +158,7 @@ export default {
     savePng: 'Save PNG',
     share: 'Share',
     empty: 'Nothing here yet. Press F12 while playing.',
+    emptyTouch: 'Nothing here yet. Tap Take screenshot above while a game is on.',
   },
   game: {
     open: 'Open game page',
