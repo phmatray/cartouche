@@ -15,6 +15,7 @@ export default {
   foot: {
     stays: '<b>Todo se queda en este navegador.</b> Las ROM, las partidas guardadas y el tiempo de juego viven en tu dispositivo. Sin cuenta, sin subir nada.',
     backup: 'Haz una copia de tus datos',
+    version: 'Versión {v}: novedades',
     art: 'Carátulas: libretro-thumbnails · Arte de Tobu Tobu Girl: Tangram Games (CC BY 4.0)',
   },
   drop: 'Suelta para añadir',
