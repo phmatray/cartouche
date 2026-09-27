@@ -10,6 +10,7 @@ import { ago, byline, dur, paths } from '../../lib/ui';
 import { startInstall } from '../shell/actions';
 import { I } from '../icons';
 import { Cover, Title } from './Cover';
+import { useT } from '../../i18n';
 
 /** Latest resume point / save slot of a game, undefined while loading, null when there is none. */
 function useLatestSave(gameId: string) {
@@ -81,34 +82,35 @@ function Attract({ game, label }: { game?: GameEntry; label: string }) {
 /** "Continue playing" / "Ready to play": the most recent game, flooded with its own ink. */
 export function ContinueHero({ game }: { game: GameEntry }) {
   const ink = useInk(game);
+  const t = useT();
   const save = useLatestSave(game.id);
   const played = !!game.lastPlayed;
   const sub = byline(game);
   return (
-    <section className="flood cont" style={{ '--flood': ink } as CSSProperties} aria-label={played ? 'Continue playing' : 'Ready to play'}>
+    <section className="flood cont" style={{ '--flood': ink } as CSSProperties} aria-label={played ? t('library.hero.continuePlaying') : t('library.hero.ready')}>
       <div className="wrap">
-        <Link to={paths.game(game.id)} className="box" aria-label={`${game.title} details`}><Cover game={game} className="boxart" /></Link>
+        <Link to={paths.game(game.id)} className="box" aria-label={t('library.hero.details', { title: game.title })}><Cover game={game} className="boxart" /></Link>
         <div className="info">
           <h1 className="hero-t"><Title text={game.title} /></h1>
           <p className="meta">
             {played
-              ? <><span><strong>Played {ago(game.lastPlayed!)}</strong>{save ? ' · resume point saved' : ''}</span><span>{dur(game.totalPlayTime)} played</span></>
-              : <span><strong>{game.importedAt ? `Added ${ago(game.importedAt)}` : 'On your shelf'}</strong> · not played yet</span>}
+              ? <><span><strong>{t('library.hero.playedAgo', { ago: ago(game.lastPlayed!) })}</strong>{save ? ` · ${t('library.hero.resumeSaved')}` : ''}</span><span>{t('common.played', { time: dur(game.totalPlayTime) })}</span></>
+              : <span><strong>{game.importedAt ? t('library.hero.added', { ago: ago(game.importedAt) }) : t('library.hero.onShelf')}</strong> · {t('library.hero.notPlayed')}</span>}
             {sub && <span>{sub}</span>}
           </p>
           <div className="acts">
-            <Link className="btn lg play" to={paths.play(game.id, save ? '?resume=1' : '')}>{I.play}{save ? 'Continue' : 'Play'}</Link>
+            <Link className="btn lg play" to={paths.play(game.id, save ? '?resume=1' : '')}>{I.play}{save ? t('library.hero.continue') : t('library.hero.play')}</Link>
             {save
-              ? <Link className="btn lg line" to={paths.play(game.id, '?tab=saves')}>Save slots</Link>
-              : <Link className="btn lg line" to={paths.game(game.id)}>About the game</Link>}
+              ? <Link className="btn lg line" to={paths.play(game.id, '?tab=saves')}>{t('library.hero.slots')}</Link>
+              : <Link className="btn lg line" to={paths.game(game.id)}>{t('library.hero.about')}</Link>}
           </div>
         </div>
         <figure className="shot" style={{ margin: 0 }} data-game={game.id}>
           <div className="frame">
-            {save?.thumbnail?.length ? <Frame rgba={save.thumbnail} label="Last frame" /> : save === undefined ? <canvas className="lcd" width={160} height={144} aria-hidden="true" /> : <Attract game={game} label={`${game.title} demo`} />}
+            {save?.thumbnail?.length ? <Frame rgba={save.thumbnail} label={t('library.hero.lastFrame')} /> : save === undefined ? <canvas className="lcd" width={160} height={144} aria-hidden="true" /> : <Attract game={game} label={t('library.hero.demo', { title: game.title })} />}
           </div>
           <figcaption className="cap">
-            <span>{save ? 'Where you left off' : 'Ready in the slot'}</span><i /><span>{save ? ago(save.timestamp) : 'Press play'}</span>
+            <span>{save ? t('library.hero.leftOff') : t('library.hero.inSlot')}</span><i /><span>{save ? ago(save.timestamp) : t('library.hero.pressPlay')}</span>
           </figcaption>
         </figure>
       </div>
@@ -119,29 +121,30 @@ export function ContinueHero({ game }: { game: GameEntry }) {
 /** First launch: nothing stored yet, so this hero shows nothing it would have to download. */
 export function FirstHero({ bundled }: { bundled?: GameEntry }) {
   const canInstall = useInstall((s) => s.can) !== null;
+  const t = useT();
   return (
-    <section className="first" aria-label="Welcome">
+    <section className="first" aria-label={t('library.first.welcome')}>
       <div className="wrap">
         <div>
-          <h1 className="hero-t">Put your games on the shelf.</h1>
-          <p className="lede">Drop the .gb and .gbc files you own anywhere on this page. Each one is identified by its SHA-1 fingerprint against thousands of known Game Boy and Game Boy Color dumps, gets its details, and stays in this browser.</p>
+          <h1 className="hero-t">{t('library.first.title')}</h1>
+          <p className="lede">{t('library.first.lede')}</p>
           <div className="acts">
-            <Link className="btn k lg" to="/add">{I.plus}Add your ROMs</Link>
-            {bundled && <Link className="btn lg line" to={paths.play(bundled.id)}>{I.play}Play {bundled.title} now</Link>}
+            <Link className="btn k lg" to="/add">{I.plus}{t('library.first.add')}</Link>
+            {bundled && <Link className="btn lg line" to={paths.play(bundled.id)}>{I.play}{t('library.first.playNow', { title: bundled.title })}</Link>}
           </div>
           {canInstall && (
-            <p className="hinstall"><button type="button" className="linkbtn" onClick={startInstall}>{I.load}Install the app</button><span>Full screen, offline, saves kept.</span></p>
+            <p className="hinstall"><button type="button" className="linkbtn" onClick={startInstall}>{I.load}{t('common.install')}</button><span>{t('library.first.installSub')}</span></p>
           )}
           <ol className="steps">
-            <li><b>Add your ROMs</b><span>Drop files anywhere, several at once.</span></li>
-            <li><b>Recognized</b><span>Title, developer and year arrive by themselves.</span></li>
-            <li><b>Play anywhere</b><span>Keyboard, gamepad or touch. Saves stay here.</span></li>
+            <li><b>{t('library.first.add')}</b><span>{t('library.first.step1')}</span></li>
+            <li><b>{t('library.first.recognized')}</b><span>{t('library.first.step2')}</span></li>
+            <li><b>{t('library.first.anywhere')}</b><span>{t('library.first.step3')}</span></li>
           </ol>
         </div>
         {bundled && (
           <figure className="shot" style={{ margin: 0 }} data-game={bundled.id}>
-            <div className="frame"><Attract game={bundled} label={`${bundled.title} demo`} /></div>
-            <figcaption className="cap"><span>{bundled.title} comes with the app</span><i /><span>Free homebrew</span></figcaption>
+            <div className="frame"><Attract game={bundled} label={t('library.hero.demo', { title: bundled.title })} /></div>
+            <figcaption className="cap"><span>{t('library.first.bundled', { title: bundled.title })}</span><i /><span>{t('library.first.free')}</span></figcaption>
           </figure>
         )}
       </div>

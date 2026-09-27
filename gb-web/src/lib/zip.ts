@@ -1,3 +1,5 @@
+import { t as tr } from '../i18n/core.ts';
+
 /**
  * A .zip read from its central directory, one entry at a time through Blob.slice: a 1.5 GB archive
  * is never held in memory. Stored (0) and deflate (8) entries, ZIP64, folders, UTF-8 names.
@@ -16,24 +18,24 @@ export async function listZip(file: Blob): Promise<ZipEntry[]> {
   const t = await view(file, tailStart, file.size);
   let e = t.byteLength - 22;
   while (e >= 0 && t.getUint32(e, true) !== 0x06054b50) e--;
-  if (e < 0) throw new ZipError('Not a zip archive');
+  if (e < 0) throw new ZipError(tr('add.zip.not'));
   let count = t.getUint16(e + 10, true), cdSize = t.getUint32(e + 12, true), cdOff = t.getUint32(e + 16, true);
   if (e >= 20 && t.getUint32(e - 20, true) === 0x07064b50) {
     const at = u64(t, e - 20 + 8);
     const r = await view(file, at, at + 56);
-    if (r.byteLength < 56 || r.getUint32(0, true) !== 0x06064b50) throw new ZipError('Damaged zip archive');
+    if (r.byteLength < 56 || r.getUint32(0, true) !== 0x06064b50) throw new ZipError(tr('add.zip.damaged'));
     count = u64(r, 32); cdSize = u64(r, 40); cdOff = u64(r, 48);
   }
-  if (cdOff + cdSize > file.size) throw new ZipError('Damaged or incomplete zip archive');
+  if (cdOff + cdSize > file.size) throw new ZipError(tr('add.zip.incomplete'));
   const cd = await view(file, cdOff, cdOff + cdSize);
   const utf8 = new TextDecoder(); // ponytail: names are read as UTF-8 even without the flag (old CP437 names come out garbled, still importable)
   const out: ZipEntry[] = [];
   let p = 0;
   for (let i = 0; i < count; i++) {
-    if (p + 46 > cd.byteLength || cd.getUint32(p, true) !== 0x02014b50) throw new ZipError('Damaged zip archive');
+    if (p + 46 > cd.byteLength || cd.getUint32(p, true) !== 0x02014b50) throw new ZipError(tr('add.zip.damaged'));
     const nlen = cd.getUint16(p + 28, true), xlen = cd.getUint16(p + 30, true), clen = cd.getUint16(p + 32, true);
     const x0 = p + 46 + nlen;
-    if (x0 + xlen + clen > cd.byteLength) throw new ZipError('Damaged zip archive');
+    if (x0 + xlen + clen > cd.byteLength) throw new ZipError(tr('add.zip.damaged'));
     const en: ZipEntry = {
       name: utf8.decode(new Uint8Array(cd.buffer, cd.byteOffset + p + 46, nlen)),
       method: cd.getUint16(p + 10, true), crc: cd.getUint32(p + 16, true),
@@ -62,10 +64,10 @@ export function crc32(data: Uint8Array): number {
 /** One entry's bytes, checked against its size and CRC-32. Throws ZipError when damaged or compressed some other way. */
 export async function readEntry(file: Blob, e: ZipEntry): Promise<Uint8Array> {
   const h = await view(file, e.offset, e.offset + 30);
-  if (h.byteLength < 30 || h.getUint32(0, true) !== 0x04034b50) throw new ZipError('Damaged zip archive');
+  if (h.byteLength < 30 || h.getUint32(0, true) !== 0x04034b50) throw new ZipError(tr('add.zip.damaged'));
   const start = e.offset + 30 + h.getUint16(26, true) + h.getUint16(28, true);
   const raw = file.slice(start, start + e.csize);
-  if (raw.size !== e.csize) throw new ZipError('Damaged or incomplete zip archive');
+  if (raw.size !== e.csize) throw new ZipError(tr('add.zip.incomplete'));
   let data: Uint8Array;
   if (e.method === 0) data = new Uint8Array(await raw.arrayBuffer());
   else if (e.method === 8) {
@@ -75,15 +77,15 @@ export async function readEntry(file: Blob, e: ZipEntry): Promise<Uint8Array> {
     const reader = raw.stream().pipeThrough(new DecompressionStream('deflate-raw')).getReader();
     try {
       for (let r = await reader.read(); !r.done; r = await reader.read()) {
-        if (n + r.value.length > e.size) { reader.cancel().catch(() => {}); throw new ZipError('Damaged zip archive'); }
+        if (n + r.value.length > e.size) { reader.cancel().catch(() => {}); throw new ZipError(tr('add.zip.damaged')); }
         data.set(r.value, n);
         n += r.value.length;
       }
     } catch (err) {
-      throw err instanceof ZipError ? err : new ZipError('Damaged zip archive');
+      throw err instanceof ZipError ? err : new ZipError(tr('add.zip.damaged'));
     }
-    if (n !== e.size) throw new ZipError('Damaged zip archive');
-  } else throw new ZipError(`Unsupported compression (method ${e.method})`);
-  if (data.length !== e.size || crc32(data) !== e.crc) throw new ZipError('Damaged zip archive');
+    if (n !== e.size) throw new ZipError(tr('add.zip.damaged'));
+  } else throw new ZipError(tr('add.zip.method', { method: String(e.method) }));
+  if (data.length !== e.size || crc32(data) !== e.crc) throw new ZipError(tr('add.zip.damaged'));
   return data;
 }

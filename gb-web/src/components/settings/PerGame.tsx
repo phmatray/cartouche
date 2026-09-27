@@ -9,10 +9,10 @@ import { I } from '../icons';
 import { Shot } from '../game/Shot';
 import { toast } from '../shell/actions';
 import type { ConfirmRequest } from '../shell/ConfirmDialog';
+import { date, list as listOf, num, rich, t as tNow, useT } from '../../i18n';
 
 /** What one game keeps in this browser, in bytes (art: downloaded box art; bundled covers ship with the app). */
 export interface GameUsage { rom: number; saves: number; nSaves: number; shots: number; nShots: number; art: number }
-const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`;
 const totalOf = (u: GameUsage) => u.rom + u.saves + u.shots + u.art;
 
 type Sort = 'size' | 'name' | 'played';
@@ -36,6 +36,7 @@ export function PerGame({ usage, onChanged, confirm }: { usage: Map<string, Game
   const [open, setOpen] = useState<string | null>(null);
   const search = useRef<HTMLInputElement>(null);
   const none = useRef<HTMLParagraphElement>(null);
+  const t = useT();
   // After a delete the removed rows (or the now disabled "Delete selected") took focus with them:
   // once the list has re-rendered, land on the search field, or on "No ROMs…" when nothing is left.
   const [refocus, setRefocus] = useState(0);
@@ -73,15 +74,19 @@ export function PerGame({ usage, onChanged, confirm }: { usage: Map<string, Game
     const nSaves = list.reduce((s, l) => s + l.u.nSaves, 0), nShots = list.reduce((s, l) => s + l.u.nShots, 0);
     const art = list.reduce((s, l) => s + l.u.art, 0), nArt = list.filter((l) => l.u.art > 0).length;
     const kept = list.length - roms.length;
-    const names = list.slice(0, 6).map((l) => l.game.title).join(', ') + (list.length > 6 ? ` and ${list.length - 6} more` : '');
+    const names = listOf([...list.slice(0, 6).map((l) => l.game.title), ...(list.length > 6 ? [t('settings.pergame.more', { count: list.length - 6 })] : [])]);
+    const parts = [
+      ...(roms.length ? [t('settings.pergame.roms', { count: roms.length, size: mb(roms.reduce((s, l) => s + l.u.rom, 0)) })] : []),
+      t('settings.pergame.saves', { count: nSaves }), t('settings.storage.nShots', { count: nShots }),
+      ...(nArt ? [t('settings.pergame.covers', { count: nArt, size: mb(art) })] : []),
+    ];
     confirm({
-      title: `Delete ${plural(list.length, 'game')}?`, danger: true, ok: `Delete ${mb(freed)}`,
+      title: t('settings.pergame.deleteTitle', { count: list.length }), danger: true, ok: t('settings.pergame.deleteOk', { size: mb(freed) }),
       body: (
         <>
-          {names}. From this browser: {roms.length ? `${plural(roms.length, 'ROM')} (${mb(roms.reduce((s, l) => s + l.u.rom, 0))}), ` : ''}
-          {plural(nSaves, 'save')} (cartridge saves, resume points and slots){nArt ? `, ${plural(nShots, 'screenshot')} and ${plural(nArt, 'downloaded cover')} (${mb(art)})` : ` and ${plural(nShots, 'screenshot')}`}.
-          {kept ? ` ${plural(kept, 'bundled game')} stay${kept === 1 ? 's' : ''} in the library, without ${kept === 1 ? 'its' : 'their'} saves.` : ''}
-          {' '}Frees about <b>{mb(freed)}</b>. This can’t be undone: export a backup first if you might want them back.
+          {t('settings.pergame.from', { names, parts: listOf(parts) })}
+          {kept ? ` ${t('settings.pergame.kept', { count: kept })}` : ''}
+          {' '}{rich(t('settings.pergame.frees', { size: mb(freed) }), { b: (s) => <b>{s}</b> })}
         </>
       ),
       run: async () => {
@@ -90,51 +95,51 @@ export function PerGame({ usage, onChanged, confirm }: { usage: Map<string, Game
         if (list.some((l) => l.game.id === open)) setOpen(null);
         await onChanged();
         await refreshSavedIds();
-        toast(`Deleted ${plural(list.length, 'game')} · ${mb(freed)} freed`, 'm');
+        toast(tNow('settings.pergame.deleted', { games: tNow('common.games', { count: list.length }), size: mb(freed) }), 'm');
         setRefocus((n) => n + 1);
       },
     });
   };
 
-  if (!usage) return <p className="empty-inline">Measuring…</p>;
-  if (!all.length) return <p className="empty-inline" ref={none} tabIndex={-1}>No ROMs or saves stored yet.</p>;
+  if (!usage) return <p className="empty-inline">{t('settings.pergame.measuring')}</p>;
+  if (!all.length) return <p className="empty-inline" ref={none} tabIndex={-1}>{t('settings.pergame.none')}</p>;
 
   return (
     <div className="pg">
       <dl className="pg-sum">
-        <div><dt>Games</dt><dd>{all.length.toLocaleString('en-US')}</dd></div>
+        <div><dt>{t('settings.pergame.games')}</dt><dd>{num(all.length)}</dd></div>
         <div><dt>ROMs</dt><dd>{mb(sum.rom)}</dd></div>
-        <div><dt>Saves</dt><dd>{mb(sum.saves)}</dd></div>
-        <div><dt>Screenshots</dt><dd>{mb(sum.shots)}</dd></div>
-        <div><dt>Box art</dt><dd>{mb(sum.art)}</dd></div>
+        <div><dt>{t('game.saves.title')}</dt><dd>{mb(sum.saves)}</dd></div>
+        <div><dt>{t('settings.storage.shots')}</dt><dd>{mb(sum.shots)}</dd></div>
+        <div><dt>{t('settings.storage.art')}</dt><dd>{mb(sum.art)}</dd></div>
       </dl>
-      <p className="pg-top"><b>Largest:</b>{' '}
+      <p className="pg-top"><b>{t('settings.pergame.largest')}</b>{' '}
         {top.map((l, i) => <span key={l.game.id}>{i > 0 && ' · '}<button className="linkbtn" onClick={() => { setQ(''); setWithSaves(false); setNever(false); setOpen(l.game.id); setSort('size'); }}>{l.game.title}</button> {mb(l.total)}</span>)}
       </p>
 
       <div className="pg-tools">
-        <input ref={search} className="field" type="search" placeholder="Search your games" aria-label="Search stored games" value={q} onChange={(e) => setQ(e.target.value)} />
-        <label className="sel">Sort
+        <input ref={search} className="field" type="search" placeholder={t('settings.pergame.search')} aria-label={t('settings.pergame.searchLabel')} value={q} onChange={(e) => setQ(e.target.value)} />
+        <label className="sel">{t('library.sortLabel')}
           <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-            <option value="size">Size, largest first</option>
-            <option value="name">Name A–Z</option>
-            <option value="played">Last played</option>
+            <option value="size">{t('settings.pergame.bySize')}</option>
+            <option value="name">{t('library.sort.name')}</option>
+            <option value="played">{t('library.col.last')}</option>
           </select>
         </label>
-        <div className="chips" role="group" aria-label="Filter">
-          <button className="chip" aria-pressed={withSaves} onClick={() => setWithSaves(!withSaves)}>With saves</button>
-          <button className="chip" aria-pressed={never} onClick={() => setNever(!never)}>Never played</button>
+        <div className="chips" role="group" aria-label={t('library.filterLabel')}>
+          <button className="chip" aria-pressed={withSaves} onClick={() => setWithSaves(!withSaves)}>{t('settings.pergame.withSaves')}</button>
+          <button className="chip" aria-pressed={never} onClick={() => setNever(!never)}>{t('search.value.is.unplayed')}</button>
         </div>
       </div>
 
       <div className="pg-bar">
-        <label className="ck"><input type="checkbox" checked={allShown} ref={(el) => { if (el) el.indeterminate = chosen.length > 0 && !allShown; }} onChange={pickAll} /><span>{chosen.length ? `${chosen.length.toLocaleString('en-US')} selected` : `Select all ${rows.length.toLocaleString('en-US')} shown`}</span></label>
-        <button className="btn danger" disabled={!chosen.length} onClick={() => del(chosen)}>Delete selected</button>
+        <label className="ck"><input type="checkbox" checked={allShown} ref={(el) => { if (el) el.indeterminate = chosen.length > 0 && !allShown; }} onChange={pickAll} /><span>{chosen.length ? t('settings.pergame.selected', { count: chosen.length }) : t('settings.pergame.selectAll', { count: rows.length })}</span></label>
+        <button className="btn danger" disabled={!chosen.length} onClick={() => del(chosen)}>{t('settings.pergame.deleteSelected')}</button>
       </div>
 
       {rows.length
         ? <Rows rows={rows} picked={picked} toggle={toggle} open={open} setOpen={setOpen} onChanged={onChanged} remove={(l) => del([l])} confirm={confirm} />
-        : <p className="empty-inline">No stored game matches. <button className="linkbtn" onClick={() => { setQ(''); setWithSaves(false); setNever(false); }}>Clear search and filters</button></p>}
+        : <p className="empty-inline">{t('settings.pergame.noMatch')} <button className="linkbtn" onClick={() => { setQ(''); setWithSaves(false); setNever(false); }}>{t('settings.pergame.clear')}</button></p>}
     </div>
   );
 }
@@ -149,6 +154,7 @@ function Rows({ rows, picked, toggle, open, setOpen, onChanged, remove, confirm 
   const [viewH, setViewH] = useState(540);
   const [detailH, setDetailH] = useState(0);
   const focusNext = useRef<string | null>(null);
+  const t = useT();
   // Roving tabindex: only the current row's checkbox and name are Tab stops, and that row always stays
   // rendered (even scrolled out of the window) so focus on it is never dropped.
   const [cur, setCur] = useState<string | null>(null);
@@ -199,23 +205,23 @@ function Rows({ rows, picked, toggle, open, setOpen, onChanged, remove, confirm 
 
   return (
     <>
-      <div className="vhead" aria-hidden="true"><span /><span>Game</span><span>ROM</span><span>Saves</span><span>Screenshots</span><span>Box art</span><span>Total</span></div>
+      <div className="vhead" aria-hidden="true"><span /><span>{t('game.game')}</span><span>ROM</span><span>{t('game.saves.title')}</span><span>{t('settings.storage.shots')}</span><span>{t('settings.storage.art')}</span><span>{t('settings.pergame.total')}</span></div>
       <div className="vlist" ref={box} onScroll={(e) => setScroll(e.currentTarget.scrollTop)} onKeyDown={onKey} onFocus={onFocus}>
-        <div role="list" aria-label="Stored games" style={{ height, position: 'relative' }}>
+        <div role="list" aria-label={t('settings.pergame.list')} style={{ height, position: 'relative' }}>
           {shown.map(([i, l]) => {
             const g = l.game, u = l.u, isOpen = g.id === open, tab = i === act ? 0 : -1;
             return (
               <div key={g.id} role="listitem" aria-setsize={rows.length} aria-posinset={i + 1} data-row={i} className={`vrow${isOpen ? ' open' : ''}`} style={{ top: topOf(i) }}>
                 <div className="vline">
-                  <label className="ck"><input type="checkbox" data-f={`c${i}`} tabIndex={tab} checked={picked.has(g.id)} onChange={() => toggle(g.id)} aria-label={`Select ${g.title}`} /></label>
+                  <label className="ck"><input type="checkbox" data-f={`c${i}`} tabIndex={tab} checked={picked.has(g.id)} onChange={() => toggle(g.id)} aria-label={t('settings.pergame.select', { title: g.title })} /></label>
                   <button className="vname" data-f={`n${i}`} tabIndex={tab} aria-expanded={isOpen} aria-controls={isOpen ? `pgd-${i}` : undefined} onClick={() => setOpen(isOpen ? null : g.id)}>
                     {I.next}
-                    <span><b>{g.title}</b><small><span className="m">{g.isLocal ? mb(u.rom) : 'Bundled'} · {plural(u.nSaves, 'save')} · </span>{g.lastPlayed ? `Played ${ago(g.lastPlayed)}` : 'Never played'}</small></span>
+                    <span><b>{g.title}</b><small><span className="m">{g.isLocal ? mb(u.rom) : t('settings.pergame.bundled')} · {t('settings.pergame.saves', { count: u.nSaves })} · </span>{g.lastPlayed ? t('library.hero.playedAgo', { ago: ago(g.lastPlayed) }) : t('search.value.is.unplayed')}</small></span>
                   </button>
-                  <span className="n">{g.isLocal ? mb(u.rom) : 'Bundled'}</span>
+                  <span className="n">{g.isLocal ? mb(u.rom) : t('settings.pergame.bundled')}</span>
                   <span className="n">{u.nSaves ? `${u.nSaves} · ${mb(u.saves)}` : '—'}</span>
                   <span className="n">{u.nShots ? `${u.nShots} · ${mb(u.shots)}` : '—'}</span>
-                  <span className="n">{g.coverArt ? 'Included' : u.art ? mb(u.art) : '—'}</span>
+                  <span className="n">{g.coverArt ? t('settings.pergame.included') : u.art ? mb(u.art) : '—'}</span>
                   <span className="n tot">{mb(l.total)}</span>
                 </div>
                 {isOpen && <Detail id={`pgd-${i}`} line={l} onSize={setDetailH} onChanged={onChanged} onRemove={() => remove(l)} confirm={confirm} />}
@@ -232,6 +238,7 @@ function Rows({ rows, picked, toggle, open, setOpen, onChanged, remove, confirm 
 function Detail({ id, line, onSize, onChanged, onRemove, confirm }: { id: string; line: Line; onSize: (h: number) => void; onChanged: () => Promise<void>; onRemove: () => void; confirm: (r: ConfirmRequest) => void }) {
   const g = line.game;
   const ref = useRef<HTMLDivElement>(null);
+  const t = useT();
   const [data, setData] = useState<{ profiles: StoredSave[]; states: (StoredSaveState | undefined)[]; shots: StoredScreenshot[] } | null>(null);
   const fetchAll = (gid: string) => Promise.all([listProfiles(gid), getGameSaveStates(gid), getScreenshots(gid)]).then(([profiles, states, shots]) => ({ profiles, states, shots }));
   const load = async () => setData(await fetchAll(g.id));
@@ -251,12 +258,12 @@ function Detail({ id, line, onSize, onChanged, onRemove, confirm }: { id: string
     await deleteScreenshot(s.id!);
     await load();
     await onChanged();
-    toast('Screenshot deleted', 'm', { label: 'Undo', run: async () => { await putInto(STORES.screenshots, s); await load(); await onChanged(); } });
+    toast(tNow('settings.pergame.shotDeleted'), 'm', { label: tNow('settings.pergame.undo'), run: async () => { await putInto(STORES.screenshots, s); await load(); await onChanged(); } });
   };
   const dropProfile = (p: StoredSave) => confirm({
-    title: `Delete “${p.name}”?`, danger: true, ok: 'Delete save',
-    body: `This battery save of ${g.title} (${mb(p.sram.length)}, last played ${ago(p.timestamp)}) is deleted from this browser. Export it from the game page first to keep a copy. This can’t be undone.`,
-    run: async () => { await deleteSave(p.id); await load(); await onChanged(); await refreshSavedIds(); toast(`“${p.name}” deleted`, 'm'); },
+    title: t('game.saves.deleteTitle', { name: p.name }), danger: true, ok: t('game.saves.deleteOk'),
+    body: t('settings.pergame.deleteSaveBody', { title: g.title, size: mb(p.sram.length), ago: ago(p.timestamp) }),
+    run: async () => { await deleteSave(p.id); await load(); await onChanged(); await refreshSavedIds(); toast(tNow('game.saves.deleted', { name: p.name }), 'm'); },
   });
   const when = (ts: number) => ago(ts);
   const [resume, ...slots] = data?.states ?? [];
@@ -264,34 +271,36 @@ function Detail({ id, line, onSize, onChanged, onRemove, confirm }: { id: string
 
   return (
     <div className="vdetail" id={id} ref={ref}>
-      {!data ? <p>Loading…</p> : (
+      {!data ? <p>{t('common.loading')}</p> : (
         <>
           <dl className="spec">
-            <div><dt>Resume point</dt><dd>{resume ? `${size(resume)} · ${when(resume.timestamp)}` : 'None'}</dd></div>
+            <div><dt>{t('game.resumePoint')}</dt><dd>{resume ? `${size(resume)} · ${when(resume.timestamp)}` : t('common.none')}</dd></div>
             {data.profiles.length ? data.profiles.map((p) => (
               <div key={p.id} className="vprofile">
-                <dt>Save · {p.name}</dt>
-                <dd>{mb(p.sram.length)} · {when(p.timestamp)}<button className="sbtn" aria-label={`Delete save “${p.name}”`} onClick={() => dropProfile(p)}>{I.close}</button></dd>
+                <dt>{t('link.save.label')} · {p.name}</dt>
+                <dd>{mb(p.sram.length)} · {when(p.timestamp)}<button className="sbtn" aria-label={t('settings.pergame.deleteSave', { name: p.name })} onClick={() => dropProfile(p)}>{I.close}</button></dd>
               </div>
-            )) : <div><dt>Battery save</dt><dd>None</dd></div>}
-            {slots.map((s, i) => <div key={i}><dt>Slot {i + 1}</dt><dd>{s ? `${size(s)} · ${when(s.timestamp)}` : 'Empty'}</dd></div>)}
+            )) : <div><dt>{t('settings.pergame.battery')}</dt><dd>{t('common.none')}</dd></div>}
+            {slots.map((s, i) => <div key={i}><dt>{t('game.slot', { n: String(i + 1) })}</dt><dd>{s ? `${size(s)} · ${when(s.timestamp)}` : t('common.empty')}</dd></div>)}
           </dl>
           {data.shots.length > 0 && (
-            <ul className="vshots" aria-label={`${g.title} screenshots`}>
+            <ul className="vshots" aria-label={t('settings.pergame.shotsOf', { title: g.title })}>
               {data.shots.map((s) => (
                 <li key={s.id}>
-                  <Shot png={s.png} label={`${g.title}, ${new Date(s.timestamp).toLocaleString('en-GB')}`} />
-                  <button className="sbtn" aria-label={`Delete screenshot from ${new Date(s.timestamp).toLocaleString('en-GB')}`} onClick={() => dropShot(s)}>{I.close}</button>
+                  <Shot png={s.png} label={`${g.title}, ${date(s.timestamp, STAMP)}`} />
+                  <button className="sbtn" aria-label={t('settings.pergame.deleteShot', { date: date(s.timestamp, STAMP) })} onClick={() => dropShot(s)}>{I.close}</button>
                 </li>
               ))}
             </ul>
           )}
           <div className="acts">
-            <Link className="sbtn" to={paths.game(g.id)}>Game page</Link>
-            <button className="sbtn" onClick={onRemove}>{g.isLocal ? 'Remove from this browser' : 'Erase its saves'}</button>
+            <Link className="sbtn" to={paths.game(g.id)}>{t('settings.pergame.gamePage')}</Link>
+            <button className="sbtn" onClick={onRemove}>{g.isLocal ? t('settings.pergame.removeHere') : t('settings.pergame.eraseIts')}</button>
           </div>
         </>
       )}
     </div>
   );
 }
+
+const STAMP: Intl.DateTimeFormatOptions = { dateStyle: 'short', timeStyle: 'medium' };

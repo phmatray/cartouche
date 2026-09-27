@@ -13,6 +13,7 @@ import { Cover, NoArt } from './library/Cover';
 import { I } from './icons';
 import { toast } from './shell/actions';
 import { fileAccept } from '../lib/pwa';
+import { rich, t as tNow, useT } from '../i18n';
 
 // Fixed two-player keys: player 1 on the right of the keyboard, player 2 on the left.
 // Values are the core's button numbers (A 0, B 1, Select 2, Start 3, Right 4, Left 5, Up 6, Down 7).
@@ -20,7 +21,7 @@ const KEYS: Record<LinkPlayer, Record<string, number>> = {
   1: { ArrowUp: 6, ArrowDown: 7, ArrowLeft: 5, ArrowRight: 4, z: 0, x: 1, Enter: 3, Shift: 2 },
   2: { w: 6, s: 7, a: 5, d: 4, n: 0, m: 1, t: 3, y: 2 },
 };
-const LEGEND: Record<LinkPlayer, string> = { 1: 'Arrows · Z · X · Enter · Shift', 2: 'W A S D · N · M · T · Y' };
+const LEGEND: Record<LinkPlayer, string> = { 1: '{arrows} · Z · X · Enter · Shift', 2: 'W A S D · N · M · T · Y' };
 const FILE = '__file';
 
 /**
@@ -33,10 +34,11 @@ async function savesOf(g: string): Promise<GameSaves> {
   const [profiles, active, states] = await Promise.all([listProfiles(g), getActiveProfileId(g), getGameSaveStates(g)]);
   return { profiles, active, states };
 }
-const slotLabel = (k: 'auto' | number) => (k === 'auto' ? 'the resume point' : `save slot ${k + 1}`);
+const slotLabel = (k: 'auto' | number) => (k === 'auto' ? tNow('link.save.theResume') : tNow('link.save.theSlot', { n: String(k + 1) }));
 
 export function LinkCablePage() {
   const { games, savedIds, loading } = useGameLibrary();
+  const t = useT();
   const [q] = useSearchParams();
   // Where each console's battery save goes, fixed when the cable connects.
   const targets = useRef<Record<LinkPlayer, Choice | null>>({ 1: null, 2: null });
@@ -59,7 +61,7 @@ export function LinkCablePage() {
         setWrote((w) => ({ ...w, [p]: Date.now() }));
         refresh(t.game).catch(() => {});
         refreshSavedIds();
-      }).catch(() => toast(`Couldn’t save Player ${p}’s game`, 'm'));
+      }).catch(() => toast(tNow('link.toast.saveFailed', { p: String(p) }), 'm'));
     }
   }, [refresh]);
   const link = useLinkCable(onSram);
@@ -92,13 +94,13 @@ export function LinkCablePage() {
     const g = sel[p], d = data[g];
     if (chosen[p]?.game === g) return chosen[p];
     if (!d || g === FILE) return null;
-    if (p === 1) return { game: g, profile: d.active, name: d.profiles.find((x) => x.id === d.active)?.name ?? 'Main', slot: null };
+    if (p === 1) return { game: g, profile: d.active, name: d.profiles.find((x) => x.id === d.active)?.name ?? t('player.saves.main'), slot: null };
     const taken = sel[1] === g ? choiceOf(1)?.profile : undefined;
-    const mine = d.profiles.find((x) => x.id !== taken && (x.id === `${g}~p2` || x.name === 'Player 2'));
+    const mine = d.profiles.find((x) => x.id !== taken && (x.id === `${g}~p2` || x.name === 'Player 2' || x.name === t('link.player', { p: '2' })));
     if (mine) return { game: g, profile: mine.id, name: mine.name, slot: null };
     let id = `${g}~p2`;
     for (let n = 2; id === taken || d.profiles.some((x) => x.id === id); n++) id = `${g}~p2-${n}`;
-    return { game: g, profile: id, name: uniqueName(d.profiles, 'Player 2'), slot: null };
+    return { game: g, profile: id, name: uniqueName(d.profiles, t('link.player', { p: '2' })), slot: null };
   };
   const choice: Record<LinkPlayer, Choice | null> = { 1: choiceOf(1), 2: choiceOf(2) };
   const clash = !!choice[1] && !!choice[2] && choice[1].game === choice[2].game && choice[1].profile === choice[2].profile;
@@ -108,18 +110,18 @@ export function LinkCablePage() {
     const g = sel[p], d = data[g];
     if (!d) return;
     setSavErr((e) => ({ ...e, [p]: '' }));
-    if (v === 'new') { setChosen((c) => ({ ...c, [p]: { game: g, profile: newProfileId(g), name: uniqueName(d.profiles, `Player ${p}`), slot: null } })); return; }
+    if (v === 'new') { setChosen((c) => ({ ...c, [p]: { game: g, profile: newProfileId(g), name: uniqueName(d.profiles, t('link.player', { p: String(p) })), slot: null } })); return; }
     if (v.startsWith('slot:')) {
       const k = v === 'slot:auto' ? 'auto' : +v.slice(5);
       const st = d.states[k === 'auto' ? 0 : k + 1];
       const owner = d.profiles.find((x) => x.id === (st?.profile ?? g)); // states from before profiles belong to Main
       // Its save was deleted: it goes to a new one (as in solo play), never to another save under a borrowed name.
-      const to = owner ?? { id: newProfileId(g), name: uniqueName(d.profiles, k === 'auto' ? 'From the resume point' : `From save slot ${k + 1}`) };
+      const to = owner ?? { id: newProfileId(g), name: uniqueName(d.profiles, k === 'auto' ? t('player.saves.fromResume') : t('player.saves.fromSlot', { n: String(k + 1) })) };
       setChosen((c) => ({ ...c, [p]: { game: g, profile: to.id, name: to.name, slot: k } }));
       return;
     }
     const id = v.slice(2), c = choice[p];
-    setChosen((s) => ({ ...s, [p]: { game: g, profile: id, name: d.profiles.find((x) => x.id === id)?.name ?? c?.name ?? 'Main', slot: null } }));
+    setChosen((s) => ({ ...s, [p]: { game: g, profile: id, name: d.profiles.find((x) => x.id === id)?.name ?? c?.name ?? t('player.saves.main'), slot: null } }));
   };
   const onSav = async (p: LinkPlayer, f: File) => {
     const g = gameOf(p);
@@ -128,21 +130,21 @@ export function LinkCablePage() {
     if (typeof r === 'string') { setSavErr((e) => ({ ...e, [p]: r })); return; }
     await refresh(g.id);
     setChosen((c) => ({ ...c, [p]: { game: g.id, profile: r.id, name: r.name, slot: null } }));
-    toast(`“${r.name}” imported for Player ${p}`, 'c');
+    toast(tNow('link.toast.imported', { name: r.name, p: String(p) }), 'c');
   };
   /** Both players on one save: Player 2 gets a copy of it (a new, separate save). */
   const copyForP2 = async () => {
     const c = choice[2], d = c && data[c.game];
     if (!c || !d) return;
     const src = d.profiles.find((x) => x.id === c.profile);
-    const name = uniqueName(d.profiles, `${nameOf(c)} (copy)`);
+    const name = uniqueName(d.profiles, tNow('game.saves.copyName', { name: nameOf(c) }));
     const id = src ? (await createProfile(c.game, name, src.sram)).id : newProfileId(c.game);
     await refresh(c.game);
     setChosen((s) => ({ ...s, 2: { ...c, profile: id, name } }));
-    toast(`Player 2 now plays “${name}”`, 'c');
+    toast(tNow('link.toast.p2Plays', { name }), 'c');
   };
 
-  useEffect(() => { document.title = 'Link cable · Cartouche'; }, []);
+  useEffect(() => { document.title = t('common.docTitle', { page: t('link.title') }); }, [t]);
 
   const choose = (p: LinkPlayer, v: string) => {
     if (v === FILE) { fileInput.current[p]?.click(); return; }
@@ -155,16 +157,16 @@ export function LinkCablePage() {
     return g ? fetchRom(g) : null;
   };
   const connect = async () => {
-    if (state.isRunning) { link.flush(); link.stop(); toast('Cable disconnected. Both games saved.', 'c'); return; }
+    if (state.isRunning) { link.flush(); link.stop(); toast(tNow('link.toast.disconnected'), 'c'); return; }
     if (clash) return;
     try {
       const [a, b] = await Promise.all([romFor(1), romFor(2)]);
-      if (!a || !b) { toast('Pick a game for both players', 'm'); return; }
+      if (!a || !b) { toast(tNow('link.toast.pick'), 'm'); return; }
       const from = async (c: Choice | null) => {
         if (!c) return {};
         if (c.slot === null) return { sram: (await getSram(c.profile))?.sram };
         const st = await getSaveState(c.slot === 'auto' ? resumeStateId(c.game) : slotStateId(c.game, c.slot));
-        if (!st) throw new Error(`${slotLabel(c.slot)} is gone`);
+        if (!st) throw new Error(tNow('link.toast.gone', { slot: slotLabel(c.slot) }));
         return { state: st.data };
       };
       const [f1, f2] = await Promise.all([from(choice[1]), from(choice[2])]);
@@ -174,9 +176,9 @@ export function LinkCablePage() {
       link.loadRom(1, a, f1);
       link.loadRom(2, b, f2);
       link.start(); // the workers handle messages in order: each ROM is loaded before the first frame runs
-      toast('Cable connected. Both players are running.', 'c');
+      toast(tNow('link.toast.connected'), 'c');
     } catch (e) {
-      toast(`Couldn’t load the ROM: ${e instanceof Error ? e.message : e}`, 'm');
+      toast(tNow('player.toast.loadFailed', { error: e instanceof Error ? e.message : String(e) }), 'm');
     }
   };
 
@@ -223,21 +225,21 @@ export function LinkCablePage() {
     const g: GameEntry | undefined = sel[p] === FILE ? undefined : playable.find((x) => x.id === sel[p]);
     const mirror = p === 2 && same;
     const title = g?.title ?? (sel[p] === FILE && f ? f.name : '');
-    const note = mirror ? 'Same cartridge as Player 1. Turn off “Same game for both players” to choose another.'
-      : g && isLinkReady(g) ? '2 players: uses the link cable'
-      : g?.players === 1 ? 'Single-player: may not use the cable'
+    const note = mirror ? t('link.cart.mirror')
+      : g && isLinkReady(g) ? t('link.cart.two')
+      : g?.players === 1 ? t('link.cart.single')
       : '';
     return (
       <div className="cart">
         <div className="box" aria-hidden="true">{g ? <Cover game={g} /> : title ? <span className="cv"><NoArt game={{ title, genre: 'Unknown' } as GameEntry} /></span> : <span className="cv none">{I.cart}</span>}</div>
         <div className="info">
-          {title ? <b>{title}</b> : <b className="dim">No cartridge</b>}
-          <small>{g?.platform ? PLATFORM[g.platform] : f && sel[p] === FILE ? 'ROM file' : ''}{g && isLinkReady(g) && <span className="tag now">{I.link}Link-ready</span>}</small>
+          {title ? <b>{title}</b> : <b className="dim">{t('link.cart.none')}</b>}
+          <small>{g?.platform ? PLATFORM[g.platform] : f && sel[p] === FILE ? t('link.cart.file') : ''}{g && isLinkReady(g) && <span className="tag now">{I.link}{t('link.ready')}</span>}</small>
           {note && <small id={`note-p${p}`}>{note}</small>}
         </div>
         <button className="btn line" disabled={state.isRunning || mirror} aria-describedby={note ? `note-p${p}` : undefined}
-          aria-label={title ? `Change Player ${p} cartridge (${title})` : `Choose a cartridge for Player ${p}`} onClick={(e) => { e.currentTarget.focus(); setPicking(p); }}>
-          {title ? 'Change' : 'Choose a cartridge'}
+          aria-label={title ? t('link.cart.changeOf', { p: String(p), title }) : t('link.cart.chooseFor', { p: String(p) })} onClick={(e) => { e.currentTarget.focus(); setPicking(p); }}>
+          {title ? t('link.cart.change') : t('link.cart.choose')}
         </button>
       </div>
     );
@@ -245,35 +247,35 @@ export function LinkCablePage() {
   /** The battery save a player plays: its game's profiles, a new game, a .sav file, or a save state. */
   const saveChooser = (p: LinkPlayer) => {
     const g = gameOf(p), c = choice[p], d = g && data[g.id], h = p === 1 ? header1 : header2;
-    if (sel[p] === FILE) return fileOf(p) ? <div className="svp"><small>A ROM file outside your library: its save isn’t kept.</small></div> : null;
+    if (sel[p] === FILE) return fileOf(p) ? <div className="svp"><small>{t('link.save.file')}</small></div> : null;
     if (!g || !c || !d) return null;
-    if (h && h.ramSize === 'None' && !/MBC2/.test(h.cartridgeType)) return <div className="svp"><small>This cartridge has no battery save.</small></div>;
+    if (h && h.ramSize === 'None' && !/MBC2/.test(h.cartridgeType)) return <div className="svp"><small>{t('link.save.noBattery')}</small></div>;
     const known = d.profiles.find((x) => x.id === c.profile);
-    const t = linked[p];
+    const to = linked[p];
     const live = state.isRunning || !!wrote[p];
     return (
       <div className="svp">
-        <label className="sel"><span>Save</span>
+        <label className="sel"><span>{t('link.save.label')}</span>
           <select value={c.slot !== null ? `slot:${c.slot}` : `p:${c.profile}`} disabled={state.isRunning} aria-describedby={`svp-s${p}`}
-            aria-label={`Player ${p} save`} onChange={(e) => pickSave(p, e.target.value)}>
-            <optgroup label="Games">
+            aria-label={t('link.save.of', { p: String(p) })} onChange={(e) => pickSave(p, e.target.value)}>
+            <optgroup label={t('link.save.games')}>
               {d.profiles.map((x) => <option key={x.id} value={`p:${x.id}`}>{x.name} · {ago(x.timestamp)} · {bytes(x.sram.length)}</option>)}
-              {!known && c.slot === null && <option value={`p:${c.profile}`}>{c.name} · new game</option>}
+              {!known && c.slot === null && <option value={`p:${c.profile}`}>{t('link.save.newOf', { name: c.name })}</option>}
             </optgroup>
-            <option value="new">New game (empty save)</option>
+            <option value="new">{t('link.save.new')}</option>
             {d.states.some(Boolean) && (
-              <optgroup label="Start from a save state">
-                {d.states.map((st, i) => st && <option key={i} value={i ? `slot:${i - 1}` : 'slot:auto'}>{i ? `Save slot ${i}` : 'Resume point'} · {ago(st.timestamp)}</option>)}
+              <optgroup label={t('link.save.fromState')}>
+                {d.states.map((st, i) => st && <option key={i} value={i ? `slot:${i - 1}` : 'slot:auto'}>{i ? t('link.save.slot', { n: String(i) }) : t('game.resumePoint')} · {ago(st.timestamp)}</option>)}
               </optgroup>
             )}
           </select>
         </label>
-        {!state.isRunning && <button className="btn line svp-imp" aria-label={`Import a .sav file for Player ${p}`} onClick={() => savInput.current[p]?.click()}>{I.load}Import a .sav file…</button>}
+        {!state.isRunning && <button className="btn line svp-imp" aria-label={t('link.save.importFor', { p: String(p) })} onClick={() => savInput.current[p]?.click()}>{I.load}{t('game.saves.import')}</button>}
         <small id={`svp-s${p}`} aria-live="polite">
-          {live && t ? <>Saving to <b>{nameOf(t)}</b>{wrote[p] ? `, saved ${ago(wrote[p])}` : ''}</>
-            : c.slot !== null ? <>Starts from {slotLabel(c.slot)}, then saves to <b>{nameOf(c)}</b>{known ? '' : ' (new)'}</>
-            : known ? <>Continues <b>{known.name}</b> and saves back to it</>
-            : <>A new game, saved as <b>{c.name}</b></>}
+          {rich(live && to ? t(wrote[p] ? 'link.save.savingAgo' : 'link.save.saving', { ago: ago(wrote[p]) })
+            : c.slot !== null ? t(known ? 'link.save.startsFrom' : 'link.save.startsFromNew', { slot: slotLabel(c.slot) })
+            : known ? t('link.save.continues')
+            : t('link.save.fresh'), { b: <b>{live && to ? nameOf(to) : known && c.slot === null ? known.name : c.slot !== null ? nameOf(c) : c.name}</b> })}
         </small>
         {savErr[p] && <small className="bad" role="alert">{savErr[p]}</small>}
         <input ref={(el) => { savInput.current[p] = el; }} type="file" accept={fileAccept('.sav,.srm')} className="sr" tabIndex={-1} aria-hidden="true"
@@ -285,10 +287,10 @@ export function LinkCablePage() {
     const f = fileOf(p);
     return (
       <section className="player" aria-labelledby={`h-p${p}`}>
-        <h2 id={`h-p${p}`}><i style={{ background: p === 1 ? 'var(--c)' : 'var(--m)' }} />Player {p}</h2>
-        <div className="ctl">{LEGEND[p]}</div>
+        <h2 id={`h-p${p}`}><i style={{ background: p === 1 ? 'var(--c)' : 'var(--m)' }} />{t('link.player', { p: String(p) })}</h2>
+        <div className="ctl">{LEGEND[p].replace('{arrows}', t('link.arrows'))}</div>
         <div className="frame">
-          <canvas ref={p === 1 ? link.p1CanvasRef : link.p2CanvasRef} className="lcd" width={160} height={144} aria-label={`Player ${p} screen`} />
+          <canvas ref={p === 1 ? link.p1CanvasRef : link.p2CanvasRef} className="lcd" width={160} height={144} aria-label={t('link.screen', { p: String(p) })} />
         </div>
         {cart(p, f)}
         {saveChooser(p)}
@@ -301,39 +303,39 @@ export function LinkCablePage() {
   return (
     <main className="wrap">
       <div className="pagehead">
-        <h1>Link cable</h1>
-        <p>Two Game Boys on one screen, joined by a virtual cable. Player 2 uses the left side of the keyboard. Both consoles run in lockstep and the cable carries their serial data; games with timing-sensitive link protocols may still fail to connect.</p>
+        <h1>{t('link.title')}</h1>
+        <p>{t('link.intro')}</p>
       </div>
       <div className="lc">
         {panel(1)}
-        <div className={`cable${state.isRunning ? ' on' : ''}`} aria-live="polite"><i /><span>{state.isRunning ? 'Linked' : ready ? 'Idle' : 'Starting…'}</span><i /></div>
+        <div className={`cable${state.isRunning ? ' on' : ''}`} aria-live="polite"><i /><span>{state.isRunning ? t('link.state.linked') : ready ? t('link.state.idle') : t('link.state.starting')}</span><i /></div>
         {panel(2)}
       </div>
       {clash && !state.isRunning && (
         <div className="svp-warn" role="alert" style={{ marginTop: 16 }}>
-          <p>Both players would play and save <b>{nameOf(choice[1]!)}</b>: the two consoles would overwrite each other’s progress. Each player needs a save of their own.</p>
-          <button className="btn p" onClick={copyForP2}>Use a copy for Player 2</button>
+          <p>{rich(t('link.clash'), { b: <b>{nameOf(choice[1]!)}</b> })}</p>
+          <button className="btn p" onClick={copyForP2}>{t('link.copyP2')}</button>
         </div>
       )}
       {state.error && <p className="note" role="alert">{state.error}</p>}
       <div className="lc-bar">
         <div className="row" style={{ border: 0, padding: 0, gap: 14, color: 'var(--paper)' }}>
-          <button className="switch" role="switch" aria-checked={same} aria-label="Same game for both players" disabled={state.isRunning} onClick={() => setSame(!same)} />
-          Same game for both players
+          <button className="switch" role="switch" aria-checked={same} aria-label={t('link.same')} disabled={state.isRunning} onClick={() => setSame(!same)} />
+          {t('link.same')}
         </div>
         <div className="acts">
           <button className="btn y lg" disabled={!ready || loading || (!playable.length && !files[1]) || (clash && !state.isRunning)} onClick={connect}>
-            {state.isRunning ? <>{I.close}Disconnect</> : <>{I.link}Connect &amp; start</>}
+            {state.isRunning ? <>{I.close}{t('link.disconnect')}</> : <>{I.link}{t('link.connect')}</>}
           </button>
         </div>
       </div>
       <CartridgePicker open={picking !== null} player={picking ?? 1} games={playable} current={picking ? sel[picking] : undefined}
         onPick={(id) => picking && choose(picking, id)} onFile={() => picking && choose(picking, FILE)} onClose={() => setPicking(null)} />
       <section className="sec compat" aria-labelledby="h-compat">
-        <div className="sec-h"><h2 id="h-compat">Link-ready in your library</h2><span className="count">Games that use the link port</span></div>
+        <div className="sec-h"><h2 id="h-compat">{t('link.compat')}</h2><span className="count">{t('link.compatSub')}</span></div>
         {linkReady.length
           ? <div className="shelf">{linkReady.map((g) => <Item key={g.id} game={g} saved={savedIds} />)}</div>
-          : <p className="shelf-empty">None yet. Two-player games you add show up here.</p>}
+          : <p className="shelf-empty">{t('link.compatNone')}</p>}
       </section>
     </main>
   );

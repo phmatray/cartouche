@@ -12,8 +12,10 @@ import { InstallHint, InstallSheet } from './InstallHint';
 import { SearchDialog } from './SearchDialog';
 import { ShortcutsDialog } from './Shortcuts';
 import { Toasts } from './Toasts';
+import { LANG_NAMES, LANGS, rich, useLang, useT, type Key } from '../../i18n';
+import { useSettingsStore } from '../../store/settingsStore';
 
-const NAV: [string, string][] = [['/', 'Library'], ['/link-cable', 'Link Cable'], ['/settings', 'Settings']];
+const NAV: [string, Key][] = [['/', 'shell.nav.library'], ['/link-cable', 'shell.nav.link'], ['/settings', 'shell.nav.settings']];
 const typing = () => {
   const el = document.activeElement as HTMLInputElement | null;
   return !!el && (/INPUT|SELECT|TEXTAREA/.test(el.tagName) && el.type !== 'range' || el.isContentEditable);
@@ -37,6 +39,7 @@ export function AppShell() {
   const [shortcuts, setShortcuts] = useState(false);
   const [dropping, setDropping] = useState(false);
   const canInstall = useInstall((s) => s.can) !== null;
+  const t = useT();
 
   // Close the mobile menu on navigation. Scroll: <ScrollRestoration> (top on a new page, restored on back).
   const [lastPath, setLastPath] = useState(pathname);
@@ -99,28 +102,29 @@ export function AppShell() {
       <header className="top" onClick={(e) => { if (menu && (e.target as Element).closest('a,button:not(.menu)')) closeMenu(false); }}>
         <div className="wrap">
           <Wordmark />
-          <nav className="nav" aria-label="Main">
-            {NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === '/'}>{label}</NavLink>)}
+          <nav className="nav" aria-label={t('shell.nav.main')}>
+            {NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === '/'}>{t(label)}</NavLink>)}
           </nav>
-          <button className="search" aria-label="Search games" onClick={openSearch}>
-            {I.search}<span>Search {games.length ? games.length.toLocaleString('en-US') : ''} games</span><kbd>/</kbd>
+          <button className="search" aria-label={t('shell.search')} onClick={openSearch}>
+            {I.search}<span>{games.length ? t('shell.searchN', { count: games.length }) : t('shell.search')}</span><kbd>/</kbd>
           </button>
-          <Link className="btn y" aria-label="Add ROMs" to="/add">{I.plus}<span className="lbl">Add ROMs</span></Link>
-          <a className="gh" href={REPO_URL} target="_blank" rel="noopener" aria-label="Cartouche on GitHub" title="Cartouche on GitHub">{I.github}</a>
-          <button ref={menuBtn} className="menu" aria-label={menu ? 'Close menu' : 'Menu'} aria-expanded={menu} aria-controls="mnav" onClick={() => (menu ? closeMenu() : setMenu(true))}>{menu ? I.close : I.menu}</button>
+          <Link className="btn y" aria-label={t('shell.addRoms')} to="/add">{I.plus}<span className="lbl">{t('shell.addRoms')}</span></Link>
+          <a className="gh" href={REPO_URL} target="_blank" rel="noopener" aria-label={t('shell.github')} title={t('shell.github')}>{I.github}</a>
+          <button ref={menuBtn} className="menu" aria-label={menu ? t('shell.closeMenu') : t('shell.menu')} aria-expanded={menu} aria-controls="mnav" onClick={() => (menu ? closeMenu() : setMenu(true))}>{menu ? I.close : I.menu}</button>
         </div>
         <ArtProgress />
       </header>
       {menu && <div className="mscrim" aria-hidden="true" onClick={() => closeMenu()} />}
       {/* A choice closes it; without a route change (the current page, GitHub in a new tab) focus returns to the button.
           Tabbing out of it closes it too. */}
-      <nav className={`mnav${menu ? ' open' : ''}`} id="mnav" aria-label="Main"
+      <nav className={`mnav${menu ? ' open' : ''}`} id="mnav" aria-label={t('shell.nav.main')}
         onClick={(e) => { const a = (e.target as Element).closest('a'); if (a) closeMenu(!!a.getAttribute('aria-current') || a.target === '_blank'); }}
         onBlur={(e) => { const to = e.relatedTarget; if (to && !e.currentTarget.contains(to) && to !== menuBtn.current) setMenu(false); }}>
-        {NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === '/'}>{label}{I.next}</NavLink>)}
-        <NavLink to="/add">Add ROMs{I.next}</NavLink>
-        {canInstall && <button type="button" onClick={() => { closeMenu(); startInstall(); }}>Install the app{I.load}</button>}
-        <a href={REPO_URL} target="_blank" rel="noopener">Source on GitHub{I.github}</a>
+        {NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === '/'}>{t(label)}{I.next}</NavLink>)}
+        <NavLink to="/add">{t('shell.addRoms')}{I.next}</NavLink>
+        {canInstall && <button type="button" onClick={() => { closeMenu(); startInstall(); }}>{t('common.install')}{I.load}</button>}
+        <a href={REPO_URL} target="_blank" rel="noopener">{t('shell.source')}{I.github}</a>
+        <LangSwitch />
       </nav>
 
       {/* A new page remounts (fresh state); a settings section is the same page, so focus stays in its table of contents. */}
@@ -128,20 +132,21 @@ export function AppShell() {
 
       <footer className="foot">
         <div className="wrap">
-          <span><b>Everything stays in this browser.</b> ROMs, saves and play time live on your device. No account, no upload.</span>
-          <Link to="/settings/storage">Back up your data</Link>
-          {canInstall && <a href="#install" onClick={(e) => { e.preventDefault(); startInstall(); }}>Install the app</a>}
-          <a href="#shortcuts" onClick={(e) => { e.preventDefault(); setShortcuts(true); }}>Keyboard shortcuts</a>
-          <Link to="/legal">Legal</Link>
-          <a href={REPO_URL} target="_blank" rel="noopener">Source on GitHub</a>
-          <span className="sp">Box art: libretro-thumbnails · Tobu Tobu Girl art: Tangram Games (CC BY 4.0)</span>
+          <span>{rich(t('shell.foot.stays'), { b: (s) => <b>{s}</b> })}</span>
+          <Link to="/settings/storage">{t('shell.foot.backup')}</Link>
+          {canInstall && <a href="#install" onClick={(e) => { e.preventDefault(); startInstall(); }}>{t('common.install')}</a>}
+          <a href="#shortcuts" onClick={(e) => { e.preventDefault(); setShortcuts(true); }}>{t('shell.shortcuts')}</a>
+          <Link to="/legal">{t('shell.legal')}</Link>
+          <a href={REPO_URL} target="_blank" rel="noopener">{t('shell.source')}</a>
+          <LangSwitch />
+          <span className="sp">{t('shell.foot.art')}</span>
         </div>
       </footer>
 
       <SearchDialog />
       <ShortcutsDialog open={shortcuts} onClose={() => setShortcuts(false)} />
       <div className={`dropall${dropping ? ' on' : ''}`} aria-hidden="true">
-        <div><b>Drop to add</b><span>Your files are read in this browser and never uploaded.</span></div>
+        <div><b>{t('shell.drop')}</b><span>{t('shell.dropSub')}</span></div>
       </div>
       <BoxArtDialog />
       <InstallHint />
@@ -161,14 +166,15 @@ function ArtProgress() {
   const total = useImports((s) => s.rows.length);
   const left = useImports((s) => s.rows.reduce((k, r) => k + +(r.st === 'work'), 0));
   const imp = left > 0 && !onAdd;
+  const t = useT();
   const [n, of] = imp ? [total - left, total] : [art.n, art.of];
-  const label = imp ? 'Importing ROMs' : 'Fetching box art';
+  const label = imp ? t('shell.importing') : t('shell.fetchingArt');
   return (
     <div className="artbar" role="status" aria-live="polite">
       {of > 0 && (
         <>
           <span className="meter" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={of} aria-valuenow={n}><i style={{ width: `${(n / of) * 100}%` }} /></span>
-          <span className="wrap"><span className="cnt">{label} · {n.toLocaleString('en-US')} of {of.toLocaleString('en-US')}</span></span>
+          <span className="wrap"><span className="cnt">{t('shell.progress', { label, n, of })}</span></span>
         </>
       )}
     </div>
@@ -176,12 +182,25 @@ function ArtProgress() {
 }
 
 export function NotFound() {
-  useEffect(() => { document.title = 'Not found · Cartouche'; }, []);
+  const t = useT();
+  useEffect(() => { document.title = t('common.docTitle', { page: t('common.notFound.docTitle') }); }, [t]);
   return (
     <main className="wrap nf">
-      <h1>Nothing in this slot.</h1>
-      <p className="lede" style={{ color: 'var(--mute)' }}>This page doesn’t exist, or the game was removed from your library.</p>
-      <div className="acts" style={{ marginTop: 28 }}><Link className="btn y" to="/">Back to the library</Link></div>
+      <h1>{t('common.notFound.title')}</h1>
+      <p className="lede" style={{ color: 'var(--mute)' }}>{t('common.notFound.body')}</p>
+      <div className="acts" style={{ marginTop: 28 }}><Link className="btn y" to="/">{t('common.notFound.back')}</Link></div>
     </main>
+  );
+}
+
+/** The three languages, each named in itself (mobile menu and footer; Settings › Language also has Automatic). */
+function LangSwitch() {
+  const t = useT();
+  const lang = useLang();
+  const set = useSettingsStore((s) => s.set);
+  return (
+    <span className="langs" role="group" aria-label={t('common.language')}>
+      {LANGS.map((l) => <button key={l} type="button" lang={l} aria-pressed={lang === l} onClick={() => set({ language: l })}>{LANG_NAMES[l]}</button>)}
+    </span>
   );
 }

@@ -5,59 +5,74 @@ import { toast } from '../shell/actions';
 import { ShortcutsList } from '../shell/Shortcuts';
 import { I, REPO_URL } from '../icons';
 import { Row } from './parts';
+import { rich, t as tNow, useT } from '../../i18n';
 
 export function AboutTab() {
   const installed = isInstalled();
+  const t = useT();
   const install = async () => {
-    if (!(await promptInstall())) toast('Look for “Install” in your browser’s address bar or menu', 'c');
+    if (!(await promptInstall())) toast(tNow('settings.about.lookFor'), 'c');
   };
   return (
     <>
-      <h2>About</h2>
-      <p className="intro">Cartouche is a Game Boy and Game Boy Color emulator that runs entirely in your browser. The core is written in Rust and compiled to WebAssembly.</p>
+      <h2>{t('settings.tabs.about')}</h2>
+      <p className="intro">{t('settings.about.intro')}</p>
 
-      <Row label="Source code" sub="Open source under the MIT License. Issues and contributions welcome.">
-        <a className="btn line" style={{ color: 'var(--ink)' }} href={REPO_URL} target="_blank" rel="noopener">{I.github}Cartouche on GitHub</a>
+      <Row label={t('settings.about.source')} sub={t('settings.about.sourceSub')}>
+        <a className="btn line" style={{ color: 'var(--ink)' }} href={REPO_URL} target="_blank" rel="noopener">{I.github}{t('shell.github')}</a>
       </Row>
 
-      <h3>Your data</h3>
+      <h3>{t('settings.about.data')}</h3>
       <p className="intro" style={{ margin: '8px 0 0' }}>
-        No account, no server, no tracking, no analytics. ROMs, saves, screenshots and settings are stored in this browser (IndexedDB and local storage) and never uploaded.
-        The covers of the bundled Tobu Tobu Girl games come with the app. The only requests to other sites are for box art of recognized ROMs you added, from the libretro-thumbnails project on GitHub (raw.githubusercontent.com),
-        and only if you agree to it (it’s off by default; change it in <Link to="/settings/storage" style={{ color: 'var(--ink)' }}>Storage</Link>). Cartouche never offers commercial ROMs: bring your own dumps.
+        {rich(t('settings.about.dataBody'), { a: (s) => <Link to="/settings/storage" style={{ color: 'var(--ink)' }}>{s}</Link> })}
       </p>
 
-      <h3>Install</h3>
+      <h3>{t('settings.about.install')}</h3>
       {installed ? (
-        <Row label="Install as an app" sub="Installed: you’re using the app.">
-          <button className="btn k" disabled>Installed</button>
+        <Row label={t('settings.about.asApp')} sub={t('settings.about.installedSub')}>
+          <button className="btn k" disabled>{t('settings.about.installed')}</button>
         </Row>
       ) : isIos() ? (
         <div className="row col ios-install">
-          <span>Install on your {device()}</span>
+          <span>{t('shell.install.title', { device: device() })}</span>
           <p>
             <IosStep />
-            <small>On recent iOS, Share is in Safari’s ⋯ menu. Cartouche then opens full screen from its icon, plays offline, and keeps its storage: Safari can delete a website’s data after 7 days of use without a visit, and Home Screen apps aren’t subject to that.</small>
+            <small>{t('settings.about.ios')}</small>
           </p>
         </div>
       ) : (
-        <Row label="Install as an app" sub="Opens in its own window and works offline after the first visit">
-          <button className="btn k" onClick={install}>Install</button>
+        <Row label={t('settings.about.asApp')} sub={t('settings.about.asAppSub')}>
+          <button className="btn k" onClick={install}>{t('settings.about.installBtn')}</button>
         </Row>
       )}
 
-      <h3>Keyboard shortcuts</h3>
+      <h3>{t('shell.shortcuts')}</h3>
       <ShortcutsList />
 
-      <h3>Credits</h3>
+      <h3>{t('game.credits')}</h3>
       <p className="intro" style={{ margin: '8px 0 0' }}>
-        Optional box art of your own games from the libretro-thumbnails project. Game details from GameDataBase © 2024 by PigSaint (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" style={{ color: 'var(--ink)' }}>CC BY 4.0</a>), modified, and No-Intro names from libretro-database (<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer" style={{ color: 'var(--ink)' }}>CC BY-SA 4.0</a>).
-        Typeface: Archivo, © 2020 The Archivo Project Authors (<a href={`${import.meta.env.BASE_URL}licenses/OFL-Archivo.txt`} target="_blank" rel="noreferrer" style={{ color: 'var(--ink)' }}>SIL Open Font License 1.1</a>), served from this site. Bundled games: <Link to="/game/tobu-tobu-girl" style={{ color: 'var(--ink)' }}>Tobu Tobu Girl</Link> and <Link to="/game/tobu-tobu-girl-deluxe" style={{ color: 'var(--ink)' }}>Tobu Tobu Girl Deluxe</Link> © 2017 Tangram Games (code MIT, assets <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" style={{ color: 'var(--ink)' }}>CC BY 4.0</a>; their box art is the official key art from the <a href="https://tangramgames.itch.io/tobutobugirl" target="_blank" rel="noreferrer" style={{ color: 'var(--ink)' }}>Tobu Tobu Girl</a> and <a href="https://tangramgames.itch.io/tobu-tobu-girl-deluxe" target="_blank" rel="noreferrer" style={{ color: 'var(--ink)' }}>Deluxe</a> itch.io pages, cropped and resized);
-        {' '}<Link to="/game/ucity" style={{ color: 'var(--ink)' }}>µCity</Link> © 2017-2018 Antonio Niño Díaz (<a href={`${import.meta.env.BASE_URL}licenses/GPL-3.0-ucity.txt`} target="_blank" rel="noreferrer" style={{ color: 'var(--ink)' }}>GPL-3.0-or-later</a>; graphics and music <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noreferrer" style={{ color: 'var(--ink)' }}>CC BY-SA 4.0</a>; <a href="https://github.com/AntonioND/ucity/tree/v1.3" target="_blank" rel="noreferrer" style={{ color: 'var(--ink)' }}>source</a>).
-        Test cartridges: dmg-acid2 and cgb-acid2 © 2020 Matt Currie (MIT); cpu_instrs by Shay Green (Blargg), no license stated, will be removed on the author’s request. Each is credited on its game page.
-        Open-source licenses: <a href={import.meta.env.BASE_URL + 'THIRD_PARTY_NOTICES.txt'} style={{ color: 'var(--ink)' }}>third-party notices</a> and <a href={import.meta.env.BASE_URL + 'THIRD_PARTY_LICENSES.txt'} style={{ color: 'var(--ink)' }}>full license texts</a>.
-        Game Boy and Game Boy Color are trademarks of Nintendo; Cartouche is not affiliated with Nintendo. See <Link to="/legal" style={{ color: 'var(--ink)' }}>Legal</Link>.
+        {rich(t('settings.about.credits'), CREDIT_LINKS)}
       </p>
     </>
   );
 }
+
+const ink = { color: 'var(--ink)' };
+const ext = (href: string) => (text: string) => <a href={href} target="_blank" rel="noreferrer" style={ink}>{text}</a>;
+const base = import.meta.env.BASE_URL;
+/** The links of the credits paragraph, by the tag that wraps each in the translated text. */
+const CREDIT_LINKS = {
+  ccby: ext('https://creativecommons.org/licenses/by/4.0/'),
+  ccbysa: ext('https://creativecommons.org/licenses/by-sa/4.0/'),
+  ofl: ext(`${base}licenses/OFL-Archivo.txt`),
+  tobu: (s: string) => <Link to="/game/tobu-tobu-girl" style={ink}>{s}</Link>,
+  tobudx: (s: string) => <Link to="/game/tobu-tobu-girl-deluxe" style={ink}>{s}</Link>,
+  itch: ext('https://tangramgames.itch.io/tobutobugirl'),
+  itchdx: ext('https://tangramgames.itch.io/tobu-tobu-girl-deluxe'),
+  ucity: (s: string) => <Link to="/game/ucity" style={ink}>{s}</Link>,
+  gpl: ext(`${base}licenses/GPL-3.0-ucity.txt`),
+  src: ext('https://github.com/AntonioND/ucity/tree/v1.3'),
+  notices: (s: string) => <a href={base + 'THIRD_PARTY_NOTICES.txt'} style={ink}>{s}</a>,
+  licenses: (s: string) => <a href={base + 'THIRD_PARTY_LICENSES.txt'} style={ink}>{s}</a>,
+  legal: (s: string) => <Link to="/legal" style={ink}>{s}</Link>,
+};

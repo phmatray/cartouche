@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useRef, useState, useCallback, useEffect } from 'react';
 import type { FromLinkWorkerMsg, ToLinkWorkerMsg } from '../workers/link-worker';
 
@@ -75,7 +76,7 @@ export function useLinkCable(onSram?: (saves: [Uint8Array | null, Uint8Array | n
           break;
         case 'romLoaded':
           if (!msg.success) {
-            setState(s => ({ ...s, error: `P${msg.player} ROM error: ${msg.error}` }));
+            setState(s => ({ ...s, error: t('link.romError', { p: String(msg.player), error: String(msg.error) }) }));
           } else {
             setState(s => msg.player === 1
               ? { ...s, p1RomLoaded: true, error: null }

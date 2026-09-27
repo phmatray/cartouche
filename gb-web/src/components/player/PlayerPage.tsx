@@ -26,6 +26,7 @@ import { ConfirmDialog, type ConfirmRequest } from '../shell/ConfirmDialog';
 import { useAlbum, useLinkRom, useRomHeader } from '../../hooks/useGameExtras';
 import { Manual, type Tab } from './Manual';
 import { fileAccept } from '../../lib/pwa';
+import { t as tNow, useT } from '../../i18n';
 
 const FPS = 4194304 / 70224; // 59.73 Hz, the Game Boy's real frame rate
 const SPEEDS = [0.5, 1, 2, 4];
@@ -47,6 +48,7 @@ function Player({ game }: { game: GameEntry }) {
   const [q] = useSearchParams();
   const { savedIds, storageError, deleteGame } = useGameLibrary();
   const navigate = useNavigate();
+  const t = useT();
   const emu = useEmulator();
   const { isReady, isRunning, setIsRunning, romLoaded, isCgb, loadRom, runFrame, getAudioSamples, pressButton, releaseButton,
     errors, hasBatteryRam, exportSram, importSram, saveState, loadState, framebufferSnapshot, setTraceEnabled, getTrace } = emu;
@@ -99,7 +101,7 @@ function Player({ game }: { game: GameEntry }) {
   }, []);
   const { connected: gamepad } = useGamepad(pressButton, releaseButton, romLoaded, toggleFullscreen);
 
-  useEffect(() => { document.title = `${game.title} · Cartouche`; }, [game.title]);
+  useEffect(() => { document.title = t('common.docTitle', { page: game.title }); }, [game.title, t]);
   // Settings › Audio › Channels (applied again after each ROM load: the core resets with the cartridge).
   const { setChannelMuted } = emu;
   useEffect(() => {
@@ -143,7 +145,7 @@ function Player({ game }: { game: GameEntry }) {
     const from: SlotKey | null = q.get('resume') ? 'auto' : slot !== null ? +slot : null;
     if (from !== null) {
       const ok = await saves.load(from);
-      toast(ok ? (from === 'auto' ? 'Resumed where you left off' : `Loaded slot ${+from + 1}`) : 'That save is gone. Starting fresh.', ok ? 'c' : 'm');
+      toast(ok ? (from === 'auto' ? tNow('player.toast.resumed') : tNow('player.toast.loadedSlot', { n: String(+from + 1) })) : tNow('player.toast.gone'), ok ? 'c' : 'm');
     }
     setIsRunning(true);
   }, [loadRom, hasBatteryRam, importSram, game.id, q, saves, setIsRunning]);
@@ -152,7 +154,7 @@ function Player({ game }: { game: GameEntry }) {
   useEffect(() => {
     if (!isReady || booted.current || !owned(game)) return;
     booted.current = true;
-    fetchRom(game).then(boot).catch((e) => toast(`Couldn’t load the ROM: ${e instanceof Error ? e.message : e}`, 'm'));
+    fetchRom(game).then(boot).catch((e) => toast(tNow('player.toast.loadFailed', { error: e instanceof Error ? e.message : String(e) }), 'm'));
   }, [isReady, game, boot]);
 
   // ---- frame loop: real-time paced (60 Hz or 120 Hz screens alike), speed ½–4× ----
@@ -229,7 +231,7 @@ function Player({ game }: { game: GameEntry }) {
       window.removeEventListener('pagehide', onPageHide);
       const wasDirty = dirty.current && useSettingsStore.getState().resumePoints;
       leaveRef.current();
-      if (wasDirty) toast(`Resume point saved for ${game.title}`, 'm');
+      if (wasDirty) toast(tNow('player.toast.resumeSaved', { title: game.title }), 'm');
     };
   }, [game.title]);
 
@@ -239,20 +241,20 @@ function Player({ game }: { game: GameEntry }) {
   const saveSlot = useCallback(async (i: number) => {
     if (!romLoaded || !(await saves.save(i))) return;
     setSavedJustNow(true);
-    toast(`Saved to slot ${i + 1}`, 'm');
+    toast(tNow('player.toast.saved', { n: String(i + 1) }), 'm');
   }, [romLoaded, saves]);
   const loadSlot = useCallback(async (k: SlotKey) => {
     if (!romLoaded) return;
-    if (await saves.load(k)) toast(`Loaded ${k === 'auto' ? 'the resume point' : `slot ${k + 1}`}`, 'c');
-    else toast(k === 'auto' ? 'No resume point yet' : `Slot ${k + 1} is empty`, 'm');
+    if (await saves.load(k)) toast(k === 'auto' ? tNow('player.toast.loadedResume') : tNow('player.toast.loadedSlot', { n: String(k + 1) }), 'c');
+    else toast(k === 'auto' ? tNow('player.toast.noResume') : tNow('player.toast.emptySlot', { n: String(k + 1) }), 'm');
   }, [romLoaded, saves]);
   const screenshot = useCallback(async () => {
     const rgba = romLoaded && framebufferSnapshot();
     if (!rgba) return;
     await album.add(rgba);
-    toast('Screenshot added to the album', '', { label: 'View', run: () => { setTab('album'); setManual(true); } });
+    toast(tNow('player.toast.shot'), '', { label: tNow('player.toast.view'), run: () => { setTab('album'); setManual(true); } });
   }, [romLoaded, framebufferSnapshot, album]);
-  const mute = useCallback(() => { toggleMute(); toast(muted ? 'Sound on' : 'Sound off', 'c'); }, [toggleMute, muted]);
+  const mute = useCallback(() => { toggleMute(); toast(muted ? tNow('player.toast.soundOn') : tNow('player.toast.soundOff'), 'c'); }, [toggleMute, muted]);
 
   // ---- keyboard: game buttons from Settings, then player shortcuts ----
   const actions = useRef({ togglePlay, saveSlot, loadSlot, screenshot, mute, toggleFullscreen, startRewind, stopRewind });
@@ -285,7 +287,7 @@ function Player({ game }: { game: GameEntry }) {
 
   const auto = saves.states[0];
   const [kind, label] = tagOf(game, savedIds);
-  const status = needsRom ? label : savedJustNow ? 'Saved just now' : auto ? `Resume point ${ago(auto.timestamp)}` : label;
+  const status = needsRom ? label : savedJustNow ? t('player.savedNow') : auto ? t('player.resumeAgo', { ago: ago(auto.timestamp) }) : label;
   // A fixed size (2×–4×) is the most the screen takes: the CSS still shrinks it to the room there is.
   const screenStyle = screenSize === 'fit' ? undefined : { '--sw': `${160 * +screenSize + 24}px` } as CSSProperties;
   const disabled = !romLoaded;
@@ -308,47 +310,47 @@ function Player({ game }: { game: GameEntry }) {
   return (
     <div ref={rootRef} className={`pl${manual ? '' : ' closed'}${idle ? ' idle' : ''}${immersive ? ' imm' : ''}`} style={{ '--flood': ink } as CSSProperties}>
       <header className="pl-top">
-        <Link className="back" to={paths.game(game.id)}>{I.back}<span className="lbl">Back</span></Link>
+        <Link className="back" to={paths.game(game.id)}>{I.back}<span className="lbl">{t('common.back')}</span></Link>
         <h1><Link to={paths.game(game.id)} title={game.title}><Title text={game.title} /></Link></h1>
         <span className={`tag ${savedJustNow || auto ? 'saved' : kind}`}>{status}</span>
         <div className="right">
-          <span className={`pad${gamepad ? ' on' : ''}`}><i /><span>{gamepad ? 'Gamepad' : 'No gamepad'}</span></span>
-          <button className="manual-btn" aria-expanded={manual} aria-controls="sheet" onClick={() => setManual(!manual)}>{I.book}<span>Manual</span></button>
+          <span className={`pad${gamepad ? ' on' : ''}`}><i /><span>{gamepad ? t('player.gamepad') : t('player.noGamepad')}</span></span>
+          <button className="manual-btn" aria-expanded={manual} aria-controls="sheet" onClick={() => setManual(!manual)}>{I.book}<span>{t('player.manual')}</span></button>
         </div>
       </header>
 
       <div className="pl-body">
         <div className="stage" style={screenStyle}>
-          <div className={`rw${isRewinding ? ' on' : ''}`}>{I.rew}Rewinding<span className="meter"><i style={{ width: `${bufferFill * 100}%` }} /></span></div>
+          <div className={`rw${isRewinding ? ' on' : ''}`}>{I.rew}{t('player.rewinding')}<span className="meter"><i style={{ width: `${bufferFill * 100}%` }} /></span></div>
           <div className="screen">
             <div className="frame">
-              <canvas key={canvasKey} ref={canvasRef} className={`lcd${lit ? ' lit' : ''}`} width={800} height={720} aria-label={`${game.title} screen`} />
+              <canvas key={canvasKey} ref={canvasRef} className={`lcd${lit ? ' lit' : ''}`} width={800} height={720} aria-label={t('player.screenOf', { title: game.title })} />
               {badRom ? (
                 <div className="overlay">
-                  <b>This file can’t be played</b>
-                  <p>It’s damaged or isn’t a Game Boy ROM.</p>
+                  <b>{t('player.bad.title')}</b>
+                  <p>{t('player.bad.body')}</p>
                   <div className="acts">
-                    {game.isLocal && <button className="btn y" onClick={async () => { await deleteGame(game.id); toast(`${game.title} removed`, 'm'); navigate('/'); }}>Remove from library</button>}
-                    <Link className="btn line" to={paths.game(game.id)}>Back</Link>
+                    {game.isLocal && <button className="btn y" onClick={async () => { await deleteGame(game.id); toast(tNow('game.removed', { title: game.title }), 'm'); navigate('/'); }}>{t('player.bad.remove')}</button>}
+                    <Link className="btn line" to={paths.game(game.id)}>{t('common.back')}</Link>
                   </div>
                 </div>
               ) : needsRom ? (
                 <div className="overlay">
-                  <b>Insert your ROM</b>
-                  <p>{game.title} isn’t included. Load your own .gb file to play; it stays in this browser.</p>
+                  <b>{t('player.insert.title')}</b>
+                  <p>{t('player.insert.body', { title: game.title })}</p>
                   <label className="btn y" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
-                    {I.cart}Load your ROM
+                    {I.cart}{t('game.loadRom')}
                     <input type="file" accept={fileAccept('.gb,.gbc')} className="sr" tabIndex={-1}
                       onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; const data = f && await linkRom(f); if (data) boot(data); }} />
                   </label>
                 </div>
               ) : romLoaded && !isRunning && !isRewinding && (
-                <div className="overlay"><b>Paused</b><p>Press P or the play button to continue.</p></div>
+                <div className="overlay"><b>{t('player.paused')}</b><p>{t('player.pausedSub')}</p></div>
               )}
             </div>
           </div>
           <div className="cap">
-            <span>{display.custom ? 'Custom' : presetOf(display.cfg.preset)!.label}</span><i /><span>{speed === 0.5 ? '½' : speed}× speed</span><i /><span>Rewind {Math.round(bufferFill * rewindSeconds)} s ready</span>
+            <span>{display.custom ? t('settings.screen.custom') : t(`settings.screen.presets.${presetOf(display.cfg.preset)!.name}.label`)}</span><i /><span>{t('player.speed', { x: speed === 0.5 ? '½' : String(speed) })}</span><i /><span>{t('player.rewindReady', { s: String(Math.round(bufferFill * rewindSeconds)) })}</span>
           </div>
         </div>
 
@@ -356,44 +358,44 @@ function Player({ game }: { game: GameEntry }) {
           game={game} header={header} inColor={inColor} tab={tab} onTab={setTab} romLoaded={romLoaded && !storageError} isRunning={isRunning}
           states={saves.states} shots={album.shots} emu={emu}
           onSave={(i) => (saves.states[i + 1]
-            ? setConfirm({ title: `Overwrite slot ${i + 1}?`, body: `The save from ${ago(saves.states[i + 1]!.timestamp)} is replaced by the game as it is now.`, ok: 'Overwrite', run: () => saveSlot(i) })
+            ? setConfirm({ title: t('player.overwrite.title', { n: String(i + 1) }), body: t('player.overwrite.body', { ago: ago(saves.states[i + 1]!.timestamp) }), ok: t('player.overwrite.ok'), run: () => saveSlot(i) })
             : saveSlot(i))}
           onLoad={loadSlot} onScreenshot={screenshot}
         />
       </div>
 
-      <nav className="deck" aria-label="Playback">
-        <button className="dk main" onClick={togglePlay} disabled={disabled} aria-label={isRunning ? 'Pause, P' : 'Play, P'}>
-          {isRunning ? <>{I.pause}<span className="lbl">Pause</span></> : <>{I.play}<span className="lbl">Play</span></>}<span className="k">P</span>
+      <nav className="deck" aria-label={t('player.deck.label')}>
+        <button className="dk main" onClick={togglePlay} disabled={disabled} aria-label={isRunning ? t('player.deck.pauseP') : t('player.deck.playP')}>
+          {isRunning ? <>{I.pause}<span className="lbl">{t('player.deck.pause')}</span></> : <>{I.play}<span className="lbl">{t('library.hero.play')}</span></>}<span className="k">P</span>
         </button>
-        <button className="dk" aria-label="Rewind, hold R" aria-pressed={isRewinding} disabled={disabled}
+        <button className="dk" aria-label={t('player.deck.rewindR')} aria-pressed={isRewinding} disabled={disabled}
           onPointerDown={startRewind} onPointerUp={stopRewind} onPointerLeave={stopRewind} onPointerCancel={stopRewind}>
-          {I.rew}<span className="lbl">Rewind</span><span className="k">Hold R</span>
+          {I.rew}<span className="lbl">{t('player.deck.rewind')}</span><span className="k">{t('player.deck.holdR')}</span>
         </button>
         <span className="gap" />
-        <div className="speed" role="group" aria-label="Speed">
+        <div className="speed" role="group" aria-label={t('player.deck.speed')}>
           {SPEEDS.map((s) => <button key={s} aria-pressed={speed === s} onClick={() => setSpeed(s)}>{s === 0.5 ? '½' : s}×</button>)}
         </div>
         {/* Narrow phones: one button steps through the speeds (the group doesn't fit). */}
-        <button className="dk spd" onClick={() => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length])} aria-label={`Speed ${speed}×, change`}>{speed === 0.5 ? '½' : speed}×</button>
+        <button className="dk spd" onClick={() => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length])} aria-label={t('player.deck.speedChange', { x: String(speed) })}>{speed === 0.5 ? '½' : speed}×</button>
         <span className="gap" />
-        <button className="dk" onClick={() => saveSlot(0)} disabled={noStore} aria-label="Save to slot 1, F5">{I.save}<span className="lbl">Save</span><span className="k">F5</span></button>
-        <button className="dk hide-m" onClick={() => loadSlot(0)} disabled={noStore} aria-label="Load slot 1, F8">{I.load}<span className="lbl">Load</span><span className="k">F8</span></button>
-        <button className="dk hide-m" onClick={screenshot} disabled={noStore} aria-label="Screenshot, F12">{I.cam}<span className="lbl">Photo</span><span className="k">F12</span></button>
+        <button className="dk" onClick={() => saveSlot(0)} disabled={noStore} aria-label={t('player.deck.saveF5')}>{I.save}<span className="lbl">{t('common.save')}</span><span className="k">F5</span></button>
+        <button className="dk hide-m" onClick={() => loadSlot(0)} disabled={noStore} aria-label={t('player.deck.loadF8')}>{I.load}<span className="lbl">{t('common.load')}</span><span className="k">F8</span></button>
+        <button className="dk hide-m" onClick={screenshot} disabled={noStore} aria-label={t('player.deck.shotF12')}>{I.cam}<span className="lbl">{t('player.deck.photo')}</span><span className="k">F12</span></button>
         <span className="push" />
-        <button className="dk hide-m" onClick={mute} aria-pressed={muted} aria-label="Mute, M">{muted ? I.mute : I.sound}</button>
+        <button className="dk hide-m" onClick={mute} aria-pressed={muted} aria-label={t('player.deck.muteM')}>{muted ? I.mute : I.sound}</button>
         {document.fullscreenEnabled
-          ? <button className="dk fs" onClick={toggleFullscreen} aria-label="Fullscreen, F">{I.full}</button>
-          : <button className="dk fs" onClick={toggleFullscreen} aria-pressed={immersive} aria-label={immersive ? 'Leave immersive view, F' : 'Immersive view, F'}>{immersive ? I.close : I.full}</button>}
+          ? <button className="dk fs" onClick={toggleFullscreen} aria-label={t('player.deck.fullF')}>{I.full}</button>
+          : <button className="dk fs" onClick={toggleFullscreen} aria-pressed={immersive} aria-label={immersive ? t('player.deck.leaveImmF') : t('player.deck.immF')}>{immersive ? I.close : I.full}</button>}
       </nav>
 
-      <div className="touch" data-size={touchSize} aria-label="Touch controls">
+      <div className="touch" data-size={touchSize} aria-label={t('player.touch.label')}>
         <div className="dpad">
           <span className="c" />
-          <button className="u" aria-label="Up" {...pad('Up')}>{I.up}</button>
-          <button className="d" aria-label="Down" {...pad('Down')}>{I.down}</button>
-          <button className="l" aria-label="Left" {...pad('Left')}>{I.left}</button>
-          <button className="r" aria-label="Right" {...pad('Right')}>{I.right}</button>
+          <button className="u" aria-label={t('player.touch.up')} {...pad('Up')}>{I.up}</button>
+          <button className="d" aria-label={t('player.touch.down')} {...pad('Down')}>{I.down}</button>
+          <button className="l" aria-label={t('player.touch.left')} {...pad('Left')}>{I.left}</button>
+          <button className="r" aria-label={t('player.touch.right')} {...pad('Right')}>{I.right}</button>
         </div>
         <div className="ab"><button className="b" {...pad('B')}>B</button><button className="a" {...pad('A')}>A</button></div>
         <div className="ss"><button {...pad('Select')}>Select</button><button {...pad('Start')}>Start</button></div>

@@ -5,6 +5,7 @@ import { supportsWebGL2 } from '../../shaders/lcd-engine';
 import { neuralStatus } from '../../neural/governor';
 import { PALETTES, presetOf, presetsFor, type Correction, type Filters, type ScreenKind, type Upscale } from '../../shaders/filters';
 import { Row, Seg, Slider, SwitchRow } from './parts';
+import { useT } from '../../i18n';
 
 /** A frame drawn through the actual filter chain, on its own small canvas. */
 export function PresetPreview({ filters, color, frame }: { filters: Filters; color: boolean; frame: Uint8ClampedArray | null }) {
@@ -20,15 +21,15 @@ const pct = (v: number) => Math.round(v * 100);
 /** The AI disclosure shown wherever Neural 4× is on. */
 export function NeuralNote() {
   const level = useSyncExternalStore(neuralStatus.subscribe, neuralStatus.get);
+  const t = useT();
   return (
     <div className="notice ai">
-      <span className="ic">AI</span>
+      <span className="ic">{t('settings.screen.ai')}</span>
       <span>
-        Upscaled by a neural network trained on Game Boy frames; it adds detail that wasn’t in the original pixels.
-        Previews and paused frames use its fast table until the game runs.
-        {!supportsWebGL2() ? <> <b>This browser has no WebGL 2, so it shows Nearest.</b></>
-          : level === 1 ? <> <b>Too slow on this device: running as the fast table only.</b></>
-          : level === 0 ? <> <b>Too slow on this device: showing Nearest for now.</b></> : null}
+        {t('settings.screen.neural')}
+        {!supportsWebGL2() ? <> <b>{t('settings.screen.noWebgl')}</b></>
+          : level === 1 ? <> <b>{t('settings.screen.slowTable')}</b></>
+          : level === 0 ? <> <b>{t('settings.screen.slowNearest')}</b></> : null}
       </span>
     </div>
   );
@@ -37,18 +38,19 @@ export function NeuralNote() {
 /** Smooth motion: a player-wide switch (not part of a preset or a game’s own settings). */
 export function MotionRows() {
   const { smoothMotion, smoothMotionForce, set } = useSettingsStore();
+  const t = useT();
   return (
     <>
-      <SwitchRow label="Smooth motion (120 Hz)" on={smoothMotion} set={(v) => set({ smoothMotion: v })}
-        sub="In-between frames from the game’s exact scroll and sprite positions, on screens over 60 Hz. About 8 ms more delay; Neural 4× pauses while it runs." />
+      <SwitchRow label={t('settings.screen.smooth')} on={smoothMotion} set={(v) => set({ smoothMotion: v })}
+        sub={t('settings.screen.smoothSub')} />
       {smoothMotion && (
-        <SwitchRow label="Also on 60 Hz screens" on={smoothMotionForce} set={(v) => set({ smoothMotionForce: v })}
-          sub="Off by default: a 60 Hz screen has no room for extra frames, it only adds delay" />
+        <SwitchRow label={t('settings.screen.force')} on={smoothMotionForce} set={(v) => set({ smoothMotionForce: v })}
+          sub={t('settings.screen.forceSub')} />
       )}
     </>
   );
 }
-const SHADES = ['Lightest', 'Light', 'Dark', 'Darkest'];
+const SHADES = ['lightest', 'light', 'dark', 'darkest'] as const;
 
 /**
  * Presets with live previews, then every filter. Edits the game's own settings when it has them,
@@ -58,40 +60,42 @@ export function ScreenFilters({ kind, gameId, frame }: { kind: ScreenKind; gameI
   const { cfg, custom, perGame, choose, tweak, reset, setPerGame } = useDisplay(kind, gameId);
   const f = cfg.filters, color = kind === 'cgb';
   const base = presetOf(cfg.preset)!;
+  const t = useT();
+  const baseLabel = t(`settings.screen.presets.${base.name}.label`);
   return (
     <div className="filters">
       <div className="presets presets-4">
         {presetsFor(kind).map((p) => (
           <button key={p.name} className="preset" aria-pressed={!custom && cfg.preset === p.name} onClick={() => choose(p.name)}>
-            <PresetPreview filters={p.filters} color={color} frame={frame} /><b>{p.label}</b><small>{p.description}</small>
+            <PresetPreview filters={p.filters} color={color} frame={frame} /><b>{t(`settings.screen.presets.${p.name}.label`)}</b><small>{t(`settings.screen.presets.${p.name}.description`)}</small>
           </button>
         ))}
         {custom && (
           // Not a button: the current selection, never a reset (that is "Reset to …" below).
           <div className="preset" aria-current="true">
-            <PresetPreview filters={f} color={color} frame={frame} /><b>Custom</b><small>Based on {base.label}</small>
+            <PresetPreview filters={f} color={color} frame={frame} /><b>{t('settings.screen.custom')}</b><small>{t('settings.screen.basedOn', { name: baseLabel })}</small>
           </div>
         )}
       </div>
       {gameId !== undefined && (
-        <SwitchRow label="Use these settings for this game only" sub={perGame ? 'Other games keep your default' : 'Changes apply to every game of this kind'} on={perGame} set={setPerGame} />
+        <SwitchRow label={t('settings.screen.perGame')} sub={perGame ? t('settings.screen.perGameOn') : t('settings.screen.perGameOff')} on={perGame} set={setPerGame} />
       )}
 
       <div className="filters-h">
-        <h3>Filters</h3>
-        <button className="sbtn" disabled={!custom} onClick={reset}>Reset to {base.label}</button>
+        <h3>{t('settings.screen.filters')}</h3>
+        <button className="sbtn" disabled={!custom} onClick={reset}>{t('settings.screen.resetTo', { name: baseLabel })}</button>
       </div>
       {color ? (
-        <Row label="Color correction" sub="How a real Game Boy Color LCD shows the colors">
-          <Seg<Correction> label="Color correction" value={f.correction} options={[['off', 'Off'], ['accurate', 'Accurate'], ['vivid', 'Vivid']]} set={(correction) => tweak({ correction })} />
+        <Row label={t('settings.screen.correction')} sub={t('settings.screen.correctionSub')}>
+          <Seg<Correction> label={t('settings.screen.correction')} value={f.correction} options={[['off', t('settings.screen.off')], ['accurate', t('settings.screen.accurate')], ['vivid', t('settings.screen.vivid')]]} set={(correction) => tweak({ correction })} />
         </Row>
       ) : (
         <div className="row col">
-          <span>Palette<small>The four shades of an original Game Boy screen</small></span>
-          <div className="swatches" role="group" aria-label="Palette">
+          <span>{t('settings.screen.palette')}<small>{t('settings.screen.paletteSub')}</small></span>
+          <div className="swatches" role="group" aria-label={t('settings.screen.palette')}>
             {[...PALETTES, { id: 'custom' as const, label: 'Custom', colors: f.custom }].map((p) => (
               <button key={p.id} className="swatch" aria-pressed={f.palette === p.id} onClick={() => tweak({ palette: p.id })}>
-                <span>{p.colors.map((c, i) => <i key={i} style={{ background: c }} />)}</span>{p.label}
+                <span>{p.colors.map((c, i) => <i key={i} style={{ background: c }} />)}</span>{t(`settings.screen.palettes.${p.id}`)}
               </button>
             ))}
           </div>
@@ -100,25 +104,25 @@ export function ScreenFilters({ kind, gameId, frame }: { kind: ScreenKind; gameI
               {f.custom.map((c, i) => (
                 <label key={i}>
                   <input type="color" value={c} onChange={(e) => tweak({ palette: 'custom', custom: f.custom.map((x, j) => (j === i ? e.target.value : x)) })} />
-                  {SHADES[i]}
+                  {t(`settings.screen.shades.${SHADES[i]}`)}
                 </label>
               ))}
             </div>
           )}
         </div>
       )}
-      <Slider label="Ghosting" sub="LCD persistence: moving sprites leave a trail, flicker blends" value={pct(f.ghosting)} min={0} max={70} set={(v) => tweak({ ghosting: v / 100 })} />
+      <Slider label={t('settings.screen.ghosting')} sub={t('settings.screen.ghostingSub')} value={pct(f.ghosting)} min={0} max={70} set={(v) => tweak({ ghosting: v / 100 })} />
       <div className="row col">
-        <span>Upscaling<small>Nearest and Smooth keep square pixels; Scale2x, 3x and Neural 4× round off pixel-art edges</small></span>
-        <Seg<Upscale> label="Upscaling" value={f.upscale} options={[['nearest', 'Nearest'], ['scale2x', 'Scale2x'], ['scale3x', 'Scale3x'], ['smooth', 'Smooth'], ['neural', 'Neural 4×']]} set={(upscale) => tweak({ upscale })} wrap />
+        <span>{t('settings.screen.upscaling')}<small>{t('settings.screen.upscalingSub')}</small></span>
+        <Seg<Upscale> label={t('settings.screen.upscaling')} value={f.upscale} options={[['nearest', t('settings.screen.nearest')], ['scale2x', 'Scale2x'], ['scale3x', 'Scale3x'], ['smooth', t('settings.screen.smoothUp')], ['neural', 'Neural 4×']]} set={(upscale) => tweak({ upscale })} wrap />
         {f.upscale === 'neural' && <NeuralNote />}
       </div>
-      <Slider label="Pixel grid" sub="The LCD’s dot matrix" value={pct(f.grid)} min={0} max={100} set={(v) => tweak({ grid: v / 100 })} />
-      <Slider label="Scanlines" value={pct(f.scanlines)} min={0} max={100} set={(v) => tweak({ scanlines: v / 100 })} />
-      <SwitchRow label="CRT curvature" sub="A curved TV tube with darker corners" on={f.crt} set={(crt) => tweak({ crt })} />
-      <Slider label="Brightness" value={pct(f.brightness)} min={-50} max={50} set={(v) => tweak({ brightness: v / 100 })} />
-      <Slider label="Contrast" value={pct(f.contrast)} min={-50} max={50} set={(v) => tweak({ contrast: v / 100 })} />
-      <Slider label="Saturation" value={pct(f.saturation)} min={-50} max={50} set={(v) => tweak({ saturation: v / 100 })} />
+      <Slider label={t('settings.screen.grid')} sub={t('settings.screen.gridSub')} value={pct(f.grid)} min={0} max={100} set={(v) => tweak({ grid: v / 100 })} />
+      <Slider label={t('settings.screen.scanlines')} value={pct(f.scanlines)} min={0} max={100} set={(v) => tweak({ scanlines: v / 100 })} />
+      <SwitchRow label={t('settings.screen.crt')} sub={t('settings.screen.crtSub')} on={f.crt} set={(crt) => tweak({ crt })} />
+      <Slider label={t('settings.screen.brightness')} value={pct(f.brightness)} min={-50} max={50} set={(v) => tweak({ brightness: v / 100 })} />
+      <Slider label={t('settings.screen.contrast')} value={pct(f.contrast)} min={-50} max={50} set={(v) => tweak({ contrast: v / 100 })} />
+      <Slider label={t('settings.screen.saturation')} value={pct(f.saturation)} min={-50} max={50} set={(v) => tweak({ saturation: v / 100 })} />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { byline, folded, owned, paths, searchKey, spatialNext, tagOf } from '../
 import { addFilters, facetCounts, facetKey, facetLabel, formatQuery, genreLabel, normValue, parseQuery, search, suggest, valueLabel, withoutEach, type Filter, type Key, type Query } from '../../lib/search';
 import { I } from '../icons';
 import { Cover } from '../library/Cover';
+import { num, rich, t as tNow, useT } from '../../i18n';
 
 const MAX_RESULTS = 60;
 const MAX_VALUES = 60;
@@ -30,7 +31,10 @@ export function Hl({ text, q }: { text: string; q: string }): ReactNode {
 }
 
 const sameFilter = (a: Filter, b: Filter) => a.key === b.key && a.value === b.value && !!a.neg === !!b.neg;
-const chipText = (x: Filter, labels: Map<string, string>) => `${x.neg ? 'Not ' : x.key === 'is' ? '' : `${facetLabel(x.key)}: `}${valueLabel(x.key, x.value, labels)}`;
+const chipText = (x: Filter, labels: Map<string, string>) => {
+  const v = valueLabel(x.key, x.value, labels);
+  return x.neg ? tNow('search.chipNot', { label: v }) : x.key === 'is' ? v : tNow('search.chip', { facet: facetLabel(x.key), label: v });
+};
 /** The token being typed at the end of the field ('' after a space). A `key:` token only applies once finished. */
 const partialOf = (input: string) => (/\s$/.test(input) ? '' : input.match(/\S*$/)![0]);
 
@@ -45,6 +49,7 @@ export function SearchDialog() {
   const navigate = useNavigate();
   const index = useSearchIndex();
   const { savedIds, loading } = useGameLibrary();
+  const t = useT();
   const urlQ = new URLSearchParams(location.search).get('q');
   const open = urlQ !== null;
 
@@ -128,8 +133,8 @@ export function SearchDialog() {
   const sel = Math.min(idx, Math.max(0, shown.length - 1));
 
   const sugs = useMemo(() => (partial ? suggest(index, query, partial) : []),
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- `formatted` is the query
-  [index, formatted, partial]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `formatted` is the query; `t`: labels follow the language
+  [index, formatted, partial, t]);
   const sugSel = Math.min(sugIdx, Math.max(0, sugs.length - 1));
 
   /** Take a completion: `genre:` stays in the field for its value, a full `genre:rpg ` becomes a chip. */
@@ -193,22 +198,22 @@ export function SearchDialog() {
   })();
 
   return (
-    <dialog ref={ref} className="sdlg" aria-label="Search games" onCancel={(e) => { e.preventDefault(); close(); }} onKeyDown={onKey}>
+    <dialog ref={ref} className="sdlg" aria-label={t('shell.search')} onCancel={(e) => { e.preventDefault(); close(); }} onKeyDown={onKey}>
       {open && (
         <div className="wrap">
           <div className="sbar">
             <svg className="icon" style={{ width: 36, height: 36 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
-            <input ref={inputRef} type="search" placeholder={query.filters.length ? 'Add words' : 'Search games'} autoComplete="off" autoFocus spellCheck={false}
+            <input ref={inputRef} type="search" placeholder={query.filters.length ? t('search.addWords') : t('shell.search')} autoComplete="off" autoFocus spellCheck={false}
               role="combobox" aria-expanded={sugs.length > 0} aria-controls="ssug sres" aria-autocomplete="list"
               aria-activedescendant={sugs.length ? `sug-${sugSel}` : undefined} aria-describedby="shelp"
               value={input} onChange={(e) => onInput(e.target.value)} />
-            <button className="close" aria-label="Close search" onClick={close}>{I.close}</button>
+            <button className="close" aria-label={t('search.close')} onClick={close}>{I.close}</button>
             {sugs.length > 0 && (
-              <ul className="ssug" id="ssug" role="listbox" aria-label="Suggestions">
+              <ul className="ssug" id="ssug" role="listbox" aria-label={t('search.suggestions')}>
                 {sugs.map((s, i) => (
                   <li key={s.insert} id={`sug-${i}`} role="option" aria-selected={i === sugSel}
                     onMouseDown={(e) => { e.preventDefault(); accept(s.insert); inputRef.current?.focus(); }}>
-                    <b>{s.label}</b><span>{s.hint}</span>{s.count !== undefined && <span className="n">{s.count.toLocaleString('en-US')}</span>}
+                    <b>{s.label}</b><span>{s.hint}</span>{s.count !== undefined && <span className="n">{num(s.count)}</span>}
                     {i === sugSel && <kbd>Tab</kbd>}
                   </li>
                 ))}
@@ -217,7 +222,7 @@ export function SearchDialog() {
           </div>
 
           <div className="fbar">
-            <div className="chips" role="group" aria-label="Filters">
+            <div className="chips" role="group" aria-label={t('search.filters')}>
               {BAR.filter((k) => query.filters.some((x) => x.key === k || (k === 'decade' && x.key === 'year')) || index.items.some((it) => it.v[k].length)).map((k) => {
                 const n = query.filters.filter((x) => x.key === k || (k === 'decade' && x.key === 'year')).length;
                 return (
@@ -232,23 +237,23 @@ export function SearchDialog() {
           </div>
 
           {query.filters.length > 0 && (
-            <div className="factive" role="group" aria-label="Active filters">
+            <div className="factive" role="group" aria-label={t('search.active')}>
               {query.filters.map((x) => (
-                <button key={`${x.neg}${x.key}${x.value}`} className={`fchip${x.neg ? ' neg' : ''}`} aria-label={`Remove ${chipText(x, index.labels)}`}
+                <button key={`${x.neg}${x.key}${x.value}`} className={`fchip${x.neg ? ' neg' : ''}`} aria-label={t('search.remove', { label: chipText(x, index.labels) })}
                   onClick={() => apply(query.filters.filter((y) => y !== x))}>
                   {chipText(x, index.labels)}{I.close}
                 </button>
               ))}
-              {query.filters.length > 1 && <button className="linkbtn" onClick={() => apply([])}>Clear filters</button>}
+              {query.filters.length > 1 && <button className="linkbtn" onClick={() => apply([])}>{t('search.clear')}</button>}
             </div>
           )}
 
           <div className="shint" id="shelp">
-            <span><kbd>↑</kbd> <kbd>↓</kbd> to move</span><span><kbd>Enter</kbd> to open</span><span><kbd>Esc</kbd> to close</span>
-            <span className="syn">Type <code>genre:</code> <code>players:2</code> <code>-region:jp</code> <code>year:1990..1995</code> to filter</span>
-            <span className="cnt" role="status">{loading ? 'Loading your library…' : any ? `${results.length.toLocaleString('en-US')} result${results.length === 1 ? '' : 's'}${results.length > MAX_RESULTS ? `, first ${MAX_RESULTS} shown` : ''}` : 'Recently played'}</span>
+            <span>{rich(t('search.hint.move'), { keys: <><kbd>↑</kbd> <kbd>↓</kbd></> })}</span><span>{rich(t('search.hint.open'), { keys: <kbd>Enter</kbd> })}</span><span>{rich(t('search.hint.close'), { keys: <kbd>Esc</kbd> })}</span>
+            <span className="syn">{rich(t('search.hint.syntax'), { codes: <><code>genre:</code> <code>players:2</code> <code>-region:jp</code> <code>year:1990..1995</code></> })}</span>
+            <span className="cnt" role="status">{loading ? t('common.loadingLibrary') : any ? t(results.length > MAX_RESULTS ? 'search.resultsCapped' : 'search.results', { count: results.length, max: MAX_RESULTS }) : t('library.sort.recent')}</span>
           </div>
-          <ul className="sres" id="sres" role="listbox" aria-label="Results" aria-busy={loading}>
+          <ul className="sres" id="sres" role="listbox" aria-label={t('search.resultsLabel')} aria-busy={loading}>
             {loading ? null : shown.length ? shown.map((g, i) => {
               const [kind, label] = tagOf(g, savedIds);
               return (
@@ -264,18 +269,18 @@ export function SearchDialog() {
               <li className="sempty">
                 {suggestion?.best.length ? (
                   <>
-                    <p>No game matches all of these{q ? <> with “{query.text}”</> : ''}.</p>
+                    <p>{q ? t('search.empty.allWith', { text: query.text }) : t('search.empty.all')}</p>
                     <div className="acts">
                       {suggestion.best.map(({ filter, count }) => (
                         <button key={`${filter.neg}${filter.key}${filter.value}`} className="btn line" onClick={() => apply(query.filters.filter((y) => y !== filter))}>
-                          Remove {chipText(filter, index.labels)} <span className="n">{count.toLocaleString('en-US')} {count === 1 ? 'game' : 'games'}</span>
+                          {t('search.remove', { label: chipText(filter, index.labels) })} <span className="n">{t('common.games', { count })}</span>
                         </button>
                       ))}
                     </div>
                   </>
                 ) : query.filters.length ? (
-                  <>No game matches {q ? <>“{query.text}” with these filters</> : 'these filters'}. <button className="linkbtn" onClick={() => apply([])}>Clear filters</button></>
-                ) : q ? <>No game called “{query.text}”. Add it from your own files with Add ROMs.</> : 'Games you play show up here.'}
+                  <>{q ? t('search.empty.filtersWith', { text: query.text }) : t('search.empty.filters')} <button className="linkbtn" onClick={() => apply([])}>{t('search.clear')}</button></>
+                ) : q ? t('search.empty.none', { text: query.text }) : t('search.empty.recent')}
               </li>
             )}
           </ul>
@@ -291,12 +296,13 @@ function FacetSheet({ k, query, within, setWithin, toggle, apply, onDone }: {
   toggle: (x: Filter) => void; apply: (f: Filter[]) => void; onDone: () => void;
 }) {
   const index = useSearchIndex();
+  const t = useT();
   const counts = facetCounts(index, query, k);
   // Active values stay listed even when nothing else is left to count.
   const active = query.filters.filter((x) => x.key === k && !counts.some((v) => v.value === x.value)).map((x) => ({ value: x.value, label: valueLabel(k, x.value, index.labels), count: 0 }));
-  const t = folded(within).s;
+  const w = folded(within).s;
   const all = [...active, ...counts];
-  const list = t ? all.filter((v) => ` ${folded(v.label).s}`.includes(` ${t}`) || folded(v.label).s.includes(t)) : all;
+  const list = w ? all.filter((v) => ` ${folded(v.label).s}`.includes(` ${w}`) || folded(v.label).s.includes(w)) : all;
   const year = query.filters.find((x) => x.key === 'year' && !x.neg)?.value.split('..') ?? [];
   const setYear = (from: string, to: string) => {
     const rest = query.filters.filter((x) => x.key !== 'year');
@@ -309,16 +315,16 @@ function FacetSheet({ k, query, within, setWithin, toggle, apply, onDone }: {
     <div className="fpanel paper" id="fpanel" role="group" aria-label={facetLabel(k)}>
       <div className="fhead">
         <h3>{facetLabel(k)}</h3>
-        <button className="btn k" onClick={onDone}>Done</button>
+        <button className="btn k" onClick={onDone}>{t('common.done')}</button>
       </div>
       {all.length > 12 && (
-        <input className="fwithin" type="search" placeholder={`Find a ${facetLabel(k).toLowerCase()}`} aria-label={`Find a ${facetLabel(k).toLowerCase()}`}
+        <input className="fwithin" type="search" placeholder={t('search.find', { facet: facetLabel(k) })} aria-label={t('search.find', { facet: facetLabel(k) })}
           value={within} onChange={(e) => setWithin(e.target.value)} />
       )}
       {k === 'decade' && (
         <div className="years">
-          <label>From <input type="text" inputMode="numeric" pattern="\d{4}" maxLength={4} placeholder="1989" defaultValue={year[0] ?? ''} onBlur={(e) => setYear(e.target.value, year[1] ?? year[0] ?? '')} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} /></label>
-          <label>To <input type="text" inputMode="numeric" pattern="\d{4}" maxLength={4} placeholder="2003" defaultValue={year[1] ?? year[0] ?? ''} onBlur={(e) => setYear(year[0] ?? '', e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} /></label>
+          <label>{t('search.from')} <input type="text" inputMode="numeric" pattern="\d{4}" maxLength={4} placeholder="1989" defaultValue={year[0] ?? ''} onBlur={(e) => setYear(e.target.value, year[1] ?? year[0] ?? '')} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} /></label>
+          <label>{t('search.to')} <input type="text" inputMode="numeric" pattern="\d{4}" maxLength={4} placeholder="2003" defaultValue={year[1] ?? year[0] ?? ''} onBlur={(e) => setYear(year[0] ?? '', e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }} /></label>
         </div>
       )}
       {list.length ? (
@@ -329,15 +335,15 @@ function FacetSheet({ k, query, within, setWithin, toggle, apply, onDone }: {
               <li key={v.value}>
                 <button className="fv" aria-pressed={!!s && !s.neg} onClick={() => toggle({ key: k, value: v.value })}>
                   <span className="box" aria-hidden="true">{s && !s.neg ? I.check : null}</span>
-                  <span className="l">{v.label}</span><span className="n">{v.count.toLocaleString('en-US')}</span>
+                  <span className="l">{v.label}</span><span className="n">{num(v.count)}</span>
                 </button>
-                <button className="fnot" aria-pressed={!!s?.neg} aria-label={`Exclude ${v.label}`} onClick={() => toggle({ key: k, value: v.value, neg: true })}>Not</button>
+                <button className="fnot" aria-pressed={!!s?.neg} aria-label={t('search.exclude', { label: v.label })} onClick={() => toggle({ key: k, value: v.value, neg: true })}>{t('search.notBtn')}</button>
               </li>
             );
           })}
         </ul>
-      ) : <p className="note" style={{ margin: 0 }}>{t ? `No ${facetLabel(k).toLowerCase()} matches “${within}”.` : 'Nothing to pick with the current search.'}</p>}
-      {list.length > MAX_VALUES && <p className="note" style={{ margin: '10px 0 0' }}>{list.length - MAX_VALUES} more: type to narrow the list.</p>}
+      ) : <p className="note" style={{ margin: 0 }}>{w ? t('search.noValue', { facet: facetLabel(k), text: within }) : t('search.nothing')}</p>}
+      {list.length > MAX_VALUES && <p className="note" style={{ margin: '10px 0 0' }}>{t('search.more', { count: list.length - MAX_VALUES })}</p>}
     </div>
   );
 }

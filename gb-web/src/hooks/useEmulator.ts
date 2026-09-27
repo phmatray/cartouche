@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { RegisterState, EmulatorError } from '../types/emulator';
 import type { FrameTrace } from '../neural/trace';
@@ -46,7 +47,7 @@ export function useEmulator() {
   const loadRom = useCallback((data: Uint8Array): boolean => {
     const emu = emulatorRef.current;
     if (!emu) {
-      addError('Emulator not initialized');
+      addError(t('player.error.init'));
       return false;
     }
 
@@ -54,7 +55,7 @@ export function useEmulator() {
       const success = emu.load_rom(data);
       if (!success) {
         const err = emu.get_error();
-        addError(err || 'Unknown error loading ROM');
+        addError(err || t('player.error.unknown'));
         setRomLoaded(false);
         return false;
       }
@@ -63,7 +64,7 @@ export function useEmulator() {
       setErrors([]);
       return true;
     } catch (e) {
-      addError(`ROM load exception: ${e}`);
+      addError(t('player.error.exception', { error: String(e) }));
       setRomLoaded(false);
       return false;
     }

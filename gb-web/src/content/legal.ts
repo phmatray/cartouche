@@ -2,7 +2,9 @@
 // Bodies are plain text; paragraphs are separated by a blank line ("\n\n").
 
 // `links` are files published next to the app (relative to its base URL), rendered as a list.
-export const LEGAL_SECTIONS: Array<{ title: string; body: string; links?: Array<{ file: string; label: string }> }> = [
+// Translations: legal.fr.ts and legal.es.ts (same sections, same URLs; the English text prevails).
+export interface LegalSection { title: string; body: string; links?: Array<{ file: string; label: string }> }
+export const LEGAL_SECTIONS: LegalSection[] = [
   {
     title: 'Disclaimer',
     body:

@@ -7,17 +7,19 @@ import type { useEmulator } from '../../hooks/useEmulator';
 import type { SlotKey } from '../../hooks/useSaveStates';
 import { useSettingsStore, type ScreenSize } from '../../store/settingsStore';
 import { MotionRows, ScreenFilters } from '../settings/ScreenFilters';
-import { ago, dur, paths } from '../../lib/ui';
+import { ago, dur, keyLabel, paths } from '../../lib/ui';
 import { I } from '../icons';
 import { Frame } from '../library/Heroes';
 import { Title } from '../library/Cover';
 import { hardwareOf } from '../../hooks/useGameExtras';
 import { Shot } from '../game/Shot';
 import { DebugPanel } from './DebugPanel';
+import { date, rich, useT, type Key } from '../../i18n';
+import { descOf } from '../../lib/catalog-utils';
 
 export type Tab = 'controls' | 'saves' | 'screen' | 'album' | 'game';
 // The Codes page of the printed manual is left out until the core can apply cheat codes.
-const TABS: [Tab, string, string][] = [['controls', 'Controls', 'p. 4'], ['saves', 'Saves', 'p. 6'], ['screen', 'Screen', 'p. 8'], ['album', 'Album', 'p. 10'], ['game', 'Game', 'p. 12']];
+const TABS: [Tab, Key, number][] = [['controls', 'player.tabs.controls', 4], ['saves', 'player.tabs.saves', 6], ['screen', 'player.tabs.screen', 8], ['album', 'player.tabs.album', 10], ['game', 'player.tabs.game', 12]];
 
 interface ManualProps {
   game: GameEntry;
@@ -38,6 +40,7 @@ interface ManualProps {
 
 /** The paper manual beside the screen (a bottom sheet on phones). */
 export function Manual(p: ManualProps) {
+  const t = useT();
   const tab = TABS.some(([k]) => k === p.tab) ? p.tab : 'controls';
   const page: Record<Tab, () => ReactNode> = {
     controls: () => <ControlsPage />,
@@ -47,10 +50,10 @@ export function Manual(p: ManualProps) {
     game: () => <GamePageTab {...p} />,
   };
   return (
-    <aside className="sheet" id="sheet" aria-label="Manual">
+    <aside className="sheet" id="sheet" aria-label={t('player.manual')}>
       <div className="tabs" role="tablist">
-        {TABS.map(([k, t, pg]) => (
-          <button key={k} role="tab" aria-selected={tab === k} onClick={() => p.onTab(k)}>{t}<small>{pg}</small></button>
+        {TABS.map(([k, label, pg]) => (
+          <button key={k} role="tab" aria-selected={tab === k} onClick={() => p.onTab(k)}>{t(label)}<small>{t('player.page', { n: String(pg) })}</small></button>
         ))}
       </div>
       <section className="page on" role="tabpanel">{page[tab]()}</section>
@@ -58,37 +61,39 @@ export function Manual(p: ManualProps) {
   );
 }
 
-const ARROWS: Record<string, ReactNode> = { ArrowUp: I.up, ArrowDown: I.down, ArrowLeft: I.left, ArrowRight: I.right, ' ': 'Space' };
-const Key = ({ k }: { k: string }) => (
-  <span className={`key${k.length > 2 && !k.startsWith('Arrow') ? ' wide' : ''}`}>{ARROWS[k] ?? (k.length === 1 ? k.toUpperCase() : k)}</span>
+const ARROWS: Record<string, ReactNode> = { ArrowUp: I.up, ArrowDown: I.down, ArrowLeft: I.left, ArrowRight: I.right };
+const Cap = ({ k }: { k: string }) => (
+  <span className={`key${k.length > 2 && !k.startsWith('Arrow') ? ' wide' : ''}`}>{ARROWS[k] ?? (k.length === 1 && k !== ' ' ? k.toUpperCase() : keyLabel(k))}</span>
 );
 const Wide = ({ children }: { children: ReactNode }) => <span className="key wide">{children}</span>;
 const Round = ({ children }: { children: ReactNode }) => <span className="key round">{children}</span>;
 
 function ControlsPage() {
   const k = useSettingsStore((s) => s.keybindings);
-  const [input, setInput] = useState<'Keyboard' | 'Gamepad' | 'Touch'>('Keyboard');
+  const t = useT();
+  const [input, setInput] = useState<'keyboard' | 'gamepad' | 'touch'>('keyboard');
+  const dpad = t('shell.keys.dpad');
   const map: Record<typeof input, [ReactNode, string, string?][]> = {
-    Keyboard: [
-      [<><Key k={k.Up} /><Key k={k.Down} /><Key k={k.Left} /><Key k={k.Right} /></>, 'D-pad'],
-      [<Key k={k.A} />, 'A'], [<Key k={k.B} />, 'B'], [<Key k={k.Start} />, 'Start'], [<Key k={k.Select} />, 'Select'],
-      [<Key k="R" />, 'Rewind', 'hold'], [<><Key k="F5" /><Key k="F8" /></>, 'Save / Load', 'slot 1'], [<Key k="F12" />, 'Screenshot'],
-      [<Key k="P" />, 'Pause'], [<Key k="M" />, 'Mute'], [<Key k="F" />, 'Fullscreen'],
+    keyboard: [
+      [<><Cap k={k.Up} /><Cap k={k.Down} /><Cap k={k.Left} /><Cap k={k.Right} /></>, dpad],
+      [<Cap k={k.A} />, 'A'], [<Cap k={k.B} />, 'B'], [<Cap k={k.Start} />, 'Start'], [<Cap k={k.Select} />, 'Select'],
+      [<Cap k="R" />, t('player.deck.rewind'), t('player.controls.hold')], [<><Cap k="F5" /><Cap k="F8" /></>, t('player.controls.saveLoad'), t('player.controls.slot1')], [<Cap k="F12" />, t('shell.keys.screenshot')],
+      [<Cap k="P" />, t('shell.keys.pause')], [<Cap k="M" />, t('shell.keys.mute')], [<Cap k="F" />, t('shell.keys.fullscreen')],
     ],
-    Gamepad: [
-      [<><Wide>D-pad</Wide><Wide>L-stick</Wide></>, 'D-pad'], [<Round>↓</Round>, 'A', 'bottom face button'], [<Round>→</Round>, 'B', 'right face button'],
-      [<Wide>Menu</Wide>, 'Start', 'Options / Menu'], [<Wide>View</Wide>, 'Select', 'Share / View'], [<Round>↑</Round>, 'Fullscreen', 'top face button'],
+    gamepad: [
+      [<><Wide>{dpad}</Wide><Wide>{t('player.controls.lstick')}</Wide></>, dpad], [<Round>↓</Round>, 'A', t('player.controls.bottom')], [<Round>→</Round>, 'B', t('player.controls.right')],
+      [<Wide>Menu</Wide>, 'Start', 'Options / Menu'], [<Wide>View</Wide>, 'Select', 'Share / View'], [<Round>↑</Round>, t('shell.keys.fullscreen'), t('player.controls.top')],
     ],
-    Touch: [
-      [<Wide>Cross</Wide>, 'D-pad', 'bottom left'], [<Round>A</Round>, 'A'], [<Round>B</Round>, 'B'], [<Wide>Start</Wide>, 'Start'], [<Wide>Select</Wide>, 'Select'],
+    touch: [
+      [<Wide>{t('player.controls.cross')}</Wide>, dpad, t('player.controls.bottomLeft')], [<Round>A</Round>, 'A'], [<Round>B</Round>, 'B'], [<Wide>Start</Wide>, 'Start'], [<Wide>Select</Wide>, 'Select'],
     ],
   };
   return (
     <>
-      <h2>Controls</h2>
-      <p>Change any key in <Link to="/settings/controls">Settings</Link>. A connected gamepad works right away.</p>
-      <div className="seg" role="group" aria-label="Input" style={{ marginBottom: 18 }}>
-        {(['Keyboard', 'Gamepad', 'Touch'] as const).map((m) => <button key={m} aria-pressed={input === m} onClick={() => setInput(m)}>{m}</button>)}
+      <h2>{t('player.tabs.controls')}</h2>
+      <p>{rich(t('player.controls.intro'), { a: (s) => <Link to="/settings/controls">{s}</Link> })}</p>
+      <div className="seg" role="group" aria-label={t('player.controls.input')} style={{ marginBottom: 18 }}>
+        {(['keyboard', 'gamepad', 'touch'] as const).map((m) => <button key={m} aria-pressed={input === m} onClick={() => setInput(m)}>{t(`player.controls.${m}`)}</button>)}
       </div>
       <ul className="map">
         {map[input].map(([keys, name, sub]) => (
@@ -99,32 +104,36 @@ function ControlsPage() {
   );
 }
 
-const Thumb = ({ s, label }: { s?: StoredSaveState; label: string }) => (s?.thumbnail.length ? <Frame rgba={s.thumbnail} label={label} /> : <>Empty</>);
+function Thumb({ s, label }: { s?: StoredSaveState; label: string }) {
+  const t = useT();
+  return s?.thumbnail.length ? <Frame rgba={s.thumbnail} label={label} /> : <>{t('common.empty')}</>;
+}
 
 function SavesPage({ header, states, romLoaded, onSave, onLoad }: ManualProps) {
+  const t = useT();
   const auto = states[0];
   const battery = !!header && /BATTERY/i.test(header.cartridgeType);
   return (
     <>
-      <h2>Saves</h2>
-      <p>{battery ? 'The cartridge’s own save is kept automatically. ' : ''}The resume point is updated every time you leave.</p>
+      <h2>{t('player.tabs.saves')}</h2>
+      <p>{battery ? `${t('player.saves.battery')} ` : ''}{t('player.saves.resume')}</p>
       <ul className="slots">
         <li>
-          <span className="n auto">Auto</span>
-          <span className="th"><Thumb s={auto} label="Resume point" /></span>
-          <span className="when">{auto ? 'Resume point' : 'No resume point'}<small>{auto ? ago(auto.timestamp) : 'Saved when you leave'}</small></span>
-          <span className="act"><button className="sbtn" disabled={!auto || !romLoaded} onClick={() => onLoad('auto')}>Load</button></span>
+          <span className="n auto">{t('game.auto')}</span>
+          <span className="th"><Thumb s={auto} label={t('game.resumePoint')} /></span>
+          <span className="when">{auto ? t('game.resumePoint') : t('player.saves.noResume')}<small>{auto ? ago(auto.timestamp) : t('player.saves.onLeave')}</small></span>
+          <span className="act"><button className="sbtn" disabled={!auto || !romLoaded} onClick={() => onLoad('auto')}>{t('common.load')}</button></span>
         </li>
         {Array.from({ length: 5 }, (_, i) => {
           const s = states[i + 1];
           return (
             <li key={i}>
               <span className="n">{i + 1}</span>
-              <span className="th"><Thumb s={s} label={`Slot ${i + 1}`} /></span>
-              <span className="when">{s ? ago(s.timestamp) : 'Empty slot'}{s && <small>{new Date(s.timestamp).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</small>}</span>
+              <span className="th"><Thumb s={s} label={t('game.slot', { n: String(i + 1) })} /></span>
+              <span className="when">{s ? ago(s.timestamp) : t('player.saves.emptySlot')}{s && <small>{date(s.timestamp, { weekday: 'short', hour: '2-digit', minute: '2-digit' })}</small>}</span>
               <span className="act">
-                <button className="sbtn" disabled={!romLoaded} onClick={() => onSave(i)}>Save</button>
-                <button className="sbtn" disabled={!s || !romLoaded} onClick={() => onLoad(i)}>Load</button>
+                <button className="sbtn" disabled={!romLoaded} onClick={() => onSave(i)}>{t('common.save')}</button>
+                <button className="sbtn" disabled={!s || !romLoaded} onClick={() => onLoad(i)}>{t('common.load')}</button>
               </span>
             </li>
           );
@@ -136,6 +145,7 @@ function SavesPage({ header, states, romLoaded, onSave, onLoad }: ManualProps) {
 
 function ScreenPage({ snapshot, romLoaded, inColor, gameId }: { snapshot: () => Uint8Array | null; romLoaded: boolean; inColor: boolean; gameId: string }) {
   const { screenSize, setScreenSize } = useSettingsStore();
+  const t = useT();
   const grab = useRef(() => null as Uint8ClampedArray | null);
   useEffect(() => { grab.current = () => { const s = romLoaded ? snapshot() : null; return s ? new Uint8ClampedArray(s) : null; }; });
   const [frame, setFrame] = useState<Uint8ClampedArray | null>(() => { const s = romLoaded ? snapshot() : null; return s ? new Uint8ClampedArray(s) : null; });
@@ -145,23 +155,24 @@ function ScreenPage({ snapshot, romLoaded, inColor, gameId }: { snapshot: () => 
   }, []);
   return (
     <>
-      <h2>Screen</h2>
-      <p>Pick the handheld you remember, then fine-tune it. {inColor ? 'Game Boy Color' : 'Original Game Boy'} games share these settings unless one has its own.</p>
+      <h2>{t('player.tabs.screen')}</h2>
+      <p>{t(inColor ? 'player.screen.introCgb' : 'player.screen.introDmg')}</p>
       {inColor && (
-        <div className="notice"><span className="ic">i</span><span>This is a Game Boy Color game: it keeps its own colors, so palettes don’t apply. Color correction does.</span></div>
+        <div className="notice"><span className="ic">i</span><span>{t('player.screen.cgb')}</span></div>
       )}
       <ScreenFilters kind={inColor ? 'cgb' : 'dmg'} gameId={gameId} frame={frame} />
-      <h3>Motion</h3>
+      <h3>{t('settings.display.motion')}</h3>
       <MotionRows />
-      <h3>Size</h3>
-      <div className="seg" role="group" aria-label="Scale">
-        {(['fit', '2', '3', '4'] as ScreenSize[]).map((s) => <button key={s} aria-pressed={screenSize === s} onClick={() => setScreenSize(s)}>{s === 'fit' ? 'Fit' : `${s}×`}</button>)}
+      <h3>{t('settings.display.size')}</h3>
+      <div className="seg" role="group" aria-label={t('player.screen.scale')}>
+        {(['fit', '2', '3', '4'] as ScreenSize[]).map((s) => <button key={s} aria-pressed={screenSize === s} onClick={() => setScreenSize(s)}>{s === 'fit' ? t('settings.display.fit') : `${s}×`}</button>)}
       </div>
     </>
   );
 }
 
 function AlbumPage({ game, shots, romLoaded, onScreenshot }: ManualProps) {
+  const t = useT();
   const file = (s: StoredScreenshot) => `${game.id}-${new Date(s.timestamp).toISOString().replace(/[:.]/g, '-')}.png`;
   const download = (s: StoredScreenshot) => {
     const a = document.createElement('a');
@@ -172,42 +183,43 @@ function AlbumPage({ game, shots, romLoaded, onScreenshot }: ManualProps) {
   };
   return (
     <>
-      <h2>Album</h2>
-      <p>Screenshots are saved as 160 × 144 PNGs at original resolution.</p>
-      <button className="btn k" style={{ marginBottom: 20 }} disabled={!romLoaded} onClick={onScreenshot}>{I.cam}Take screenshot</button>
+      <h2>{t('player.tabs.album')}</h2>
+      <p>{t('player.album.intro')}</p>
+      <button className="btn k" style={{ marginBottom: 20 }} disabled={!romLoaded} onClick={onScreenshot}>{I.cam}{t('player.album.take')}</button>
       {shots.length ? (
         <div className="albumg">
           {shots.map((s) => (
             <figure key={s.id}>
-              <Shot png={s.png} label={`Screenshot, ${ago(s.timestamp)}`} />
-              <figcaption><span>{ago(s.timestamp)}</span><span><button className="sbtn" onClick={() => download(s)}>Save PNG</button></span></figcaption>
+              <Shot png={s.png} label={t('game.shot', { ago: ago(s.timestamp) })} />
+              <figcaption><span>{ago(s.timestamp)}</span><span><button className="sbtn" onClick={() => download(s)}>{t('player.album.savePng')}</button></span></figcaption>
             </figure>
           ))}
         </div>
-      ) : <div className="empty-inline">Nothing here yet. Press F12 while playing.</div>}
+      ) : <div className="empty-inline">{t('player.album.empty')}</div>}
     </>
   );
 }
 
 function GamePageTab({ game, header, emu, isRunning }: ManualProps) {
   const [debug, setDebug] = useState(false);
+  const t = useT();
   const rows: [string, ReactNode][] = [
-    ['Developer', game.developer || '—'], ['Year', game.year || '—'],
-    ['Hardware', header ? hardwareOf(header) : '—'], ['Mapper', header?.cartridgeType || '—'],
-    ['ROM', header?.romSize || '—'], ['Save memory', header?.ramSize || '—'],
-    ['Played', dur(game.totalPlayTime)], ['Sessions', game.sessions ?? 0],
+    [t('search.facet.developer'), game.developer || '—'], [t('search.facet.year'), game.year || '—'],
+    [t('game.cart.hardware'), header ? hardwareOf(header) : '—'], [t('game.cart.mapper'), header?.cartridgeType || '—'],
+    ['ROM', header?.romSize || '—'], [t('game.cart.ram'), header?.ramSize === 'None' ? t('common.none') : header?.ramSize || '—'],
+    [t('library.col.played'), dur(game.totalPlayTime)], [t('game.sessions'), game.sessions ?? 0],
   ];
   return (
     <>
       <h2><Title text={game.title} /></h2>
-      {game.description && <p>{game.description}</p>}
+      {descOf(game) && <p>{descOf(game)}</p>}
       <dl className="spec" style={{ gridTemplateColumns: '1fr' }}>
         {rows.map(([a, b]) => <div key={a}><dt>{a}</dt><dd>{b}</dd></div>)}
       </dl>
-      <p style={{ marginTop: 20 }}><Link className="btn line" to={paths.game(game.id)} style={{ color: 'var(--ink)' }}>Open game page</Link></p>
+      <p style={{ marginTop: 20 }}><Link className="btn line" to={paths.game(game.id)} style={{ color: 'var(--ink)' }}>{t('player.game.open')}</Link></p>
       <div className="row">
-        <span>Debug<small>Registers, memory, serial output and tiles, for development</small></span>
-        <button className="switch" role="switch" aria-checked={debug} aria-label="Debug" onClick={() => setDebug(!debug)} />
+        <span>{t('player.game.debug')}<small>{t('player.game.debugSub')}</small></span>
+        <button className="switch" role="switch" aria-checked={debug} aria-label={t('player.game.debug')} onClick={() => setDebug(!debug)} />
       </div>
       {debug && <DebugPanel emu={emu} isRunning={isRunning} />}
     </>

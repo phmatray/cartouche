@@ -32,7 +32,7 @@ export const titleKey = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, ''
 function localEntry(id: string, title: string, genre: string, data: Uint8Array, sha1: string, dbEntry: GameDbEntry | undefined, importedAt?: number): GameEntry {
   const h = parseRomHeader(data);
   return {
-    id, title, description: dbEntry ? `${dbEntry.developer} · ${dbEntry.region}` : 'User-added ROM',
+    id, title, description: dbEntry ? `${dbEntry.developer} · ${dbEntry.region}` : '', // '': "User-added ROM" (descOf)
     genre, category: 'My Collection', coverArt: '', screenshots: [],
     romHeaderTitle: parseRomTitle(data) || undefined,
     isLocal: true, importedAt, sha1,
@@ -65,6 +65,7 @@ function withLocal(list: GameEntry[], e: GameEntry): GameEntry[] {
     ...cat, ...e,
     title: e.developer ? e.title : cat.title, // no GameDB match: the catalog title beats a file name
     description: e.developer ? e.description : cat.description || e.description,
+    descriptions: e.developer ? undefined : cat.descriptions,
     regions: e.regions?.length ? e.regions : cat.regions,
     genre: e.genre !== 'Unknown' ? e.genre : cat.genre,
     developer: e.developer ?? cat.developer,

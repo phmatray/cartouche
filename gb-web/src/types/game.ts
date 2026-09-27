@@ -4,6 +4,8 @@ export interface GameEntry {
   id: string;
   title: string;
   description: string;
+  /** The description in the other languages (catalog entries). */
+  descriptions?: Partial<Record<'fr' | 'es', string>>;
   genre: string;
   category: string;
   /** Bundled, freely licensed box art (a path under public/, e.g. covers/x.webp); '' when there is none. */
@@ -28,6 +30,7 @@ export interface GameEntry {
   changes?: string;
   /** Test cartridges: what a pass looks like, shown under the box. */
   hint?: string;
+  hints?: Partial<Record<'fr' | 'es', string>>;
   isLocal: boolean;
   isFavorite?: boolean;
   lastPlayed?: number;

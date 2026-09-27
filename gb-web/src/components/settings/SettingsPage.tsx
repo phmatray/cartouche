@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, type ComponentType } from 'react';
 import { Link, Navigate, useParams } from 'react-router';
 import { ControlsTab } from './ControlsTab';
 import { DisplayTab } from './DisplayTab';
@@ -6,28 +6,32 @@ import { AudioTab } from './AudioTab';
 import { EmulationTab } from './EmulationTab';
 import { StorageTab } from './StorageTab';
 import { AboutTab } from './AboutTab';
+import { LanguageTab } from './LanguageTab';
+import { useT, type Key } from '../../i18n';
 
-const SECTIONS = [
-  ['controls', 'Controls', 2, ControlsTab], ['display', 'Display', 4, DisplayTab], ['audio', 'Audio', 6, AudioTab],
-  ['emulation', 'Emulation', 8, EmulationTab], ['storage', 'Storage', 10, StorageTab], ['about', 'About', 12, AboutTab],
-] as const;
+const SECTIONS: [string, Key, number, ComponentType][] = [
+  ['controls', 'settings.tabs.controls', 2, ControlsTab], ['display', 'settings.tabs.display', 4, DisplayTab], ['audio', 'settings.tabs.audio', 6, AudioTab],
+  ['emulation', 'settings.tabs.emulation', 8, EmulationTab], ['storage', 'settings.tabs.storage', 10, StorageTab], ['language', 'common.language', 12, LanguageTab],
+  ['about', 'settings.tabs.about', 14, AboutTab],
+];
 
 /** Settings laid out as a printed manual: table of contents on the left, one paper page per section. */
 export function SettingsPage() {
   const { section } = useParams();
   const cur = SECTIONS.find(([id]) => id === section);
-  useEffect(() => { if (cur) document.title = `${cur[1]} · Settings · Cartouche`; }, [cur]);
+  const t = useT();
+  useEffect(() => { if (cur) document.title = t('common.docTitle', { page: `${t(cur[1])} · ${t('shell.nav.settings')}` }); }, [cur, t]);
   if (!cur) return <Navigate to="/settings/controls" replace />;
   const [, label, page, Body] = cur;
   return (
     <main className="wrap">
-      <div className="pagehead"><h1>Settings</h1><p>Saved in this browser and applied to every game.</p></div>
+      <div className="pagehead"><h1>{t('shell.nav.settings')}</h1><p>{t('settings.intro')}</p></div>
       <div className="manual">
-        <nav className="toc" aria-label="Settings sections">
-          {SECTIONS.map(([id, l, p]) => <Link key={id} to={`/settings/${id}`} aria-current={id === section ? 'page' : undefined}>{l}<small>p. {p}</small></Link>)}
+        <nav className="toc" aria-label={t('settings.sections')}>
+          {SECTIONS.map(([id, l, p]) => <Link key={id} to={`/settings/${id}`} aria-current={id === section ? 'page' : undefined}>{t(l)}<small>{t('player.page', { n: String(p) })}</small></Link>)}
         </nav>
-        <section className="paper" aria-label={label}>
-          <span className="pgno">p. {page}</span>
+        <section className="paper" aria-label={t(label)}>
+          <span className="pgno">{t('player.page', { n: String(page) })}</span>
           <Body />
         </section>
       </div>

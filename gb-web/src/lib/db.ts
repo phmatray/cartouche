@@ -1,3 +1,5 @@
+import { t } from '../i18n/core';
+
 const DB_NAME = 'gb-emulator';
 const DB_VERSION = 5;
 const ROM_STORE = 'roms';
@@ -18,7 +20,7 @@ function blockedNotice(show: boolean) {
   el.id = id;
   el.className = 'toasts';
   el.setAttribute('role', 'alert');
-  el.innerHTML = '<div class="toast m"><i></i><span>Close other Cartouche tabs to finish updating</span></div>';
+  el.innerHTML = `<div class="toast m"><i></i><span>${t('player.error.otherTabs')}</span></div>`;
   document.body.append(el);
 }
 
@@ -122,7 +124,7 @@ export interface StoredSave { id: string; gameId: string; name: string; sram: Ui
 export const gameOfSave = (id: string) => id.split('~')[0];
 /** Fill in what a save written before profiles (or read from a backup, untrusted) lacks or gets wrong. */
 export const asProfile = (s: Omit<StoredSave, 'gameId' | 'name'> & Partial<StoredSave>): StoredSave =>
-  ({ ...s, gameId: gameOfSave(s.id), name: typeof s.name === 'string' && s.name.trim() ? s.name.trim().slice(0, 40) : 'Main' });
+  ({ ...s, gameId: gameOfSave(s.id), name: typeof s.name === 'string' && s.name.trim() ? s.name.trim().slice(0, 40) : t('player.saves.main') });
 export function saveSram(save: StoredSave): Promise<void> { return txOp(SAVE_STORE, 'readwrite', (s) => s.put(save)).then(() => {}); }
 export function getSram(id: string): Promise<StoredSave | undefined> { return txOp<StoredSave | undefined>(SAVE_STORE, 'readonly', (s) => s.get(id)).then((r) => r && asProfile(r)); }
 export function deleteSave(id: string): Promise<void> { return txOp(SAVE_STORE, 'readwrite', (s) => s.delete(id)).then(() => {}); }
@@ -147,7 +149,7 @@ export async function createProfile(gameId: string, name: string, sram: Uint8Arr
   return p;
 }
 /** Write a running game's SRAM to its profile, creating it (named `name`) on the first write. */
-export async function writeProfileSram(id: string, sram: Uint8Array, name = 'Main'): Promise<void> {
+export async function writeProfileSram(id: string, sram: Uint8Array, name = t('player.saves.main')): Promise<void> {
   const old = await getSram(id);
   const now = Date.now();
   await saveSram(old ? { ...old, sram, timestamp: now } : { id, gameId: gameOfSave(id), name, sram, timestamp: now, created: now });

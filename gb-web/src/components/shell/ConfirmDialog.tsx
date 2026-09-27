@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { trapTab } from '../../lib/ui';
+import { useT } from '../../i18n';
 
 export interface ConfirmRequest { title: string; body: ReactNode; ok: string; danger?: boolean; run: () => void }
 
@@ -7,6 +8,7 @@ export interface ConfirmRequest { title: string; body: ReactNode; ok: string; da
 export function ConfirmDialog({ request, onClose }: { request: ConfirmRequest | null; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
+  const t = useT();
   useEffect(() => {
     const d = ref.current;
     if (request && d && !d.open) d.showModal();
@@ -19,7 +21,7 @@ export function ConfirmDialog({ request, onClose }: { request: ConfirmRequest | 
           <h2 id={`${id}t`}>{request.title}</h2>
           <p id={`${id}d`}>{request.body}</p>
           <div className="acts">
-            <button className="btn line" onClick={onClose}>Cancel</button>
+            <button className="btn line" onClick={onClose}>{t('common.cancel')}</button>
             <button className={`btn ${request.danger ? 'danger' : 'k'}`} autoFocus onClick={() => { request.run(); onClose(); }}>{request.ok}</button>
           </div>
         </div>
