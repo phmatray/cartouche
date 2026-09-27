@@ -64,7 +64,6 @@ export default {
   sessions: 'Sessions',
   auto: 'Auto',
   resumePoint: 'Point de reprise',
-  resume: 'Reprendre',
   slot: 'Emplacement {n}',
   slots: {
     note: 'Le point de reprise s’enregistre chaque fois que vous quittez le jeu. Un emplacement garde l’instant que vous choisissez, depuis la page Parties du Manuel.',
