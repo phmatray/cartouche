@@ -13,7 +13,7 @@ max_bytes=$((2 * 1024 * 1024))
 allowed_roms='^gb-web/public/roms/(tobutobugirl\.gb|tobutobugirldx\.gb|ucity\.gbc|cgb-acid2\.gbc|dmg-acid2\.gb|cpu_instrs\.gb)$'
 allowlist=scripts/rom-allowlist.sha1
 # Archives and Cartouche backups (.cartouche/.cartshelf) are banned too: the app imports both, so a ROM can hide in them.
-banned_ext='\.(gb|gbc|sgb|sav|srm|state|npz|npy|pt|pth|ckpt|safetensors|onnx|h5|pkl|zip|7z|rar|gz|tgz|bz2|xz|zst|tar|cartouche|cartshelf)$'
+banned_ext='\.(gb|gbc|sgb|sav|srm|state|npz|npy|pt|pth|ckpt|safetensors|onnx|h5|pkl|zip|7z|rar|gz|tgz|bz2|xz|zst|tar|br|lz|lz4|lzma|zlib|z|cartouche|cartshelf)$'
 # Boot ROMs / BIOS dumps: only SameBoy's open-source (MIT) boot ROMs, at these paths with exactly this content
 # (THIRD_PARTY_NOTICES.md). Any other file named like a boot ROM or BIOS image fails.
 boot_roms='6f64da4cecd7e54e2f928eb3e3ba7810a7a567d0d247cc71737d1771e073a916  gb-core/boot/sameboy_dmg_boot.bin
@@ -58,7 +58,7 @@ done <<< "$boot_roms"
 # Content: no copy of the Nintendo logo (a boot ROM dump carries it) in any tracked file but the bundled ROMs,
 # whose headers need it: raw in a binary, or written out as a byte array or base64 in a text file (scripts/logo_scan.py).
 # Matched by the SHA-1 of its 48 bytes, so neither script holds any of them. It also fails any archive by its magic
-# bytes (zip, gzip, 7z, xz, zstd, bzip2, rar), whatever the file is named: the extension check above is only by name.
+# bytes (zip, gzip, 7z, xz, zstd, bzip2, rar, zlib, lzma), whatever the file is named: the extension check above is only by name.
 python3 scripts/logo_scan.py --self-test >/dev/null
 logo_hits=$(git ls-files --eol -z | python3 scripts/logo_scan.py)
 if [[ -n $logo_hits ]]; then
