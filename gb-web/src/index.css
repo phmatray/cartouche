@@ -1008,12 +1008,16 @@ body{font-family:var(--font)}
 .row.col{display:grid;justify-content:stretch;gap:10px}
 .row.col .seg{grid-auto-columns:minmax(0,1fr);max-width:440px}
 .row.col .seg button{padding:0 4px;white-space:normal;line-height:1.1}
-@media (max-width:560px){
-  .row.col .seg.wrap{display:grid;width:100%;padding:0;grid-auto-flow:row;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px;background:var(--ink)}
-  .row.col .seg.wrap button{background:var(--paper)}
-  .row.col .seg.wrap button+button{border-left:0}
-  .row.col .seg.wrap button[aria-pressed=true]{background:var(--ink)}
-  .row.col .seg.wrap button:last-child:nth-child(3n+2){grid-column:span 2}
+/* Five or more options: one row where there is room, else three columns (keyed on the row's width: the manual's
+   side sheet is as narrow as a phone). Not `.wrap`, the page container class. */
+.row.col .seg.rows{max-width:640px}
+.row.col:has(>.seg.rows){container-type:inline-size}
+@container (max-width:560px){
+  .row.col .seg.rows{display:grid;width:100%;grid-auto-flow:row;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px;background:var(--ink)}
+  .row.col .seg.rows button{background:var(--paper)}
+  .row.col .seg.rows button+button{border-left:0}
+  .row.col .seg.rows button[aria-pressed=true]{background:var(--ink)}
+  .row.col .seg.rows button:last-child:nth-child(3n+2){grid-column:span 2}
 }
 .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px}
 .swatch{border:2px solid var(--paper-3);background:#fff;padding:6px 6px 7px;text-align:left;font:800 11px var(--font);text-transform:uppercase;letter-spacing:.05em;color:var(--ink)}
