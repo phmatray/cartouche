@@ -821,6 +821,8 @@ dialog::backdrop{background:rgba(0,0,0,.72)}
 .shint .syn code{font:700 12px var(--font);color:var(--paper);background:var(--band-3);padding:2px 5px}
 .shint .cnt{margin-left:auto;color:var(--paper);font-variant-numeric:tabular-nums}
 .sempty p{margin:0 0 16px;color:var(--paper)}
+.sres .sempty a{display:inline;padding:0;border:0;color:var(--paper);text-decoration:underline;text-underline-offset:3px}
+.sres .sempty a:hover{background:none;box-shadow:none;color:var(--y)}
 .sempty .acts{display:flex;flex-wrap:wrap;gap:10px}
 .sempty .btn{color:var(--paper)}
 .sempty .btn .n{font-weight:600;color:var(--mute);text-transform:none;letter-spacing:0}

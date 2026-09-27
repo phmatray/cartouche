@@ -52,7 +52,7 @@ export default {
     allWith: 'No game matches all of these with “{text}”.',
     filters: 'No game matches these filters.',
     filtersWith: 'No game matches “{text}” with these filters.',
-    none: 'No game called “{text}”. Add it from your own files with Add ROMs.',
+    none: 'No game called “{text}”. Add it from your own files with <a>Add ROMs</a>.',
     recent: 'Games you play show up here.',
   },
   find: 'Find: {facet}',
