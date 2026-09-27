@@ -11,7 +11,7 @@ export default {
   tests: 'Test cartridges',
   testsSub: 'Hardware tests that come with the app: see if the emulator passes',
   all: 'All games',
-  allSub: '{games} · free homebrew, test cartridges and your own ROMs',
+  allSub: '{games} · free homebrew and your own ROMs',
   filterLabel: 'Filter',
   filter: { all: 'All', mine: 'In my library', fav: 'Favorites' },
   moreFilters: 'More filters',
