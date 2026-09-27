@@ -81,7 +81,6 @@
 
 /* ---------- phones: the lens is a chip in a strip under the screen ---------- */
 @media (max-width:900px),(orientation:landscape) and (max-height:500px){
-  .stage:has(.periph){overflow:visible}
   .stage :is(.screen,.cap){max-width:none!important}
   .periph{display:flex;gap:8px;position:relative;z-index:4;width:min(var(--sw,100%),100%);margin-top:8px}
   .periph:not(:has(.cdock,.ptray)){display:none}
@@ -101,6 +100,10 @@
    over the controls, the torn edge last. The strip (44 px + 8 px) takes the stage's bottom padding and some
    of the air around the touch controls; the LCD gives up the rest (24 px of height). Same sums as index.css. */
 @media (max-width:900px) and (min-height:501px){
+  /* Only the paper hangs out of the stage (the lens's sheet is fixed). A Super Game Boy border stays clipped at the
+     stage's top and sides, never over the bar: the paper still falls below, over the controls. */
+  .stage:has(.ptray){overflow:visible}
+  .pl.sgb .stage:has(.ptray){clip-path:inset(0 0 -100vh);z-index:4}
   .periph:has(.ptray) .cdock{flex:none}
   .periph:has(.ptray) .cd-t{display:none}
   .periph:has(.ptray) .cd-head{grid-template-columns:44px 8px;grid-template-areas:"lens led";gap:10px}

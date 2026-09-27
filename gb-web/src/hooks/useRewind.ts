@@ -31,7 +31,8 @@ export function useRewind({
     const snap = bufferRef.current.pop();
     if (!snap) return;
     // The first step happens on press, so even a tap shorter than a frame rewinds; the next frame draws it.
-    loadState(snap.state, snap.frame);
+    // A refused state (made before a restart onto another console): so is everything older, the buffer goes.
+    if (!loadState(snap.state, snap.frame)) { bufferRef.current = []; setBufferFill(0); return; }
     pendingFrameRef.current = snap.frame;
     setBufferFill(bufferRef.current.length / bufferSize);
     isRewindingRef.current = true;
@@ -59,15 +60,15 @@ export function useRewind({
         rewindStepCounterRef.current = 0;
 
         const snap = bufferRef.current.pop();
-        if (!snap) {
-          // Buffer exhausted — auto-stop rewind
+        // Buffer exhausted, or a state that won't load (and nothing older will): auto-stop rewind
+        if (!snap || !loadState(snap.state, snap.frame)) {
+          bufferRef.current = [];
           isRewindingRef.current = false;
           setIsRewinding(false);
           setBufferFill(0);
           return originalRunFrame();
         }
 
-        loadState(snap.state, snap.frame);
         setBufferFill(bufferRef.current.length / bufferSize);
         return snap.frame;
       } else {

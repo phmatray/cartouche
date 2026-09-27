@@ -14,6 +14,7 @@ import { CHANNEL_KEYS, machineFor, paletteOf, useDisplay, useSettingsStore, type
 import { parseRomHeader, sgbCartOf } from '../../lib/rom-utils';
 import { presetOf } from '../../shaders/filters';
 import { BUTTON_NUMBERS } from '../../utils/keybindings';
+import { dpadAt, slide } from '../../lib/touch-slide';
 import { getActiveProfileId, getSram } from '../../lib/db';
 import { ago, owned, paths, tagOf } from '../../lib/ui';
 import { settled } from '../../lib/transitions';
@@ -44,9 +45,11 @@ const ON = ['Dmg', 'Gbc', 'Gbc', 'Sgb'] as const;
 /** What a game is switched on with, from its settings and its cartridge. */
 const machineOf = (data: Uint8Array, gameId: string) => machineFor(useSettingsStore.getState(), gameId, sgbCartOf(parseRomHeader(data)));
 const SPEEDS = [0.5, 1, 2, 4];
+/** Text is being typed: a slider, a switch or a button keeping focus leaves the keys to the game. */
 const typing = () => {
   const el = document.activeElement as HTMLElement | null;
-  return !!el && (/INPUT|SELECT|TEXTAREA/.test(el.tagName) || el.isContentEditable);
+  if (el instanceof HTMLInputElement) return !/^(range|checkbox|radio|button|submit|reset|color|file|image)$/.test(el.type);
+  return !!el && (/SELECT|TEXTAREA/.test(el.tagName) || el.isContentEditable);
 };
 
 export function PlayerPage() {
@@ -205,6 +208,8 @@ function Player({ game }: { game: GameEntry }) {
     const s = useSettingsStore.getState();
     const slot = q.get('slot');
     const from: SlotKey | null = q.get('resume') ? 'auto' : slot !== null ? +slot : null;
+    // A slot is loaded once: a reload (or iOS bringing back an evicted tab) goes on from the resume point instead.
+    if (slot !== null) setQ((p) => { p.delete('slot'); if (s.resumePoints) p.set('resume', '1'); return p; }, { replace: true });
     // A state replaces the start-up at once: the animation then costs nothing (and plays if the state is gone).
     if (!powerOn(data, machineOf(data, game.id), s.startupAnimation || from !== null)) { setBadRom(true); return; }
     setNeedsRom(false);
@@ -225,7 +230,7 @@ function Player({ game }: { game: GameEntry }) {
       else if (!refused.current) toast(ok ? (from === 'auto' ? tNow('player.toast.resumed') : tNow('player.toast.loadedSlot', { n: String(+from + 1) })) : tNow('player.toast.gone'), ok ? 'c' : 'm');
     }
     setIsRunning(q.get('edit') !== 'controls');
-  }, [powerOn, hasBatteryRam, importSram, game.id, q, saves, setIsRunning, consoleNow, skipBoot]);
+  }, [powerOn, hasBatteryRam, importSram, game.id, q, setQ, saves, setIsRunning, consoleNow, skipBoot]);
 
   const booted = useRef(false);
   useEffect(() => {
@@ -390,9 +395,17 @@ function Player({ game }: { game: GameEntry }) {
       if (b !== undefined) releaseButton(b);
       else if (e.key.toLowerCase() === 'r') actions.current.stopRewind();
     };
+    // A key released in another window never comes back as a keyup: let go of everything when the page loses focus.
+    const releaseAll = () => { Object.values(BUTTON_NUMBERS).forEach((n) => releaseButton(n)); actions.current.stopRewind(); };
+    const onHidden = () => { if (document.visibilityState === 'hidden') releaseAll(); };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
-    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
+    window.addEventListener('blur', releaseAll);
+    document.addEventListener('visibilitychange', onHidden);
+    return () => {
+      window.removeEventListener('keydown', down); window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', releaseAll); document.removeEventListener('visibilitychange', onHidden);
+    };
   }, [keybindings, pressButton, releaseButton]);
 
   const auto = saves.states[0];
@@ -402,6 +415,16 @@ function Player({ game }: { game: GameEntry }) {
   const screenStyle = screenSize === 'fit' ? undefined : { '--sw': `${(bordered ? 256 : 160) * +screenSize + 24}px` } as CSSProperties;
   const disabled = !romLoaded;
   const noStore = disabled || storageError; // save slots and the album need IndexedDB
+  // Each finger holds what's under it: a thumb rolls across the D-pad (diagonals on the way) or from B onto A.
+  const held = useRef(new Map<number, string[]>());
+  const hold = (e: React.PointerEvent<HTMLButtonElement>, now: string[]) => {
+    const root = e.currentTarget.closest('.touch');
+    const { press, release } = slide(held.current, e.pointerId, now);
+    for (const b of release) { root?.querySelector(`[data-pad="${b}"]`)?.classList.remove('down'); releaseButton(BUTTON_NUMBERS[b]); }
+    for (const b of press) { root?.querySelector(`[data-pad="${b}"]`)?.classList.add('down'); pressButton(BUTTON_NUMBERS[b]); }
+    if (press.length && useSettingsStore.getState().haptics) navigator.vibrate?.(8);
+  };
+  const letGo = (e: React.PointerEvent<HTMLButtonElement>) => hold(e, []);
   const pad = (b: string) => ({
     'data-pad': b,
     onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
@@ -410,14 +433,24 @@ function Player({ game }: { game: GameEntry }) {
       if (!tick) e.preventDefault();
       // Capture can throw (pointer already released or cancelled by the system): never lose the press over it.
       if (!tick) try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* keep going */ }
-      e.currentTarget.classList.add('down');
-      if (useSettingsStore.getState().haptics) navigator.vibrate?.(8);
-      pressButton(BUTTON_NUMBERS[b]);
+      hold(e, [b]);
     },
-    onPointerUp: (e: React.PointerEvent<HTMLButtonElement>) => { e.currentTarget.classList.remove('down'); releaseButton(BUTTON_NUMBERS[b]); },
-    onPointerCancel: (e: React.PointerEvent<HTMLButtonElement>) => { e.currentTarget.classList.remove('down'); releaseButton(BUTTON_NUMBERS[b]); },
+    onPointerMove: (e: React.PointerEvent<HTMLButtonElement>) => {
+      if (!held.current.has(e.pointerId) || !e.currentTarget.hasPointerCapture(e.pointerId)) return;
+      const root = e.currentTarget.closest('.touch');
+      const dpad = root?.querySelector('.dpad')?.getBoundingClientRect();
+      if (dpad && e.clientX >= dpad.left && e.clientX <= dpad.right && e.clientY >= dpad.top && e.clientY <= dpad.bottom) {
+        hold(e, dpadAt(e.clientX - (dpad.left + dpad.right) / 2, e.clientY - (dpad.top + dpad.bottom) / 2, dpad.width));
+        return;
+      }
+      // Over another button: that one. Over nothing: the thumb keeps what it holds (it overshoots the edges).
+      const other = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[data-pad]');
+      if (other?.dataset.pad && root?.contains(other)) hold(e, [other.dataset.pad]);
+    },
+    onPointerUp: letGo,
+    onPointerCancel: letGo,
     // Uncaptured (an armed rumble tick): sliding off the button lets it go.
-    onPointerLeave: (e: React.PointerEvent<HTMLButtonElement>) => { if (e.currentTarget.classList.contains('down')) { e.currentTarget.classList.remove('down'); releaseButton(BUTTON_NUMBERS[b]); } },
+    onPointerLeave: (e: React.PointerEvent<HTMLButtonElement>) => { if (!e.currentTarget.hasPointerCapture(e.pointerId)) letGo(e); },
     onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
   });
 
