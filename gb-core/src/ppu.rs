@@ -139,8 +139,11 @@ impl Ppu {
             0xFF40 => self.lcdc,
             0xFF41 => {
                 let mode_bits = if self.lcd_on_line0 { 0 } else { self.mode as u8 };
-                let lyc_flag = if self.ly == self.lyc { 0x04 } else { 0 };
-                (self.stat & 0xF8) | lyc_flag | mode_bits
+                // With the LCD off the coincidence bit is frozen at its LCD-off value
+                // (kept in stored bit 2). Bit 7 is unused and always reads 1.
+                let lyc_flag = if self.lcdc & 0x80 == 0 { self.stat & 0x04 }
+                    else if self.ly == self.lyc { 0x04 } else { 0 };
+                0x80 | (self.stat & 0x78) | lyc_flag | mode_bits
             }
             0xFF42 => self.scy,
             0xFF43 => self.scx,
@@ -167,6 +170,8 @@ impl Ppu {
                 self.lcdc = value;
                 let is_enabled = self.lcdc & 0x80 != 0;
                 if was_enabled && !is_enabled {
+                    let lyc_flag = if self.ly == self.lyc { 0x04 } else { 0 };
+                    self.stat = (self.stat & !0x04) | lyc_flag;
                     self.ly = 0;
                     self.mode = PpuMode::HBlank;
                     self.mode_clock = 0;
@@ -179,7 +184,7 @@ impl Ppu {
                     self.lcd_on_line0 = true;
                 }
             }
-            0xFF41 => self.stat = (value & 0xF8) | (self.stat & 0x07),
+            0xFF41 => self.stat = (value & 0x78) | (self.stat & 0x07),
             0xFF42 => self.scy = value,
             0xFF43 => self.scx = value,
             0xFF44 => {}
@@ -887,5 +892,22 @@ mod tests {
         p.bg_cram[0] = 0x1F;
         p.bg_cram[1] = 0x00;
         assert_eq!(p.get_bg_cram_color(0, 0), [255, 0, 0, 255]);
+    }
+
+    #[test]
+    fn stat_bit7_reads_1_and_lyc_flag_freezes_while_lcd_off() {
+        let mut p = Ppu::new();
+        p.write_register(0xFF41, 0xFF);
+        assert_eq!(p.read_register(0xFF41) & 0x80, 0x80);
+        p.lcdc = 0x80;
+        p.ly = 145;
+        p.lyc = 145;
+        p.write_register(0xFF40, 0x00); // LCD off at LY == LYC: flag latched set
+        assert_eq!(p.ly, 0);
+        assert_eq!(p.read_register(0xFF41) & 0x04, 0x04);
+        p.write_register(0xFF45, 0x91); // LYC writes don't update it while off
+        assert_eq!(p.read_register(0xFF41) & 0x04, 0x04);
+        p.write_register(0xFF40, 0x80); // LCD on: live again (LY 0 != LYC)
+        assert_eq!(p.read_register(0xFF41) & 0x04, 0);
     }
 }
