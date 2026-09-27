@@ -58,7 +58,7 @@ export function Manual(p: ManualProps) {
   const page: Record<Tab, () => ReactNode> = {
     controls: () => <ControlsPage online={p.online} onEdit={p.onEditControls} />,
     saves: () => <SavesPage {...p} />,
-    screen: () => <ScreenPage snapshot={p.emu.framebufferSnapshot} romLoaded={p.romLoaded} inColor={!!p.inColor} gameId={p.game.id}
+    screen: () => <ScreenPage live={p.isRunning} snapshot={p.emu.framebufferSnapshot} romLoaded={p.romLoaded} inColor={!!p.inColor} gameId={p.game.id}
       dmgCart={p.header?.cgbFlag === 'DMG Only'} sgb={sgbCartOf(p.header)} running={p.running} onRestart={p.onRestart} />,
     album: () => <AlbumPage {...p} />,
     game: () => <GamePageTab {...p} />,
@@ -178,8 +178,8 @@ function SavesPage({ header, states, romLoaded, onSave, onLoad }: ManualProps) {
   );
 }
 
-function ScreenPage({ snapshot, romLoaded, inColor, gameId, dmgCart, sgb, running, onRestart }: {
-  snapshot: () => Uint8Array | null; romLoaded: boolean; inColor: boolean; gameId: string; dmgCart: boolean; sgb: SgbCart; running: Machine | null; onRestart: () => void;
+function ScreenPage({ live, snapshot, romLoaded, inColor, gameId, dmgCart, sgb, running, onRestart }: {
+  live: boolean; snapshot: () => Uint8Array | null; romLoaded: boolean; inColor: boolean; gameId: string; dmgCart: boolean; sgb: SgbCart; running: Machine | null; onRestart: () => void;
 }) {
   const { screenSize, setScreenSize } = useSettingsStore();
   const chosen = useSettingsStore((s) => machineFor(s, gameId, sgb));
@@ -188,10 +188,12 @@ function ScreenPage({ snapshot, romLoaded, inColor, gameId, dmgCart, sgb, runnin
   const grab = useRef(() => null as Uint8ClampedArray | null);
   useEffect(() => { grab.current = () => { const s = romLoaded ? snapshot() : null; return s ? new Uint8ClampedArray(s) : null; }; });
   const [frame, setFrame] = useState<Uint8ClampedArray | null>(() => { const s = romLoaded ? snapshot() : null; return s ? new Uint8ClampedArray(s) : null; });
+  // Live previews, once a second while the game runs; paused, the frame is caught once and nothing redraws.
   useEffect(() => {
-    const t = window.setInterval(() => setFrame(grab.current()), 1000); // live previews, once a second
+    if (!live) { setFrame(grab.current()); return; }
+    const t = window.setInterval(() => setFrame(grab.current()), 1000);
     return () => window.clearInterval(t);
-  }, []);
+  }, [live]);
   return (
     <>
       <h2>{t('player.tabs.screen')}</h2>

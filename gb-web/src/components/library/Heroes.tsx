@@ -47,8 +47,9 @@ function Attract({ game, label }: { game?: GameEntry; label: string }) {
     const canvas = ref.current;
     if (!canvas || !game) return;
     let raf = 0, stopped = false, onScreen = true;
+    let resume: (() => void) | null = null; // set while the loop is parked off screen
     let emu: import('gb-core').Emulator | null = null;
-    const io = new IntersectionObserver(([e]) => { onScreen = e.isIntersecting; });
+    const io = new IntersectionObserver(([e]) => { onScreen = e.isIntersecting; if (onScreen && resume) { const r = resume; resume = null; r(); } });
     io.observe(canvas);
     (async () => {
       const [wasm, rom] = await Promise.all([import('gb-core'), fetchRom(game)]);
@@ -63,7 +64,7 @@ function Attract({ game, label }: { game?: GameEntry; label: string }) {
       // Fast-forward past the boot sequence before the first frame is shown; a still waits ~5 s for the title screen.
       const warmup = still ? 300 : 150;
       let frames = 0;
-      const due = pacer();
+      let due = pacer();
       const step = () => { const ok = emu!.run_frame(); emu!.clear_audio_buffer(); frames++; return ok; }; // silent: audio is dropped
       const draw = () => { img.data.set(emu!.framebuffer_snapshot()); ctx.putImageData(img, 0, 0); };
       const tick = () => {
@@ -74,7 +75,10 @@ function Attract({ game, label }: { game?: GameEntry; label: string }) {
         } else if (onScreen) {
           let n = due(performance.now()); // real time, not one frame per display refresh
           if (n) { while (n--) if (!step()) return; draw(); }
-        } else due(performance.now());
+        } else { // off screen: no animation frames at all until the observer sees it again
+          resume = () => { due = pacer(); raf = requestAnimationFrame(tick); };
+          return;
+        }
         raf = requestAnimationFrame(tick);
       };
       raf = requestAnimationFrame(tick);
