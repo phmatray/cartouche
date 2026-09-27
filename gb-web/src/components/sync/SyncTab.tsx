@@ -27,10 +27,11 @@ export function SyncTab() {
   const [local, setLocal] = useState<{ count: number; bytes: number } | null>(null);
 
   // While this page is open, every paired device's room is joined: "Sync now" is instant, the other device shows up live.
+  // Leaving it also ends a pairing: the code is only good while it's on screen (docs/SYNC.md).
   useEffect(() => {
     let release: (() => void) | null = null, gone = false;
     engine().then((e) => { if (!gone) release = e.hold(); });
-    return () => { gone = true; release?.(); };
+    return () => { gone = true; release?.(); if (useSync.getState().pairing) void engine().then((e) => e.cancelPairing()); };
   }, []);
   useEffect(() => {
     let live = true;
