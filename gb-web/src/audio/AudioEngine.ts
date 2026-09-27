@@ -37,11 +37,23 @@ export class AudioEngine {
     return this.context?.state ?? null;
   }
 
-  async resume(): Promise<void> {
+  // The audio device only runs while the game does and the page is shown: a paused game or a hidden tab suspends it,
+  // so the audio thread stops rendering silence and the phone can idle.
+  private wanted = false;
+
+  /** Whether the sound should run (game running, page visible); applied at once when the context exists. */
+  setWanted(on: boolean): Promise<void> {
+    this.wanted = on;
+    return this.apply();
+  }
+
+  /** Brings the context to the wanted state: resumed (also from iOS's 'interrupted') or suspended. */
+  private async apply(): Promise<void> {
+    const ctx = this.context;
+    if (!ctx || ctx.state === 'closed') return;
     // Not only 'suspended': iOS parks the context as 'interrupted' after a call, Siri or the app going to the background.
-    if (this.context && this.context.state !== 'running' && this.context.state !== 'closed') {
-      await this.context.resume();
-    }
+    if (this.wanted && ctx.state !== 'running') await ctx.resume();
+    else if (!this.wanted && ctx.state === 'running') await ctx.suspend();
   }
 
   feedSamples(samples: Float32Array): void {
