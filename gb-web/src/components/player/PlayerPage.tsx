@@ -231,11 +231,7 @@ function Player({ game }: { game: GameEntry }) {
       else if (!refused.current) toast(ok ? (from === 'auto' ? tNow('player.toast.resumed') : tNow('player.toast.loadedSlot', { n: String(+from + 1) })) : tNow('player.toast.gone'), ok ? 'c' : 'm');
     }
     setIsRunning(q.get('edit') !== 'controls');
-<<<<<<< HEAD
-  }, [powerOn, hasBatteryRam, importSram, game.id, q, setQ, saves, setIsRunning, consoleNow, skipBoot]);
-=======
-  }, [powerOn, hasBatteryRam, importSram, game.id, q, saves, setIsRunning, consoleNow, skipBoot, saveWriter]);
->>>>>>> cb0faa5 (fix(web): keep battery saves on reload and never write over one saved elsewhere)
+  }, [powerOn, hasBatteryRam, importSram, game.id, q, setQ, saves, setIsRunning, consoleNow, skipBoot, saveWriter]);
 
   const booted = useRef(false);
   useEffect(() => {

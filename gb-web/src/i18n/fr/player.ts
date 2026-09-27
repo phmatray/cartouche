@@ -49,7 +49,7 @@ export default {
     soundOff: 'Son coupé',
     belongs: 'Cette sauvegarde appartient à « {name} » : les prochaines y seront écrites',
     newSave: 'La sauvegarde de cartouche d’origine a été supprimée : sauvegarde dans une nouvelle, « {name} »',
-    changedElsewhere: 'Cette sauvegarde a changé ailleurs (autre onglet ou appareil) : sauvegarde dans une nouvelle, « {name} », les deux sont gardées',
+    changedElsewhere: 'Cette sauvegarde a changé ailleurs (autre onglet ou appareil) : sauvegarde dans une nouvelle, « {name} », les deux sont gardées',
   },
   error: {
     init: 'Émulateur non initialisé',
