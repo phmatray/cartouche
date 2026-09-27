@@ -4,6 +4,74 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.3.0](https://github.com/phmatray/cartouche/compare/v1.2.1...v1.3.0) (2026-09-27)
+
+
+### Added
+
+* Cartouche start-up animations (Registration, Insert, Shelf) ([#89](https://github.com/phmatray/cartouche/issues/89)) ([9b8bc8a](https://github.com/phmatray/cartouche/commit/9b8bc8a857a6cd3045660beabb82bbd89f35ee34))
+* play the link cable online, browser to browser ([#42](https://github.com/phmatray/cartouche/issues/42)) ([6f6addf](https://github.com/phmatray/cartouche/commit/6f6addfa35ebf41aaba451d3be20b8b142a45a41))
+* pocket camera, Game Boy Printer and rumble ([#37](https://github.com/phmatray/cartouche/issues/37)) ([57e28d9](https://github.com/phmatray/cartouche/commit/57e28d959c9de87886ba1e0a5f98627036eeff17))
+* start-up animation and Game Boy Color colours for original Game Boy games ([#49](https://github.com/phmatray/cartouche/issues/49)) ([704439a](https://github.com/phmatray/cartouche/commit/704439a4e728ecb7bfb496a74de98b21e6206533))
+* Super Game Boy borders, colours and multiplayer ([#50](https://github.com/phmatray/cartouche/issues/50)) ([fded9eb](https://github.com/phmatray/cartouche/commit/fded9eb8667b8b56a1b28fedaab688ac7ceeac66))
+* **web:** add a GB Studio collection with one-tap downloads ([#39](https://github.com/phmatray/cartouche/issues/39)) ([7a7941f](https://github.com/phmatray/cartouche/commit/7a7941fc9cbf174867aec9118f4a6095b44f0928))
+* **web:** an option to hide the test cartridges ([#43](https://github.com/phmatray/cartouche/issues/43)) ([174ec20](https://github.com/phmatray/cartouche/commit/174ec20f2d0b31914d243219b031e2c997debb4c))
+* **web:** English, French and Spanish ([#36](https://github.com/phmatray/cartouche/issues/36)) ([0ddfd4c](https://github.com/phmatray/cartouche/commit/0ddfd4c192448db8dac48f1149174078ac5f9c76))
+* **web:** read-only RetroAchievements on the game page and in the manual ([#47](https://github.com/phmatray/cartouche/issues/47)) ([72a6d96](https://github.com/phmatray/cartouche/commit/72a6d9698922c85c83708a9ebcdc560f87f7865d))
+* **web:** show the version in the footer ([#46](https://github.com/phmatray/cartouche/issues/46)) ([ec69d2e](https://github.com/phmatray/cartouche/commit/ec69d2e93d899da8b8ce4176f7c1159acf2f731c))
+* **web:** sync saves between your own devices, end to end encrypted ([#45](https://github.com/phmatray/cartouche/issues/45)) ([0da0ad4](https://github.com/phmatray/cartouche/commit/0da0ad49fa3313cb3d6ad0912777b3d024c8432e))
+* **web:** touch control skins and a layout editor ([#48](https://github.com/phmatray/cartouche/issues/48)) ([0195045](https://github.com/phmatray/cartouche/commit/0195045808e9ca42cadfd12be51cf728d8c745be))
+
+
+### Fixed
+
+* **audio:** suspend the audio device while paused or hidden ([#54](https://github.com/phmatray/cartouche/issues/54)) ([748190a](https://github.com/phmatray/cartouche/commit/748190a6c9f0a241df8aa65451c0cccb85b090d4))
+* **core:** draw the first frame after a state load over its thumbnail ([#91](https://github.com/phmatray/cartouche/issues/91)) ([f064152](https://github.com/phmatray/cartouche/commit/f0641520a46e420b17291dca1d6da5190aaafeae))
+* **core:** release review round 1 — Emulation core ([#52](https://github.com/phmatray/cartouche/issues/52)) ([9c43b5d](https://github.com/phmatray/cartouche/commit/9c43b5df31be8766b1d5ec2482d88892675ee514))
+* **core:** release review round 2 — Emulation core ([#66](https://github.com/phmatray/cartouche/issues/66)) ([ca115a8](https://github.com/phmatray/cartouche/commit/ca115a87a4485c36de7c55a1853dbff17286e67d))
+* **core:** release review round 3 — Emulation core ([#70](https://github.com/phmatray/cartouche/issues/70)) ([ba2f7d6](https://github.com/phmatray/cartouche/commit/ba2f7d6ae51ccfaeaeb91bc1c5565480a6ccbe61))
+* **core:** release review round 4 — Emulation core ([#79](https://github.com/phmatray/cartouche/issues/79)) ([ef88bfd](https://github.com/phmatray/cartouche/commit/ef88bfdb6f438c6dfa3bde33c84df6cefe9615e9))
+* **i18n:** release review round 3 — Translations and accessibility ([#72](https://github.com/phmatray/cartouche/issues/72)) ([ccefd83](https://github.com/phmatray/cartouche/commit/ccefd83a98ab86ab95f505cc932f155d4b08b416))
+* **i18n:** release review round 4 — Translations and accessibility ([#80](https://github.com/phmatray/cartouche/issues/80)) ([8881b2a](https://github.com/phmatray/cartouche/commit/8881b2a5edd293a521f34f1d5cb429f513b57a1c))
+* **i18n:** release review round 5 — Translations and accessibility ([#85](https://github.com/phmatray/cartouche/issues/85)) ([c8a6a2c](https://github.com/phmatray/cartouche/commit/c8a6a2c504243d1dd6dff95a7de0a295af414d9c))
+* **legal:** open license files in a new browsing context ([#76](https://github.com/phmatray/cartouche/issues/76)) ([b2e66e7](https://github.com/phmatray/cartouche/commit/b2e66e7a5f45b79083d7f55f47325d8d5554b23c))
+* **legal:** release review round 1 — Legal, licensing and security ([#51](https://github.com/phmatray/cartouche/issues/51)) ([732c0fe](https://github.com/phmatray/cartouche/commit/732c0fe9099e12baa290e586f3c4b992581a9617))
+* **legal:** release review round 2 — Legal, licensing and security ([#59](https://github.com/phmatray/cartouche/issues/59)) ([806c41a](https://github.com/phmatray/cartouche/commit/806c41af78e86249f2d42f8f9f62788010d10da1))
+* **legal:** release review round 4 — Legal, licensing and security ([#77](https://github.com/phmatray/cartouche/issues/77)) ([79689f7](https://github.com/phmatray/cartouche/commit/79689f737ddc6264b5d5ff55f19b852f28fc8d0c))
+* **legal:** release review round 5 — Legal, licensing and security ([#84](https://github.com/phmatray/cartouche/issues/84)) ([9247933](https://github.com/phmatray/cartouche/commit/9247933f9d9ab9aa0c758b6a5287ecef55f505e5))
+* **library:** release review round 4 — Library, import and storage ([#78](https://github.com/phmatray/cartouche/issues/78)) ([fff9a08](https://github.com/phmatray/cartouche/commit/fff9a08614455a949b9378536b56d4d2db2611fd))
+* **library:** release review round 5 — Library, import and storage ([#88](https://github.com/phmatray/cartouche/issues/88)) ([d604f40](https://github.com/phmatray/cartouche/commit/d604f4070b6491ad4aa8f342a53abc1126601287))
+* **neural:** draw curves smoothly instead of as zigzags, keep straight edges exact ([#40](https://github.com/phmatray/cartouche/issues/40)) ([a11efdd](https://github.com/phmatray/cartouche/commit/a11efdd9fc82ce4e1ff8ff37f9f01ede93667466))
+* **player:** pause under the phone Manual, SNES-music resume, restart, Enter on focused buttons ([#82](https://github.com/phmatray/cartouche/issues/82)) ([7aec36a](https://github.com/phmatray/cartouche/commit/7aec36a581dcb399a8110f4450c074edea08952c))
+* **player:** release review round 1 — Player and input ([#53](https://github.com/phmatray/cartouche/issues/53)) ([529c285](https://github.com/phmatray/cartouche/commit/529c2857f1382e5b524db55fa284d008dc3071f4))
+* **player:** release review round 3 — Player and input ([#68](https://github.com/phmatray/cartouche/issues/68)) ([ae4c015](https://github.com/phmatray/cartouche/commit/ae4c015008f16b22ea5b5e873fd1a07986691caa))
+* **player:** release review round 5 — Player and input ([#86](https://github.com/phmatray/cartouche/issues/86)) ([bdb1f4a](https://github.com/phmatray/cartouche/commit/bdb1f4a87eca99236356928cef70cdfdf12d1ebd))
+* **pwa:** don't activate an update while another tab is open ([#62](https://github.com/phmatray/cartouche/issues/62)) ([d9f7556](https://github.com/phmatray/cartouche/commit/d9f7556403ae9f7415bee99969f1317a06f4acc6))
+* **pwa:** release review round 1 — PWA, offline and iPhone ([#55](https://github.com/phmatray/cartouche/issues/55)) ([f794be0](https://github.com/phmatray/cartouche/commit/f794be07032fb92e51e485424f2c25dce1390205))
+* **pwa:** release review round 3 — PWA, offline and iPhone ([#73](https://github.com/phmatray/cartouche/issues/73)) ([2203dba](https://github.com/phmatray/cartouche/commit/2203dbacbbf8a7b7b64d8f209b5ca2267e6f95aa))
+* **pwa:** release review round 5 — PWA, offline and iPhone ([#90](https://github.com/phmatray/cartouche/issues/90)) ([d06af49](https://github.com/phmatray/cartouche/commit/d06af4915615c5426ba5296162dfcd4331697ae2))
+* release review round 2 — Data integrity, sync and online link ([#64](https://github.com/phmatray/cartouche/issues/64)) ([095ba80](https://github.com/phmatray/cartouche/commit/095ba8065d7c8e7368010a4282c8c9a890cf2269))
+* release review round 2 — Performance ([#63](https://github.com/phmatray/cartouche/issues/63)) ([2f234c7](https://github.com/phmatray/cartouche/commit/2f234c7d61dd7513795432956d139c012948048b))
+* release review round 3 — legal, data and library (combined) ([#75](https://github.com/phmatray/cartouche/issues/75)) ([c239559](https://github.com/phmatray/cartouche/commit/c2395595ee8293ac9394d50cb13dd81217d5b72d))
+* release review round 4 — Data integrity, sync and online link ([#81](https://github.com/phmatray/cartouche/issues/81)) ([e9c4c06](https://github.com/phmatray/cartouche/commit/e9c4c06fccf1bdb1e6c656772d4782296a399039))
+* release review round 4 — Performance ([#83](https://github.com/phmatray/cartouche/issues/83)) ([b2a3072](https://github.com/phmatray/cartouche/commit/b2a30721b4bf07812a3f885b8a5d66971f67a7ee))
+* **search:** keep keys typed while the debounced URL update lands ([#93](https://github.com/phmatray/cartouche/issues/93)) ([c7aaffa](https://github.com/phmatray/cartouche/commit/c7aaffab2b540eb51e9970d0d448e239dfcd3853))
+* **sync:** release review round 5 — Data integrity, sync and online link ([#87](https://github.com/phmatray/cartouche/issues/87)) ([1a5bf8f](https://github.com/phmatray/cartouche/commit/1a5bf8f9d33dca39e8cdeaf3973544b100ff8a40))
+* **web:** quick wins (zip on Load your ROM, 404 message, wake lock, share, streamed backup, iPhone touch) ([#44](https://github.com/phmatray/cartouche/issues/44)) ([193fcaf](https://github.com/phmatray/cartouche/commit/193fcaf7d6c11687886eab1bb3465538c66271d5))
+* **web:** release review round 1 — data integrity, sync and online link ([#56](https://github.com/phmatray/cartouche/issues/56)) ([1ea9916](https://github.com/phmatray/cartouche/commit/1ea991610478ed20656eeb12e9b62684bce845b0))
+* **web:** release review round 1 — Library, import and storage ([#58](https://github.com/phmatray/cartouche/issues/58)) ([d72885b](https://github.com/phmatray/cartouche/commit/d72885b52168fbf3a59cfde321a780bc775bc62c))
+* **web:** release review round 1 — Translations and accessibility ([#57](https://github.com/phmatray/cartouche/issues/57)) ([9073ffe](https://github.com/phmatray/cartouche/commit/9073ffef0f0208a73be63e8acd214e06680ec3a1))
+* **web:** release review round 2 — Library, import and storage ([#60](https://github.com/phmatray/cartouche/issues/60)) ([3c6a9d3](https://github.com/phmatray/cartouche/commit/3c6a9d378534db5f3c88ca8f7ff5ada4b429d315))
+* **web:** release review round 2 — Player and input ([#61](https://github.com/phmatray/cartouche/issues/61)) ([b892f08](https://github.com/phmatray/cartouche/commit/b892f0834ed36f8da1c9d796978e5733d76741ff))
+* **web:** release review round 2 — Translations and accessibility ([#65](https://github.com/phmatray/cartouche/issues/65)) ([ed2643a](https://github.com/phmatray/cartouche/commit/ed2643a1800cf79778374d0dcb194d62ad4de4ab))
+* **web:** release review round 3 — Performance ([#74](https://github.com/phmatray/cartouche/issues/74)) ([e56ead4](https://github.com/phmatray/cartouche/commit/e56ead40180ade9e049f8fc89fe24738bd5e5ab1))
+
+
+### Documentation
+
+* docs/SYNC.md (design, threat model, limits). ([0da0ad4](https://github.com/phmatray/cartouche/commit/0da0ad49fa3313cb3d6ad0912777b3d024c8432e))
+* refresh the README and screenshots for the release ([#92](https://github.com/phmatray/cartouche/issues/92)) ([5167afb](https://github.com/phmatray/cartouche/commit/5167afb66cbeab52cbb3f7964c8cc38ddd4e62fb))
+
 ## [1.2.1](https://github.com/phmatray/cartouche/compare/v1.2.0...v1.2.1) (2026-09-27)
 
 
