@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import { useSettingsStore } from '../store/settingsStore';
 import { detectLang, loadLang, setLang, translate, type Key, type Lang, type Vars } from './core';
 
-export { ago, date, dur, getLang, headerSize, langName, LANG_NAMES, LANGS, list, num, size, t, type Key, type Lang } from './core';
+export { ago, date, dur, getLang, headerSize, langName, LANG_NAMES, LANGS, list, num, pct, regionName, size, t, type Key, type Lang } from './core';
 
 /** The language shown: switched once its dictionary is in (the chosen one, else the browser's). */
 const useShown = create<{ lang: Lang }>(() => ({ lang: 'en' }));

@@ -6,6 +6,7 @@ import { CONSOLE_COMPAT, CONSOLE_DMG, CONSOLE_SGB, useEmulator } from '../../hoo
 import { useAudio } from '../../hooks/useAudio';
 import { stretch } from '../../audio/AudioEngine';
 import { useGamepad } from '../../hooks/useGamepad';
+import { padNav } from '../../hooks/useGamepadNav';
 import { useLcdShader } from '../../hooks/useLcdShader';
 import { useRewind } from '../../hooks/useRewind';
 import { useSaveData } from '../../hooks/useSaveData';
@@ -173,7 +174,8 @@ function Player({ game }: { game: GameEntry }) {
     else if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     else rootRef.current?.requestFullscreen().catch(() => {});
   }, []);
-  const { connected: gamepad } = useGamepad(pressButton, releaseButton, romLoaded, toggleFullscreen);
+  // The pad plays the game while it runs; paused, it works the Manual and the page (useGamepadNav).
+  const { connected: gamepad } = useGamepad(pressButton, releaseButton, romLoaded && isRunning, toggleFullscreen);
 
   // Phones sideways: the top bar takes the row but the deck's width (see index.css).
   useLayoutEffect(() => {
@@ -385,6 +387,12 @@ function Player({ game }: { game: GameEntry }) {
   const rewind = online.on ? noop : startRewind, load = online.on ? async () => {} : loadSlot;
   const actions = useRef({ togglePlay, saveSlot, loadSlot: load, screenshot, mute, toggleFullscreen, startRewind: rewind, stopRewind });
   useEffect(() => { actions.current = { togglePlay, saveSlot, loadSlot: load, screenshot, mute, toggleFullscreen, startRewind: rewind, stopRewind }; });
+  // The pad's menu button (Home, or Select + Start): pause and open the Manual, or play on.
+  useEffect(() => {
+    padNav.game = romLoaded && isRunning;
+    padNav.menu = romLoaded ? () => { if (isRunning) setManual(true); actions.current.togglePlay(); } : undefined;
+    return () => { padNav.game = false; padNav.menu = undefined; };
+  }, [romLoaded, isRunning]);
   useEffect(() => {
     const buttonOf = (key: string) => {
       for (const [b, k] of Object.entries(keybindings)) if (k === key || k.toLowerCase() === key.toLowerCase()) return BUTTON_NUMBERS[b];

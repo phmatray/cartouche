@@ -126,5 +126,27 @@ export function langName(code: string): string {
   } catch { return code; }
 }
 
+/** A percentage with the language's spacing: 80% · 80 % (a no-break space). `signed`: +20 %, 0 %, −20 %. */
+export const pct = (n: number, signed = false) =>
+  intl(`p${lang}${signed}`, () => new Intl.NumberFormat(locale(), { style: 'percent', signDisplay: signed ? 'exceptZero' : 'auto' })).format(n / 100);
+
+// GameDB regions (English country names, 'USA/Europe') as Unicode region codes; Europe and World are UN M.49 areas.
+const REGION_CODES: Record<string, string> = {
+  USA: 'US', Japan: 'JP', Europe: '150', World: '001', Germany: 'DE', France: 'FR', Spain: 'ES', Italy: 'IT', Taiwan: 'TW',
+  Australia: 'AU', China: 'CN', 'South Korea': 'KR', 'Hong Kong': 'HK', 'United Kingdom': 'GB', Sweden: 'SE', Brazil: 'BR',
+  Netherlands: 'NL', Canada: 'CA',
+};
+/** A GameDB region in the active language ('USA/Europe' → 'États-Unis/Europe'); English and unknown names stay as they are. */
+export function regionName(region: string): string {
+  if (lang === 'en') return region;
+  try {
+    const dn = intl(`g${lang}`, () => new Intl.DisplayNames(locale(), { type: 'region' }));
+    return region.split('/').map((r) => {
+      const s = (REGION_CODES[r] && dn.of(REGION_CODES[r])) || r;
+      return s.charAt(0).toLocaleUpperCase(locale()) + s.slice(1);
+    }).join('/');
+  } catch { return region; }
+}
+
 /** "a, b and c" in the active language. */
 export const list = (items: string[]) => intl(`L${lang}`, () => new Intl.ListFormat(locale())).format(items);

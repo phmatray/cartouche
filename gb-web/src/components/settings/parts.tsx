@@ -1,4 +1,5 @@
 import { useId, type ReactNode } from 'react';
+import { pct } from '../../i18n';
 
 /** One settings line with an on/off switch. */
 export function SwitchRow({ label, sub, on, set }: { label: string; sub?: ReactNode; on: boolean; set: (v: boolean) => void }) {
@@ -26,7 +27,7 @@ export function Row({ label, sub, subId, children }: { label: string; sub?: Reac
 /** A settings line with a slider and its value. */
 export function Slider({ label, sub, value, min, max, set }: { label: string; sub?: ReactNode; value: number; min: number; max: number; set: (v: number) => void }) {
   const id = useId();
-  const text = `${min < 0 && value > 0 ? '+' : ''}${value}%`;
+  const text = pct(value, min < 0);
   return (
     <Row label={label} sub={sub} subId={id}>
       <span className="range">

@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 import { encode } from 'uqr';
 import { useGameLibrary } from '../../hooks/useGameLibrary';
 import { createProfile, getActiveProfileId, getGameSaveStates, listProfiles, uniqueName, type StoredSave, type StoredSaveState } from '../../lib/db';
-import { ago, bytes, linkReady, owned, paths, PLATFORM, sortTitle } from '../../lib/ui';
+import { ago, bytes, focusIfLost, linkReady, owned, paths, PLATFORM, sortTitle } from '../../lib/ui';
 import { inviteUrl, parseCode, spaced } from '../../lib/p2p/code';
 import { loadTurn, saveTurn, validTurn } from '../../lib/p2p/room';
 import { closeRoom, hold, openRoom, other, setSeat, useNet, type Seat } from '../../lib/netlink/session';
@@ -262,7 +262,7 @@ function Ticket({ code, compact }: { code: string; compact: boolean }) {
         <rect x="-2" y="-2" width={qr.size + 4} height={qr.size + 4} fill="#fff" /><path d={path} fill="currentColor" />
       </svg>
       <div className="nl-t-body">
-        <h2 id="h-code" aria-label={t('online.ticket.code', { code: [...code].join(' ') })}>{spaced(code)}</h2>
+        <h2 id="h-code" ref={focusIfLost} tabIndex={-1} aria-label={t('online.ticket.code', { code: [...code].join(' ') })}>{spaced(code)}</h2>
         <p>{t('online.ticket.sub')}</p>
         <div className="nl-t-acts">
           {canShare && <button className="btn y" onClick={() => navigator.share({ title: t('online.ticket.shareTitle'), text: t('online.ticket.shareText', { code: spaced(code) }), url }).catch(() => {})}>{I.share}{t('online.ticket.share')}</button>}

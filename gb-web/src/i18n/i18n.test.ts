@@ -1,7 +1,7 @@
 // node --test: the three dictionaries stay in step, and the plural and format helpers follow the language.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ago, detectLang, DICTS, dur, headerSize, isPlural, LANGS, langName, loadLang, num, setLang, size, translate } from './core.ts';
+import { ago, detectLang, DICTS, dur, headerSize, isPlural, LANGS, langName, loadLang, num, pct, regionName, setLang, size, translate } from './core.ts';
 import { LEGAL_SECTIONS } from '../content/legal.ts';
 import { LEGAL_FR } from '../content/legal.fr.ts';
 import { LEGAL_ES } from '../content/legal.es.ts';
@@ -86,6 +86,24 @@ test('sizes, times and names use the active language', () => {
   assert.equal(ago(now - 3 * 86400e3, now), 'hace 3 días');
   assert.equal(ago(Date.UTC(2026, 7, 18), now), 'el 18 de agosto');
   assert.equal(langName('en'), 'Inglés');
+  setLang('en');
+});
+
+test('percentages and GameDB regions follow the language', () => {
+  setLang('en');
+  assert.equal(pct(80), '80%');
+  assert.equal(regionName('USA/Europe'), 'USA/Europe');
+  setLang('fr');
+  assert.match(pct(80), /^80\s%$/); // a no-break space before %
+  assert.match(pct(20, true), /^\+20\s%$/);
+  assert.match(pct(0, true), /^0\s%$/);
+  assert.equal(regionName('Japan'), 'Japon');
+  assert.equal(regionName('USA/Europe'), 'États-Unis/Europe');
+  assert.equal(regionName('World'), 'Monde');
+  assert.equal(regionName('Scandinavia'), 'Scandinavia'); // no region code: as the GameDB has it
+  setLang('es');
+  assert.equal(regionName('Japan'), 'Japón');
+  assert.equal(regionName('South Korea'), 'Corea del Sur');
   setLang('en');
 });
 

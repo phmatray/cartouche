@@ -1,6 +1,6 @@
 import { useSettingsStore, type ChannelMutes } from '../../store/settingsStore';
 import { Row, SwitchRow } from './parts';
-import { useT } from '../../i18n';
+import { pct, useT } from '../../i18n';
 
 const CHANNELS: (keyof ChannelMutes)[] = ['pulse1', 'pulse2', 'wave', 'noise'];
 
@@ -13,8 +13,8 @@ export function AudioTab() {
       <p className="intro">{t('settings.audio.intro')}</p>
       <Row label={t('settings.audio.volume')}>
         <span className="range">
-          <input type="range" min={0} max={100} value={masterVolume} aria-label={t('settings.audio.volume')} onChange={(e) => setMasterVolume(+e.target.value)} />
-          <output>{masterVolume}%</output>
+          <input type="range" min={0} max={100} value={masterVolume} aria-label={t('settings.audio.volume')} aria-valuetext={pct(masterVolume)} onChange={(e) => setMasterVolume(+e.target.value)} />
+          <output>{pct(masterVolume)}</output>
         </span>
       </Row>
       <h3>{t('settings.audio.channels')}</h3>
