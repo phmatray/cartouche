@@ -491,7 +491,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .dk[aria-pressed=true]{background:var(--y);color:#000}
 .dk.main{background:var(--paper);color:#000;min-width:124px}
 .dk.main:hover{background:#fff}
-.dk .k{font:700 10px var(--font);color:var(--dim);letter-spacing:.04em}
+.dk .k{font:700 10px var(--font);color:var(--mute);letter-spacing:.04em}
 .dk.main .k,.dk[aria-pressed=true] .k{color:#6f6f68}
 .gap{width:18px;flex:none}
 .speed{display:inline-grid;grid-auto-flow:column;background:var(--band-2)}
