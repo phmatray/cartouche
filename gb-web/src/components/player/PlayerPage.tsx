@@ -107,7 +107,7 @@ function Player({ game }: { game: GameEntry }) {
   // and it has its own default screen settings (the core decides, from header byte 0x143 bit 7).
   const inColor = romLoaded && isCgb;
   const display = useDisplay(inColor ? 'cgb' : 'dmg', game.id);
-  const { canvasRef, canvasKey, renderFrame, setMotion, drawMotion, usesTrace } = useLcdShader(display.cfg.filters, inColor);
+  const { canvasRef, canvasKey, renderFrame, setMotion, drawMotion, usesTrace, restores } = useLcdShader(display.cfg.filters, inColor);
   const { ensureStarted, feedSamples, muted, toggleMute } = useAudio(isRunning);
   const saveTo = useRef<string | null>(null); // the save profile played solo (the game's active one)
 
@@ -159,6 +159,11 @@ function Player({ game }: { game: GameEntry }) {
     if (fb) { renderFrame(new Uint8ClampedArray(fb.buffer, fb.byteOffset, fb.length), true); setLit(true); }
     return true;
   }, [loadState, framebufferSnapshot, renderFrame, stateConsole, consoleNow, powerOn, paletteNow, syncBorder]);
+  // A WebGL context given back after a loss (iOS, backgrounded app) starts blank: redraw the frame, even paused.
+  useEffect(() => {
+    const fb = restores && framebufferSnapshot();
+    if (fb) renderFrame(new Uint8ClampedArray(fb.buffer, fb.byteOffset, fb.length), true);
+  }, [restores, framebufferSnapshot, renderFrame]);
   const saves = useSaveStates(game.id, { ...emu, loadState: loadAndShow }, saveTo);
   // Rewinding stops quietly at a restart onto another console.
   const rewindLoad = useCallback((data: Uint8Array, frame?: Uint8ClampedArray) => stateConsole(data) === consoleNow() && loadAndShow(data, frame), [stateConsole, consoleNow, loadAndShow]);

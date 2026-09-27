@@ -18,6 +18,8 @@ export function useLcdShader(filters: Filters, color: boolean, follow = true) {
   const [webglAvailable, setWebglAvailable] = useState(true);
   const look = useRef({ filters, color });
   const motion = useRef(false);
+  /** Bumped when the browser gives back a lost WebGL context: the engine is rebuilt on it. */
+  const [restores, setRestores] = useState(0);
   useEffect(() => { look.current = { filters, color }; }, [filters, color]);
 
   useEffect(() => {
@@ -39,8 +41,19 @@ export function useLcdShader(filters: Filters, color: boolean, follow = true) {
       if (w > 0) engine.resize(w, Math.round(w * 0.9));
     });
     if (follow) ro.observe(canvas);
-    return () => { ro.disconnect(); engine.destroy(); engineRef.current = null; };
-  }, [canvas, follow, webglAvailable]);
+    // iOS drops the WebGL context of a backgrounded app (and a GPU process restart does too). Without preventDefault the
+    // browser never gives it back and the screen stays black: keep it restorable, then rebuild the engine on it.
+    const lost = (e: Event) => { e.preventDefault(); ro.disconnect(); engine.destroy(); if (engineRef.current === engine) engineRef.current = null; };
+    const restored = () => setRestores((n) => n + 1);
+    canvas.addEventListener('webglcontextlost', lost);
+    canvas.addEventListener('webglcontextrestored', restored);
+    return () => {
+      // Listeners first: destroy() loses the context on purpose, and that loss must not be taken for the browser's.
+      canvas.removeEventListener('webglcontextlost', lost);
+      canvas.removeEventListener('webglcontextrestored', restored);
+      ro.disconnect(); engine.destroy(); if (engineRef.current === engine) engineRef.current = null;
+    };
+  }, [canvas, follow, webglAvailable, restores]);
 
   useEffect(() => { engineRef.current?.setFilters(filters, color); }, [filters, color, canvas]);
 
@@ -61,6 +74,6 @@ export function useLcdShader(filters: Filters, color: boolean, follow = true) {
   /** Whether the engine needs the layer trace right now (see LcdEngine.usesTrace). */
   const usesTrace = useCallback(() => engineRef.current?.usesTrace() ?? false, []);
 
-  /** `canvas` is set once the engine exists: a caller drawing a still frame redraws when it changes. */
-  return { canvasRef: setCanvas, canvasKey: webglAvailable ? 'gl' : '2d', renderFrame, setMotion, drawMotion, usesTrace, webglAvailable, canvas };
+  /** `canvas` is set once the engine exists and `restores` counts rebuilt contexts: a caller drawing a still frame redraws when either changes. */
+  return { canvasRef: setCanvas, canvasKey: webglAvailable ? 'gl' : '2d', renderFrame, setMotion, drawMotion, usesTrace, webglAvailable, canvas, restores };
 }
