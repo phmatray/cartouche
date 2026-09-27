@@ -18,6 +18,27 @@ const AXIS_MAP = {
   leftY: { axis: 1, negative: 6, positive: 7 },
 };
 
+/**
+ * What the pads still hold, from the last poll (keys: `12` for player 1, `2:12` for player 3; the stick as
+ * `leftX`/`2:leftX`), as [Game Boy button, player] pairs. A pad that goes away never sends its releases.
+ */
+export function heldBy(buttons: Record<string, boolean>, axes: Record<string, number>): [number, number][] {
+  const held: [number, number][] = [];
+  const split = (key: string) => { const [a, b] = key.split(':'); return b === undefined ? [0, a] as const : [Number(a), b] as const; };
+  for (const [key, on] of Object.entries(buttons)) {
+    const [player, i] = split(key);
+    const b = GAMEPAD_MAP[Number(i)];
+    if (on && b !== undefined) held.push([b, player]);
+  }
+  for (const [key, v] of Object.entries(axes)) {
+    const [player, name] = split(key);
+    const m = AXIS_MAP[name as keyof typeof AXIS_MAP];
+    if (m && v < -AXIS_DEADZONE) held.push([m.negative, player]);
+    if (m && v > AXIS_DEADZONE) held.push([m.positive, player]);
+  }
+  return held;
+}
+
 export function useGamepad(
   pressButton: (button: number, player?: number) => void,
   releaseButton: (button: number, player?: number) => void,
@@ -28,11 +49,15 @@ export function useGamepad(
   const prevButtonsRef = useRef<Record<string, boolean>>({});
   const prevAxesRef = useRef<Record<string, number>>({});
   const rafRef = useRef<number>(0);
+  const releaseRef = useRef(releaseButton);
+  useEffect(() => { releaseRef.current = releaseButton; }, [releaseButton]);
 
   useEffect(() => {
     const onConnect = () => setConnected(true);
     const onDisconnect = () => {
       setConnected(false);
+      // A pad that sleeps or runs flat mid-press: let go of what it held, as on blur.
+      for (const [b, player] of heldBy(prevButtonsRef.current, prevAxesRef.current)) releaseRef.current(b, player);
       prevButtonsRef.current = {};
       prevAxesRef.current = {};
     };

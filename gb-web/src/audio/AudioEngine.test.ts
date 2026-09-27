@@ -1,7 +1,7 @@
 // node --test: the audio device runs only while wanted (game running, page shown), and comes back from iOS's 'interrupted'.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AudioEngine } from './AudioEngine.ts';
+import { AudioEngine, stretch } from './AudioEngine.ts';
 
 function fakeContext(state: string) {
   const calls: string[] = [];
@@ -42,4 +42,10 @@ test('a closed context, or none yet, is left alone', async () => {
   await engine.setWanted(false);
   assert.deepEqual(calls, []);
   await new AudioEngine().setWanted(true); // before init(): no throw
+});
+
+test('½×: each stereo frame is played twice, so the device never runs dry', () => {
+  const lr = new Float32Array([0.1, -0.1, 0.2, -0.2]);
+  assert.deepEqual([...stretch(lr, 0.5)].map((v) => +v.toFixed(2)), [0.1, -0.1, 0.1, -0.1, 0.2, -0.2, 0.2, -0.2]);
+  assert.equal(stretch(lr, 1), lr); // normal speed: untouched
 });

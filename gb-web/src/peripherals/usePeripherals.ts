@@ -21,7 +21,7 @@ export interface Printout extends Paper { id: number; /** rows of this strip alr
  * port, the rumble motor. `tick(frames)` runs once per animation frame, after the frames it emulated
  * (0 on a display faster than the Game Boy, every other frame: the motor keeps its last state).
  */
-export function usePeripherals(core: () => Emulator | null, romLoaded: boolean, gameId: string, onSaved: () => void, frameEl: () => HTMLElement | null) {
+export function usePeripherals(core: () => Emulator | null, power: number, gameId: string, onSaved: () => void, frameEl: () => HTMLElement | null) {
   const [paper, setPaper] = useState<Printout | null>(null);
   const hasRumble = useRef(false);
   const rumbleMod = useRef<Rumble | null>(null);
@@ -43,7 +43,7 @@ export function usePeripherals(core: () => Emulator | null, romLoaded: boolean, 
 
   useEffect(() => {
     const emu = core();
-    if (!romLoaded || !emu) return;
+    if (!power || !emu) return; // again on every power-on: a restart builds a new console, printer unplugged
     emu.set_printer_connected(true);
     hasRumble.current = emu.has_rumble();
     let untick: (() => void) | undefined;
@@ -57,7 +57,7 @@ export function usePeripherals(core: () => Emulator | null, romLoaded: boolean, 
       const o = open.current;
       if (o) void finishRef.current(o.paper);
     };
-  }, [romLoaded, core, frameEl]);
+  }, [power, core, frameEl]);
 
   const onJob = useCallback((raw: Uint8Array) => {
     const job = parseJob(raw);
@@ -91,8 +91,8 @@ export function usePeripherals(core: () => Emulator | null, romLoaded: boolean, 
   const feedCamera = useCallback((frame: Uint8Array) => core()?.camera_set_frame(frame), [core]);
   const dismiss = useCallback(() => setPaper(null), []);
 
-  // Read from the core on render: a camera cartridge stays one until the next ROM load (which flips romLoaded).
-  const camera = romLoaded && !!core()?.has_camera();
+  // Read from the core on render: a camera cartridge stays one until the next ROM load (which bumps power).
+  const camera = !!power && !!core()?.has_camera();
   return { camera, paper, dismiss, tick, stop, feedCamera };
 }
 

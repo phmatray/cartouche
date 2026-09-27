@@ -6,6 +6,21 @@ export function warmAudio() {
   try { spare = new AudioContext({ sampleRate: 44100 }); } catch { /* the player makes its own */ }
 }
 
+/**
+ * Slowed play (½×): the game makes half the samples the device plays, so each stereo frame is played
+ * `1 / speed` times over (an octave down at ½×) instead of the device running dry every other frame.
+ * ponytail: plain repeats, no interpolation; enough for the ½× the player offers.
+ */
+export function stretch(samples: Float32Array, speed: number): Float32Array {
+  const n = Math.round(1 / speed);
+  if (n <= 1) return samples;
+  const out = new Float32Array(samples.length * n);
+  for (let i = 0, o = 0; i + 1 < samples.length; i += 2) {
+    for (let r = 0; r < n; r++, o += 2) { out[o] = samples[i]; out[o + 1] = samples[i + 1]; }
+  }
+  return out;
+}
+
 export class AudioEngine {
   private context: AudioContext | null = null;
   private workletNode: AudioWorkletNode | null = null;
