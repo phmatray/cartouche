@@ -18,7 +18,10 @@ export function useEmulator() {
   const emulatorRef = useRef<import('gb-core').Emulator | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
-  const [romLoaded, setRomLoaded] = useState(false);
+  /** Power-ons so far (0: no cartridge running). Each load builds a new console, so per-console setup
+   *  (channel mutes, printer, link cable) keys on this, not on romLoaded, which stays true across a restart. */
+  const [power, setPower] = useState(0);
+  const romLoaded = power > 0;
   /** The core runs the loaded cartridge in Game Boy Color mode (the only source of truth for colour). */
   const [isCgb, setIsCgb] = useState(false);
   const [errors, setErrors] = useState<EmulatorError[]>([]);
@@ -64,16 +67,16 @@ export function useEmulator() {
       if (!success) {
         const err = emu.get_error();
         addError(err || t('player.error.unknown'));
-        setRomLoaded(false);
+        setPower(0);
         return false;
       }
-      setRomLoaded(true);
+      setPower((n) => n + 1);
       setIsCgb(emu.is_cgb());
       setErrors([]);
       return true;
     } catch (e) {
       addError(t('player.error.exception', { error: String(e) }));
-      setRomLoaded(false);
+      setPower(0);
       return false;
     }
   }, [addError]);
@@ -306,6 +309,7 @@ export function useEmulator() {
     isRunning,
     setIsRunning,
     romLoaded,
+    power,
     isCgb,
     loadRom,
     runFrame,

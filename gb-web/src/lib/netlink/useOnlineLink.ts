@@ -12,7 +12,7 @@ type Core = LinkCore & { set_link_remote(on: boolean): void; run_frame(): boolea
  * the ROM runs, tells the other player when this one is paused, and gives up on a transfer nobody answers.
  * `pump` must run after every frame.
  */
-export function useOnlineLink(core: RefObject<Core | null>, romLoaded: boolean, code: string | null, running: boolean) {
+export function useOnlineLink(core: RefObject<Core | null>, power: number, code: string | null, running: boolean) {
   const [unplugged, setUnplugged] = useState(false);
   const [waiting, setWaiting] = useState(0); // ms our console has waited for the other one (0: not waiting)
   const [gaveUp, setGaveUp] = useState(0);
@@ -30,7 +30,7 @@ export function useOnlineLink(core: RefObject<Core | null>, romLoaded: boolean, 
 
   useEffect(() => {
     const emu = core.current;
-    if (!on || !romLoaded || !emu) return;
+    if (!on || !power || !emu) return; // plugged in again on every power-on (a new console)
     emu.set_link_remote(true);
     // The answer came: finish the stalled frame now (running the game only while it plays), and send what it says.
     const c = plug(emu, () => {
@@ -45,7 +45,7 @@ export function useOnlineLink(core: RefObject<Core | null>, romLoaded: boolean, 
       cable.current = null;
       setSeat({ playing: false, ready: false, paused: false });
     };
-  }, [on, romLoaded, core]);
+  }, [on, power, core]);
 
   // Paused, or hidden (the frame loop stops in the background): the other console may wait on this one.
   useEffect(() => {

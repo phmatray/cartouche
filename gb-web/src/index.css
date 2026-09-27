@@ -512,7 +512,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
   .pl{height:auto;min-height:100dvh;grid-template-rows:56px auto auto 1fr}
   .pl-top{padding:0 12px;gap:10px}
   /* a long title takes two lines, then an ellipsis (the full title is the link's tooltip and the game page) */
-  .pl-top h1{font-size:20px;line-height:.95;white-space:normal;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .pl-top h1{font-size:20px;line-height:.95;white-space:normal;overflow-wrap:break-word;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
   .pl-top .tag,.pad{display:none}
   /* icon-only on phones: the labels stay in the accessibility tree (VoiceOver), as .sr does */
   .back .lbl,.manual-btn span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
@@ -1144,17 +1144,19 @@ html:has(.pl),body:has(.pl){overscroll-behavior:none}
 }
 @media (max-width:374px) and (min-height:501px){.pl{--touch-h:calc(209px + max(24px,calc(8px + var(--sab))))}}
 
-/* Phones held sideways: screen in the middle, D-pad on the left, A/B and Start/Select on the right; top bar and deck share one row. */
+/* Phones held sideways: screen in the middle, D-pad on the left, A/B and Start/Select on the right; top bar and deck share one row
+   (the deck at its own width on the right, the top bar in the rest: --deck-w is measured by the player). */
 @media (orientation:landscape) and (max-height:500px){
   .pl{height:100dvh;min-height:0;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);grid-template-rows:calc(52px + var(--sat)) minmax(0,1fr);
-    grid-template-areas:"top deck deck" "l stage r";--sheet-w:min(460px,max(50vw,320px))}
+    grid-template-areas:"top top top" "l stage r";--sheet-w:min(460px,max(50vw,320px))}
   .pl-body,.touch{display:contents}
-  .pl-top{grid-area:top;min-width:0;padding-right:8px;gap:8px;border-bottom:1px solid var(--rule)}
+  .pl-top{grid-area:top;min-width:0;padding-right:calc(var(--deck-w,0px) + 8px);gap:8px;border-bottom:1px solid var(--rule)}
   .pl-top h1{font-size:20px}
   .pl-top .right{display:contents}
   .manual-btn{margin-left:auto;width:44px;padding:0;justify-content:center;flex:none}
-  .deck{grid-area:deck;border-top:0;border-bottom:1px solid var(--rule);padding:var(--sat) max(12px,var(--sar)) 0 8px;justify-content:flex-end;gap:6px}
+  .deck{grid-area:top;justify-self:end;max-width:100%;border-top:0;border-bottom:1px solid var(--rule);padding:var(--sat) max(12px,var(--sar)) 0 8px;justify-content:flex-end;gap:6px}
   .deck .push{display:none}
+  @media (max-width:600px){.deck .speed{display:none}.deck .dk.spd{display:inline-flex}} /* 4" phones: room left for the title */
   .stage{grid-area:stage;padding:8px 8px calc(8px + var(--sab))}
   .screen{width:min(var(--sw,100vw),calc((100dvh - 52px - var(--sat) - var(--sab) - 16px - 24px) * var(--ar) + 24px),calc(100vw - 360px - var(--sal) - var(--sar)))}
   .touch .dpad{grid-area:l;align-self:center;justify-self:center;margin-left:var(--sal)}
@@ -1169,6 +1171,9 @@ html:has(.pl),body:has(.pl){overscroll-behavior:none}
   .pl.imm .deck{position:fixed;top:calc(8px + var(--sat));right:max(8px,var(--sar));padding:0}
   /* manual open: the screen moves into the room left of the sheet (the controls sit under the sheet, as upright) */
   .pl:not(.closed) .touch>*{visibility:hidden}
+  /* ...and so does the deck: the top bar ends at the sheet, its Manual button always in reach to close it */
+  .pl:not(.closed) .deck{visibility:hidden}
+  .pl:not(.closed) .pl-top{padding-right:calc(var(--sheet-w) + 8px)}
   .pl:not(.closed) .stage{grid-column:1/-1;padding-right:calc(var(--sheet-w) + 8px)}
   .pl:not(.closed) .screen{width:min(var(--sw,100vw),calc((100dvh - 52px - var(--sat) - var(--sab) - 16px - 24px) * var(--ar) + 24px),calc(100vw - var(--sheet-w) - 16px - var(--sal)))}
   .pl.imm:not(.closed) .screen{width:min(calc((100dvh - 16px - var(--sat) - var(--sab) - 24px) * var(--ar) + 24px),calc(100vw - var(--sheet-w) - 16px - var(--sal)))}

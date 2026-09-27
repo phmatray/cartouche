@@ -1,9 +1,10 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { GameEntry } from '../../types/game';
 import { fetchRom, recordSession, useGameLibrary } from '../../hooks/useGameLibrary';
 import { CONSOLE_COMPAT, CONSOLE_DMG, CONSOLE_SGB, useEmulator } from '../../hooks/useEmulator';
 import { useAudio } from '../../hooks/useAudio';
+import { stretch } from '../../audio/AudioEngine';
 import { useGamepad } from '../../hooks/useGamepad';
 import { useLcdShader } from '../../hooks/useLcdShader';
 import { useRewind } from '../../hooks/useRewind';
@@ -69,7 +70,7 @@ function Player({ game }: { game: GameEntry }) {
   const emu = useEmulator();
   const { isReady, isRunning, setIsRunning, romLoaded, isCgb, loadRom, runFrame, getAudioSamples, pressButton, releaseButton,
     errors, hasBatteryRam, exportSram, importSram, saveState, loadState, framebufferSnapshot, setTraceEnabled, getTrace,
-    consoleNow, stateConsole, paletteNow, skipBoot, sgbBorder } = emu;
+    consoleNow, stateConsole, paletteNow, skipBoot, sgbBorder, power } = emu;
   const keybindings = useSettingsStore((s) => s.keybindings);
   const rewindSeconds = useSettingsStore((s) => s.rewindBufferSeconds);
   const screenSize = useSettingsStore((s) => s.screenSize);
@@ -78,7 +79,8 @@ function Player({ game }: { game: GameEntry }) {
   const smoothMotionForce = useSettingsStore((s) => s.smoothMotionForce);
   const [speed, setSpeed] = useState(() => (q.get('online') ? 1 : useSettingsStore.getState().defaultSpeed));
   const [tab, setTab] = useState<Tab>(() => (q.get('tab') as Tab) || 'controls');
-  const [manual, setManual] = useState(() => !!q.get('tab') || !matchMedia('(max-width:900px)').matches);
+  // Open at start only where it sits beside the game (not on phones, upright or sideways: see index.css).
+  const [manual, setManual] = useState(() => !!q.get('tab') || !matchMedia('(max-width:900px),(orientation:landscape) and (max-height:500px)').matches);
   // Edit controls (from the manual, or Settings › Controls with ?edit=controls): the game waits meanwhile.
   const [editing, setEditing] = useState(() => q.get('edit') === 'controls');
   const [needsRom, setNeedsRom] = useState(!owned(game));
@@ -97,7 +99,7 @@ function Player({ game }: { game: GameEntry }) {
     toast(tNow('periph.printer.added'), '', { label: tNow('player.toast.view'), run: () => { setTab('album'); setManual(true); } });
   }, [album]);
   const frameEl = useCallback(() => rootRef.current?.querySelector<HTMLElement>('.screen .frame') ?? null, []);
-  const periph = usePeripherals(emu.core, romLoaded, game.id, onPrinted, frameEl);
+  const periph = usePeripherals(emu.core, power, game.id, onPrinted, frameEl);
 
   // A cartridge the core runs in Game Boy Color mode keeps its own colours: DMG palettes never apply to it,
   // and it has its own default screen settings (the core decides, from header byte 0x143 bit 7).
@@ -161,7 +163,7 @@ function Player({ game }: { game: GameEntry }) {
   const { isRewinding, startRewind, stopRewind, wrapRunFrame, bufferFill } = useRewind({ saveState, loadState: rewindLoad });
   const saveWriter = useSaveData({ saveTo, romLoaded, hasBatteryRam, exportSram });
   // Online link cable (?online=<room>): real time only, so no speed change, rewind or state loading while plugged in.
-  const online = useOnlineLink(emu.coreRef, romLoaded, q.get('online'), isRunning);
+  const online = useOnlineLink(emu.coreRef, power, q.get('online'), isRunning);
   const linkPump = online.pump;
 
   // No Fullscreen API on iPhone (nor in its Home Screen apps): "immersive" hides the chrome instead and gives the screen all the room.
@@ -173,12 +175,20 @@ function Player({ game }: { game: GameEntry }) {
   }, []);
   const { connected: gamepad } = useGamepad(pressButton, releaseButton, romLoaded, toggleFullscreen);
 
+  // Phones sideways: the top bar takes the row but the deck's width (see index.css).
+  useLayoutEffect(() => {
+    const root = rootRef.current, deck = root?.querySelector<HTMLElement>('.deck');
+    if (!root || !deck) return;
+    const ro = new ResizeObserver(() => root.style.setProperty('--deck-w', `${deck.offsetWidth}px`));
+    ro.observe(deck);
+    return () => ro.disconnect();
+  }, []);
   useEffect(() => { document.title = t('common.docTitle', { page: game.title }); }, [game.title, t]);
-  // Settings › Audio › Channels (applied again after each ROM load: the core resets with the cartridge).
+  // Settings › Audio › Channels (applied again after each power-on: a restart builds a new console).
   const { setChannelMuted } = emu;
   useEffect(() => {
-    if (romLoaded) CHANNEL_KEYS.forEach((k, i) => setChannelMuted(i, channelMutes[k]));
-  }, [romLoaded, channelMutes, setChannelMuted]);
+    if (power) CHANNEL_KEYS.forEach((k, i) => setChannelMuted(i, channelMutes[k]));
+  }, [power, channelMutes, setChannelMuted]);
   useEffect(() => { if (errors.length && !badRom) toast(errors[errors.length - 1].message, 'm'); }, [errors, badRom]);
 
   // Fullscreen: the deck overlays the screen and hides after 2.5 s without pointer or key activity.
@@ -250,8 +260,8 @@ function Player({ game }: { game: GameEntry }) {
   const runOne = useCallback(() => {
     const fb = runFrame();
     linkPump();
-    const samples = getAudioSamples(); // always drained; only played at ≤ 1×
-    if (samples && speedRef.current <= 1) feedSamples(samples);
+    const samples = getAudioSamples(); // always drained; only played at ≤ 1× (stretched to fill the device at ½×)
+    if (samples && speedRef.current <= 1) feedSamples(stretch(samples, speedRef.current));
     return fb;
   }, [runFrame, getAudioSamples, feedSamples, linkPump]);
   // Display refresh rate, from the time between animation frames (median of the last 31).
