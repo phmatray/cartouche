@@ -111,6 +111,7 @@ export default {
     intro: 'Las capturas se guardan como PNG de 160 × 144 a la resolución original.',
     take: 'Hacer captura',
     savePng: 'Guardar PNG',
+    share: 'Compartir',
     empty: 'Aún no hay nada. Pulsa F12 mientras juegas.',
   },
   game: {

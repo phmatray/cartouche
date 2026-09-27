@@ -181,6 +181,10 @@ function AlbumPage({ game, shots, romLoaded, onScreenshot }: ManualProps) {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   };
+  // Where files can be shared (the iPhone's share sheet: Save Image, Messages…), Share replaces the download.
+  const canShare = !!navigator.canShare?.({ files: [new File([], 'shot.png', { type: 'image/png' })] });
+  const share = (s: StoredScreenshot) => navigator.share({ files: [new File([s.png], file(s), { type: 'image/png' })] })
+    .catch((e) => { if (e?.name !== 'AbortError') download(s); }); // cancelled: nothing
   return (
     <>
       <h2>{t('player.tabs.album')}</h2>
@@ -191,7 +195,9 @@ function AlbumPage({ game, shots, romLoaded, onScreenshot }: ManualProps) {
           {shots.map((s) => (
             <figure key={s.id}>
               <Shot png={s.png} label={t('game.shot', { ago: ago(s.timestamp) })} />
-              <figcaption><span>{ago(s.timestamp)}</span><span><button className="sbtn" onClick={() => download(s)}>{t('player.album.savePng')}</button></span></figcaption>
+              <figcaption><span>{ago(s.timestamp)}</span><span>{canShare
+                ? <button className="sbtn" onClick={() => share(s)}>{t('player.album.share')}</button>
+                : <button className="sbtn" onClick={() => download(s)}>{t('player.album.savePng')}</button>}</span></figcaption>
             </figure>
           ))}
         </div>

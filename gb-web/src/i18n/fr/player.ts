@@ -111,6 +111,7 @@ export default {
     intro: 'Les captures sont enregistrées en PNG de 160 × 144, à la résolution d’origine.',
     take: 'Prendre une capture',
     savePng: 'Enregistrer le PNG',
+    share: 'Partager',
     empty: 'Rien pour l’instant. Appuyez sur F12 en jeu.',
   },
   game: {

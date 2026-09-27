@@ -110,6 +110,7 @@ export default {
     intro: 'Screenshots are saved as 160 × 144 PNGs at original resolution.',
     take: 'Take screenshot',
     savePng: 'Save PNG',
+    share: 'Share',
     empty: 'Nothing here yet. Press F12 while playing.',
   },
   game: {
