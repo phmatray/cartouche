@@ -35,6 +35,17 @@ const typing = () => {
   return !!el && (/INPUT|SELECT|TEXTAREA/.test(el.tagName) || el.isContentEditable);
 };
 
+/**
+ * iOS starts a selection, the magnifier or a double-tap zoom from a touch unless its touchstart is cancelled, which
+ * React's (passive) touch listeners can't do. The pads run on pointer events, which still arrive.
+ */
+function holdTouches(el: HTMLElement | null) {
+  if (!el) return;
+  const stop = (e: TouchEvent) => e.preventDefault();
+  el.addEventListener('touchstart', stop, { passive: false });
+  return () => el.removeEventListener('touchstart', stop);
+}
+
 export function PlayerPage() {
   const { id = '' } = useParams<{ id: string }>();
   const { getGameById, loading } = useGameLibrary();
@@ -401,7 +412,7 @@ function Player({ game }: { game: GameEntry }) {
           : <button className="dk fs" onClick={toggleFullscreen} aria-pressed={immersive} aria-label={immersive ? t('player.deck.leaveImmF') : t('player.deck.immF')}>{immersive ? I.close : I.full}</button>}
       </nav>
 
-      <div className="touch" data-size={touchSize} aria-label={t('player.touch.label')}>
+      <div className="touch" ref={holdTouches} data-size={touchSize} aria-label={t('player.touch.label')}>
         <div className="dpad">
           <span className="c" />
           <button className="u" aria-label={t('player.touch.up')} {...pad('Up')}>{I.up}</button>
