@@ -82,7 +82,7 @@ export function ControlsTab() {
         sub={pad ? t('settings.controls.padOn') : t('settings.controls.padOff')}>
         <span className={`tag ${pad ? 'now' : 'need'}`} style={{ margin: 0 }}>{pad ? t('settings.controls.connected') : t('settings.controls.waiting')}</span>
       </Row>
-      <dl className="spec" style={{ gridTemplateColumns: '1fr 1fr' }}>
+      <dl className="spec">
         {PAD.map(([a, b]) => <div key={a}><dt>{tk(a)}</dt><dd>{tk(b)}</dd></div>)}
       </dl>
 
