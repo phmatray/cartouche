@@ -276,11 +276,24 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 @media (max-width:900px){.first .wrap{grid-template-columns:minmax(0,1fr);gap:32px;padding-top:28px;padding-bottom:36px}.first .shot{max-width:420px}body:has(.pl) .toasts{top:auto;bottom:12px}}
 
 .foot{margin-top:96px;border-top:1px solid var(--rule)}
-.foot .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:12px 28px;padding-top:24px;padding-bottom:40px;font:500 13px/1.5 var(--font);color:var(--mute)}
+/* Footer: the promise and the links on one baseline, then a hairline and the small print (language, version, credits). */
+.foot .wrap{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:14px 48px;padding-top:28px;padding-bottom:40px;font:500 13px/1.5 var(--font);color:var(--mute)}
+.foot p{margin:0}
+.f-note{max-width:64ch}
 .foot b{color:var(--paper);font-weight:700}
 .foot a{text-decoration:none;font-weight:700}
 .foot a:hover{color:var(--y)}
-.foot .sp{margin-left:auto}
+.f-links{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px 24px}
+.f-meta{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:12px 32px;margin-top:10px;padding-top:18px;border-top:1px solid var(--rule)}
+.foot .f-small{margin-left:auto;display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px}
+.f-small a{font-variant-numeric:tabular-nums}
+/* the footer's language switch: one segmented control, the size of the other footer controls (44 px under a finger) */
+.foot .langs{gap:0;flex-wrap:nowrap;border:1.5px solid #4a4a47}
+.foot .langs button{border:0;min-height:32px;padding:0 12px;font:700 12px var(--font)}
+.foot .langs button+button{border-left:1.5px solid #4a4a47}
+.foot .langs button:not([aria-pressed=true]):hover{color:var(--paper);background:var(--band-2)}
+@media (pointer:coarse){.foot .langs button{min-height:44px;padding:0 14px}.f-links{row-gap:24px}} /* the links' 44 px hit areas don't overlap */
+@media (max-width:900px){.foot .wrap{grid-template-columns:minmax(0,1fr)}.f-links{justify-content:flex-start}.foot .f-small{margin-left:0}}
 
 /* ---------- game page ---------- */
 .gp .wrap.hero{display:grid;grid-template-columns:minmax(220px,340px) minmax(0,1fr);gap:48px;align-items:center;padding-top:48px;padding-bottom:48px}
