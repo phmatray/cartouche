@@ -193,6 +193,7 @@ export default {
     restoreLabel: 'Restore from a backup',
     restoreSub: 'Merges into this library; nothing is overwritten without asking',
     import: 'Import backup',
+    reading: 'Reading the backup…',
     restoreTitle: 'Restore this backup?',
     restoreWhat: '{roms}, {saves} and {shots}, from {date}.',
     restoreWhatNoDate: '{roms}, {saves} and {shots}.',

@@ -309,14 +309,28 @@ export function compile(filters: Filter[], skip?: Key): (it: Indexed) => boolean
 
 // The text pass is the costly one: remembered for the last text of each index.
 const textMemo = new WeakMap<SearchIndex, { q: string; hits: Map<Indexed, number> }>();
+// `rest` plus the genre as the cards show it in this language ('aventure' finds Adventure): once per index and language.
+const restMemo = new WeakMap<SearchIndex, { lang: string; rest: string[] }>();
+function localRest(index: SearchIndex): string[] {
+  const lang = getLang();
+  let m = restMemo.get(index);
+  if (m?.lang !== lang) {
+    const byGenre = new Map<string, string>();
+    const label = (g: GameEntry) => { let s = byGenre.get(g.genre); if (s === undefined) byGenre.set(g.genre, (s = f(genreLabel(g)))); return s; };
+    restMemo.set(index, (m = { lang, rest: index.items.map((it) => `${it.rest} ${label(it.g)}`) }));
+  }
+  return m.rest;
+}
 function textHits(index: SearchIndex, text: string): Map<Indexed, number> | null {
   const q = f(text);
   if (!q) return null;
+  const memo = `${getLang()}\0${q}`;
   const m = textMemo.get(index);
-  if (m?.q === q) return m.hits;
+  if (m?.q === memo) return m.hits;
   const hits = new Map<Indexed, number>();
-  for (const it of index.items) { const n = score(it.g, q, it); if (n) hits.set(it, n); }
-  textMemo.set(index, { q, hits });
+  const rest = localRest(index);
+  index.items.forEach((it, i) => { const n = score(it.g, q, { t: it.t, rest: rest[i] }); if (n) hits.set(it, n); });
+  textMemo.set(index, { q: memo, hits });
   return hits;
 }
 
@@ -388,7 +402,7 @@ export interface Suggestion { insert: string; label: string; hint: string; count
  * `ge` → `genre:`, `genre:r` → `genre:rpg` (with counts), a plain word → facet values it starts (`rpg` → `genre:rpg`).
  */
 export function suggest(index: SearchIndex, q: Query, partial: string, max = 8): Suggestion[] {
-  const m = partial.match(/^(-?)([a-z]*)(?::"?([^"]*))?$/i);
+  const m = partial.match(/^(-?)(\p{L}*)(?::"?([^"]*))?$/iu);
   if (!m || !partial.replace('-', '')) return [];
   const [, neg, rawKey, rawVal] = m;
   const values = (key: Key, typed: string, strict: boolean) => {

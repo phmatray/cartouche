@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
-import { useGameLibrary } from '../../hooks/useGameLibrary';
+import { useGameLibrary, useSearchIndex } from '../../hooks/useGameLibrary';
 import { useBoxArtProgress } from '../../lib/cover-art';
 import { queueImport, useImports } from '../../lib/import-queue';
 import { useInstall } from '../../lib/pwa';
@@ -33,7 +33,8 @@ function Wordmark() {
 
 /** Header, footer, search, shortcuts, toasts and drop-anywhere import around every library-style page. */
 export function AppShell() {
-  const { games, storageError } = useGameLibrary();
+  const { storageError } = useGameLibrary();
+  const shown = useSearchIndex().items.length; // the games listed: hidden test cartridges left out
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [menu, setMenu] = useState(false);
@@ -108,7 +109,7 @@ export function AppShell() {
             {NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === '/'}>{t(label)}</NavLink>)}
           </nav>
           <button className="search" aria-label={t('shell.search')} onClick={openSearch}>
-            {I.search}<span>{games.length ? t('shell.searchN', { count: games.length }) : t('shell.search')}</span><kbd>/</kbd>
+            {I.search}<span>{shown ? t('shell.searchN', { count: shown }) : t('shell.search')}</span><kbd>/</kbd>
           </button>
           <Link className="btn y" aria-label={t('shell.addRoms')} to="/add">{I.plus}<span className="lbl">{t('shell.addRoms')}</span></Link>
           <SyncSlot />

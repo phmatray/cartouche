@@ -121,9 +121,11 @@ export function StorageTab() {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     toast(tNow('settings.storage.exported'), 'c');
   };
+  const [reading, setReading] = useState(false); // a big backup takes seconds to scan
   const doImport = async (file: File) => {
+    setReading(true);
     try {
-      const b = await readBackup(file);
+      const b = await readBackup(file).finally(() => setReading(false));
       withSettings.current = false;
       setConfirm({
         title: tNow('settings.storage.restoreTitle'),
@@ -217,10 +219,10 @@ export function StorageTab() {
         <button className="btn k" onClick={doExport}>{t('settings.storage.export')}</button>
       </Row>
       <Row label={t('settings.storage.restoreLabel')} sub={t('settings.storage.restoreSub')}>
-        <label className="btn line" style={{ color: 'var(--ink)' }} tabIndex={0}
+        <label className="btn line" style={{ color: 'var(--ink)', ...(reading && { opacity: 0.6, cursor: 'progress' }) }} tabIndex={0} aria-disabled={reading || undefined}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
-          {t('settings.storage.import')}
-          <input type="file" accept={fileAccept('.cartouche,.cartshelf,application/json')} className="sr" tabIndex={-1}
+          <span role="status">{t(reading ? 'settings.storage.reading' : 'settings.storage.import')}</span>
+          <input type="file" accept={fileAccept('.cartouche,.cartshelf,application/json')} className="sr" tabIndex={-1} disabled={reading}
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) doImport(f); }} />
         </label>
       </Row>
