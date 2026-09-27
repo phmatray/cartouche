@@ -10,6 +10,9 @@ const CPU_CLOCK: u32 = 4_194_304;
 const SAMPLE_RATE: u32 = 44_100;
 const CYCLES_PER_SAMPLE: f64 = CPU_CLOCK as f64 / SAMPLE_RATE as f64;
 pub const AUDIO_BUFFER_SIZE: usize = 4096;
+/// The output capacitor's charge kept per sample: 0.999958 per T-cycle, as on a DMG (SameBoy),
+/// over the ~95 T-cycles of a 44.1 kHz sample. A high-pass around 28 Hz.
+const HIGHPASS_CHARGE: f32 = 0.996;
 
 /// Extra T-cycles before CH3 fetches its first sample after a trigger.
 const WAVE_TRIGGER_DELAY: i32 = 6;
@@ -627,6 +630,11 @@ pub struct Apu {
     sample_counter: f64,
     sample_buffer: Vec<f32>,
     pub channel_muted: [bool; 4],
+    /// Output capacitor charge (left, right): the DC the high-pass removes. Not in save states:
+    /// after a start or a load it charges to the first sample (`charged`), so the output starts
+    /// at 0 without a click and a loaded state plays the same sound on every machine.
+    capacitor: [f32; 2],
+    charged: bool,
 }
 
 impl Apu {
@@ -646,6 +654,8 @@ impl Apu {
             sample_counter: 0.0,
             sample_buffer: Vec::with_capacity(AUDIO_BUFFER_SIZE),
             channel_muted: [false; 4],
+            capacitor: [0.0; 2],
+            charged: false,
         }
     }
 
@@ -661,10 +671,7 @@ impl Apu {
             self.sample_counter += cycles as f64;
             while self.sample_counter >= CYCLES_PER_SAMPLE {
                 self.sample_counter -= CYCLES_PER_SAMPLE;
-                if self.sample_buffer.len() < AUDIO_BUFFER_SIZE {
-                    self.sample_buffer.push(0.0);
-                    self.sample_buffer.push(0.0);
-                }
+                self.push_sample(0.0, 0.0);
             }
             return;
         }
@@ -751,8 +758,25 @@ impl Apu {
         left /= 4.0;
         right /= 4.0;
 
-        self.sample_buffer.push(left);
-        self.sample_buffer.push(right);
+        self.push_sample(left, right);
+    }
+
+    /// Through the output capacitor, as on the console: the DACs' DC (an enabled channel at volume 0
+    /// sits at -1) is removed, so silence is 0 whether channels are on, off, muted or the APU is
+    /// powered down, and switching between them doesn't jump the baseline.
+    fn push_sample(&mut self, left: f32, right: f32) {
+        if self.sample_buffer.len() >= AUDIO_BUFFER_SIZE {
+            return;
+        }
+        if !self.charged {
+            self.capacitor = [left, right];
+            self.charged = true;
+        }
+        for (x, cap) in [left, right].into_iter().zip(&mut self.capacitor) {
+            let out = x - *cap;
+            *cap = x - out * HIGHPASS_CHARGE;
+            self.sample_buffer.push(out);
+        }
     }
 
     // -- Buffer access --
@@ -900,6 +924,8 @@ impl Apu {
         let old = std::mem::replace(self, Apu::new());
         self.cgb_mode = old.cgb_mode;
         self.channel_muted = old.channel_muted;
+        self.capacitor = old.capacitor;
+        self.charged = old.charged;
         self.sample_counter = old.sample_counter;
         self.sample_buffer = old.sample_buffer;
         self.ch3.wave_ram = wave_ram;
@@ -1001,7 +1027,38 @@ impl Apu {
         self.ch4.divisor_code &= 7;
         self.ch1_sweep.shift &= 7;
         self.frame_sequencer_step &= 7;
+        self.charged = false;
         true
     }
 }
 
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The last sample (left) after `ms` milliseconds.
+    fn settle(apu: &mut Apu, ms: u32) -> f32 {
+        apu.clear_samples();
+        for _ in 0..ms { apu.step(CPU_CLOCK / 1000); }
+        let last = apu.sample_buffer[apu.sample_buffer.len() - 2];
+        apu.clear_samples();
+        last
+    }
+
+    #[test]
+    fn silence_sits_at_zero_whatever_the_dacs_do() {
+        let mut apu = Apu::new();
+        for (reg, v) in [(0xFF26, 0x80), (0xFF24, 0x77), (0xFF25, 0xFF), (0xFF17, 0x08), (0xFF19, 0x80)] {
+            apu.write_register(reg, v);
+        }
+        // Channel 2 on at volume 0: its DAC holds -1, a DC level and no tone.
+        assert_eq!(settle(&mut apu, 50), 0.0, "the capacitor charges at start: no click");
+        apu.set_channel_muted(1, true);
+        apu.step(100);
+        assert!(apu.sample_buffer[0] > 0.2, "a DAC switched off still steps (as on the console)");
+        assert!(settle(&mut apu, 50).abs() < 0.01, "then the baseline is 0 again");
+        apu.write_register(0xFF26, 0x00); // powered off
+        assert!(settle(&mut apu, 50).abs() < 0.01);
+    }
+}
