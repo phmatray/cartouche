@@ -20,6 +20,8 @@ export interface Entry {
   n?: number;
   /** The value (small records). */
   v?: unknown;
+  /** The battery save a save state belongs to, as `<game>[~<profile>]` (states only). */
+  p?: string;
 }
 export interface Manifest {
   dev: string;
@@ -65,7 +67,11 @@ export function gameOfKey(k: string): string {
 }
 
 export interface Pull { k: string; dest: string; n: number; from: string }
-export interface Conflict { k: string; copy: string | null; kept: 'local' | 'remote'; olderFrom: string; olderAt: number }
+export interface Conflict {
+  k: string; copy: string | null; kept: 'local' | 'remote'; olderFrom: string; olderAt: number;
+  /** A state's copy: the save it now belongs to (`<game>~s<hash>`), when its own save was the older side of a conflict too. */
+  profile?: string;
+}
 export interface Play { time?: number; sessions?: number; last?: number }
 export interface Plan {
   /** Fetch the other device's `k`, store it as `dest` here (`dest` ≠ `k`: it's the older side of a conflict). */
@@ -88,7 +94,8 @@ export function plan(local: Manifest, remote: Manifest, base: Record<string, str
   const theirs = new Map(remote.entries.map((e) => [e.k, e]));
   const out: Plan = { pull: [], moves: [], write: [], conflicts: [] };
   const taken = new Set([...mine.keys(), ...theirs.keys()]);
-  const keys = [...theirs.keys()].sort();
+  const keys = [...theirs.keys()].sort(); // 'sram:' before 'state:': a state's save conflict is known before the state's
+  const olderSaves = new Map<string, { copy: string; remoteWins: boolean }>();
   for (const k of keys) {
     const r = theirs.get(k)!;
     const l = mine.get(k);
@@ -115,7 +122,12 @@ export function plan(local: Manifest, remote: Manifest, base: Record<string, str
     const older = remoteWins ? l : r;
     const copy = copyKey(k, older, taken);
     const olderFrom = remoteWins ? local.name : remote.name;
-    out.conflicts.push({ k, copy, kept: remoteWins ? 'remote' : 'local', olderFrom, olderAt: older.t });
+    const c: Conflict = { k, copy, kept: remoteWins ? 'remote' : 'local', olderFrom, olderAt: older.t };
+    if (kind === 'sram' && copy) olderSaves.set(k.slice(5), { copy: copy.slice(5), remoteWins });
+    // The older state goes with the older save of the same device: loading it never touches the newer one.
+    const save = kind === 'state' && older.p ? olderSaves.get(older.p) : undefined;
+    if (save && save.remoteWins === remoteWins) c.profile = save.copy;
+    out.conflicts.push(c);
     if (!copy) continue; // no free slot: both left as they are, the player is told
     taken.add(copy);
     if (remoteWins) {

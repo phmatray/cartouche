@@ -91,7 +91,9 @@ export async function readLocal(me: { id: string; name: string }, roms: boolean)
   }
   for (const s of states) {
     const k = stateKey(s.id, games);
-    if (k && s.data instanceof Uint8Array) entries.push({ k, h: await hashState(stateRec(s, games)), t: s.timestamp, n: s.data.length + (s.thumbnail?.length ?? 0) + 200 });
+    if (!k || !(s.data instanceof Uint8Array)) continue;
+    const r = stateRec(s, games);
+    entries.push({ k, h: await hashState(r), t: s.timestamp, n: s.data.length + (s.thumbnail?.length ?? 0) + 200, p: r.profile ?? games.key(STATE_ID.exec(s.id)![1]) }); // no profile: Main
   }
 
   // Small records, with the time each was last seen changing here.
@@ -162,7 +164,8 @@ export async function currentHash(k: string, games: Games): Promise<string> {
   return '';
 }
 
-export interface Rename { from: string; at: number }
+/** The older side of a conflict: named after its device and day; a state's copy may belong to another save (`profile`). */
+export interface Rename { from: string; at: number; profile?: string }
 
 /**
  * Checks a received record against the hash the manifest promised and stores it under `dest` (renamed when it's
@@ -190,7 +193,8 @@ export async function storeRecord(k: string, dest: string, hash: string, bytes: 
       const g = await games();
       const id = localId(dest, g);
       if (!id) return false;
-      const profile = r.profile ? localId(`sram:${r.profile}`, g) ?? undefined : undefined;
+      const p = rename?.profile ?? r.profile;
+      const profile = p ? localId(`sram:${p}`, g) ?? undefined : undefined;
       await saveSaveState({ id, data: r.data, thumbnail: r.thumbnail, timestamp: r.timestamp, profile });
       return true;
     }
@@ -207,7 +211,7 @@ export async function moveAside(from: string, to: string, games: Games, rename: 
     if (s) await saveSram({ ...s, id: b, gameId: gameOfSave(b), name: copyName(s.name, rename.from, rename.at) });
   } else {
     const s = await getSaveState(a);
-    if (s) await saveSaveState({ ...s, id: b });
+    if (s) await saveSaveState({ ...s, id: b, profile: rename.profile ? localId(`sram:${rename.profile}`, games) ?? s.profile : s.profile });
   }
 }
 
