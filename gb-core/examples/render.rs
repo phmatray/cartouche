@@ -5,6 +5,7 @@
 //! Buttons: a, b, select, start, up, down, left, right. Each press is held for HOLD_FRAMES frames.
 //! Example: --buttons "120:start,200:a,260:right"
 //! --gbc <0-12>: an original Game Boy cartridge on a Game Boy Color (0 automatic colours, 1-12 a palette).
+//! --sgb: on a Super Game Boy; the PNG is 256x224 with the game's border once it sent one.
 //!
 //! Write output to ../screenshots/ (git-ignored): screenshots of commercial games must never be committed.
 
@@ -12,6 +13,7 @@ use gb_core::gameboy::GameBoy;
 use gb_core::interrupts::JOYPAD_BIT;
 use gb_core::joypad::JoypadButton;
 use gb_core::ppu::{SCREEN_HEIGHT, SCREEN_WIDTH};
+use gb_core::sgb::{BORDER_HEIGHT, BORDER_WIDTH, GAME_X, GAME_Y};
 
 const HOLD_FRAMES: u32 = 5;
 
@@ -47,7 +49,12 @@ fn main() {
 
     let rom = std::fs::read(&args[0]).expect("cannot read ROM");
     let gbc = args.iter().position(|a| a == "--gbc").map(|i| args[i + 1].parse::<u8>().expect("palette 0-12"));
-    let mut gb = GameBoy::with_boot(rom, gbc.is_some(), gbc.unwrap_or(0), false).expect("cannot load ROM");
+    let mut gb = if args.iter().any(|a| a == "--sgb") {
+        GameBoy::with_sgb(rom, false)
+    } else {
+        GameBoy::with_boot(rom, gbc.is_some(), gbc.unwrap_or(0), false)
+    }
+    .expect("cannot load ROM");
 
     for frame in 0..frames {
         for &(at, b) in &presses {
@@ -64,10 +71,19 @@ fn main() {
         }
     }
 
+    let (mut w, mut h, mut image) = (SCREEN_WIDTH, SCREEN_HEIGHT, gb.screen().to_vec());
+    if let Some(s) = gb.bus.sgb.as_deref().filter(|s| s.has_border) {
+        let mut out = s.border.clone();
+        for (y, row) in image.chunks(SCREEN_WIDTH * 4).enumerate() {
+            let o = ((GAME_Y + y) * BORDER_WIDTH + GAME_X) * 4;
+            out[o..o + row.len()].copy_from_slice(row);
+        }
+        (w, h, image) = (BORDER_WIDTH, BORDER_HEIGHT, out);
+    }
     let file = std::fs::File::create(&args[2]).expect("cannot create output");
-    let mut enc = png::Encoder::new(file, SCREEN_WIDTH as u32, SCREEN_HEIGHT as u32);
+    let mut enc = png::Encoder::new(file, w as u32, h as u32);
     enc.set_color(png::ColorType::Rgba);
     enc.set_depth(png::BitDepth::Eight);
-    enc.write_header().unwrap().write_image_data(&gb.bus.ppu.framebuffer).unwrap();
+    enc.write_header().unwrap().write_image_data(&image).unwrap();
     println!("{} ({} mode, {frames} frames)", args[2], format!("{:?}", gb.console));
 }

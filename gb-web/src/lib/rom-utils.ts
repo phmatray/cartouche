@@ -356,8 +356,8 @@ export function parseRomHeader(data: Uint8Array): RomMetadata | null {
   else if (cgbByte & 0x80) cgbFlag = 'CGB Compatible'; // bit 7, as the core decides
   else cgbFlag = 'DMG Only';
 
-  // SGB flag: byte 0x0146
-  const sgbFlag: SgbFlag = data[0x0146] === 0x03 ? 'SGB Supported' : 'Not Supported';
+  // SGB flag: byte 0x0146, which the Super Game Boy only honours with the old licensee code 0x33
+  const sgbFlag: SgbFlag = data[0x0146] === 0x03 && data[0x014B] === 0x33 ? 'SGB Supported' : 'Not Supported';
 
   // Cartridge type: byte 0x0147
   const cartridgeByte = data[0x0147];
@@ -382,6 +382,12 @@ export function parseRomHeader(data: Uint8Array): RomMetadata | null {
   const romVersion = data[0x014C];
 
   return { title, cgbFlag, sgbFlag, cartridgeType, romSize, ramSize, region, publisher, romVersion };
+}
+
+/** Super Game Boy functions: 'dmg' an original Game Boy game, 'cgb' a Color game (not a Color-only one), null none. */
+export function sgbCartOf(h: RomMetadata | null): 'dmg' | 'cgb' | null {
+  if (!h || h.sgbFlag !== 'SGB Supported' || h.cgbFlag === 'CGB Only') return null;
+  return h.cgbFlag === 'DMG Only' ? 'dmg' : 'cgb';
 }
 
 /**

@@ -74,6 +74,8 @@ function copyFramebuffer(emu: Emulator): ArrayBuffer {
       let success = emu.load_rom(rom);
       // A state from an original Game Boy game played on the Game Boy Color goes back onto that console.
       if (success && state && emu.state_console(state) === 2) success = emu.load_rom_with(rom, true, 0, true);
+      // One made on the Super Game Boy too (its colours come along; the border is not shown here).
+      if (success && state && emu.state_console(state) === 3) success = emu.load_rom_sgb(rom, true);
       if (success && msg.sram) emu.import_sram(new Uint8Array(msg.sram));
       if (success && state) success = emu.load_state(state);
       loaded[i] = success;

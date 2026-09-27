@@ -9,9 +9,10 @@ const textDecoder = new TextDecoder();
 const VRAM_SIZE = 0x2000; // 8192 bytes
 const START = 3; // JoypadButton.Start
 
-export interface BootOptions { colorize: boolean; palette: number; animation: boolean }
+/** `sgb`: a Super Game Boy (only for a cartridge with its functions; `colorize` and `palette` then do not apply). */
+export interface BootOptions { colorize: boolean; palette: number; animation: boolean; sgb?: boolean }
 /** Console numbers, as the core reports them. */
-export const CONSOLE_DMG = 0, CONSOLE_COMPAT = 2;
+export const CONSOLE_DMG = 0, CONSOLE_CGB = 1, CONSOLE_COMPAT = 2, CONSOLE_SGB = 3;
 
 export function useEmulator() {
   const emulatorRef = useRef<import('gb-core').Emulator | null>(null);
@@ -59,7 +60,7 @@ export function useEmulator() {
     }
 
     try {
-      const success = emu.load_rom_with(data, boot.colorize, boot.palette, boot.animation);
+      const success = boot.sgb ? emu.load_rom_sgb(data, boot.animation) : emu.load_rom_with(data, boot.colorize, boot.palette, boot.animation);
       if (!success) {
         const err = emu.get_error();
         addError(err || t('player.error.unknown'));
@@ -164,24 +165,36 @@ export function useEmulator() {
     return emu.read_memory(addr);
   }, []);
 
-  const pressButton = useCallback((button: number) => {
+  /** `player` 1-3: Super Game Boy players 2-4 (heard once the game asks for more players). */
+  const pressButton = useCallback((button: number, player = 0) => {
     const emu = emulatorRef.current;
     if (!emu) return;
+    if (player) { emu.press_button_player(player, button); return; }
     if (button === START && emu.booting()) { emu.finish_boot(); return; } // Start skips the start-up animation
     emu.press_button(button);
   }, []);
 
-  /** The console the core runs (0 Game Boy, 1 Game Boy Color, 2 Game Boy cartridge on a Game Boy Color), and a state's. */
+  /** The Super Game Boy border the game sent (256×224 RGBA, a view valid until the next frame) when it changed since `version`. */
+  const sgbBorder = useCallback((version: number): { version: number; rgba: Uint8ClampedArray | null } | null => {
+    const emu = emulatorRef.current;
+    const v = emu?.sgb_border_version() ?? 0;
+    if (!emu || v === version) return null;
+    const ptr = emu.sgb_border_ptr();
+    return { version: v, rgba: v && ptr && wasmMemory ? new Uint8ClampedArray(wasmMemory.buffer, ptr, 256 * 224 * 4) : null };
+  }, []);
+
+  /** The console the core runs (0 Game Boy, 1 Game Boy Color, 2 Game Boy cartridge on a Game Boy Color, 3 Super Game Boy), and a state's. */
   const consoleNow = useCallback((): number => emulatorRef.current?.console() ?? 255, []);
   const stateConsole = useCallback((data: Uint8Array): number => emulatorRef.current?.state_console(data) ?? 255, []);
   /** The palette a colourised Game Boy cartridge runs with (0 automatic, 1-12): a loaded state brings back its own. */
   const paletteNow = useCallback((): number => emulatorRef.current?.palette() ?? 0, []);
   const skipBoot = useCallback(() => { emulatorRef.current?.finish_boot(); }, []);
 
-  const releaseButton = useCallback((button: number) => {
+  const releaseButton = useCallback((button: number, player = 0) => {
     const emu = emulatorRef.current;
     if (!emu) return;
-    emu.release_button(button);
+    if (player) emu.release_button_player(player, button);
+    else emu.release_button(button);
   }, []);
 
   const hasBatteryRam = useCallback((): boolean => {
@@ -304,6 +317,7 @@ export function useEmulator() {
     pressButton,
     releaseButton,
     consoleNow,
+    sgbBorder,
     stateConsole,
     paletteNow,
     skipBoot,

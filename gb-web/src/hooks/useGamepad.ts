@@ -19,13 +19,13 @@ const AXIS_MAP = {
 };
 
 export function useGamepad(
-  pressButton: (button: number) => void,
-  releaseButton: (button: number) => void,
+  pressButton: (button: number, player?: number) => void,
+  releaseButton: (button: number, player?: number) => void,
   active: boolean,
   onToggleFullscreen?: () => void,
 ) {
   const [connected, setConnected] = useState(() => !!navigator.getGamepads?.().some(Boolean));
-  const prevButtonsRef = useRef<Record<number, boolean>>({});
+  const prevButtonsRef = useRef<Record<string, boolean>>({});
   const prevAxesRef = useRef<Record<string, number>>({});
   const rafRef = useRef<number>(0);
 
@@ -52,48 +52,50 @@ export function useGamepad(
     const gamepads = navigator.getGamepads?.();
     if (!gamepads) return;
 
-    const gp = gamepads[0];
-    if (!gp) return;
+    // The first connected gamepad is player 1; the next ones are Super Game Boy players 2-4 (ignored elsewhere).
+    [...gamepads].filter((g) => g !== null).slice(0, 4).forEach((gp, player) => {
+      const prev = prevButtonsRef.current;
+      const k = (i: number | string) => (player ? `${player}:${i}` : String(i));
+      const press = (b: number) => pressButton(b, player), release = (b: number) => releaseButton(b, player);
 
-    const prev = prevButtonsRef.current;
+      // Poll mapped buttons
+      for (const [gpIdx, gbBtn] of Object.entries(GAMEPAD_MAP)) {
+        const idx = Number(gpIdx);
+        const pressed = gp.buttons[idx]?.pressed ?? false;
+        const wasPressed = prev[k(idx)] ?? false;
 
-    // Poll mapped buttons
-    for (const [gpIdx, gbBtn] of Object.entries(GAMEPAD_MAP)) {
-      const idx = Number(gpIdx);
-      const pressed = gp.buttons[idx]?.pressed ?? false;
-      const wasPressed = prev[idx] ?? false;
+        if (pressed && !wasPressed) press(gbBtn);
+        if (!pressed && wasPressed) release(gbBtn);
+        prev[k(idx)] = pressed;
+      }
 
-      if (pressed && !wasPressed) pressButton(gbBtn);
-      if (!pressed && wasPressed) releaseButton(gbBtn);
-      prev[idx] = pressed;
-    }
+      // Triangle (button 3) -> fullscreen toggle
+      if (onToggleFullscreen && !player) {
+        const triPressed = gp.buttons[3]?.pressed ?? false;
+        const triWas = prev[3] ?? false;
+        if (triPressed && !triWas) onToggleFullscreen();
+        prev[3] = triPressed;
+      }
 
-    // Triangle (button 3) -> fullscreen toggle
-    if (onToggleFullscreen) {
-      const triPressed = gp.buttons[3]?.pressed ?? false;
-      const triWas = prev[3] ?? false;
-      if (triPressed && !triWas) onToggleFullscreen();
-      prev[3] = triPressed;
-    }
+      // Poll left stick axes
+      const prevAxes = prevAxesRef.current;
+      for (const [key, mapping] of Object.entries(AXIS_MAP)) {
+        const value = gp.axes[mapping.axis] ?? 0;
+        const prevValue = prevAxes[k(key)] ?? 0;
 
-    // Poll left stick axes
-    const prevAxes = prevAxesRef.current;
-    for (const [key, mapping] of Object.entries(AXIS_MAP)) {
-      const value = gp.axes[mapping.axis] ?? 0;
-      const prevValue = prevAxes[key] ?? 0;
+        const wasNeg = prevValue < -AXIS_DEADZONE;
+        const wasPos = prevValue > AXIS_DEADZONE;
+        const isNeg = value < -AXIS_DEADZONE;
+        const isPos = value > AXIS_DEADZONE;
 
-      const wasNeg = prevValue < -AXIS_DEADZONE;
-      const wasPos = prevValue > AXIS_DEADZONE;
-      const isNeg = value < -AXIS_DEADZONE;
-      const isPos = value > AXIS_DEADZONE;
+        if (isNeg && !wasNeg) press(mapping.negative);
+        if (!isNeg && wasNeg) release(mapping.negative);
+        if (isPos && !wasPos) press(mapping.positive);
+        if (!isPos && wasPos) release(mapping.positive);
 
-      if (isNeg && !wasNeg) pressButton(mapping.negative);
-      if (!isNeg && wasNeg) releaseButton(mapping.negative);
-      if (isPos && !wasPos) pressButton(mapping.positive);
-      if (!isPos && wasPos) releaseButton(mapping.positive);
-
-      prevAxes[key] = value;
-    }
+        prevAxes[k(key)] = value;
+      }
+    });
   }, [active, pressButton, releaseButton, onToggleFullscreen]);
 
   useEffect(() => {

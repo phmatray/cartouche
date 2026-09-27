@@ -12,6 +12,7 @@ pub mod ppu;
 pub mod printer;
 pub mod registers;
 pub mod serial;
+pub mod sgb;
 pub mod timer;
 pub mod trace;
 
@@ -56,6 +57,42 @@ impl Emulator {
                 false
             }
         }
+    }
+
+    /// A Super Game Boy (palettes, border, multiplayer) for a cartridge with SGB support; any
+    /// other cartridge starts as with `load_rom_with(rom, false, 0, animation)`.
+    pub fn load_rom_sgb(&mut self, rom_data: &[u8], animation: bool) -> bool {
+        match GameBoy::with_sgb(rom_data.to_vec(), animation) {
+            Ok(gb) => {
+                self.gb = Some(gb);
+                self.last_error = None;
+                true
+            }
+            Err(e) => {
+                self.last_error = Some(e.to_string());
+                false
+            }
+        }
+    }
+
+    /// Super Game Boy border, `sgb::BORDER_WIDTH` x `BORDER_HEIGHT` RGBA (the Game Boy's picture goes
+    /// at `GAME_X`, `GAME_Y` on top of it). Null until the game sent one (`sgb_border_version` 0).
+    pub fn sgb_border_ptr(&self) -> *const u8 {
+        self.sgb().filter(|s| s.has_border).map_or(std::ptr::null(), |s| s.border.as_ptr())
+    }
+
+    /// Bumped whenever the border is redrawn; 0: no border.
+    pub fn sgb_border_version(&self) -> u32 {
+        self.sgb().filter(|s| s.has_border).map_or(0, |s| s.border_version.max(1))
+    }
+
+    /// Buttons of Super Game Boy players 2-4 (`player` 1-3), read once the game asks for them (MLT_REQ).
+    pub fn press_button_player(&mut self, player: u8, button: JoypadButton) {
+        self.set_player_button(player, button, true);
+    }
+
+    pub fn release_button_player(&mut self, player: u8, button: JoypadButton) {
+        self.set_player_button(player, button, false);
     }
 
     pub fn run_frame(&mut self) -> bool {
@@ -105,7 +142,7 @@ impl Emulator {
 
     pub fn framebuffer_ptr(&self) -> *const u8 {
         if let Some(gb) = &self.gb {
-            gb.bus.ppu.framebuffer.as_ptr()
+            gb.screen().as_ptr()
         } else {
             std::ptr::null()
         }
@@ -273,7 +310,7 @@ impl Emulator {
     /// Get a copy of the current framebuffer for save state thumbnails
     pub fn framebuffer_snapshot(&self) -> Vec<u8> {
         self.gb.as_ref()
-            .map_or(Vec::new(), |gb| gb.bus.ppu.framebuffer.to_vec())
+            .map_or(Vec::new(), |gb| gb.screen().to_vec())
     }
 
     pub fn serial_output_ptr(&self) -> *const u8 {
@@ -470,6 +507,18 @@ impl Emulator {
 }
 
 impl Emulator {
+    fn sgb(&self) -> Option<&crate::sgb::Sgb> {
+        self.gb.as_ref()?.bus.sgb.as_deref()
+    }
+
+    fn set_player_button(&mut self, player: u8, button: JoypadButton, pressed: bool) {
+        let Some(s) = self.gb.as_mut().and_then(|gb| gb.bus.sgb.as_deref_mut()) else { return };
+        let Some(pad) = s.pads.get_mut((player as usize).wrapping_sub(1)) else { return };
+        let (i, bit) = (button as u8 / 4, button as u8 % 4);
+        let i = 1 - i as usize; // JoypadButton: A B Select Start (buttons), then the d-pad
+        if pressed { pad[i] &= !(1 << bit); } else { pad[i] |= 1 << bit; }
+    }
+
     fn tracer(&self) -> Option<&crate::trace::Tracer> {
         self.gb.as_ref()?.bus.ppu.trace.as_deref()
     }

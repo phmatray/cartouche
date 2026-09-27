@@ -34,8 +34,10 @@ export default {
     gone: 'Cette sauvegarde n’existe plus. Nouvelle partie.',
     madeOnDmg: 'Cette sauvegarde a été faite sur Game Boy. Choisissez la console Game Boy pour la charger.',
     madeOnGbc: 'Cette sauvegarde a été faite sur Game Boy Color. Choisissez la console Game Boy Color pour la charger.',
+    madeOnSgb: 'Cette sauvegarde a été faite sur Super Game Boy. Activez les cadres et couleurs Super Game Boy dans la page Écran pour la charger.',
     resumedOnDmg: 'Reprise sur Game Boy, là où cette sauvegarde a été faite. Redémarrez depuis la page Écran pour changer.',
     resumedOnGbc: 'Reprise sur Game Boy Color, là où cette sauvegarde a été faite. Redémarrez depuis la page Écran pour changer.',
+    resumedOnSgb: 'Reprise sur Super Game Boy, là où cette sauvegarde a été faite. Redémarrez depuis la page Écran pour changer.',
     loadFailed: 'Impossible de charger la ROM : {error}',
     resumeSaved: 'Point de reprise enregistré pour {title}',
     saved: 'Sauvegardé dans l’emplacement {n}',
@@ -108,6 +110,7 @@ export default {
   screen: {
     introDmg: 'Choisissez la console de vos souvenirs, puis affinez le rendu. Les jeux Game Boy d’origine partagent ces réglages, sauf ceux qui ont les leurs.',
     introCgb: 'Choisissez la console de vos souvenirs, puis affinez le rendu. Les jeux Game Boy Color partagent ces réglages, sauf ceux qui ont les leurs.',
+    introSgb: 'Choisissez la console de vos souvenirs, puis affinez le rendu. Les jeux Super Game Boy partagent les réglages des jeux Game Boy Color, sauf ceux qui ont les leurs.',
     restartNote: 'La nouvelle console prend le relais au redémarrage du jeu. La sauvegarde du jeu est conservée, pas la progression faite depuis.',
     restart: 'Redémarrer',
     cgb: 'C’est un jeu Game Boy Color : il garde ses propres couleurs, les palettes ne s’appliquent donc pas. La correction des couleurs, si.',

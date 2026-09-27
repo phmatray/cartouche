@@ -74,6 +74,8 @@ about a minute.
 **Play**
 - Game Boy (DMG) and Game Boy Color (CGB) games, including double speed,
   HDMA and color palettes.
+- Super Game Boy games play with their own border and colors (per-game switch),
+  and up to four players with more than one gamepad.
 - MBC1, MBC2, MBC3 (with clock) and MBC5 cartridges, with battery saves kept
   automatically.
 - Rewind by holding <kbd>R</kbd>, speed from ½× to 4×, and five save-state slots with

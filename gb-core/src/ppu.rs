@@ -754,7 +754,7 @@ impl Ppu {
         }
     }
 
-    fn rgb555_to_rgba8888(lo: u8, hi: u8) -> [u8; 4] {
+    pub(crate) fn rgb555_to_rgba8888(lo: u8, hi: u8) -> [u8; 4] {
         let v = (hi as u16) << 8 | lo as u16;
         let r = ((v & 0x1F) as u16 * 255 / 31) as u8;
         let g = (((v >> 5) & 0x1F) as u16 * 255 / 31) as u8;

@@ -15,6 +15,8 @@ pub struct MemoryBus {
     pub joypad: Joypad,
     pub apu: Apu,
     pub serial: Serial,
+    /// Super Game Boy mode (packets over P1, palettes, border).
+    pub sgb: Option<Box<crate::sgb::Sgb>>,
     /// 256 bytes (DMG) or 0x900 (CGB: $0000-$00FF and $0200-$08FF).
     pub boot_rom: &'static [u8],
     pub boot_rom_active: bool,
@@ -56,6 +58,7 @@ impl MemoryBus {
             joypad: Joypad::new(),
             apu: Apu::new(),
             serial: Serial::new(),
+            sgb: None,
             boot_rom: &DMG_BOOT_ROM,
             boot_rom_active: true,
             key0: 0,
@@ -112,7 +115,7 @@ impl MemoryBus {
             0xE000..=0xFDFF => self.wram_read(addr - 0x2000),
             0xFE00..=0xFE9F => self.ppu.read_oam(addr - 0xFE00),
             0xFEA0..=0xFEFF => 0xFF,
-            0xFF00 => self.joypad.read(),
+            0xFF00 => self.sgb.as_ref().and_then(|s| s.read_p1(self.joypad.select)).unwrap_or_else(|| self.joypad.read()),
             0xFF01 | 0xFF02 => self.serial.read(addr),
             0xFF04..=0xFF07 => self.timer.read(addr),
             0xFF0F => self.interrupts.interrupt_flag | 0xE0, // bits 5-7 unused, read as 1
@@ -152,7 +155,10 @@ impl MemoryBus {
             0xE000..=0xFDFF => self.wram_write(addr - 0x2000, value),
             0xFE00..=0xFE9F => self.ppu.write_oam(addr - 0xFE00, value),
             0xFEA0..=0xFEFF => {}
-            0xFF00 => self.joypad.write(value),
+            0xFF00 => {
+                self.joypad.write(value);
+                if let Some(s) = self.sgb.as_deref_mut() { s.write_p1(value); }
+            }
             0xFF01 | 0xFF02 => self.serial.write(addr, value),
             0xFF04..=0xFF07 => self.timer.write(addr, value),
             0xFF0F => self.interrupts.interrupt_flag = value & 0x1F,
@@ -247,6 +253,7 @@ impl MemoryBus {
         let (vblank_irq, stat_irq, hblank_entry) = self.ppu.step(ppu_step);
         if vblank_irq {
             self.interrupts.request(VBLANK_BIT);
+            if let Some(s) = self.sgb.as_deref_mut() { s.vblank(&self.ppu.framebuffer); }
         }
         if stat_irq {
             self.interrupts.request(STAT_BIT);

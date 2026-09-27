@@ -3,6 +3,8 @@
 /// original code: the logo they show is read from the cartridge header at $0104, and neither
 /// binary contains Nintendo's boot ROM or its logo bytes. `GameBoy::with_boot` runs them.
 pub static SAMEBOY_DMG: &[u8; 0x100] = include_bytes!("../boot/sameboy_dmg_boot.bin");
+/// Super Game Boy: sends the cartridge header to the SNES side as packets, like the original.
+pub static SAMEBOY_SGB: &[u8; 0x100] = include_bytes!("../boot/sameboy_sgb_boot.bin");
 /// Mapped at $0000-$00FF and $0200-$08FF (the cartridge header shows through at $0100-$01FF).
 pub static SAMEBOY_CGB: &[u8; 0x900] = include_bytes!("../boot/sameboy_cgb_boot.bin");
 

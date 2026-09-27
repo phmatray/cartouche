@@ -34,8 +34,10 @@ export default {
     gone: 'Ese guardado ya no existe. Empezando de cero.',
     madeOnDmg: 'Ese guardado se hizo en Game Boy. Elige la consola Game Boy para cargarlo.',
     madeOnGbc: 'Ese guardado se hizo en Game Boy Color. Elige la consola Game Boy Color para cargarlo.',
+    madeOnSgb: 'Ese guardado se hizo en Super Game Boy. Activa los marcos y colores de Super Game Boy en la página Pantalla para cargarlo.',
     resumedOnDmg: 'Reanudado en Game Boy, donde se hizo este guardado. Reinicia desde la página Pantalla para cambiar.',
     resumedOnGbc: 'Reanudado en Game Boy Color, donde se hizo este guardado. Reinicia desde la página Pantalla para cambiar.',
+    resumedOnSgb: 'Reanudado en Super Game Boy, donde se hizo este guardado. Reinicia desde la página Pantalla para cambiar.',
     loadFailed: 'No se pudo cargar la ROM: {error}',
     resumeSaved: 'Punto de reanudación guardado para {title}',
     saved: 'Guardado en la ranura {n}',
@@ -108,6 +110,7 @@ export default {
   screen: {
     introDmg: 'Elige la consola que recuerdas y luego ajústala. Los juegos de Game Boy original comparten estos ajustes, salvo los que tienen los suyos.',
     introCgb: 'Elige la consola que recuerdas y luego ajústala. Los juegos de Game Boy Color comparten estos ajustes, salvo los que tienen los suyos.',
+    introSgb: 'Elige la consola que recuerdas y luego ajústala. Los juegos de Super Game Boy comparten los ajustes de los juegos de Game Boy Color, salvo los que tienen los suyos.',
     restartNote: 'La nueva consola entra en juego al reiniciar el juego. Tu partida guardada se conserva; el progreso hecho desde entonces, no.',
     restart: 'Reiniciar ahora',
     cgb: 'Este es un juego de Game Boy Color: conserva sus propios colores, así que las paletas no se aplican. La corrección de color, sí.',

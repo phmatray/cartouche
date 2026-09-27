@@ -363,9 +363,15 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .pl.closed .pl-body{grid-template-columns:minmax(0,1fr) 0}
 .stage{background:var(--flood);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;min-width:0;position:relative;overflow:hidden}
 .screen{position:relative}
-.screen,.stage .cap{width:min(var(--sw,100%),100%,calc((100dvh - 64px - 90px - 130px) * 160 / 144),820px)}
+.screen,.stage .cap{width:min(var(--sw,100%),100%,calc((100dvh - 64px - 90px - 130px) * var(--ar)),820px)}
 .stage .cap{color:#fff}
 .screen .frame{padding:12px;position:relative}
+/* Super Game Boy: the game's border (256 x 224) fills the frame, the screen sits in it at (48, 40). */
+.stage{--ar:160 / 144}
+.pl.sgb .stage{--ar:256 / 224}
+.sgb-border{display:none}
+.pl.sgb .sgb-border{display:block;width:100%;height:auto;image-rendering:pixelated}
+.pl.sgb .screen .frame canvas.lcd{position:absolute;left:calc(12px + (100% - 24px) * 48 / 256);top:calc(12px + (100% - 24px) * 40 / 224);width:calc((100% - 24px) * 160 / 256);aspect-ratio:160 / 144}
 .screen .grid::after{content:"";position:absolute;inset:12px;pointer-events:none;background:linear-gradient(90deg,rgba(0,0,0,.14) 1px,transparent 1px) 0 0/calc(100%/160) 100%,linear-gradient(rgba(0,0,0,.14) 1px,transparent 1px) 0 0/100% calc(100%/144)}
 .overlay{position:absolute;inset:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(8,24,32,.72);color:#fff;text-align:center;padding:20px}
 .overlay b{font:900 40px/1 var(--font);font-stretch:62%;text-transform:uppercase}
@@ -473,7 +479,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .pl:fullscreen .pl-top,.pl:fullscreen .sheet,.pl:fullscreen .touch,.pl:fullscreen .stage .cap{display:none}
 .pl:fullscreen .pl-body{display:block;height:100vh}
 .pl:fullscreen .stage{height:100%;padding:16px}
-.pl:fullscreen .screen{width:min(100%,calc((100vh - 32px - 24px) * 160 / 144 + 24px))}
+.pl:fullscreen .screen{width:min(100%,calc((100vh - 32px - 24px) * var(--ar) + 24px))}
 .pl:fullscreen .deck{position:fixed;left:0;right:0;bottom:0;z-index:5;border:0;background:rgba(18,18,18,.88);transition:opacity .3s}
 .pl:fullscreen.idle .deck{opacity:0;pointer-events:none}
 .pl:fullscreen.idle{cursor:none}
@@ -938,7 +944,7 @@ body{font-family:var(--font)}
 .manual .paper .notice{margin:16px 0 0}
 .rrow{grid-template-columns:56px minmax(0,1fr) 170px 250px}
 .rrow .act{display:flex;gap:8px;justify-content:flex-end}
-@media (max-width:760px){.rrow{grid-template-columns:48px minmax(0,1fr) auto}.rrow .act{justify-content:flex-start}.row{flex-wrap:wrap}.range{max-width:none;min-width:200px}}
+@media (max-width:760px){.rrow{grid-template-columns:48px minmax(0,1fr) auto}.rrow .act{justify-content:flex-start}.row{flex-wrap:wrap}.row:has(>.switch){flex-wrap:nowrap}.range{max-width:none;min-width:200px}}
 .player .frame canvas{background:#000}
 .lc-bar .switch[disabled]{opacity:.5}
 /* link cable: the cartridge in each slot, and the picker sheet */
@@ -1067,7 +1073,7 @@ html:has(.pl),body:has(.pl){overscroll-behavior:none}
 .pl.imm .pl-top,.pl.imm .sheet,.pl.imm .stage .cap{display:none}
 .pl.imm .pl-body{display:block;height:100dvh}
 .pl.imm .stage{height:100%;padding:calc(16px + var(--sat)) max(16px,var(--sar)) calc(16px + var(--sab)) max(16px,var(--sal))}
-.pl.imm .screen{width:min(100%,calc((100dvh - 32px - var(--sat) - var(--sab) - 24px) * 160 / 144 + 24px))}
+.pl.imm .screen{width:min(100%,calc((100dvh - 32px - var(--sat) - var(--sab) - 24px) * var(--ar) + 24px))}
 .pl.imm .deck>:not(.fs){display:none}
 .pl.imm .deck{position:fixed;top:calc(12px + var(--sat));right:max(12px,var(--sar));z-index:5;padding:0;border:0;background:none}
 .pl.imm .deck .fs{background:rgba(20,20,20,.72);color:var(--paper);box-shadow:inset 0 0 0 1.5px var(--rule)}
@@ -1085,6 +1091,11 @@ html:has(.pl),body:has(.pl){overscroll-behavior:none}
   .pl.imm .stage{height:auto;padding:calc(12px + var(--sat)) max(12px,var(--sar)) 12px max(12px,var(--sal))}
   .pl.imm .screen{width:100%}
   .pl.imm .deck{position:static;justify-content:flex-end;padding:8px max(12px,var(--sar)) 0 max(12px,var(--sal))}
+  /* Super Game Boy on phones: the game keeps its size, the border reaches out into the stage around it (clipped there) */
+  .pl.sgb .stage{--ar:160 / 144}
+  .pl.sgb .screen .frame{isolation:isolate}
+  .pl.sgb .screen .frame canvas.lcd{position:static;width:100%}
+  .pl.sgb .sgb-border{position:absolute;z-index:-1;left:12px;top:12px;width:calc((100% - 24px) * 256 / 160);transform:translate(-18.75%,-17.857%)}
 }
 @media (pointer:coarse) and (max-width:900px){.deck{padding-left:max(8px,var(--sal));padding-right:max(8px,var(--sar))}}
 /* Phones upright: the player is one screen high. The LCD takes the full width when the controls still fit under it,
@@ -1093,11 +1104,11 @@ html:has(.pl),body:has(.pl){overscroll-behavior:none}
 @media (max-width:900px) and (min-height:501px){
   .pl{--touch-h:calc(230px + max(24px,calc(8px + var(--sab))));height:100vh;height:100dvh;min-height:0}
   .stage{padding:12px 16px}
-  .screen{width:min(var(--sw,100%),100%,calc((100dvh - 56px - var(--sat) - 61px - var(--touch-h) - 24px - 24px) * 160 / 144 + 24px))}
-  .pl.imm .screen{width:min(100%,calc((100dvh - 24px - var(--sat) - 52px - var(--touch-h) - 24px) * 160 / 144 + 24px))}
+  .screen{width:min(var(--sw,100%),100%,calc((100dvh - 56px - var(--sat) - 61px - var(--touch-h) - 24px - 24px) * var(--ar) + 24px))}
+  .pl.imm .screen{width:min(100%,calc((100dvh - 24px - var(--sat) - 52px - var(--touch-h) - 24px) * var(--ar) + 24px))}
   .touch{align-content:center;gap:20px 12px;padding-top:16px;padding-bottom:max(24px,calc(8px + var(--sab)))}
   .sheet{height:58dvh}
-  .pl:not(.closed):not(.imm) .screen{width:min(var(--sw,100%),100%,calc((42dvh - 56px - var(--sat) - 32px - 24px) * 160 / 144 + 24px))}
+  .pl:not(.closed):not(.imm) .screen{width:min(var(--sw,100%),100%,calc((42dvh - 56px - var(--sat) - 32px - 24px) * var(--ar) + 24px))}
 }
 @media (max-width:374px) and (min-height:501px){.pl{--touch-h:calc(209px + max(24px,calc(8px + var(--sab))))}}
 
@@ -1113,7 +1124,7 @@ html:has(.pl),body:has(.pl){overscroll-behavior:none}
   .deck{grid-area:deck;border-top:0;border-bottom:1px solid var(--rule);padding:var(--sat) max(12px,var(--sar)) 0 8px;justify-content:flex-end;gap:6px}
   .deck .push{display:none}
   .stage{grid-area:stage;padding:8px 8px calc(8px + var(--sab))}
-  .screen{width:min(var(--sw,100vw),calc((100dvh - 52px - var(--sat) - var(--sab) - 16px - 24px) * 160 / 144 + 24px),calc(100vw - 360px - var(--sal) - var(--sar)))}
+  .screen{width:min(var(--sw,100vw),calc((100dvh - 52px - var(--sat) - var(--sab) - 16px - 24px) * var(--ar) + 24px),calc(100vw - 360px - var(--sal) - var(--sar)))}
   .touch .dpad{grid-area:l;align-self:center;justify-self:center;margin-left:var(--sal)}
   .touch .ab{grid-area:r;align-self:center;justify-self:center;margin:0 var(--sar) 48px 0}
   .touch .ss{grid-area:r;align-self:end;justify-self:center;margin:0 var(--sar) calc(12px + var(--sab)) 0;gap:8px}
@@ -1122,13 +1133,13 @@ html:has(.pl),body:has(.pl){overscroll-behavior:none}
   .sheet{top:0;bottom:0;left:auto;width:var(--sheet-w);height:auto;padding:var(--sat) var(--sar) var(--sab) 0;transform:translateX(100%);box-shadow:-20px 0 40px rgba(0,0,0,.5)}
   .pl.imm{grid-template-rows:minmax(0,1fr);grid-template-areas:"l stage r"}
   .pl.imm .stage{height:100%;padding:calc(8px + var(--sat)) 8px calc(8px + var(--sab))}
-  .pl.imm .screen{width:min(calc((100dvh - 16px - var(--sat) - var(--sab) - 24px) * 160 / 144 + 24px),calc(100vw - 360px - var(--sal) - var(--sar)))}
+  .pl.imm .screen{width:min(calc((100dvh - 16px - var(--sat) - var(--sab) - 24px) * var(--ar) + 24px),calc(100vw - 360px - var(--sal) - var(--sar)))}
   .pl.imm .deck{position:fixed;top:calc(8px + var(--sat));right:max(8px,var(--sar));padding:0}
   /* manual open: the screen moves into the room left of the sheet (the controls sit under the sheet, as upright) */
   .pl:not(.closed) .touch>*{visibility:hidden}
   .pl:not(.closed) .stage{grid-column:1/-1;padding-right:calc(var(--sheet-w) + 8px)}
-  .pl:not(.closed) .screen{width:min(var(--sw,100vw),calc((100dvh - 52px - var(--sat) - var(--sab) - 16px - 24px) * 160 / 144 + 24px),calc(100vw - var(--sheet-w) - 16px - var(--sal)))}
-  .pl.imm:not(.closed) .screen{width:min(calc((100dvh - 16px - var(--sat) - var(--sab) - 24px) * 160 / 144 + 24px),calc(100vw - var(--sheet-w) - 16px - var(--sal)))}
+  .pl:not(.closed) .screen{width:min(var(--sw,100vw),calc((100dvh - 52px - var(--sat) - var(--sab) - 16px - 24px) * var(--ar) + 24px),calc(100vw - var(--sheet-w) - 16px - var(--sal)))}
+  .pl.imm:not(.closed) .screen{width:min(calc((100dvh - 16px - var(--sat) - var(--sab) - 24px) * var(--ar) + 24px),calc(100vw - var(--sheet-w) - 16px - var(--sal)))}
 }
 
 /* "Install on your iPhone": a one-time card, and the same steps in Settings › About */
