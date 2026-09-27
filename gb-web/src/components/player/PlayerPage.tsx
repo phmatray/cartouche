@@ -17,7 +17,8 @@ import { parseRomHeader, sgbCartOf } from '../../lib/rom-utils';
 import { presetOf } from '../../shaders/filters';
 import { BUTTON_NUMBERS } from '../../utils/keybindings';
 import { dpadAt, slide } from '../../lib/touch-slide';
-import { getActiveProfileId, getSram } from '../../lib/db';
+import { getActiveProfileId, getSaveState, getSram, resumeStateId } from '../../lib/db';
+import { bootFrom } from '../../lib/boot-from';
 import { ago, owned, paths, tagOf } from '../../lib/ui';
 import { settled } from '../../lib/transitions';
 import { I } from '../icons';
@@ -222,7 +223,8 @@ function Player({ game }: { game: GameEntry }) {
   const boot = useCallback(async (data: Uint8Array) => {
     const s = useSettingsStore.getState();
     const slot = q.get('slot');
-    const from: SlotKey | null = q.get('resume') ? 'auto' : slot !== null ? +slot : null;
+    const hasResume = !!(await getSaveState(resumeStateId(game.id)).catch(() => undefined));
+    const from: SlotKey | null = bootFrom(q, s.resumePoints, hasResume);
     // A slot is loaded once: a reload (or iOS bringing back an evicted tab) goes on from the resume point instead.
     if (slot !== null) setQ((p) => { p.delete('slot'); if (s.resumePoints) p.set('resume', '1'); return p; }, { replace: true });
     // A state replaces the start-up at once: the animation then costs nothing (and plays if the state is gone).
