@@ -66,6 +66,7 @@ export default {
     saveFailed: 'Impossible de sauvegarder votre progression : le stockage ne répond pas. Gardez l’app ouverte et réessayez.',
     resumeSaved: 'Point de reprise enregistré pour {title}',
     saved: 'Sauvegardé dans l’emplacement {n}',
+    slotBack: 'L’emplacement {n} est revenu tel qu’il était',
     noResume: 'Pas encore de point de reprise',
     emptySlot: 'L’emplacement {n} est vide',
     shot: 'Capture ajoutée à l’album',
