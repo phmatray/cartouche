@@ -51,6 +51,8 @@ export default {
     otherTabs: 'Cierra las demás pestañas de Cartouche para terminar de actualizar',
     notStored: 'ya no está en el almacenamiento de este navegador',
     download: 'falló la descarga, comprueba la conexión',
+    notFound: 'el archivo no está en el servidor (error {status})',
+    server: 'el servidor no pudo enviarlo (error {status})',
   },
   deck: {
     label: 'Reproducción',

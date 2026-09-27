@@ -200,13 +200,16 @@ export async function importRom(name: string, data: Uint8Array, force = false): 
 
 /** A download that failed or isn't the expected file: its message is for the player. */
 export class FetchError extends Error {}
+/** A reply that isn't the file: missing (404) or a server failure, not the connection. */
+const httpError = (res: Response) => new FetchError(t(res.status === 404 || res.status === 410 ? 'player.error.notFound' : 'player.error.server', { status: res.status }));
 
 /** A hosted catalog ROM (the GB Studio collection), downloaded and checked against its SHA-1; `progress` gets 0..1. */
 export async function fetchHosted(game: GameEntry, progress?: (done: number) => void): Promise<Uint8Array> {
   let data: Uint8Array;
   try {
     const res = await fetch(assetUrl(game.romUrl!));
-    if (!res.ok || !res.body) throw new Error();
+    if (!res.ok) throw httpError(res);
+    if (!res.body) throw new Error();
     const total = game.size || Number(res.headers.get('content-length'));
     const parts: Uint8Array<ArrayBuffer>[] = [];
     let got = 0;
@@ -218,8 +221,8 @@ export async function fetchHosted(game: GameEntry, progress?: (done: number) => 
       if (total) progress?.(Math.min(1, got / total));
     }
     data = new Uint8Array(await new Blob(parts).arrayBuffer());
-  } catch {
-    throw new FetchError(t('player.error.download')); // offline, or cut off midway
+  } catch (e) {
+    throw e instanceof FetchError ? e : new FetchError(t('player.error.download')); // offline, or cut off midway
   }
   if (game.sha1 && (await computeSha1(data)) !== game.sha1) throw new FetchError(t('add.mismatch'));
   return data;
@@ -260,7 +263,8 @@ export async function fetchRom(game: GameEntry): Promise<Uint8Array> {
   if (!game.romUrl) throw new Error(`NO_ROM_URL`);
   if (game.madeWith && game.sha1) return fetchHosted(game); // hosted: checked against its SHA-1
   const response = await fetch(assetUrl(game.romUrl)).catch(() => null); // offline: a TypeError in the browser's language
-  if (!response?.ok) throw new Error(t('player.error.download'));
+  if (!response) throw new Error(t('player.error.download'));
+  if (!response.ok) throw httpError(response);
   return new Uint8Array(await response.arrayBuffer());
 }
 

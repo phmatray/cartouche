@@ -50,6 +50,8 @@ export default {
     otherTabs: 'Close other Cartouche tabs to finish updating',
     notStored: 'it is no longer in this browser’s storage',
     download: 'the download failed, check the connection',
+    notFound: 'the file isn’t on the server (error {status})',
+    server: 'the server couldn’t send it (error {status})',
   },
   deck: {
     label: 'Playback',
