@@ -1,4 +1,4 @@
-import { t } from '../i18n/core';
+import { t } from '../i18n/core.ts';
 
 const DB_NAME = 'gb-emulator';
 const DB_VERSION = 5;
@@ -127,7 +127,14 @@ export interface StoredSave { id: string; gameId: string; name: string; sram: Ui
 export const gameOfSave = (id: string) => id.split('~')[0];
 /** Fill in what a save written before profiles (or read from a backup, untrusted) lacks or gets wrong. */
 export const asProfile = (s: Omit<StoredSave, 'gameId' | 'name'> & Partial<StoredSave>): StoredSave =>
-  ({ ...s, gameId: gameOfSave(s.id), name: typeof s.name === 'string' && s.name.trim() ? s.name.trim().slice(0, 40) : t('player.saves.main') });
+  ({ ...s, gameId: gameOfSave(s.id), name: typeof s.name === 'string' && s.name.trim() ? mainName(s.name.trim().slice(0, 40)) : t('player.saves.main') });
+/**
+ * The default save's name in every language (player.saves.main of each dictionary; a test keeps them in step), with the
+ * " 2" a copy gets: it is stored in whichever language was active (or a paired device's), so it is shown in the current one.
+ * ponytail: a save a user named exactly "Main" in another language follows the language too.
+ */
+const MAIN_NAME = /^(?:Main|Principale|Principal)( \d+)?$/;
+export const mainName = (name: string) => { const m = MAIN_NAME.exec(name); return m ? t('player.saves.main') + (m[1] ?? '') : name; };
 export function saveSram(save: StoredSave): Promise<void> { return txOp(SAVE_STORE, 'readwrite', (s) => s.put(save)).then(() => {}); }
 export function getSram(id: string): Promise<StoredSave | undefined> { return txOp<StoredSave | undefined>(SAVE_STORE, 'readonly', (s) => s.get(id)).then((r) => r && asProfile(r)); }
 export function deleteSave(id: string): Promise<void> { return txOp(SAVE_STORE, 'readwrite', (s) => s.delete(id)).then(() => {}); }
