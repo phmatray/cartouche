@@ -65,6 +65,7 @@ export default {
     saveFailed: 'Couldn’t save your progress: storage isn’t working. Keep the app open and try again.',
     resumeSaved: 'Resume point saved for {title}',
     saved: 'Saved to slot {n}',
+    slotBack: 'Slot {n} is back as it was',
     noResume: 'No resume point yet',
     emptySlot: 'Slot {n} is empty',
     shot: 'Screenshot added to the album',

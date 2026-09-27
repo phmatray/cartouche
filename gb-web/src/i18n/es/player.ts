@@ -66,6 +66,7 @@ export default {
     saveFailed: 'No se pudo guardar tu progreso: el almacenamiento no responde. Mantén la app abierta y vuelve a intentarlo.',
     resumeSaved: 'Punto de reanudación guardado para {title}',
     saved: 'Guardado en la ranura {n}',
+    slotBack: 'La ranura {n} vuelve a estar como antes',
     noResume: 'Aún no hay punto de reanudación',
     emptySlot: 'La ranura {n} está vacía',
     shot: 'Captura añadida al álbum',

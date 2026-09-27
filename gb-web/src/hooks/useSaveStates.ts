@@ -90,5 +90,17 @@ export function useSaveStates(
     return true;
   }, [gameId, idOf, loadState, exportSram, profileRef]);
 
-  return { states, save, load };
+  /** Put a stored state back as it was (undoing a save over it). */
+  const put = useCallback(async (entry: StoredSaveState) => {
+    try {
+      await saveSaveState(entry);
+    } catch (e) {
+      warnSaveFailed(e);
+      return false;
+    }
+    await Promise.all([reload(), refreshSavedIds()]).catch(() => {});
+    return true;
+  }, [reload]);
+
+  return { states, save, load, put };
 }

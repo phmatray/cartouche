@@ -458,9 +458,15 @@ function Player({ game }: { game: GameEntry }) {
     if (data) offerUndo(data, frame);
   }, [romLoaded, saveState, framebufferSnapshot, restart, offerUndo]);
   const saveSlot = useCallback(async (i: number) => {
+    const was = saves.states[i + 1]; // F5 and the deck's Save write over slot 1 without asking: one tap puts it back
     if (!romLoaded || !(await saves.save(i))) return;
     setSavedJustNow(true);
-    toast(tNow('player.toast.saved', { n: String(i + 1) }), 'm');
+    const n = String(i + 1);
+    toast(tNow('player.toast.saved', { n }), 'm', was && { label: tNow('player.restart.undo'), run: async () => {
+      if (!(await saves.put(was))) return;
+      setSavedJustNow(false);
+      toast(tNow('player.toast.slotBack', { n }), 'c');
+    } });
   }, [romLoaded, saves]);
   const loadSlot = useCallback(async (k: SlotKey) => {
     if (!romLoaded) return;
