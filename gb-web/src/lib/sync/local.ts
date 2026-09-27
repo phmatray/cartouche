@@ -3,7 +3,7 @@
  * (key formats: manifest.ts). Plus the pieces of an interrupted transfer, kept in their own small database
  * so a transfer resumes where it stopped, even after a reload.
  */
-import { gameOfSave, getAllFrom, getAllGameMeta, getGameMeta, getRom, getRomIds, getSaveState, getSram, saveSaveState, saveSram, setGameMeta, STORES, type StoredSave, type StoredSaveState } from '../db';
+import { gameOfSave, neutralName, getAllFrom, getAllGameMeta, getGameMeta, getRom, getRomIds, getSaveState, getSram, saveSaveState, saveSram, setGameMeta, STORES, type StoredSave, type StoredSaveState } from '../db';
 import { importRom } from '../../hooks/useGameLibrary';
 import { computeSha1 } from '../rom-utils';
 import { useSettingsStore, type SettingsValues } from '../../store/settingsStore';
@@ -46,9 +46,10 @@ interface SramRec { name: string; sram: Uint8Array; timestamp: number; created?:
 interface StateRec { data: Uint8Array; thumbnail: Uint8Array; timestamp: number; profile: string | null }
 interface RomRec { title: string; genre: string; data: Uint8Array }
 
-// As getSram gives it (db.ts asProfile): the name hashed here is the one loadRecord sends.
+// As getSram gives it (db.ts asProfile), less the language: the stored record, the one loadRecord sends (translated)
+// and the one received all hash alike, whichever language each device shows "Main" in.
 const nameOf = (s: { name?: unknown }) => (typeof s.name === 'string' && s.name.trim() ? s.name.trim().slice(0, 40) : 'Main');
-const hashSram = (r: { name: string; sram: Uint8Array }) => digest(pack({ name: r.name, sram: r.sram }));
+const hashSram = (r: { name: string; sram: Uint8Array }) => digest(pack({ name: neutralName(r.name), sram: r.sram }));
 const hashState = (r: StateRec) => digest(pack({ data: r.data, thumbnail: r.thumbnail, profile: r.profile }));
 const stable = (v: unknown): string => JSON.stringify(v, (_, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => a.localeCompare(b))) : x));
 export const hashValue = (v: unknown) => digest(new TextEncoder().encode(stable(v)));

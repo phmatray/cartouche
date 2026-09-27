@@ -122,6 +122,8 @@ export const asProfile = (s: Omit<StoredSave, 'gameId' | 'name'> & Partial<Store
  */
 const MAIN_NAME = /^(?:Main|Principale|Principal)( \d+)?$/;
 export const mainName = (name: string) => { const m = MAIN_NAME.exec(name); return m ? t('player.saves.main') + (m[1] ?? '') : name; };
+/** The same name whatever the language (sync hashes it: two devices, or one before and after a language change, agree). */
+export const neutralName = (name: string) => { const m = MAIN_NAME.exec(name); return m ? 'Main' + (m[1] ?? '') : name; };
 export function saveSram(save: StoredSave): Promise<void> { return txOp(SAVE_STORE, 'readwrite', (s) => s.put(save)).then(() => {}); }
 export function getSram(id: string): Promise<StoredSave | undefined> { return txOp<StoredSave | undefined>(SAVE_STORE, 'readonly', (s) => s.get(id)).then((r) => r && asProfile(r)); }
 export function deleteSave(id: string): Promise<void> { return txOp(SAVE_STORE, 'readwrite', (s) => s.delete(id)).then(() => {}); }
