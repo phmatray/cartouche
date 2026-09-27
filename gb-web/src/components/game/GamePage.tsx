@@ -210,7 +210,7 @@ function GameDetails({ game }: { game: GameEntry }) {
                       <span className="th">{auto.thumbnail.length ? <Frame rgba={auto.thumbnail} label={t('game.resumePoint')} /> : null}</span>
                       <span className="w">{t('game.resumePoint')}<small>{[ago(auto.timestamp), profileName(auto.profile)].filter(Boolean).join(' · ')}</small></span>
                       <span className="ma">
-                        <Link className="btn line sm" to={paths.play(game.id, '?resume=1')}>{t('game.resume')}</Link>
+                        <Link className="btn line sm" to={paths.play(game.id, '?resume=1')}>{t('library.hero.continue')}</Link>
                         <button className="btn line sm ic" aria-label={t('game.slots.deleteResume')} title={t('common.delete')} onClick={() => dropState(null)}>{I.close}</button>
                       </span>
                     </li>

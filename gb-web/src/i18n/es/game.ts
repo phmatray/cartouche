@@ -64,7 +64,6 @@ export default {
   sessions: 'Sesiones',
   auto: 'Auto',
   resumePoint: 'Punto de reanudación',
-  resume: 'Reanudar',
   slot: 'Ranura {n}',
   slots: {
     note: 'El punto de reanudación se guarda cada vez que sales del juego. Una ranura guarda el momento que eliges, desde la página Partidas del Manual.',

@@ -63,7 +63,6 @@ export default {
   sessions: 'Sessions',
   auto: 'Auto',
   resumePoint: 'Resume point',
-  resume: 'Resume',
   slot: 'Slot {n}',
   slots: {
     note: 'The resume point is written every time you leave the game. A slot keeps the moment you choose, from the Manual’s Saves page.',
