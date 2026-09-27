@@ -101,7 +101,7 @@ function Player({ game }: { game: GameEntry }) {
   const inColor = romLoaded && isCgb;
   const display = useDisplay(inColor ? 'cgb' : 'dmg', game.id);
   const { canvasRef, canvasKey, renderFrame, setMotion, drawMotion, usesTrace } = useLcdShader(display.cfg.filters, inColor);
-  const { ensureStarted, feedSamples, muted, toggleMute } = useAudio();
+  const { ensureStarted, feedSamples, muted, toggleMute } = useAudio(isRunning);
   const saveTo = useRef<string | null>(null); // the save profile played solo (the game's active one)
 
   // ---- the Super Game Boy border: drawn behind the screen once the game sent one ----
@@ -331,7 +331,7 @@ function Player({ game }: { game: GameEntry }) {
   }, [game.title]);
 
   // ---- actions ----
-  const play = useCallback(() => { ensureStarted().catch(() => {}); setIsRunning(true); }, [ensureStarted, setIsRunning]);
+  const play = useCallback(() => { ensureStarted(true).catch(() => {}); setIsRunning(true); }, [ensureStarted, setIsRunning]);
   // The game waits while its controls are edited, and plays again when they're done.
   const editControls = useCallback(() => { setManual(false); setIsRunning(false); setEditing(true); }, [setIsRunning]);
   const togglePlay = useCallback(() => (isRunning ? setIsRunning(false) : play()), [isRunning, setIsRunning, play]);
