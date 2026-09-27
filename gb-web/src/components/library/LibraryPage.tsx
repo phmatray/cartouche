@@ -10,6 +10,7 @@ import { queueDownloads, useImports } from '../../lib/import-queue';
 import { ConfirmDialog, type ConfirmRequest } from '../shell/ConfirmDialog';
 import { Item, ListRow } from './GameItem';
 import { size, t as tNow, useT, type Key } from '../../i18n';
+import { useSettingsStore } from '../../store/settingsStore';
 
 type Sort = 'name' | 'recent' | 'most' | 'year';
 // Shortcuts into the search model (the same filters as `is:mine`, `region:us`… in the search overlay).
@@ -76,6 +77,7 @@ function useSpatialFocus() {
 export function LibraryPage() {
   const { games, savedIds, loading, storageError, toggleFavorite } = useGameLibrary();
   const index = useSearchIndex();
+  const showTests = useSettingsStore((s) => s.showTests);
   const [filter, setFilter] = useKept<Filter>('lib.filter', Object.keys(FILTERS) as Filter[]);
   const [sort, setSort] = useKept<Sort>('lib.sort', SORTS.map(([s]) => s));
   const [view, setView] = useKept('lib.view', ['grid', 'list'] as const);
@@ -100,10 +102,10 @@ export function LibraryPage() {
       free: games.filter((g) => playsNow(g) && g !== mine[0] && g.category !== TEST_CATEGORY && !g.madeWith),
       // The GB Studio collection, best first; the ones that play here (hosted or already added) lead.
       gbs: games.filter((g) => g.madeWith === 'GB Studio').sort((a, b) => +owned(b) - +owned(a)),
-      tests: games.filter((g) => playsNow(g) && g.category === TEST_CATEGORY),
+      tests: showTests ? games.filter((g) => playsNow(g) && g.category === TEST_CATEGORY) : [],
       hasRoms: games.some((g) => g.isLocal),
     };
-  }, [games, importing, held]);
+  }, [games, importing, held, showTests]);
   if (cont?.id !== held) setHeld(cont?.id);
 
   const list = useMemo(() => search(index, { text: '', filters: FILTERS[filter][1] }).sort(COMPARE[sort]), [index, filter, sort]);

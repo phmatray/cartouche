@@ -47,7 +47,7 @@ export function StorageTab() {
   const [persisted, setPersisted] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const withSettings = useRef(false);
-  const { showBoxArt, boxArtAnswer, setShowBoxArt } = useSettingsStore();
+  const { showBoxArt, boxArtAnswer, setShowBoxArt, showTests, set: setSettings } = useSettingsStore();
   const artProgress = useBoxArtProgress();
   const [art, setArt] = useState<{ bytes: number; games: Set<string> }>({ bytes: 0, games: new Set() });
   const t = useT();
@@ -175,6 +175,9 @@ export function StorageTab() {
         </>}>
         <button className={`btn ${persisted ? 'line' : 'k'}`} style={persisted ? { color: 'var(--ink)' } : undefined} disabled={persisted} onClick={persist}>{persisted ? t('settings.storage.protected') : t('settings.storage.protect')}</button>
       </Row>
+
+      <h3>{t('settings.storage.library')}</h3>
+      <SwitchRow label={t('settings.storage.showTests')} sub={t('settings.storage.showTestsSub')} on={showTests} set={(v) => setSettings({ showTests: v })} />
 
       <h3>{t('settings.storage.art')}</h3>
       <SwitchRow label={t('settings.storage.showArt')}

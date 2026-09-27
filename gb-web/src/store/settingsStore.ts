@@ -56,6 +56,8 @@ export interface SettingsState {
   // Library
   /** Fetch box art from libretro-thumbnails (only for recognized ROMs the user added). When off, no request is ever made. */
   showBoxArt: boolean;
+  /** The test cartridges (cpu_instrs, the acid2 screens) in the library and search. */
+  showTests: boolean;
   /** The player's answer to "Show box art?" (null: never asked, the dialog shows on launch). */
   boxArtAnswer: BoxArtAnswer | null;
 
@@ -105,6 +107,7 @@ const DEFAULT_STATE = {
   autoSaveEnabled: true,
   autoSaveIntervalSeconds: 60,
   bootRomEnabled: false,
+  showTests: true,
   showBoxArt: false, // opt-in: box art is third-party content fetched from GitHub
   boxArtAnswer: null as BoxArtAnswer | null,
   resumePoints: true,
