@@ -218,7 +218,7 @@ export function LibraryPage() {
           <div ref={bodyRef}>
             {!list.length ? (
               <div className="empty-inline" style={{ borderColor: '#3a3a3a', color: 'var(--mute)' }}>
-                {t('library.noMatch')} <button className="linkbtn" onClick={() => pickFilter('all')}>{t('library.showAll')}</button>
+                {t(filter === 'fav' ? 'library.noFav' : 'library.noMatch')} <button className="linkbtn" onClick={() => pickFilter('all')}>{t('library.showAll')}</button>
               </div>
             ) : view === 'grid' ? (
               <div className="shelf cat">{list.map((g) => <Item key={g.id} game={g} saved={savedIds} />)}</div>

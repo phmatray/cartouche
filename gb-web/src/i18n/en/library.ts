@@ -22,6 +22,7 @@ export default {
   list: 'List',
   jump: 'Jump to letter',
   jumpTo: 'Jump to {letter}',
+  noFav: 'No favorites yet: star a game on its page or in the list view.',
   noMatch: 'No games match this filter.',
   showAll: 'Show all',
   col: { title: 'Title', played: 'Played', last: 'Last played', status: 'Status' },
