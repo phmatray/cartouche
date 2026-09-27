@@ -18,7 +18,7 @@ import { presetOf } from '../../shaders/filters';
 import { BUTTON_NUMBERS } from '../../utils/keybindings';
 import { dpadAt, slide } from '../../lib/touch-slide';
 import { getActiveProfileId, getSaveState, getSram, resumeStateId } from '../../lib/db';
-import { bootFrom } from '../../lib/boot-from';
+import { bootFrom, skipSilentResume } from '../../lib/boot-from';
 import { ago, owned, paths, tagOf } from '../../lib/ui';
 import { settled } from '../../lib/transitions';
 import { I } from '../icons';
@@ -49,7 +49,11 @@ const ON = ['Dmg', 'Gbc', 'Gbc', 'Sgb'] as const;
 /** What a game is switched on with, from its settings and its cartridge. */
 const machineOf = (data: Uint8Array, gameId: string) => machineFor(useSettingsStore.getState(), gameId, sgbCartOf(parseRomHeader(data)));
 const SPEEDS = [0.5, 1, 2, 4];
-/** Text is being typed: a slider, a switch or a button keeping focus leaves the keys to the game. */
+/** Phones, upright or sideways: the Manual is a sheet over the controls, not a page beside the game (see index.css). */
+const sheetCovers = () => matchMedia('(max-width:900px),(orientation:landscape) and (max-height:500px)').matches;
+/** What Enter and Space press when it has the focus. */
+const CONTROL = 'button,a[href],summary,[role=tab],[role=button],label[tabindex]';
+/** Text is being typed: a slider, a switch or a button keeping focus leaves the keys to the game (Enter: see `down`). */
 const typing = () => {
   const el = document.activeElement as HTMLElement | null;
   if (el instanceof HTMLInputElement) return !/^(range|checkbox|radio|button|submit|reset|color|file|image)$/.test(el.type);
@@ -83,7 +87,11 @@ function Player({ game }: { game: GameEntry }) {
   const [speed, setSpeed] = useState(() => (q.get('online') ? 1 : useSettingsStore.getState().defaultSpeed));
   const [tab, setTab] = useState<Tab>(() => (q.get('tab') as Tab) || 'controls');
   // Open at start only where it sits beside the game (not on phones, upright or sideways: see index.css).
-  const [manual, setManual] = useState(() => !!q.get('tab') || !matchMedia('(max-width:900px),(orientation:landscape) and (max-height:500px)').matches);
+  const [manual, setManual] = useState(() => !!q.get('tab') || !sheetCovers());
+  // There it covers the controls: the game waits under it, and plays on when it closes (see the effect after `play`).
+  const manualRef = useRef(manual);
+  useEffect(() => { manualRef.current = manual; }, [manual]);
+  const heldBySheet = useRef(false);
   // Edit controls (from the manual, or Settings › Controls with ?edit=controls): the game waits meanwhile.
   const [editing, setEditing] = useState(() => q.get('edit') === 'controls');
   const [needsRom, setNeedsRom] = useState(!owned(game));
@@ -124,7 +132,7 @@ function Player({ game }: { game: GameEntry }) {
       snesTold.current = true;
       const s = useSettingsStore.getState();
       if (s.gameSgb[game.id] === undefined) {
-        s.set({ gameSgb: { ...s.gameSgb, [game.id]: false } });
+        s.set({ gameSgb: { ...s.gameSgb, [game.id]: false }, snesMusic: { ...s.snesMusic, [game.id]: true } });
         toast(tNow('player.toast.snesMusic'), 'm', { label: tNow('player.tabs.screen'), run: () => { setTab('screen'); setManual(true); } });
       }
     }
@@ -239,13 +247,25 @@ function Player({ game }: { game: GameEntry }) {
   const boot = useCallback(async (data: Uint8Array) => {
     const s = useSettingsStore.getState();
     const slot = q.get('slot');
-    const hasResume = !!(await getSaveState(resumeStateId(game.id)).catch(() => undefined));
-    const from: SlotKey | null = bootFrom(q, s.resumePoints, hasResume);
+    const resume = await getSaveState(resumeStateId(game.id)).catch(() => undefined);
+    let from: SlotKey | null = bootFrom(q, s.resumePoints, !!resume);
     // A slot is loaded once: a reload (or iOS bringing back an evicted tab) goes on from the resume point instead.
     if (slot !== null) setQ((p) => { p.delete('slot'); if (s.resumePoints) p.set('resume', '1'); return p; }, { replace: true });
     // A state replaces the start-up at once: the animation then costs nothing (and plays if the state is gone).
     if (!powerOn(data, machineOf(data, game.id), s.startupAnimation || from !== null)) { setBadRom(true); return; }
     setNeedsRom(false);
+    // Moved to the Game Boy for its SNES music (see syncBorder): a resume point made on the Super Game Boy would bring the
+    // silence back, so the game starts again on the Game Boy, from its cartridge save. "Resume there" still goes back to it.
+    if (resume && skipSilentResume(from, MADE_ON[stateConsole(resume.data)], machineOf(data, game.id), !!s.snesMusic?.[game.id])) {
+      from = null;
+      if (!s.startupAnimation) skipBoot();
+      toast(tNow('player.toast.snesFresh'), 'm', { label: tNow('player.toast.resumeThere'), run: async () => {
+        switchOk.current = true;
+        const ok = await saves.load('auto');
+        switchOk.current = false;
+        if (ok === true) toast(tNow('player.toast.loadedResume'), 'c');
+      } });
+    }
     if (hasBatteryRam()) {
       const id = q.get('save') ?? await getActiveProfileId(game.id).catch(() => game.id);
       const sram = await getSram(id).catch(() => undefined);
@@ -265,8 +285,10 @@ function Player({ game }: { game: GameEntry }) {
       else if (r === 'older') toast(tNow('player.toast.saveNewer'), 'm');
       else if (!refused.current) toast(ok ? (from === 'auto' ? tNow('player.toast.resumed') : tNow('player.toast.loadedSlot', { n: String(+from + 1) })) : tNow('player.toast.gone'), ok ? 'c' : 'm');
     }
-    setIsRunning(q.get('edit') !== 'controls');
-  }, [powerOn, hasBatteryRam, importSram, game.id, q, setQ, saves, setIsRunning, consoleNow, skipBoot, saveWriter]);
+    // Opened on a page of the Manual on a phone (Save slots from the library, say): the game waits until it closes.
+    if (manualRef.current && sheetCovers()) heldBySheet.current = true;
+    else setIsRunning(q.get('edit') !== 'controls');
+  }, [powerOn, hasBatteryRam, importSram, game.id, q, setQ, saves, setIsRunning, consoleNow, skipBoot, saveWriter, stateConsole]);
 
   // A ROM that can't be fetched (a hosted game streamed while offline, say) keeps its reason on the screen, with a retry.
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -383,6 +405,12 @@ function Player({ game }: { game: GameEntry }) {
   // The game waits while its controls are edited, and plays again when they're done.
   const editControls = useCallback(() => { setManual(false); setIsRunning(false); setEditing(true); }, [setIsRunning]);
   const togglePlay = useCallback(() => (isRunning ? setIsRunning(false) : play()), [isRunning, setIsRunning, play]);
+  // Phones: nobody plays a game under the Manual (the sheet hides the controls), and it must not run on its own there
+  // and write over the resume point. It pauses while the sheet is open, and plays on when it closes if it was running.
+  useEffect(() => {
+    if (manual && isRunning && sheetCovers()) { heldBySheet.current = true; setIsRunning(false); }
+    else if (!manual && heldBySheet.current) { heldBySheet.current = false; if (!editing) play(); }
+  }, [manual, isRunning, editing, play, setIsRunning]);
   /** Switch the console off and on with the game's chosen one: the battery save carries over, like the cartridge. */
   const restart = useCallback(() => {
     const data = romData.current;
@@ -418,7 +446,7 @@ function Player({ game }: { game: GameEntry }) {
   // The pad's menu button (Home, or Select + Start): pause and open the Manual, or play on.
   useEffect(() => {
     padNav.game = romLoaded && isRunning;
-    padNav.menu = romLoaded ? () => { if (isRunning) setManual(true); actions.current.togglePlay(); } : undefined;
+    padNav.menu = romLoaded ? () => { if (isRunning) setManual(true); else if (sheetCovers()) setManual(false); actions.current.togglePlay(); } : undefined;
     return () => { padNav.game = false; padNav.menu = undefined; };
   }, [romLoaded, isRunning]);
   useEffect(() => {
@@ -426,11 +454,18 @@ function Player({ game }: { game: GameEntry }) {
       for (const [b, k] of Object.entries(keybindings)) if (k === key || k.toLowerCase() === key.toLowerCase()) return BUTTON_NUMBERS[b];
       return undefined;
     };
+    // The control last focused by a click or a tap (a focus moved on by Tab or the pad forgets it).
+    let clicked: Element | null = null;
+    const onPointer = (e: PointerEvent) => { clicked = e.target instanceof Element ? e.target.closest(CONTROL) : null; };
+    const onFocus = (e: FocusEvent) => { if (e.target !== clicked) clicked = null; };
     const down = (e: KeyboardEvent) => {
       // The touch layout editor has the page (arrows and +/- move its parts): the game waits, no shortcut gets through.
       if (editing || typing() || document.querySelector('dialog[open]') || e.ctrlKey || e.metaKey || e.altKey) return;
       // Keys on the camera lens or the printer tray work their own controls (Enter presses the button, not Start).
       if (e.target instanceof Element && e.target.closest('.cdock,.ptray')) return;
+      // Enter or Space on a control reached with the keyboard presses it; after a click, the keys stay the game's.
+      const control = (e.key === 'Enter' || e.key === ' ') && e.target instanceof Element ? e.target.closest(CONTROL) : null;
+      if (control && control !== clicked) return;
       const a = actions.current;
       const b = buttonOf(e.key);
       if (b !== undefined) { e.preventDefault(); if (!e.repeat) pressButton(b); return; }
@@ -448,11 +483,14 @@ function Player({ game }: { game: GameEntry }) {
     // A key released in another window never comes back as a keyup: let go of everything when the page loses focus.
     const releaseAll = () => { Object.values(BUTTON_NUMBERS).forEach((n) => releaseButton(n)); actions.current.stopRewind(); };
     const onHidden = () => { if (document.visibilityState === 'hidden') releaseAll(); };
+    window.addEventListener('pointerdown', onPointer, true);
+    window.addEventListener('focusin', onFocus, true);
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     window.addEventListener('blur', releaseAll);
     document.addEventListener('visibilitychange', onHidden);
     return () => {
+      window.removeEventListener('pointerdown', onPointer, true); window.removeEventListener('focusin', onFocus, true);
       window.removeEventListener('keydown', down); window.removeEventListener('keyup', up);
       window.removeEventListener('blur', releaseAll); document.removeEventListener('visibilitychange', onHidden);
     };
@@ -560,7 +598,7 @@ function Player({ game }: { game: GameEntry }) {
                   <div className="acts"><button className="btn y" onClick={restart}>{t('player.crashed.restart')}</button></div>
                 </div>
               ) : (
-                <div className="overlay"><b>{t('player.paused')}</b><p>{t('player.pausedSub')}</p></div>
+                <div className="overlay hold"><b>{t('player.paused')}</b><p>{t('player.pausedSub')}</p></div>
               ))}
             </div>
           </div>
@@ -584,6 +622,7 @@ function Player({ game }: { game: GameEntry }) {
             ? setConfirm({ title: t('player.overwrite.title', { n: String(i + 1) }), body: t('player.overwrite.body', { ago: ago(saves.states[i + 1]!.timestamp) }), ok: t('player.overwrite.ok'), run: () => saveSlot(i) })
             : saveSlot(i))}
           onLoad={load} onScreenshot={screenshot} online={online.on} running={running} onRestart={restart}
+          onStartOver={() => setConfirm({ title: t('player.restart.title'), body: t('player.restart.body'), ok: t('player.restart.ok'), run: restart })}
           onEditControls={editControls}
         />
       </div>

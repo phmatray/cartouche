@@ -27,6 +27,7 @@ export function cleanSetting(key: string, value: unknown, cur: unknown): unknown
     case 'gameConsole':
       return isObj(value) ? pick(value, (x): x is string => typeof x === 'string' && /^(dmg|gbc|gbc([1-9]|1[0-2]))$/.test(x)) : undefined;
     case 'gameSgb':
+    case 'snesMusic':
       return isObj(value) ? pick(value, isBool) : undefined;
     case 'touchLayouts': {
       if (!isObj(value)) return undefined;

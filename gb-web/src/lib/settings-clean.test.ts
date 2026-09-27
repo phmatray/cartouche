@@ -16,6 +16,8 @@ test('channel mutes, per-game choices and layouts drop what is wrong', () => {
   assert.deepEqual(cleanSetting('channelMutes', { wave: true, noise: 'yes', x: true }, mutes), { ...mutes, wave: true });
   assert.deepEqual(cleanSetting('gameConsole', { a: 'gbc3', b: 'gbc13', c: 1 }, {}), { a: 'gbc3' });
   assert.deepEqual(cleanSetting('gameSgb', { a: true, b: 'no' }, {}), { a: true });
+  assert.deepEqual(cleanSetting('snesMusic', { a: true, b: 1 }, {}), { a: true });
+  assert.equal(cleanSetting('snesMusic', 'x', {}), undefined);
   assert.deepEqual(cleanSetting('gameDisplay', { a: {}, b: 3 }, {}), { a: {} });
   assert.deepEqual(cleanSetting('touchLayouts', { 'phone-portrait': { parts: {} } }, {}), {});
   assert.equal(cleanSetting('touchSkin', 'nope', 'box'), undefined);

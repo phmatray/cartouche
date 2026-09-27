@@ -1119,6 +1119,7 @@ html:has(.pl),body:has(.pl){overscroll-behavior:none}
 
 @media (max-width:900px),(orientation:landscape) and (max-height:500px){
   body:has(.pl) .toasts{top:auto}
+  .pl:not(.closed) .overlay.hold{display:none} /* the game waits while the Manual is open: no "Paused" card over the small screen */
   .pl{grid-template-rows:calc(56px + var(--sat)) auto auto 1fr}
   .pl-top{padding:var(--sat) max(12px,var(--sar)) 0 max(12px,var(--sal))}
   .deck{padding:8px max(12px,var(--sar)) 8px max(12px,var(--sal))}
