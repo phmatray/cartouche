@@ -96,7 +96,7 @@ export function LinkCablePage() {
     if (!d || g === FILE) return null;
     if (p === 1) return { game: g, profile: d.active, name: d.profiles.find((x) => x.id === d.active)?.name ?? t('player.saves.main'), slot: null };
     const taken = sel[1] === g ? choiceOf(1)?.profile : undefined;
-    const mine = d.profiles.find((x) => x.id !== taken && (x.id === `${g}~p2` || x.name === 'Player 2' || x.name === t('link.player', { p: '2' })));
+    const mine = d.profiles.find((x) => x.id !== taken && (x.id === `${g}~p2` || x.id.startsWith(`${g}~p2-`) || x.name === 'Player 2' || x.name === t('link.player', { p: '2' })));
     if (mine) return { game: g, profile: mine.id, name: mine.name, slot: null };
     let id = `${g}~p2`;
     for (let n = 2; id === taken || d.profiles.some((x) => x.id === id); n++) id = `${g}~p2-${n}`;

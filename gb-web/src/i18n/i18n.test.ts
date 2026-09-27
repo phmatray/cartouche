@@ -34,6 +34,17 @@ test('French and Spanish have exactly the English keys, placeholders and markup'
   }
 });
 
+test('every plural has each form its language uses (“many” falls back to “other”)', () => {
+  const walk = (o: object, lang: string, path = ''): void => {
+    for (const [k, v] of Object.entries(o)) {
+      if (isPlural(v)) {
+        for (const c of new Intl.PluralRules(lang).resolvedOptions().pluralCategories) if (c !== 'many') assert.ok(c in v, `${lang}: ${path}${k}.${c}`);
+      } else if (typeof v === 'object') walk(v, lang, `${path}${k}.`);
+    }
+  };
+  for (const lang of LANGS) walk(DICTS[lang]!, lang);
+});
+
 test('plurals follow each language’s rules', () => {
   assert.equal(translate('en', 'common.games', { count: 0 }), '0 games');
   assert.equal(translate('en', 'common.games', { count: 1 }), '1 game');
@@ -58,10 +69,13 @@ test('sizes, times and names use the active language', () => {
   assert.match(size(1536 * 1024), /^1,5\sMo$/); // \s: Intl puts a (narrow) no-break space before the unit
   assert.equal(ago(now - 26 * 3600e3, now), 'hier');
   assert.match(ago(now - 5 * 60e3, now), /^il y a 5\smin$/);
+  assert.equal(ago(Date.UTC(2026, 7, 18), now), 'le 18 août'); // after a month: a date that reads inside a sentence
+  assert.equal(ago(Date.UTC(2025, 7, 18), now), 'le 18 août 2025');
   assert.equal(langName('ja'), 'Japonais');
   setLang('es');
   assert.match(size(32 * 1024), /^32\skB$/);
   assert.equal(ago(now - 3 * 86400e3, now), 'hace 3 días');
+  assert.equal(ago(Date.UTC(2026, 7, 18), now), 'el 18 de agosto');
   assert.equal(langName('en'), 'Inglés');
   setLang('en');
 });

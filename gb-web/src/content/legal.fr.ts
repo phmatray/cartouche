@@ -46,24 +46,24 @@ export const LEGAL_FR: LegalSection[] = [
       'Cartouche n’inclut pas, n’héberge pas, ne propose aucun lien vers des ROM de jeux commerciaux ni vers des fichiers ' +
       'BIOS et n’aide pas à en trouver, et ne liste aucun jeu commercial. Sa base de dumps connus ne fait que reconnaître un ' +
       'fichier chargé par l’utilisateur lui-même.\n\n' +
-      'Jouer aux jeux que l’on possède, avec des copies de sauvegarde réalisées soi-même à partir de ses propres cartouches. La législation ' +
-      'sur les copies de sauvegarde varie d’un pays à l’autre ; vérifier celle qui s’applique.',
+      'Ne jouez qu’aux jeux que vous possédez, avec des copies de sauvegarde que vous avez faites vous-même à partir de vos propres cartouches. La législation ' +
+      'sur les copies de sauvegarde varie d’un pays à l’autre ; vérifiez celle qui s’applique à vous.',
   },
   {
     title: 'Jaquettes',
     body:
-      'Les deux jeux Tobu Tobu Girl sont fournis avec leurs propres couvertures (sous licence libre, voir ci-dessus) : ce sont ' +
+      'Les deux jeux Tobu Tobu Girl sont fournis avec leurs propres jaquettes (sous licence libre, voir ci-dessus) : ce sont ' +
       'des fichiers de cette app, affichés sans demande et sans contacter aucun autre site. Toutes les autres ' +
-      'couvertures sont désactivées par défaut et ne sont jamais hébergées ni redistribuées par Cartouche. Ces images appartiennent ' +
+      'jaquettes sont désactivées par défaut et ne sont jamais hébergées ni redistribuées par Cartouche. Ces images appartiennent ' +
       'aux éditeurs des jeux et aux autres titulaires de droits. Au premier lancement, une boîte de dialogue demande « Afficher les jaquettes ? ». ' +
       'Seulement si « Télécharger les jaquettes » est choisi (ou si les jaquettes sont activées plus tard dans Réglages > Stockage, avec accord), ' +
-      'le navigateur télécharge la couverture de chaque ROM reconnue ajoutée, directement depuis le ' +
+      'le navigateur télécharge la jaquette de chaque ROM reconnue ajoutée, directement depuis le ' +
       'projet libretro-thumbnails sur GitHub (https://github.com/libretro-thumbnails, servi depuis ' +
       'raw.githubusercontent.com), et la conserve dans le stockage de ce navigateur (Cache Storage). La réponse ' +
-      'et sa date sont enregistrées dans les réglages, et la restauration d’une sauvegarde ne les modifie jamais. La question ' +
+      'et sa date sont enregistrées dans les réglages, et la restauration d’une copie de sauvegarde ne les modifie jamais. La question ' +
       'n’est reposée que si les jaquettes sont activées après un refus, ou après « Tout effacer ». Avec ' +
-      '« Continuer sans » (ou Échap), l’app ne fait aucune requête à libretro-thumbnails. ' +
-      'Réglages > Stockage indique l’espace utilisé par les couvertures, les supprime (« Supprimer les jaquettes téléchargées », ' +
+      '« Continuer sans » (ou Esc), l’app ne fait aucune requête à libretro-thumbnails. ' +
+      'Réglages > Stockage indique l’espace utilisé par les jaquettes, les supprime (« Supprimer les jaquettes téléchargées », ' +
       'qui désactive aussi les jaquettes) et les télécharge à nouveau pour la bibliothèque.',
   },
   {
@@ -86,7 +86,7 @@ export const LEGAL_FR: LegalSection[] = [
       'les réglages du navigateur supprime tout.\n\n' +
       'Seul GitHub reçoit des requêtes. GitHub Pages sert l’app et ses polices. Les jaquettes sont désactivées par ' +
       'défaut et nécessitent un accord (boîte de dialogue du premier lancement ou Réglages > Stockage) ; seulement alors le ' +
-      'navigateur charge aussi les couvertures des ROM reconnues ajoutées depuis raw.githubusercontent.com. Comme tout ' +
+      'navigateur charge aussi les jaquettes des ROM reconnues ajoutées depuis raw.githubusercontent.com. Comme tout ' +
       'serveur web, GitHub reçoit ' +
       'l’adresse IP et les informations du navigateur ; voir la déclaration générale de confidentialité de GitHub ' +
       '(https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).\n\n' +

@@ -29,8 +29,9 @@ export default {
   time: {
     justNow: 'à l’instant',
     underMinute: '< 1 min',
-    minutes: '{m} min',
-    hours: '{h} h {m}',
+    minutes: '{m} min',
+    hours: '{h} h {m}',
+    on: 'le {date}',
   },
   keys: { space: 'Espace' },
   tag: { need: 'ROM requise', saved: 'Sauvegardé', now: 'Jouable', rom: 'Ma ROM' },

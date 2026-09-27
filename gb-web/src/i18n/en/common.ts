@@ -30,6 +30,7 @@ export default {
     underMinute: '< 1 min',
     minutes: '{m} min',
     hours: '{h} h {m}',
+    on: '{date}',
   },
   keys: { space: 'Space' },
   tag: { need: 'Needs your ROM', saved: 'Saved', now: 'Play now', rom: 'Your ROM' },

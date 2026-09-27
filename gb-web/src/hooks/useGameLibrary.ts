@@ -9,6 +9,7 @@ import { assetUrl } from '../lib/ui';
 import { boxArtAllowed, getCoverArtUrl, needsDownload } from '../lib/cover-art';
 import { indexFor } from '../lib/search';
 import { useSettingsStore } from '../store/settingsStore';
+import { t } from '../i18n';
 import catalogData from '../data/catalog.json';
 
 /** ok: added and identified · unk: added, not a known dump · dup: same file already on the shelf · bad: not a Game Boy ROM */
@@ -211,10 +212,10 @@ export async function recordSession(gameId: string, seconds: number, newSession 
 export async function fetchRom(game: GameEntry): Promise<Uint8Array> {
   const stored = await getRom(game.id).catch(() => undefined); // storage blocked: bundled ROMs still load
   if (stored) return stored.data;
-  if (game.isLocal) throw new Error(`ROM not found in storage: ${game.id}`);
+  if (game.isLocal) throw new Error(t('player.error.notStored'));
   if (!game.romUrl) throw new Error(`NO_ROM_URL`);
-  const response = await fetch(assetUrl(game.romUrl));
-  if (!response.ok) throw new Error(`Failed to fetch ROM: ${response.status}`);
+  const response = await fetch(assetUrl(game.romUrl)).catch(() => null); // offline: a TypeError in the browser's language
+  if (!response?.ok) throw new Error(t('player.error.download'));
   return new Uint8Array(await response.arrayBuffer());
 }
 

@@ -37,11 +37,11 @@ export default {
   art: {
     title: '¿Mostrar carátulas?',
     p1: 'Las carátulas tienen derechos de autor de las editoras de los juegos. Cartouche no aloja ni incluye ninguna (solo las portadas con licencia libre de sus juegos incluidos).',
-    p2: 'Si aceptas, tu navegador descarga las carátulas de los juegos reconocidos que añadas directamente del proyecto libretro-thumbnails en GitHub, así que GitHub ve tu dirección IP y los datos de tu navegador (consulta <a>la declaración de privacidad de GitHub</a>), y las guarda en el almacenamiento de este navegador. No compartimos nada. Puedes eliminarlas cuando quieras en Ajustes › Almacenamiento.',
+    p2: 'Si aceptas, tu navegador descarga las carátulas de los juegos reconocidos que añadas directamente del proyecto libretro-thumbnails en GitHub, así que GitHub ve tu dirección IP y los datos de tu navegador (consulta <a>la declaración de privacidad de GitHub</a>). Tu navegador las guarda en su almacenamiento local. No compartimos nada. Puedes eliminarlas cuando quieras en Ajustes › Almacenamiento.',
     no: 'Continuar sin ellas',
     yes: 'Descargar carátulas',
     ready: { one: 'Carátula lista para {count} juego', other: 'Carátulas listas para {count} juegos' },
-    none: 'Todavía no hay carátulas que descargar. Aparecen para los juegos reconocidos que añades; los juegos incluidos usan su propio arte.',
+    none: 'Todavía no hay carátulas que descargar. Aparecen para los juegos reconocidos que añadas; los juegos incluidos usan su propio arte.',
   },
   install: {
     title: 'Instalar en tu {device}',

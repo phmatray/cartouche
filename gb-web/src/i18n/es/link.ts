@@ -45,7 +45,7 @@ export default {
     savingAgo: 'Guardando en {b}, guardado {ago}',
     startsFrom: 'Empieza desde {slot} y luego guarda en {b}',
     startsFromNew: 'Empieza desde {slot} y luego guarda en {b} (nueva)',
-    continues: 'Continúa {b} y guarda en ella',
+    continues: 'Continúa {b} y sigue guardando ahí',
     fresh: 'Una partida nueva, guardada como {b}',
   },
   toast: {

@@ -61,7 +61,7 @@ export default {
   },
   saves: {
     title: 'Partidas guardadas',
-    none: 'Todavía no hay partida guardada. Aparece aquí cuando juegas; añade más para otros jugadores o importa un archivo .sav.',
+    none: 'Todavía no hay partida guardada. Aparece aquí cuando juegues; añade más para otros jugadores o importa un archivo .sav.',
     renamedTo: 'Otra partida ya se llama «{name}»: renombrada a «{unique}»',
     copyName: '{name} (copia)',
     created: '«{name}» creada',

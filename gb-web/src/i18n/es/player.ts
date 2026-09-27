@@ -11,7 +11,7 @@ export default {
   paused: 'En pausa',
   pausedSub: 'Pulsa P o el botón Jugar para continuar.',
   speed: 'Velocidad {x}×',
-  rewindReady: 'Rebobinado: {s} s listos',
+  rewindReady: 'Rebobinado listo: {s} s',
   page: 'p. {n}',
   bad: {
     title: 'Este archivo no se puede jugar',
@@ -24,7 +24,7 @@ export default {
   },
   overwrite: {
     title: '¿Sobrescribir la ranura {n}?',
-    body: 'El guardado de {ago} se sustituye por la partida tal como está ahora.',
+    body: 'El guardado hecho {ago} se sustituye por la partida actual.',
     ok: 'Sobrescribir',
   },
   toast: {
@@ -42,13 +42,15 @@ export default {
     soundOn: 'Sonido activado',
     soundOff: 'Sonido desactivado',
     belongs: 'Este guardado pertenece a «{name}»: ahora se guarda ahí',
-    newSave: 'La partida de este guardado se eliminó: se guarda en una nueva, «{name}»',
+    newSave: 'Se eliminó la partida guardada de origen: ahora se guarda en una nueva, «{name}»',
   },
   error: {
     init: 'Emulador no inicializado',
     unknown: 'Error desconocido al cargar la ROM',
     exception: 'Excepción al cargar la ROM: {error}',
     otherTabs: 'Cierra las demás pestañas de Cartouche para terminar de actualizar',
+    notStored: 'ya no está en el almacenamiento de este navegador',
+    download: 'falló la descarga, comprueba la conexión',
   },
   deck: {
     label: 'Reproducción',
@@ -70,7 +72,7 @@ export default {
     leaveImmF: 'Salir de la vista inmersiva, F',
   },
   touch: { label: 'Controles táctiles', up: 'Arriba', down: 'Abajo', left: 'Izquierda', right: 'Derecha' },
-  tabs: { controls: 'Controles', saves: 'Guardado', screen: 'Pantalla', album: 'Álbum', game: 'Juego' },
+  tabs: { controls: 'Controles', saves: 'Partidas', screen: 'Pantalla', album: 'Álbum', game: 'Juego' },
   controls: {
     intro: 'Cambia cualquier tecla en <a>Ajustes</a>. Un mando conectado funciona al instante.',
     input: 'Entrada',

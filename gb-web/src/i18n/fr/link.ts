@@ -2,7 +2,7 @@ import type { Messages } from '../core.ts';
 
 export default {
   title: 'Câble Link',
-  intro: 'Deux Game Boy sur un seul écran, reliées par un câble virtuel. Le joueur 2 utilise la partie gauche du clavier. Les deux consoles tournent en synchronisation et le câble transporte leurs données série ; les jeux dont le protocole Link est sensible au timing peuvent encore échouer à se connecter.',
+  intro: 'Deux Game Boy sur un seul écran, reliées par un câble virtuel. Le joueur 2 utilise la partie gauche du clavier. Les deux consoles tournent en synchronisation et le câble transporte leurs données série ; les jeux dont le protocole Link est sensible à la latence peuvent encore échouer à se connecter.',
   player: 'Joueur {p}',
   screen: 'Écran du joueur {p}',
   arrows: 'Flèches',
@@ -18,7 +18,7 @@ export default {
   compatSub: 'Les jeux qui utilisent le port Link',
   compatNone: 'Aucun pour l’instant. Les jeux à deux joueurs ajoutés apparaissent ici.',
   cart: {
-    mirror: 'Même cartouche que le joueur 1. Désactiver « Même jeu pour les deux joueurs » pour en choisir une autre.',
+    mirror: 'Même cartouche que le joueur 1. Désactivez « Même jeu pour les deux joueurs » pour en choisir une autre.',
     two: '2 joueurs : utilise le câble Link',
     single: 'Un seul joueur : n’utilise peut-être pas le câble',
     none: 'Aucune cartouche',
@@ -70,7 +70,7 @@ export default {
     inSlot: 'En place',
     noMatch: 'Aucune cartouche ne correspond à « {text} ».',
     noneOf: 'Aucune cartouche dans la bibliothèque pour ce filtre ({filter}).',
-    try: 'Essayer un développeur ou une année, choisir un autre filtre, ou charger le fichier ROM ci-dessous.',
+    try: 'Essayez un développeur ou une année, choisissez un autre filtre, ou chargez le fichier ROM ci-dessous.',
     file: 'Charger un fichier…',
     fileSub: 'Une ROM .gb ou .gbc absente de la bibliothèque',
   },

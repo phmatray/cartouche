@@ -103,7 +103,7 @@ export function normValue(key: Key, raw: string): string {
 
 let aliases: Map<string, string> | null = null;
 let aliasLangs = '';
-/** A value typed as its label in any of our (loaded) languages (`genre:plateforme`, `is:favoris`, `lang:japonés`). */
+/** A value typed as its label in any of our (loaded) languages (`genre:plateformes`, `is:favoris`, `lang:japonés`). */
 function translated(key: Key, v: string): string | undefined {
   const loaded = Object.keys(DICTS).join();
   if (!aliases || aliasLangs !== loaded) {

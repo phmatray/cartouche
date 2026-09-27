@@ -48,6 +48,8 @@ export default {
     unknown: 'Unknown error loading ROM',
     exception: 'ROM load exception: {error}',
     otherTabs: 'Close other Cartouche tabs to finish updating',
+    notStored: 'it is no longer in this browser’s storage',
+    download: 'the download failed, check the connection',
   },
   deck: {
     label: 'Playback',

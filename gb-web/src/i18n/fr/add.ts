@@ -1,11 +1,11 @@
 import type { Messages } from '../core.ts';
 
 export default {
-  intro: 'Déposer des fichiers .gb et .gbc, ou un .zip qui les contient. Chacun est identifié par son empreinte SHA-1 parmi les dumps connus et arrive avec ses informations. Les fichiers ne quittent jamais ce navigateur.',
+  intro: 'Déposez des fichiers .gb et .gbc, ou un .zip qui les contient. Chacun est identifié par son empreinte SHA-1 parmi les copies connues et arrive avec ses informations. Les fichiers ne quittent jamais ce navigateur.',
   drop: 'Déposer les fichiers ici',
   dropSub: 'Plusieurs à la fois, ou un .zip entier. Les doublons sont repérés avant d’être stockés.',
   choose: 'Choisir des fichiers',
-  iphone: '<b>Depuis un iPhone</b> Placer les ROM dans un dossier d’iCloud Drive. Dans l’app Fichiers, appuyer longuement sur le dossier et choisir Compresser, puis choisir ce .zip ici. Sélectionner plusieurs fichiers fonctionne aussi.',
+  iphone: '<b>Depuis un iPhone</b> Placez les ROM dans un dossier d’iCloud Drive. Dans l’app Fichiers, appuyez longuement sur le dossier et choisissez Compresser, puis choisissez ce .zip ici. Vous pouvez aussi sélectionner plusieurs fichiers.',
   import: 'Cet import',
   checked: '{done} sur {total} vérifiés',
   stop: 'Arrêter',
@@ -34,15 +34,15 @@ export default {
     other: 'Impossible d’enregistrer dans le stockage de ce navigateur',
     stopped: 'L’import s’est arrêté. Toutes les ROM ajoutées avant sont en sécurité ; les autres n’ont pas été importées.',
     using: 'Cartouche utilise {usage} sur les {quota} autorisés par ce navigateur.',
-    free: 'Libérer de l’espace sur cet appareil et conserver son stockage, puis ajouter à nouveau les mêmes fichiers : ceux déjà présents sont ignorés comme doublons.',
-    freeInstall: 'Libérer de l’espace sur cet appareil, installer l’app et conserver son stockage, puis ajouter à nouveau les mêmes fichiers : ceux déjà présents sont ignorés comme doublons.',
+    free: 'Libérez de l’espace sur cet appareil et conservez son stockage, puis ajoutez à nouveau les mêmes fichiers : ceux déjà présents sont ignorés comme doublons.',
+    freeInstall: 'Libérez de l’espace sur cet appareil, installez l’app et conservez son stockage, puis ajoutez à nouveau les mêmes fichiers : ceux déjà présents sont ignorés comme doublons.',
     keep: 'Conserver le stockage',
     kept: 'Stockage conservé : le navigateur ne l’effacera pas',
     refused: 'Le navigateur a refusé',
   },
   rename: {
     title: 'Nommer cette ROM',
-    body: 'Elle n’a pas été reconnue, elle n’a donc pas de jaquette. Lui donner un titre pour l’étagère.',
+    body: 'Elle n’a pas été reconnue, elle n’a donc pas de jaquette. Donnez-lui un titre pour l’étagère.',
   },
   zip: {
     not: 'Pas une archive zip',

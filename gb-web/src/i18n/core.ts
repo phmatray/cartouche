@@ -87,7 +87,7 @@ export function size(n: number): string {
   return intl(`u${lang}${unit}`, () => new Intl.NumberFormat(locale(), { style: 'unit', unit, unitDisplay: unit === 'byte' ? 'long' : 'short', maximumFractionDigits: d })).format(v);
 }
 
-/** How long ago: "just now", "5 min ago", "yesterday", "3 weeks ago", then the date. */
+/** How long ago: "just now", "5 min ago", "yesterday", "3 weeks ago", then "on" the date (with its year when not this one). */
 export function ago(ts: number, now = Date.now()): string {
   const s = Math.max(1, Math.round((now - ts) / 1000));
   if (s < 60) return t('common.time.justNow');
@@ -97,7 +97,8 @@ export function ago(ts: number, now = Date.now()): string {
   const h = Math.round(m / 60); if (h < 24) return rel(h, 'hour');
   const d = Math.round(h / 24); if (d < 7) return rel(d, 'day');
   if (d < 30) return rel(Math.round(d / 7), 'week');
-  return date(ts, { day: 'numeric', month: 'long' });
+  const year = new Date(ts).getFullYear() === new Date(now).getFullYear() ? undefined : 'numeric';
+  return t('common.time.on', { date: date(ts, { day: 'numeric', month: 'long', year }) });
 }
 
 /** A date (and time, with hour/minute options) in the active language. */

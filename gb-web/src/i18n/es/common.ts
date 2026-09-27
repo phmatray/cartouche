@@ -31,9 +31,10 @@ export default {
     underMinute: '< 1 min',
     minutes: '{m} min',
     hours: '{h} h {m}',
+    on: 'el {date}',
   },
   keys: { space: 'Espacio' },
   tag: { need: 'Falta tu ROM', saved: 'Guardado', now: 'Jugar ya', rom: 'Tu ROM' },
   games: { one: '{count} juego', other: '{count} juegos' },
-  played: '{time} jugado',
+  played: '{time} de juego',
 } satisfies Messages['common'];

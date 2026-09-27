@@ -51,7 +51,7 @@ export default {
     filters: 'Ningún juego coincide con estos filtros.',
     filtersWith: 'Ningún juego coincide con «{text}» con estos filtros.',
     none: 'Ningún juego se llama «{text}». Añádelo desde tus propios archivos con Añadir ROM.',
-    recent: 'Los juegos que juegas aparecen aquí.',
+    recent: 'Aquí aparecen los juegos a los que juegues.',
   },
   find: 'Buscar: {facet}',
   from: 'Desde',

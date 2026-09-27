@@ -3,7 +3,7 @@
     "id": "tobu-tobu-girl",
     "title": "Tobu Tobu Girl",
     "description": "An arcade platformer: bounce off enemies to climb the tower and bring your cat back home.",
-    "descriptions": {"fr": "Un jeu de plateforme arcade : rebondir sur les ennemis pour gravir la tour et ramener son chat à la maison.", "es": "Un plataformas arcade: rebota sobre los enemigos para subir la torre y llevar a tu gato de vuelta a casa."},
+    "descriptions": {"fr": "Un jeu de plateformes arcade : rebondir sur les ennemis pour gravir la tour et ramener son chat à la maison.", "es": "Un plataformas arcade: rebota sobre los enemigos para subir la torre y llevar a tu gato de vuelta a casa."},
     "genre": "Platformer",
     "category": "Homebrew Highlights",
     "coverArt": "covers/tobu-tobu-girl.webp",
@@ -75,7 +75,7 @@
     "screenshots": [],
     "developer": "Damian Yerrick",
     "year": "2018",
-    "license": "zlib License (not bundled: get it from the author)",
+    "license": "zlib License",
     "homepage": "https://github.com/pinobatch/libbet",
     "isLocal": false
   },
@@ -90,7 +90,7 @@
     "screenshots": [],
     "developer": "-IZMA-",
     "year": "2019",
-    "license": "Freeware, all rights reserved by the author (not bundled: download it from the author)",
+    "license": "Freeware, all rights reserved by the author",
     "homepage": "https://izma.itch.io/deadeus",
     "isLocal": false
   },

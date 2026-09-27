@@ -7,7 +7,7 @@ export default {
   },
   genre: {
     action: 'Action', adventure: 'Aventure', 'action rpg': 'Action-RPG', board: 'Jeu de plateau', brawler: 'Beat ’em up',
-    fighting: 'Combat', minigames: 'Mini-jeux', notagame: 'Hors jeu', parlor: 'Jeu de société', platformer: 'Plateforme',
+    fighting: 'Combat', minigames: 'Mini-jeux', notagame: 'Pas un jeu', parlor: 'Jeu de société', platformer: 'Plateformes',
     puzzle: 'Réflexion', quiz: 'Quiz', racing: 'Course', rhythm: 'Rythme', rpg: 'RPG', shmup: 'Shoot ’em up',
     shooting: 'Tir', sim: 'Simulation', sports: 'Sport', strategy: 'Stratégie',
   },
@@ -50,7 +50,7 @@ export default {
     allWith: 'Aucun jeu ne réunit tous ces critères avec « {text} ».',
     filters: 'Aucun jeu ne correspond à ces filtres.',
     filtersWith: 'Aucun jeu ne correspond à « {text} » avec ces filtres.',
-    none: 'Aucun jeu nommé « {text} ». Il peut être ajouté depuis ses propres fichiers avec Ajouter des ROM.',
+    none: 'Aucun jeu nommé « {text} ». Ajoutez-le depuis vos fichiers avec Ajouter des ROM.',
     recent: 'Les jeux lancés apparaissent ici.',
   },
   find: 'Chercher : {facet}',
