@@ -1092,9 +1092,9 @@ body{font-family:var(--font)}
 /* touch only: the search's keyboard hints (↑ ↓, Enter, Esc) don't apply */
 @media (pointer:coarse) and (hover:none){.shint>span:has(kbd){display:none}}
 @media (pointer:coarse) and (max-width:640px){
-  .index{grid-template-columns:repeat(8,1fr)}
+  .index{grid-template-columns:repeat(7,1fr)} /* 27 keys: 7 across leaves one empty cell (8 left five), each ≥44 px wide */
   .index button:nth-child(9n){border-right:1px solid var(--rule)}
-  .index button:nth-child(8n){border-right:0}
+  .index button:nth-child(7n){border-right:0}
   .index button{height:44px}
 }
 @media (pointer:coarse) and (max-width:900px){
