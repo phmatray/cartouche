@@ -993,6 +993,14 @@ impl Apu {
     pub fn import_state(&mut self, data: &[u8], pos: &mut usize) -> bool {
         macro_rules! take { ($($f:expr),*) => { $( if $f.take(data, pos).is_none() { return false; } )* }; }
         apu_fields!(take, self);
+        // Table indexes and shifts are clamped: a damaged state must not index out of the tables.
+        for ch in [&mut self.ch1, &mut self.ch2] { ch.duty &= 3; ch.duty_position &= 7; }
+        self.ch3.sample_index &= 31;
+        self.ch3.volume_shift &= 3;
+        self.ch4.clock_shift &= 0x0F;
+        self.ch4.divisor_code &= 7;
+        self.ch1_sweep.shift &= 7;
+        self.frame_sequencer_step &= 7;
         true
     }
 }

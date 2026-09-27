@@ -32,6 +32,8 @@ pub struct MemoryBus {
     // OAM DMA state
     pub(crate) dma_active: bool,
     pub(crate) dma_cycles_remaining: u8,
+    /// Page the running OAM DMA reads from (not in save states: a load mid-DMA assumes page 0).
+    dma_source: u8,
     /// Whether the ROM is CGB compatible
     pub cgb_mode: bool,
     /// KEY1 speed-switch register (bit 0 = switch armed)
@@ -68,6 +70,7 @@ impl MemoryBus {
             cycle_count: 0,
             dma_active: false,
             dma_cycles_remaining: 0,
+            dma_source: 0,
             cgb_mode,
             key1: 0,
             double_speed: false,
@@ -97,8 +100,27 @@ impl MemoryBus {
         self.wram[idx] = value;
     }
 
+    /// Whether a CPU read collides with the running OAM DMA: OAM itself, or an address on
+    /// the bus the DMA reads from. Buses: VRAM, the external one (ROM, cartridge RAM, and WRAM
+    /// on a Game Boy) and, on a Game Boy Color, WRAM's own. I/O and HRAM stay reachable, so a
+    /// DMA from VRAM (or from WRAM on a Color) leaves ROM fetches alone. The Color quirks
+    /// follow SameBoy: WRAM is busy unless the DMA reads VRAM, and a DMA from echo RAM
+    /// ($E000+) blocks everything but VRAM.
+    fn dma_conflict(&self, addr: u16) -> bool {
+        let cgb = self.cgb_mode || self.ppu.compat; // Color hardware, whatever the mode
+        let bus = |a: u16| match a { 0x8000..=0x9FFF => 1, 0xC000.. if cgb => 2, _ => 0 };
+        let src = (self.dma_source as u16) << 8;
+        match addr {
+            0xFE00..=0xFEFF => true,
+            0xFF00.. => false,
+            0xC000.. if cgb => bus(src) != 1,
+            _ if cgb && src >= 0xE000 => bus(addr) != 1,
+            _ => bus(addr) == bus(src),
+        }
+    }
+
     pub fn read_byte(&self, addr: u16) -> u8 {
-        if self.dma_active && !(0xFF80..=0xFFFE).contains(&addr) {
+        if self.dma_active && self.dma_conflict(addr) {
             return 0xFF;
         }
         match addr {
@@ -166,6 +188,7 @@ impl MemoryBus {
             0xFF40..=0xFF4B => {
                 if addr == 0xFF46 {
                     self.dma_transfer(value);
+                    self.dma_source = value;
                     self.dma_active = true;
                     self.dma_cycles_remaining = 160;
                 } else {
