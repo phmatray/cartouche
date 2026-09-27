@@ -20,6 +20,7 @@ cartouche/
 │   └── src/
 │       ├── components/       # shell/, library/, game/, player/, add/, settings/, LinkCablePage
 │       ├── hooks/ lib/ store/ shaders/ workers/ audio/
+│       ├── neural/           # Neural 4× (tile-aware network + learned table) and Smooth motion, WebGL2; weights/*.bin are the only model data allowed (docs/NEURAL.md)
 │       ├── content/legal.ts  # Legal page text
 │       └── data/             # catalog.json (only verified, licensed entries), GameDB
 └── scripts/                  # build.sh, fetch-test-roms.sh, catalog/gamedb generators
@@ -61,6 +62,9 @@ cd gb-web && npm run dev:full
 
 # Full production build (served from /cartouche/)
 ./scripts/build.sh
+
+# Web unit tests (Node's test runner, pure TS modules only)
+cd gb-web && npm test
 
 # Core tests (use --no-fail-fast or cargo stops at the first failing binary)
 cd gb-core && cargo test --release --no-fail-fast
