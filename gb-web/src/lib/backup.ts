@@ -1,11 +1,9 @@
 import { t } from '../i18n';
-import { asProfile, getAllFrom, putInto, STORES, type StoredGameMeta, type StoredRom, type StoredSave, type StoredSaveState, type StoredScreenshot } from './db';
+import { decode, jsonBlob } from './backup-json';
+import { asProfile, getAllFrom, getRom, getRomIds, putInto, STORES, type StoredGameMeta, type StoredRom, type StoredSave, type StoredSaveState, type StoredScreenshot } from './db';
 import { SETTINGS_KEYS, displayFromV3, useSettingsStore, type SettingsValues } from '../store/settingsStore';
 
-/**
- * A .cartouche backup is JSON: every IndexedDB store plus the settings.
- * Bytes are written as {"$b64": "..."}; Blobs (screenshots) as {"$blob": "...", "type": "image/png"}.
- */
+/** A .cartouche backup is JSON (see ./backup-json): every IndexedDB store plus the settings. */
 const APP = 'cartouche';
 const VERSION = 1;
 
@@ -21,48 +19,20 @@ interface Backup {
   screenshots: StoredScreenshot[];
 }
 
-function toB64(u8: Uint8Array): string {
-  let s = '';
-  for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000));
-  return btoa(s);
-}
-function fromB64(b64: string): Uint8Array {
-  const s = atob(b64);
-  const u8 = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
-  return u8;
-}
-
-async function encode(v: unknown): Promise<unknown> {
-  if (v instanceof Uint8Array) return { $b64: toB64(v) };
-  if (v instanceof Blob) return { $blob: toB64(new Uint8Array(await v.arrayBuffer())), type: v.type };
-  if (Array.isArray(v)) return Promise.all(v.map(encode));
-  if (v && typeof v === 'object') return Object.fromEntries(await Promise.all(Object.entries(v).map(async ([k, x]) => [k, await encode(x)])));
-  return v;
-}
-function decode(v: unknown): unknown {
-  if (Array.isArray(v)) return v.map(decode);
-  if (v && typeof v === 'object') {
-    const o = v as Record<string, unknown>;
-    if (typeof o.$b64 === 'string') return fromB64(o.$b64);
-    if (typeof o.$blob === 'string') return new Blob([fromB64(o.$blob) as BlobPart], { type: typeof o.type === 'string' ? o.type : 'image/png' });
-    return Object.fromEntries(Object.entries(o).map(([k, x]) => [k, decode(x)]));
-  }
-  return v;
-}
-
-/** Everything in this browser as one downloadable file. */
+/** Everything in this browser as one downloadable file. The ROMs are read one at a time (a library can be gigabytes). */
 export async function exportBackup(): Promise<Blob> {
   const s = useSettingsStore.getState();
-  const [roms, saves, states, meta, screenshots] = await Promise.all([
-    getAllFrom(STORES.roms), getAllFrom(STORES.saves), getAllFrom(STORES.states), getAllFrom(STORES.meta), getAllFrom(STORES.screenshots),
+  const [saves, states, meta, screenshots] = await Promise.all([
+    getAllFrom(STORES.saves), getAllFrom(STORES.states), getAllFrom(STORES.meta), getAllFrom(STORES.screenshots),
   ]);
-  const data = await encode({
+  const head = {
     app: APP, version: VERSION, exported: new Date().toISOString(),
     settings: Object.fromEntries(SETTINGS_KEYS.map((k) => [k, s[k]])),
-    roms, saves, states, meta, screenshots,
-  });
-  return new Blob([JSON.stringify(data)], { type: 'application/json' });
+    saves, states, meta, screenshots,
+  };
+  return jsonBlob(head, 'roms', (async function* () {
+    for (const id of await getRomIds()) { const r = await getRom(id); if (r) yield r; }
+  })());
 }
 
 export const backupFileName = () => `cartouche-backup-${new Date().toISOString().slice(0, 10)}.cartouche`;
@@ -98,11 +68,10 @@ export interface RestoreCount { roms: number; saves: number; screenshots: number
  */
 export async function restoreBackup(b: Backup, withSettings: boolean): Promise<RestoreCount> {
   const count: RestoreCount = { roms: 0, saves: 0, screenshots: 0 };
-  const [roms, saves, states, meta, shots] = await Promise.all([
-    getAllFrom<StoredRom>(STORES.roms), getAllFrom<StoredSave>(STORES.saves), getAllFrom<StoredSaveState>(STORES.states),
+  const [romIds, saves, states, meta, shots] = await Promise.all([
+    getRomIds().then((ids) => new Set(ids)), getAllFrom<StoredSave>(STORES.saves), getAllFrom<StoredSaveState>(STORES.states),
     getAllFrom<StoredGameMeta>(STORES.meta), getAllFrom<StoredScreenshot>(STORES.screenshots),
   ]);
-  const romIds = new Set(roms.map((r) => r.id));
   for (const r of b.roms) if (!romIds.has(r.id)) { await putInto(STORES.roms, r); count.roms++; }
 
   const newer = async <T extends { id: string; timestamp: number }>(store: typeof STORES.saves | typeof STORES.states, mine: T[], theirs: T[]) => {
