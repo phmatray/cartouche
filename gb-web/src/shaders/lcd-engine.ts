@@ -4,7 +4,7 @@ import upscaleSource from './upscale.glsl?raw';
 import outputSource from './output.glsl?raw';
 import { colorMode, hasAdjustments, paletteRgb, PRESETS, type Filters } from './filters';
 import { loadWeights, NeuralUpscaler, OUT_H, OUT_W } from '../neural/upscaler';
-import { Governor, LEVEL_NAMES } from '../neural/governor';
+import { Governor, LEVEL_NAMES, neuralStatus } from '../neural/governor';
 import { CUT, FrameGen, parse, predictability, steady, type Parsed } from '../neural/motion';
 import { validTrace, type FrameTrace } from '../neural/trace';
 
@@ -57,7 +57,10 @@ export class LcdEngine {
   private bigValid = false;
   private hist4: Target[] = [];
   private timer: { ext: { TIME_ELAPSED_EXT: number; GPU_DISJOINT_EXT: number }; pending: WebGLQuery[] } | null = null;
-  private lastDraw = 0;
+  /** Live frames since the last synchronised timing (only without timer queries). */
+  private sinceSample = 0;
+  /** The trace of the frame on screen, so a paused redraw keeps the tile path (views stay valid while paused). */
+  private lastTrace: FrameTrace | null = null;
 
   // Smooth motion: the last three traced frames (P before A before B) and whether to hold a real frame.
   private motionOn = false;
@@ -66,6 +69,8 @@ export class LcdEngine {
   private mA: Parsed | null = null;
   private mB: Parsed | null = null;
   private hold = true;
+  /** The rebuild of the current pair was checked against both real frames. */
+  private checked = false;
   private destroyed = false;
   private path = 'lcd';
 
@@ -145,23 +150,34 @@ export class LcdEngine {
     if (!gl || !this.progs) return;
     if (fresh) { this.fresh = true; this.neural?.invalidate(); }
     if (fresh) trace = null;
+    this.lastTrace = validTrace(trace) ? trace : null;
     // A traced frame is the whole picture at VBlank; the live framebuffer can hold the top of the next one.
     gl.bindTexture(gl.TEXTURE_2D, this.frame);
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, validTrace(trace) ? trace.final.subarray(0, W * H * 4) : framebuffer);
     this.hasFrame = true;
     this.bigValid = false;
     if (this.motionOn) this.ingest(trace);
-    this.draw(trace, tau);
+    this.draw(trace, tau, true);
+  }
+
+  /**
+   * Does the engine use the layer trace right now? Smooth motion, or Neural 4x at the tile level (or still
+   * loading). The player turns tracing off otherwise: it costs emulation time.
+   */
+  usesTrace(): boolean {
+    if (this.motionOn) return true;
+    if (this.filters.upscale !== 'neural' || !this.gl2) return false;
+    return !this.neural ? this.neuralLoading : this.neural.tileCapable && this.governor!.level === 2;
   }
 
   /** Smooth motion: draw the in-between picture at `tau` (0 = the previous frame, 1 = the last one). */
   drawMotion(tau: number): void {
-    if (this.motionOn && this.mA && this.mB) this.draw(null, tau);
+    if (this.motionOn && this.mA && this.mB) this.draw(null, tau, false);
   }
 
   /** Draw the last frame again (filters or size changed while paused). */
   private redraw(): void {
-    if (this.hasFrame) this.draw(null, 0);
+    if (this.hasFrame) this.draw(validTrace(this.lastTrace) ? this.lastTrace : null, 0, false);
   }
 
   private ingest(trace: FrameTrace | null): void {
@@ -170,6 +186,7 @@ export class LcdEngine {
     [this.mP, this.mA, this.mB] = [this.mA, this.mB, f];
     this.gen.swap();
     this.gen.setFrame(1, trace, f);
+    this.checked = false;
     // Hold a real frame on a scene cut or uneven motion (see motion.ts).
     this.hold = !this.mA || !this.mP || predictability(this.mA, f) < CUT || !steady(this.mP, this.mA, f);
   }
@@ -180,18 +197,21 @@ export class LcdEngine {
     loadWeights().then((w) => {
       if (this.destroyed || !this.gl2) return;
       this.neural = new NeuralUpscaler(this.gl2, w);
-      this.governor = new Governor(this.neural.tileCapable ? 2 : 1);
+      // Timer queries: every frame is a sample (a 1 s window). Without: a synchronised sample every 6th frame.
+      this.governor = new Governor(this.neural.tileCapable ? 2 : 1, 8, this.timer ? 60 : 10);
       this.redraw();
     }).catch((e) => console.warn('Neural upscaler unavailable', e)).finally(() => { this.neuralLoading = false; });
   }
 
-  private draw(trace: FrameTrace | null, tau: number): void {
+  /** `live`: a newly emulated frame (paused redraws and previews are not timed). */
+  private draw(trace: FrameTrace | null, tau: number, live: boolean): void {
     const gl = this.gl!, f = this.filters;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quad);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
     const motion = this.motionOn && this.gen && this.mA && this.mB;
+    if (!motion && f.upscale === 'neural' && this.neural && this.governor!.level === 0 && live && this.governor!.idle()) this.levelChanged();
     const neural = !motion && f.upscale === 'neural' && this.neural && this.governor!.level > 0;
     const path = motion ? 'motion' : neural ? 'neural' : 'lcd';
     if (path !== this.path) { this.path = path; this.fresh = true; } // the colour history was drawn at another size
@@ -201,11 +221,15 @@ export class LcdEngine {
         this.hist4 = [this.target(OUT_W, OUT_H), this.target(OUT_W, OUT_H)];
       }
       if (motion) {
-        this.gen!.setPair(this.mA!, this.mB!, this.hold ? 0 : Math.min(1, Math.max(0, tau)));
-        this.gen!.render(this.big.fbo);
+        const gen = this.gen!, t = Math.min(1, Math.max(0, tau));
+        // Only pairs whose rebuild reproduces both real frames are interpolated; the others show real frames.
+        if (!this.hold && !this.checked) { this.checked = true; this.hold = !gen.verify(this.mA!, this.mB!); }
+        if (this.hold || t === 0) gen.renderReal(0, this.big.fbo);
+        else if (t === 1) gen.renderReal(1, this.big.fbo);
+        else { gen.setPair(this.mA!, this.mB!, t); gen.render(this.big.fbo); }
         this.bigValid = false;
       } else if (!this.bigValid) {
-        this.neuralPass(trace);
+        this.neuralPass(trace, live);
       }
       this.outputPass(this.colorPass(this.big.tex, this.hist4, true), true);
       return;
@@ -230,31 +254,41 @@ export class LcdEngine {
     this.outputPass(src, f.upscale === 'smooth');
   }
 
-  /** The neural upscaler into `big`, timed for the automatic quality fallback. */
-  private neuralPass(trace: FrameTrace | null): void {
+  /**
+   * The neural upscaler into `big`, timed for the automatic quality fallback: GPU timer queries when the
+   * browser has them, else every 6th live frame a wall-clock time of the passes between two 1-pixel reads
+   * (each waits for the GPU), so only the passes' own cost counts, not the display rate.
+   */
+  private neuralPass(trace: FrameTrace | null, live: boolean): void {
     const gl2 = this.gl2!, gov = this.governor!, t = this.timer;
     if (t) {
       while (t.pending.length && gl2.getQueryParameter(t.pending[0], gl2.QUERY_RESULT_AVAILABLE)) {
         const q = t.pending.shift()!;
         const ns = gl2.getQueryParameter(q, gl2.QUERY_RESULT) as number;
         gl2.deleteQuery(q);
-        if (!gl2.getParameter(t.ext.GPU_DISJOINT_EXT) && gov.gpu(ns / 1e6)) this.dropped();
+        if (!gl2.getParameter(t.ext.GPU_DISJOINT_EXT) && gov.sample(ns / 1e6)) this.levelChanged();
       }
-    } else if (trace) {
-      const now = performance.now();
-      if (this.lastDraw && gov.frame(now - this.lastDraw)) this.dropped();
-      this.lastDraw = now;
     }
-    if (gov.level === 0) return;
-    const q = t && t.pending.length < 4 ? gl2.createQuery() : null;
+    const tile = gov.level === 2 ? trace : null;
+    const q = t && live && t.pending.length < 4 ? gl2.createQuery() : null;
+    const sync = !t && live && ++this.sinceSample >= 6;
+    const px = new Uint8Array(4);
+    if (sync) { this.sinceSample = 0; gl2.readPixels(0, 0, 1, 1, gl2.RGBA, gl2.UNSIGNED_BYTE, px); }
+    const t0 = performance.now();
     if (q) gl2.beginQuery(t!.ext.TIME_ELAPSED_EXT, q);
-    this.neural!.render(this.frame!, gov.level === 2 ? trace : null, this.big!.fbo);
+    this.neural!.render(this.frame!, tile, this.big!.fbo);
     if (q) { gl2.endQuery(t!.ext.TIME_ELAPSED_EXT); t!.pending.push(q); }
+    if (sync) {
+      gl2.readPixels(0, 0, 1, 1, gl2.RGBA, gl2.UNSIGNED_BYTE, px);
+      if (gov.sample(performance.now() - t0)) this.levelChanged();
+    }
     this.bigValid = true;
   }
 
-  private dropped(): void {
-    console.info(`Neural 4×: over the frame budget, now ${LEVEL_NAMES[this.governor!.level]}`);
+  private levelChanged(): void {
+    const level = this.governor!.level;
+    console.info(`Neural 4×: now ${LEVEL_NAMES[level]}`);
+    neuralStatus.set(this, level);
   }
 
   /** Colour + persistence of `src` into the next of `hist` (ping-pong); returns it. */
@@ -305,6 +339,7 @@ export class LcdEngine {
   destroy(): void {
     const gl = this.gl;
     this.destroyed = true;
+    neuralStatus.clear(this);
     if (!gl) return;
     this.neural?.destroy();
     this.gen?.destroy();

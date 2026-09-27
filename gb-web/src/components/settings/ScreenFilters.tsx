@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { useLcdShader } from '../../hooks/useLcdShader';
 import { useDisplay, useSettingsStore } from '../../store/settingsStore';
 import { supportsWebGL2 } from '../../shaders/lcd-engine';
+import { neuralStatus } from '../../neural/governor';
 import { PALETTES, presetOf, presetsFor, type Correction, type Filters, type ScreenKind, type Upscale } from '../../shaders/filters';
 import { Row, Seg, Slider, SwitchRow } from './parts';
 
@@ -18,12 +19,16 @@ const pct = (v: number) => Math.round(v * 100);
 
 /** The AI disclosure shown wherever Neural 4× is on. */
 export function NeuralNote() {
+  const level = useSyncExternalStore(neuralStatus.subscribe, neuralStatus.get);
   return (
     <div className="notice ai">
       <span className="ic">AI</span>
       <span>
         Upscaled by a neural network trained on Game Boy frames; it adds detail that wasn’t in the original pixels.
-        {!supportsWebGL2() && <> <b>This browser has no WebGL 2, so it shows Nearest.</b></>}
+        Previews and paused frames use its fast table until the game runs.
+        {!supportsWebGL2() ? <> <b>This browser has no WebGL 2, so it shows Nearest.</b></>
+          : level === 1 ? <> <b>Too slow on this device: running as the fast table only.</b></>
+          : level === 0 ? <> <b>Too slow on this device: showing Nearest for now.</b></> : null}
       </span>
     </div>
   );

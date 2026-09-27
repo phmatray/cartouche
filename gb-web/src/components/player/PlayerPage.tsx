@@ -76,8 +76,7 @@ function Player({ game }: { game: GameEntry }) {
   // and it has its own default screen settings (the core decides, from header byte 0x143 bit 7).
   const inColor = romLoaded && isCgb;
   const display = useDisplay(inColor ? 'cgb' : 'dmg', game.id);
-  const { canvasRef, canvasKey, renderFrame, setMotion, drawMotion } = useLcdShader(display.cfg.filters, inColor);
-  const neural = display.cfg.filters.upscale === 'neural';
+  const { canvasRef, canvasKey, renderFrame, setMotion, drawMotion, usesTrace } = useLcdShader(display.cfg.filters, inColor);
   const { ensureStarted, feedSamples, muted, toggleMute } = useAudio();
   const saveTo = useRef<string | null>(null); // the save profile played solo (the game's active one)
   // Every state load (slot, resume point, rewind step) draws its picture at once, paused or not, with no ghosting from before the jump.
@@ -183,16 +182,16 @@ function Player({ game }: { game: GameEntry }) {
     // Smooth motion only where it makes sense: a display faster than the Game Boy (or forced), normal speed, no rewind.
     const hz = refresh.current.length >= 15 ? 1 / [...refresh.current].sort((a, b) => a - b)[refresh.current.length >> 1] : 60;
     const motion = smoothMotion && (smoothMotionForce || hz > 75) && speedRef.current === 1 && !isRewinding;
-    const traced = neural || motion;
-    setTraceEnabled(traced);
     setMotion(motion);
+    const traced = usesTrace(); // only while Neural 4× really runs its tile path, or Smooth motion is on
+    setTraceEnabled(traced);
     let fb: Uint8ClampedArray | null = null;
     for (let i = 0; i < n; i++) fb = wrapRunFrame(runOne) ?? fb;
     const trace = fb && traced && !isRewinding ? getTrace() : null; // a rewound frame has no trace of its own
     if (fb) { renderFrame(fb, false, trace, p.acc); setLit(true); }
     else if (motion) drawMotion(p.acc);
     if (n) { played.current += dt; dirty.current = true; }
-  }, [wrapRunFrame, runOne, renderFrame, isRewinding, neural, smoothMotion, smoothMotionForce, setTraceEnabled, getTrace, setMotion, drawMotion]);
+  }, [wrapRunFrame, runOne, renderFrame, isRewinding, smoothMotion, smoothMotionForce, setTraceEnabled, getTrace, setMotion, drawMotion, usesTrace]);
   const looping = romLoaded && (isRunning || isRewinding);
   useEffect(() => { if (!looping) { pace.current.last = 0; refresh.current = []; } }, [looping]);
   useAnimationFrame(onFrame, looping);

@@ -362,21 +362,40 @@ void main() {
   o = vec4(vec3(out_) / 255.0, 1.0);
 }`;
 
+// A real frame (slot 0 or 1) at 4x, nearest.
+const FS_REAL = `#version 300 es
+precision highp float; precision highp usampler2D;
+uniform usampler2D uFin; out vec4 o;
+void main() { o = vec4(vec3(texelFetch(uFin, ivec2(gl_FragCoord.xy) >> 2, 0).rgb) / 255.0, 1.0); }`;
+
+// Rebuild check: 1 where any of a pixel's 16 subpixels in the rebuilt frame differs from the real frame.
+const FS_CHECK = `#version 300 es
+precision highp float; precision highp int; precision highp usampler2D;
+uniform sampler2D uOut; uniform usampler2D uFin; uniform int uOff; out vec4 o;
+void main() {
+  ivec2 p = ivec2(gl_FragCoord.xy) - ivec2(0, uOff);
+  uvec3 f = texelFetch(uFin, p, 0).rgb; bool bad = false;
+  for (int k = 0; k < 16; k++) bad = bad || any(notEqual(uvec3(texelFetch(uOut, p * 4 + ivec2(k & 3, k >> 2), 0).rgb * 255.0 + 0.5), f));
+  o = vec4(bad ? 1.0 : 0.0, 0.0, 0.0, 1.0);
+}`;
+
 interface Tex { t: WebGLTexture; fmt: number; type: number; w: number; h: number }
 interface Prog { p: WebGLProgram; loc: (name: string) => WebGLUniformLocation | null }
 const MAX_ITEMS = 96;
 
 export class FrameGen {
   private gl: WebGL2RenderingContext;
-  private pAgree: Prog; private pH: Prog; private pFinal: Prog;
+  private pAgree: Prog; private pH: Prog; private pFinal: Prog; private pReal: Prog; private pCheck: Prog;
   private planes: { bg: Tex; win: Tex; obj: Tex; info: Tex; fin: Tex; lines: Tex }[];
   private inv: Tex; private vram: Tex; private lp: Tex; private items: Tex; private agree: Tex; private hsum: Tex;
+  private scratch: Tex; private check: Tex;
   private fbs: WebGLFramebuffer[];
   private T: Tables | null = null;
 
   constructor(gl: WebGL2RenderingContext) {
     this.gl = gl;
     this.pAgree = this.prog(FS_AGREE); this.pH = this.prog(FS_HSUM); this.pFinal = this.prog(FS_FINAL);
+    this.pReal = this.prog(FS_REAL); this.pCheck = this.prog(FS_CHECK);
     const U8: [number, number, number] = [gl.RGBA8UI, gl.RGBA_INTEGER, gl.UNSIGNED_BYTE];
     this.planes = [0, 1].map(() => ({ bg: this.tex(...U8, W, H), win: this.tex(...U8, W, H), obj: this.tex(...U8, W, H), info: this.tex(...U8, W, H), fin: this.tex(...U8, W, H), lines: this.tex(...U8, 2, H) }));
     this.inv = this.tex(gl.R8UI, gl.RED_INTEGER, gl.UNSIGNED_BYTE, 256, 16);
@@ -385,7 +404,9 @@ export class FrameGen {
     this.items = this.tex(gl.RGBA32I, gl.RGBA_INTEGER, gl.INT, 4, MAX_ITEMS);
     this.agree = this.tex(gl.RG8UI, gl.RG_INTEGER, gl.UNSIGNED_BYTE, OW, OH);
     this.hsum = this.tex(gl.RG8UI, gl.RG_INTEGER, gl.UNSIGNED_BYTE, OW, OH);
-    this.fbs = [this.agree, this.hsum].map((t) => {
+    this.scratch = this.tex(gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, OW, OH);
+    this.check = this.tex(gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, W, 2 * H);
+    this.fbs = [this.agree, this.hsum, this.scratch, this.check].map((t) => {
       const fb = gl.createFramebuffer()!;
       gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
       gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t.t, 0);
@@ -419,6 +440,33 @@ export class FrameGen {
     this.T = T;
   }
 
+  /** Draws real frame `slot` (0 = A, 1 = B) into `target` at 4x, nearest. */
+  renderReal(slot: number, target: WebGLFramebuffer): void {
+    this.gl.viewport(0, 0, OW, OH);
+    this.draw(this.pReal, target, (bind) => bind('uFin', this.planes[slot].fin));
+  }
+
+  /**
+   * Does the rebuild reproduce both real frames exactly (at tau 0 and 1)? Some screens use effects the layer
+   * model does not cover (a mid-line register write, say); their pairs are held on a real frame instead.
+   * One small synchronous read (160x288) per pair.
+   */
+  verify(A: Parsed, B: Parsed): boolean {
+    const gl = this.gl, bad = new Uint8Array(W * 2 * H * 4);
+    for (let i = 0; i < 2; i++) {
+      this.setPair(A, B, i);
+      this.render(this.fbs[2]);
+      gl.viewport(0, i * H, W, H);
+      this.draw(this.pCheck, this.fbs[3], (bind) => {
+        bind('uOut', this.scratch); bind('uFin', this.planes[i].fin);
+        gl.uniform1i(this.pCheck.loc('uOff'), i * H);
+      });
+    }
+    gl.readPixels(0, 0, W, 2 * H, gl.RGBA, gl.UNSIGNED_BYTE, bad);
+    for (let i = 0; i < bad.length; i += 4) if (bad[i]) return false;
+    return true;
+  }
+
   /** B becomes A: the slots trade places instead of uploading A again. */
   swap(): void { this.planes.reverse(); }
 
@@ -442,7 +490,7 @@ export class FrameGen {
       gl.bindTexture(gl.TEXTURE_2D, t.t);
       gl.uniform1i(l, unit++);
     };
-    if (pr !== this.pH) {
+    if (pr === this.pFinal || pr === this.pAgree) {
       for (let i = 0; i < 2; i++) {
         const P = this.planes[i];
         bind(`uBg[${i}]`, P.bg); bind(`uWin[${i}]`, P.win); bind(`uObj[${i}]`, P.obj); bind(`uInfo[${i}]`, P.info); bind(`uLines[${i}]`, P.lines);
@@ -460,9 +508,9 @@ export class FrameGen {
 
   destroy(): void {
     const gl = this.gl;
-    for (const p of [this.pAgree, this.pH, this.pFinal]) gl.deleteProgram(p.p);
+    for (const p of [this.pAgree, this.pH, this.pFinal, this.pReal, this.pCheck]) gl.deleteProgram(p.p);
     for (const P of this.planes) for (const t of Object.values(P)) gl.deleteTexture(t.t);
-    for (const t of [this.inv, this.vram, this.lp, this.items, this.agree, this.hsum]) gl.deleteTexture(t.t);
+    for (const t of [this.inv, this.vram, this.lp, this.items, this.agree, this.hsum, this.scratch, this.check]) gl.deleteTexture(t.t);
     for (const f of this.fbs) gl.deleteFramebuffer(f);
   }
 

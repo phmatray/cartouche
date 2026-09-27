@@ -58,7 +58,9 @@ export function useLcdShader(filters: Filters, color: boolean, follow = true) {
   /** Smooth motion: on or off, and the in-between picture for a display refresh without a new frame. */
   const setMotion = useCallback((on: boolean) => { motion.current = on; engineRef.current?.setMotion(on); }, []);
   const drawMotion = useCallback((tau: number) => engineRef.current?.drawMotion(tau), []);
+  /** Whether the engine needs the layer trace right now (see LcdEngine.usesTrace). */
+  const usesTrace = useCallback(() => engineRef.current?.usesTrace() ?? false, []);
 
   /** `canvas` is set once the engine exists: a caller drawing a still frame redraws when it changes. */
-  return { canvasRef: setCanvas, canvasKey: webglAvailable ? 'gl' : '2d', renderFrame, setMotion, drawMotion, webglAvailable, canvas };
+  return { canvasRef: setCanvas, canvasKey: webglAvailable ? 'gl' : '2d', renderFrame, setMotion, drawMotion, usesTrace, webglAvailable, canvas };
 }
