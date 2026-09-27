@@ -4,7 +4,8 @@
    The bundled ROMs in roms/ (under 1 MB together) are ordinary built files, so they are kept here too; not roms/gbstudio/
    (the GB Studio collection), which the page downloads into IndexedDB only when the player asks, through the network below.
    Updates: a new version installs in the background and waits. It never takes over a running page (whose lazy
-   chunks would then be gone from the cache); the page asks it to take over on the next launch (see lib/pwa.ts).
+   chunks would then be gone from the cache); the page asks it to take over on the next launch (see lib/pwa.ts),
+   which it does only when no other tab or window of the app is open.
    Pages come from this version's cache first, so the page always matches the files this worker holds (a newer
    index.html from the network would ask for chunks only the waiting version has), and a launch on a stalled
    connection shows the app at once instead of waiting on the network. */
@@ -23,7 +24,12 @@ const prune = () => caches.keys()
   .then((keys) => Promise.all(keys.filter((k) => /^(cartouche|cartshelf)-shell-/.test(k) && k !== CACHE).map((k) => caches.delete(k))));
 
 self.addEventListener('message', (e) => {
-  if (e.data === 'activate') self.skipWaiting();
+  // Only for a page that is alone: the activate step prunes the running version's cache, so any other open tab or
+  // window would lose the lazy chunks it hasn't loaded yet. With several open, the update waits for a later launch.
+  if (e.data === 'activate') {
+    e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then((all) => { if (all.filter((c) => c.url.startsWith(self.registration.scope)).length <= 1) return self.skipWaiting(); }));
+  }
   // The page asks which version runs it (for the "Updated" toast). Prune again here, while no newer version is on
   // its way: WebKit can skip the activate cleanup when it activates a waiting worker on its own at relaunch.
   if (e.data === 'version') {
