@@ -129,7 +129,7 @@ const preloadLang = (): Plugin => {
   }
 }
 
-const ONLINE_ONLY =/\/node_modules\/(trystero|@trystero-p2p|@noble|uqr)\//
+const ONLINE_ONLY = /\/node_modules\/(trystero|@trystero-p2p|@noble|uqr)\//
 
 export default defineConfig(({ mode }) => ({
   // Deployed at https://phmatray.github.io/cartouche/ (build and preview); the dev server stays at '/'.
