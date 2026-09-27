@@ -14,6 +14,7 @@ import { CHANNEL_KEYS, machineFor, paletteOf, useDisplay, useSettingsStore, type
 import { parseRomHeader, sgbCartOf } from '../../lib/rom-utils';
 import { presetOf } from '../../shaders/filters';
 import { BUTTON_NUMBERS } from '../../utils/keybindings';
+import { dpadAt, slide } from '../../lib/touch-slide';
 import { getActiveProfileId, getSram } from '../../lib/db';
 import { ago, owned, paths, tagOf } from '../../lib/ui';
 import { settled } from '../../lib/transitions';
@@ -402,6 +403,16 @@ function Player({ game }: { game: GameEntry }) {
   const screenStyle = screenSize === 'fit' ? undefined : { '--sw': `${(bordered ? 256 : 160) * +screenSize + 24}px` } as CSSProperties;
   const disabled = !romLoaded;
   const noStore = disabled || storageError; // save slots and the album need IndexedDB
+  // Each finger holds what's under it: a thumb rolls across the D-pad (diagonals on the way) or from B onto A.
+  const held = useRef(new Map<number, string[]>());
+  const hold = (e: React.PointerEvent<HTMLButtonElement>, now: string[]) => {
+    const root = e.currentTarget.closest('.touch');
+    const { press, release } = slide(held.current, e.pointerId, now);
+    for (const b of release) { root?.querySelector(`[data-pad="${b}"]`)?.classList.remove('down'); releaseButton(BUTTON_NUMBERS[b]); }
+    for (const b of press) { root?.querySelector(`[data-pad="${b}"]`)?.classList.add('down'); pressButton(BUTTON_NUMBERS[b]); }
+    if (press.length && useSettingsStore.getState().haptics) navigator.vibrate?.(8);
+  };
+  const letGo = (e: React.PointerEvent<HTMLButtonElement>) => hold(e, []);
   const pad = (b: string) => ({
     'data-pad': b,
     onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
@@ -410,14 +421,24 @@ function Player({ game }: { game: GameEntry }) {
       if (!tick) e.preventDefault();
       // Capture can throw (pointer already released or cancelled by the system): never lose the press over it.
       if (!tick) try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* keep going */ }
-      e.currentTarget.classList.add('down');
-      if (useSettingsStore.getState().haptics) navigator.vibrate?.(8);
-      pressButton(BUTTON_NUMBERS[b]);
+      hold(e, [b]);
     },
-    onPointerUp: (e: React.PointerEvent<HTMLButtonElement>) => { e.currentTarget.classList.remove('down'); releaseButton(BUTTON_NUMBERS[b]); },
-    onPointerCancel: (e: React.PointerEvent<HTMLButtonElement>) => { e.currentTarget.classList.remove('down'); releaseButton(BUTTON_NUMBERS[b]); },
+    onPointerMove: (e: React.PointerEvent<HTMLButtonElement>) => {
+      if (!held.current.has(e.pointerId) || !e.currentTarget.hasPointerCapture(e.pointerId)) return;
+      const root = e.currentTarget.closest('.touch');
+      const dpad = root?.querySelector('.dpad')?.getBoundingClientRect();
+      if (dpad && e.clientX >= dpad.left && e.clientX <= dpad.right && e.clientY >= dpad.top && e.clientY <= dpad.bottom) {
+        hold(e, dpadAt(e.clientX - (dpad.left + dpad.right) / 2, e.clientY - (dpad.top + dpad.bottom) / 2, dpad.width));
+        return;
+      }
+      // Over another button: that one. Over nothing: the thumb keeps what it holds (it overshoots the edges).
+      const other = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[data-pad]');
+      if (other?.dataset.pad && root?.contains(other)) hold(e, [other.dataset.pad]);
+    },
+    onPointerUp: letGo,
+    onPointerCancel: letGo,
     // Uncaptured (an armed rumble tick): sliding off the button lets it go.
-    onPointerLeave: (e: React.PointerEvent<HTMLButtonElement>) => { if (e.currentTarget.classList.contains('down')) { e.currentTarget.classList.remove('down'); releaseButton(BUTTON_NUMBERS[b]); } },
+    onPointerLeave: (e: React.PointerEvent<HTMLButtonElement>) => { if (!e.currentTarget.hasPointerCapture(e.pointerId)) letGo(e); },
     onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
   });
 
