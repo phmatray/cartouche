@@ -251,7 +251,7 @@ class Link {
       await this.chunk(round, m.k, Number(m.off), Number(m.total), m.data);
     } else if (m.t === 'missing' && typeof m.k === 'string') {
       const p = round.pending.get(m.k);
-      if (p) { round.pending.delete(m.k); round.failed.push(m.k); await this.maybeDone(round); }
+      if (p) { round.pending.delete(m.k); round.failed.push(p.k); await this.maybeDone(round); } // p.k: what maybeFinish leaves out of the base
     } else if (m.t === 'done') {
       round.theyDone = true;
       round.theirFailed = Array.isArray(m.failed) ? m.failed.map(String) : [];

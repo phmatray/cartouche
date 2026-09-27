@@ -43,11 +43,15 @@ export interface Games {
 /**
  * `alias`: SHA-1 → local id for games kept here without their ROM (a save that came from a device that has it).
  * They're keyed by the SHA-1 like there, never "@id": one record, one key on both devices.
+ * A ROM stored twice here ("Add anyway": a second copy for separate saves): the first id (in sort order) takes the
+ * SHA-1, every other copy is "@id", so each copy's records keep a key of their own.
  */
 export function gamesOf(metas: { id: string; rom?: { sha1?: string } }[], alias: Record<string, string> = {}): Games {
   const sha = new Map<string, string>(), byId = new Map<string, string>();
-  for (const m of metas) if (m.rom?.sha1) { sha.set(m.id, m.rom.sha1); byId.set(m.rom.sha1, m.id); }
-  // ponytail: a ROM imported here later under another id than its alias leaves the alias's saves keyed "@id"; re-key them if that shows up.
+  const withRom = metas.filter((m) => m.rom?.sha1).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  for (const m of withRom) if (!byId.has(m.rom!.sha1!)) { sha.set(m.id, m.rom!.sha1!); byId.set(m.rom!.sha1!, m.id); }
+  // A ROM that arrives by sync lands under its alias's id (importRom), so the saves kept there stay its own.
+  // ponytail: one imported by hand under another id leaves the alias's saves keyed "@id"; re-key them if that shows up.
   for (const [s, id] of Object.entries(alias)) if (!byId.has(s) && !sha.has(id)) { sha.set(id, s); byId.set(s, id); }
   return {
     key: (id) => sha.get(id) ?? `@${id}`,

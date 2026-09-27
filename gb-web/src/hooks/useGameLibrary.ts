@@ -187,8 +187,9 @@ export const MAX_ROM_SIZE = 0x8000 << 8;
  * Add one ROM file's bytes to the library, identified by its SHA-1 against the GameDB.
  * A dump already on the shelf is reported as 'dup' unless `force` stores it again as a second copy.
  * Storage errors (a full disk: QuotaExceededError) are thrown; nothing is half-stored.
+ * `id`: the id to store it under when free (sync: the one its saves are already kept under here).
  */
-export async function importRom(name: string, data: Uint8Array, force = false): Promise<ImportOutcome> {
+export async function importRom(name: string, data: Uint8Array, force = false, id?: string): Promise<ImportOutcome> {
   data = withoutCopierHeader(data);
   if (!isRomFile(name) || !isGameBoyRom(data)) return { status: 'bad' };
   await (loadPromise ??= loadLibrary());
@@ -202,14 +203,14 @@ export async function importRom(name: string, data: Uint8Array, force = false): 
   const summary = { title, genre, sha1, head: data.slice(0, 0x150), size: data.length };
   const cat = catalogMatch(useLibraryStore.getState().games, localEntry('', title, genre, data, sha1, dbEntry));
   // A catalog game keeps its id (and its page's address) once its file is here.
-  const id = await addRom(cat?.id ?? (slugify(title) || 'rom'), { title, genre, data }, { importedAt, rom: summary });
-  const entry = localEntry(id, title, genre, data, sha1, dbEntry, importedAt);
+  const stored = await addRom(cat?.id ?? id ?? (slugify(title) || 'rom'), { title, genre, data }, { ...(id && !cat ? await getGameMeta(id) : undefined), importedAt, rom: summary });
+  const entry = localEntry(stored, title, genre, data, sha1, dbEntry, importedAt);
   const added = withLocal(cat ? [cat] : [], entry).at(-1)!; // as it will show on the shelf
   pending.push(entry);
   flushTimer ??= setTimeout(flushPending, 400);
   // Box art on: fetch it now (no request when off, unrecognized, or the game has its own bundled cover).
   if (needsDownload(added)) getCoverArtUrl(added.libretroName, added.platform);
-  return { status: dbEntry || cat ? 'ok' : 'unk', id, title: added.title, sha1 }; // known: a GameDB dump, or a catalog homebrew
+  return { status: dbEntry || cat ? 'ok' : 'unk', id: stored, title: added.title, sha1 }; // known: a GameDB dump, or a catalog homebrew
 }
 
 /** A download that failed or isn't the expected file: its message is for the player. */
