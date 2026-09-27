@@ -1211,6 +1211,8 @@ html:has(.pl),body:has(.pl){overscroll-behavior:none}
   .pl:not(.closed):not(.imm) .screen{width:min(var(--sw,100%),100%,calc((42dvh - 56px - var(--sat) - 32px - 24px) * var(--ar) + 24px))}
 }
 @media (max-width:374px) and (min-height:501px){.pl{--touch-h:calc(209px + max(24px,calc(8px + var(--sab))))}}
+/* Tablets upright: the dock has room for Load, Photo and Mute, which phones leave to the manual. */
+@media (min-width:700px) and (max-width:900px) and (min-height:501px){.deck .hide-m{display:inline-flex}}
 
 /* Phones held sideways: screen in the middle, D-pad on the left, A/B and Start/Select on the right; top bar and deck share one row
    (the deck at its own width on the right, the top bar in the rest: --deck-w is measured by the player). */
