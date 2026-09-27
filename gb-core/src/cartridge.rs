@@ -218,7 +218,9 @@ impl Cartridge {
             _ => return Err(CartridgeError::UnsupportedType { cart_type }),
         };
 
-        let rom_bank_count = 2usize << (rom_size as usize);
+        // $00-$08: 32 KB << n. Anything else (a damaged or hand-made header) is sized from the file,
+        // never 0 banks: `2 << n` wraps to 0 for some of them.
+        let rom_bank_count = if rom_size <= 8 { 2usize << rom_size } else { (data.len() / 0x4000).next_power_of_two().max(2) };
 
         // MBC2 has built-in 512x4-bit RAM; ignore the ram_size header byte for it
         let ram_bytes = match cart_type {
@@ -713,6 +715,20 @@ mod tests {
         let sum = (0x134..=0x14C).fold(0u8, |c, a| c.wrapping_sub(rom[a]).wrapping_sub(1));
         rom[0x14D] = sum;
         Cartridge::from_rom(rom).expect("valid header")
+    }
+
+    #[test]
+    fn bad_rom_size_byte_is_sized_from_the_file() {
+        for size in [0x09, 0x3F, 0x7F, 0xBF, 0xFF] {
+            let mut rom = vec![0u8; 0x8000];
+            rom[0x147] = 0x01; // MBC1
+            rom[0x148] = size;
+            rom[0x14D] = (0x134..=0x14C).fold(0u8, |c, a| c.wrapping_sub(rom[a]).wrapping_sub(1));
+            let mut c = Cartridge::from_rom(rom).expect("loads");
+            assert_eq!(c.rom_bank_count, 2, "{size:#04x}");
+            c.write_rom(0x6000, 0x01); // mode 1: bank 0 area follows the upper bits
+            assert_eq!(c.read_rom(0x0147), 0x01);
+        }
     }
 
     #[test]
