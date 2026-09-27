@@ -53,6 +53,19 @@ test('a state conflict takes the first slot free on both devices, or leaves both
   assert.deepEqual(p.moves, []);
 });
 
+test('the older resume point goes with the older save of the same device, the same way on both devices', () => {
+  const a = m('Mac', [e('sram:g', 'aaaaaaaaaa', 100), e('state:g#auto', 'sa', 100, { p: 'g' })]);
+  const b = m('iPhone', [e('sram:g', 'bbbbbbbbbb', 200), e('state:g#auto', 'sb', 200, { p: 'g' })]);
+  const onMac = plan(a, b, {}), onPhone = plan(b, a, {});
+  for (const p of [onMac, onPhone]) assert.equal(p.conflicts.find((c) => c.k === 'state:g#auto')!.profile, 'g~saaaaaaaa');
+  // The older state is from the other device than the older save: it stays with its save.
+  const c = m('Mac', [e('sram:g', 'aaaaaaaaaa', 300), e('state:g#auto', 'sa', 100, { p: 'g' })]);
+  assert.equal(plan(c, b, {}).conflicts.find((x) => x.k === 'state:g#auto')!.profile, undefined);
+  // Another save's state, or no save conflict: unchanged.
+  const d = m('Mac', [e('sram:g', 'aaaaaaaaaa', 100), e('state:g#auto', 'sa', 100, { p: 'g~p2' })]);
+  assert.equal(plan(d, b, {}).conflicts.find((x) => x.k === 'state:g#auto')!.profile, undefined);
+});
+
 test('small records: the last writer wins, deletions included; play time merges', () => {
   const a = m('Mac', [
     e('set:defaultSpeed', 'h1', 10, { v: 1 }), e('fav:g', 'f1', 50, { v: true }),
