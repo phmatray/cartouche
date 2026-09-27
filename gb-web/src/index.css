@@ -449,8 +449,9 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .rw .meter i{display:block;height:100%;background:#000}
 .sheet{background:var(--paper);color:var(--ink);overflow:auto;border-left:1px solid #000;min-width:0;scrollbar-color:var(--paper-3) var(--paper)}
 .pl.closed .sheet{visibility:hidden}
-.tabs{display:grid;grid-template-columns:repeat(5,1fr);position:sticky;top:0;background:var(--paper);z-index:2;border-bottom:3px solid var(--ink)}
-.tabs button{border:0;background:transparent;height:56px;padding:0 6px;text-align:left;font:900 16px/1 var(--font);font-stretch:62%;text-transform:uppercase;color:var(--ink-3);position:relative;display:flex;flex-direction:column;justify-content:center;gap:4px;min-width:0}
+/* Each tab as wide as its label plus an equal share of the rest: five equal columns squeezed COMMANDES against PARTIES. */
+.tabs{display:grid;grid-template-columns:repeat(5,auto);position:sticky;top:0;background:var(--paper);z-index:2;border-bottom:3px solid var(--ink)}
+.tabs button{border:0;background:transparent;height:56px;padding:0 12px;text-align:left;font:900 16px/1 var(--font);font-stretch:62%;text-transform:uppercase;color:var(--ink-3);position:relative;display:flex;flex-direction:column;justify-content:center;gap:4px;min-width:0}
 .tabs button small{font:700 10px var(--font);font-stretch:100%;letter-spacing:.06em;color:#8a8a84}
 .tabs button::before{content:"";position:absolute;left:0;right:0;top:0;height:6px;background:var(--t)}
 .tabs button[aria-selected=true]{color:var(--ink);background:#fff}
