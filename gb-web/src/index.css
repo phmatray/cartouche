@@ -142,6 +142,7 @@ canvas.lcd,img.lcd{display:block;width:100%;height:auto;image-rendering:pixelate
 .cap{display:flex;align-items:center;gap:10px;margin-top:14px;font:800 12px/1 var(--font);text-transform:uppercase;letter-spacing:.07em}
 .cap i{flex:1;height:1px;background:currentColor;opacity:.6}
 .stage .cap span{white-space:nowrap}
+.shot .cap span:last-child{white-space:nowrap} /* "Homebrew libre" stays on one line; the rule between the two gives way */
 @media (max-width:1100px){.cont .wrap{grid-template-columns:200px minmax(0,1fr);gap:32px}.cont .shot{grid-column:1/-1;max-width:520px}}
 @media (max-width:640px){
   .cont .wrap{grid-template-columns:120px minmax(0,1fr);gap:16px 18px;padding-top:24px;padding-bottom:32px;align-items:end}
