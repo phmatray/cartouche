@@ -14,6 +14,7 @@ export default {
   foot: {
     stays: '<b>Everything stays in this browser.</b> ROMs, saves and play time live on your device. No account, no upload.',
     backup: 'Back up your data',
+    version: 'Version {v}: what’s new',
     art: 'Box art: libretro-thumbnails · Tobu Tobu Girl art: Tangram Games (CC BY 4.0)',
   },
   drop: 'Drop to add',

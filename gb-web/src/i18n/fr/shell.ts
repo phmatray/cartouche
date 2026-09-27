@@ -15,6 +15,7 @@ export default {
   foot: {
     stays: '<b>Tout reste dans ce navigateur.</b> ROM, sauvegardes et temps de jeu restent sur cet appareil. Pas de compte, aucun envoi.',
     backup: 'Faire une copie de sauvegarde',
+    version: 'Version {v} : les nouveautés',
     art: 'Jaquettes : libretro-thumbnails · Illustrations de Tobu Tobu Girl : Tangram Games (CC BY 4.0)',
   },
   drop: 'Déposer pour ajouter',

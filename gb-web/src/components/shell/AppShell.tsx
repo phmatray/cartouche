@@ -14,6 +14,7 @@ import { ShortcutsDialog } from './Shortcuts';
 import { Toasts } from './Toasts';
 import { LANG_NAMES, LANGS, rich, useLang, useT, type Key } from '../../i18n';
 import { useSettingsStore } from '../../store/settingsStore';
+import { version } from '../../../package.json';
 
 const NAV: [string, Key][] = [['/', 'shell.nav.library'], ['/link-cable', 'shell.nav.link'], ['/settings', 'shell.nav.settings']];
 const typing = () => {
@@ -138,6 +139,7 @@ export function AppShell() {
           <a href="#shortcuts" onClick={(e) => { e.preventDefault(); setShortcuts(true); }}>{t('shell.shortcuts')}</a>
           <Link to="/legal">{t('shell.legal')}</Link>
           <a href={REPO_URL} target="_blank" rel="noopener">{t('shell.source')}</a>
+          <a href={`${REPO_URL}/releases/tag/v${version}`} target="_blank" rel="noopener" aria-label={t('shell.foot.version', { v: version })}>v{version}</a>
           <LangSwitch />
           <span className="sp">{t('shell.foot.art')}</span>
         </div>
