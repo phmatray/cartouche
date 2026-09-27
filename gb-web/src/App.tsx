@@ -2,6 +2,7 @@ import { Component, lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { createBrowserRouter, Outlet, RouterProvider, ScrollRestoration, useLocation } from 'react-router';
 import { committed, install } from './lib/transitions';
 import { warmAudio } from './audio/AudioEngine';
+import { useGamepadNav } from './hooks/useGamepadNav';
 import { AppShell, NotFound } from './components/shell/AppShell';
 import { LibraryPage } from './components/library/LibraryPage';
 import { t } from './i18n';
@@ -38,6 +39,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean
 function Root() {
   const { key, pathname } = useLocation();
   useEffect(committed, [key]);
+  useGamepadNav();
   // One click away from Play (library, game page): open the audio device once the page has settled.
   const nearPlay = pathname === '/' || /^\/game\/[^/]+\/?$/.test(pathname);
   useEffect(() => {

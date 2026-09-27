@@ -52,6 +52,24 @@ export function useGamepad(
   const releaseRef = useRef(releaseButton);
   useEffect(() => { releaseRef.current = releaseButton; }, [releaseButton]);
 
+  const quietRef = useRef(true); // first poll after (re)starting: note what is held, press nothing
+
+  // Paused or unloaded: let go of what the pad holds (its release would never reach the game), and start afresh.
+  useEffect(() => () => {
+    const who = (k: string) => (k.includes(':') ? [Number(k.split(':')[0]), k.split(':')[1]] as const : [0, k] as const);
+    for (const [k, on] of Object.entries(prevButtonsRef.current)) {
+      const [p, i] = who(k);
+      if (on && GAMEPAD_MAP[+i] !== undefined) releaseButton(GAMEPAD_MAP[+i], p);
+    }
+    for (const [k, v] of Object.entries(prevAxesRef.current)) {
+      const [p, a] = who(k), m = AXIS_MAP[a as keyof typeof AXIS_MAP];
+      if (m && Math.abs(v) > AXIS_DEADZONE) releaseButton(v < 0 ? m.negative : m.positive, p);
+    }
+    prevButtonsRef.current = {};
+    prevAxesRef.current = {};
+    quietRef.current = true;
+  }, [active, releaseButton]);
+
   useEffect(() => {
     const onConnect = () => setConnected(true);
     const onDisconnect = () => {
@@ -76,12 +94,15 @@ export function useGamepad(
 
     const gamepads = navigator.getGamepads?.();
     if (!gamepads) return;
+    // A button still down from the menus (A on Play) doesn't reach the game: only presses made from now on.
+    const quiet = quietRef.current;
+    quietRef.current = false;
 
     // The first connected gamepad is player 1; the next ones are Super Game Boy players 2-4 (ignored elsewhere).
     [...gamepads].filter((g) => g !== null).slice(0, 4).forEach((gp, player) => {
       const prev = prevButtonsRef.current;
       const k = (i: number | string) => (player ? `${player}:${i}` : String(i));
-      const press = (b: number) => pressButton(b, player), release = (b: number) => releaseButton(b, player);
+      const press = (b: number) => { if (!quiet) pressButton(b, player); }, release = (b: number) => releaseButton(b, player);
 
       // Poll mapped buttons
       for (const [gpIdx, gbBtn] of Object.entries(GAMEPAD_MAP)) {
@@ -98,7 +119,7 @@ export function useGamepad(
       if (onToggleFullscreen && !player) {
         const triPressed = gp.buttons[3]?.pressed ?? false;
         const triWas = prev[3] ?? false;
-        if (triPressed && !triWas) onToggleFullscreen();
+        if (triPressed && !triWas && !quiet) onToggleFullscreen();
         prev[3] = triPressed;
       }
 
