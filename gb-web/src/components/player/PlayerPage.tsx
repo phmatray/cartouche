@@ -9,7 +9,7 @@ import { useGamepad } from '../../hooks/useGamepad';
 import { padNav } from '../../hooks/useGamepadNav';
 import { useLcdShader } from '../../hooks/useLcdShader';
 import { useRewind } from '../../hooks/useRewind';
-import { useSaveData } from '../../hooks/useSaveData';
+import { useSaveData, warnSaveFailed } from '../../hooks/useSaveData';
 import { useSaveStates, type SlotKey } from '../../hooks/useSaveStates';
 import { useAnimationFrame } from '../../hooks/useAnimationFrame';
 import { CHANNEL_KEYS, machineFor, paletteOf, useDisplay, useSettingsStore, type Machine } from '../../store/settingsStore';
@@ -444,7 +444,8 @@ function Player({ game }: { game: GameEntry }) {
   const screenshot = useCallback(async () => {
     const rgba = romLoaded && framebufferSnapshot();
     if (!rgba) return;
-    await album.add(rgba);
+    // A full device must say so, like a save slot: the player would go on trusting the album.
+    try { await album.add(rgba); } catch (e) { warnSaveFailed(e); return; }
     toast(tNow('player.toast.shot'), '', { label: tNow('player.toast.view'), run: () => { setTab('album'); setManual(true); } });
   }, [romLoaded, framebufferSnapshot, album]);
   const mute = useCallback(() => { toggleMute(); toast(muted ? tNow('player.toast.soundOn') : tNow('player.toast.soundOff'), 'c'); }, [toggleMute, muted]);
