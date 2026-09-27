@@ -4,6 +4,59 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.4.0](https://github.com/phmatray/cartouche/compare/v1.3.0...v1.4.0) (2026-09-27)
+
+
+### Added
+
+* **player:** the pause card offers Resume and New game ([370d932](https://github.com/phmatray/cartouche/commit/370d932944eaced762f6a553ed4a02daf4fb432b))
+* **saves:** a New game button beside Resume, with a moment to undo it ([433a998](https://github.com/phmatray/cartouche/commit/433a9984973a37e7113849c394552cbfd3430de6))
+* **saves:** delete a slot or the resume point from the game page ([7ed3d00](https://github.com/phmatray/cartouche/commit/7ed3d00afc0a8b9f9e64b9d4cb961324cf98c985))
+
+
+### Fixed
+
+* **add:** import results keep the title readable on phones ([ad45387](https://github.com/phmatray/cartouche/commit/ad453879bf93bedcc114364574537f10fa0f8fdc))
+* **game:** the hero's buttons stack evenly on tablets and phones held sideways ([b371850](https://github.com/phmatray/cartouche/commit/b371850d2b5b17b15ff2fd3db8fa27430d943728))
+* **game:** the save buttons are 44 px tall on touch screens ([b4b3333](https://github.com/phmatray/cartouche/commit/b4b33333aaa9b329430629ee4b4424e71e14a617))
+* **library:** "Show all" in an empty filter stays on one line ([12850d5](https://github.com/phmatray/cartouche/commit/12850d5e6a8f7014e997e43786e649e78e41b37b))
+* **library:** an empty Favorites filter says how to add one ([75d638f](https://github.com/phmatray/cartouche/commit/75d638f7f780140c075e29613f40a25901c59f8e))
+* **library:** list view column headings share one baseline ([7c0b5f7](https://github.com/phmatray/cartouche/commit/7c0b5f73d06b6437eda2cfe4127df4c62d707847))
+* **library:** printed covers no longer split short words ("Pof-fin", "Spi-der") ([30aeec1](https://github.com/phmatray/cartouche/commit/30aeec12095b9eec9a8a0c2e498ac68d96e23608))
+* **library:** the A–Z jump on touch phones leaves one empty cell, not five ([c7f95be](https://github.com/phmatray/cartouche/commit/c7f95beb132d455b6f970625a35119a1b68721d5))
+* **library:** the demo caption keeps "Free homebrew" on one line ([1fc4861](https://github.com/phmatray/cartouche/commit/1fc4861e6b1543035061e7d836d7b3bb6db93a57))
+* **link:** the link cable no longer starts on a test cartridge ([1c67593](https://github.com/phmatray/cartouche/commit/1c675932664889f673410ce372f580675467035f))
+* **online:** the room code field shows the whole code on phones ([d913041](https://github.com/phmatray/cartouche/commit/d91304163f860c35626fa4f504a514230e6f47a0))
+* **player:** notices on a sideways phone keep to a corner instead of a bar across the game ([053a874](https://github.com/phmatray/cartouche/commit/053a8749db0a6f52acf22e051f710dbd11f0d9de))
+* **player:** on phones, Start and Select work while a notice is showing ([1005dc4](https://github.com/phmatray/cartouche/commit/1005dc4eb77fb77ba2effb8045d5cdfa6e3e9a0c))
+* **player:** screen preset previews no longer show a coarse checkerboard ([9c6d3a7](https://github.com/phmatray/cartouche/commit/9c6d3a74eccbfa9729d8741d8c5c12e163a1f15d))
+* **player:** screen preset previews no longer show a ghost of an earlier frame ([ed7974d](https://github.com/phmatray/cartouche/commit/ed7974d8c8562ba608793e238a5b39f445debf0a))
+* **player:** tablets held upright get Load, Photo and Mute in the dock ([e69f574](https://github.com/phmatray/cartouche/commit/e69f574e5a779342100da5fdc291457796359576))
+* **player:** the bottom dock no longer overlaps its labels on laptops and small screens ([f8e7e52](https://github.com/phmatray/cartouche/commit/f8e7e52b024cba357c4cc6971b77c741db396f4c))
+* **player:** the layout editor no longer shows the Paused card under its grid ([8affce4](https://github.com/phmatray/cartouche/commit/8affce4de992c06abc9716dce0306c8b28268e5d))
+* **player:** the manual's tab labels get room to breathe ([e351ef7](https://github.com/phmatray/cartouche/commit/e351ef7af389aca22f92f8a304aa7be02385e6b9))
+* **player:** the screen sliders share one width and one left edge ([b3ec0d7](https://github.com/phmatray/cartouche/commit/b3ec0d71e6970f615469d5d48371eb2c3e99873e))
+* **player:** the Upscaling choice fills its row, no empty first cell, labels no longer crammed ([5d26545](https://github.com/phmatray/cartouche/commit/5d26545f101abe0d21705c9457483dfe49a6bee1))
+* **saves:** a quick save over a filled slot can be undone ([41c063e](https://github.com/phmatray/cartouche/commit/41c063e92d4d9964bc004dc6d789a6835a396ec6))
+* **saves:** Save and Load sit side by side in the phone's Saves page ([1a9d7d8](https://github.com/phmatray/cartouche/commit/1a9d7d83eeffa64e62388cf4d3739c5c7b752d4c))
+* **saves:** say what a slot, the resume point and the cartridge save each are ([c23ec31](https://github.com/phmatray/cartouche/commit/c23ec31cc7d44c81df3eeabc2ccb423c530116ba))
+* **saves:** the game page's slots show the day and time they were made ([97d2f96](https://github.com/phmatray/cartouche/commit/97d2f9629429e828c65aacf373bd6fa7b1c67c25))
+* **saves:** the resume point's button reads like the hero's ([c2e87d0](https://github.com/phmatray/cartouche/commit/c2e87d09e1eaa7a46991b8f4d8048c17fc604391))
+* **search:** "no game called …" links to Add ROMs ([e74b482](https://github.com/phmatray/cartouche/commit/e74b482eb7bb94384efadb0ab3836776a9b24d0d))
+* **settings:** deleting downloaded box art asks first ([489c17b](https://github.com/phmatray/cartouche/commit/489c17b356dea823a475d7ba161a154ce916b43c))
+* **settings:** key binding rows keep a compact Change button on tablets and phones ([fd43c0b](https://github.com/phmatray/cartouche/commit/fd43c0b2319632ce2985e1838d630388abd2c663))
+* **settings:** on phones the open section scrolls into the contents row, which fades at the edge ([60c729e](https://github.com/phmatray/cartouche/commit/60c729e326ecfc7b5ffd57367e4a636bedac707f))
+* **settings:** resetting the keys can be undone ([7208337](https://github.com/phmatray/cartouche/commit/7208337f21ccdfb570bdf3bd3a9e51ba0513400d))
+* **settings:** segmented choices match on phones ([f3d4c23](https://github.com/phmatray/cartouche/commit/f3d4c2332dfcd30b53d65e57cff3e4cdb3792029))
+* **settings:** storage says ROM in French and Spanish, and one game is "never played" ([33ed513](https://github.com/phmatray/cartouche/commit/33ed5135b716e3459461734d8ab198362301ee8b))
+* **settings:** the gamepad map stacks to one column on phones ([53bc6af](https://github.com/phmatray/cartouche/commit/53bc6af6ae6b33ab53c78dd18dec2e85bdd62919))
+* **settings:** volume and rewind sliders stop announcing every step while dragged ([3593272](https://github.com/phmatray/cartouche/commit/3593272203fbb968650338b97b3cccdb6d9c2c88))
+* **shell:** footer groups the promise, the links and the small print, with a compact language switch ([44c2318](https://github.com/phmatray/cartouche/commit/44c231835da9616fb2826f580ee043275f42aa8b))
+* **shell:** header search stays on one line and the menu button stays on screen on tablets ([f63c356](https://github.com/phmatray/cartouche/commit/f63c356e4bb255c663c371567a7fc98c234a9983))
+* **shell:** long toasts wrap at a readable width ([958063e](https://github.com/phmatray/cartouche/commit/958063ecf89a8e4b23542550a2e60b446b045aec))
+* **shell:** the 404 headline no longer hyphenates on phones ([1b103c9](https://github.com/phmatray/cartouche/commit/1b103c977c2a7e893fdf3c7003cd48836a6320e7))
+* **shell:** the phone menu fits in landscape with page left to tap ([fb68a22](https://github.com/phmatray/cartouche/commit/fb68a220062e8522e186da505609f8b0cdf54dad))
+
 ## [1.3.0](https://github.com/phmatray/cartouche/compare/v1.2.1...v1.3.0) (2026-09-27)
 
 
