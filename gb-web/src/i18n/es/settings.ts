@@ -252,6 +252,8 @@ export default {
     list: 'Juegos almacenados',
     select: 'Seleccionar {title}',
     bundled: 'Incluido',
+    romsCol: 'ROM',
+    unplayed: 'Sin jugar',
     included: 'Incluida',
     shotDeleted: 'Captura eliminada',
     undo: 'Deshacer',

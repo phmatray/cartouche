@@ -252,6 +252,8 @@ export default {
     list: 'Jeux stockés',
     select: 'Sélectionner {title}',
     bundled: 'Inclus',
+    romsCol: 'ROM',
+    unplayed: 'Jamais joué',
     included: 'Incluse',
     shotDeleted: 'Capture supprimée',
     undo: 'Annuler',
