@@ -1,5 +1,5 @@
 import type { GameEntry } from '../types/game';
-import { folded, owned, score, searchFields, sortTitle } from './ui.ts';
+import { byName, folded, owned, score, searchFields } from './ui.ts';
 import { DICTS, getLang, LANGS, langName, t, tOr, type Key as MsgKey } from '../i18n/core.ts';
 
 /**
@@ -338,9 +338,8 @@ function textHits(index: SearchIndex, text: string): Map<Indexed, number> | null
 export function search(index: SearchIndex, q: Query): GameEntry[] {
   const hits = textHits(index, q.text);
   const ok = compile(q.filters);
-  const byTitle = (a: Indexed, b: Indexed) => sortTitle(a.g.title).localeCompare(sortTitle(b.g.title));
   const pool = hits ? [...hits.keys()] : index.items;
-  return pool.filter(ok).sort((a, b) => (hits ? hits.get(b)! - hits.get(a)! : 0) || byTitle(a, b)).map((it) => it.g);
+  return pool.filter(ok).sort((a, b) => (hits ? hits.get(b)! - hits.get(a)! : 0) || byName(a.g, b.g)).map((it) => it.g);
 }
 
 export interface FacetValue { value: string; label: string; count: number }

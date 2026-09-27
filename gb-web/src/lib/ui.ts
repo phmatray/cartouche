@@ -62,6 +62,12 @@ export function letterOf(g: GameEntry): string {
   const c = sortTitle(g.title).charAt(0).normalize('NFD').charAt(0).toUpperCase(); // 'Ō' files under O, where it sorts
   return /[A-Z]/.test(c) ? c : '#';
 }
+/**
+ * Name order ('The' aside), with every '#' title (digits, symbols such as 'µ', other scripts) first, in one run the
+ * A–Z bar's '#' reaches: plain localeCompare would file some symbols after Z.
+ */
+export const byName = (a: GameEntry, b: GameEntry) =>
+  +(letterOf(a) !== '#') - +(letterOf(b) !== '#') || sortTitle(a.title).localeCompare(sortTitle(b.title));
 
 /** Catalog category of the bundled test ROMs (acid2, cpu_instrs): a shelf of their own. */
 export const TEST_CATEGORY = 'Test cartridges';
