@@ -4,7 +4,7 @@ import type { GameEntry } from '../../types/game';
 import { downloadGame, FetchError, refreshSavedIds, useGameLibrary } from '../../hooks/useGameLibrary';
 import { createProfile, deleteSave, getActiveProfileId, getGameSaveStates, getSram, listProfiles, saveSram, setActiveProfile, uniqueName, type StoredSave, type StoredSaveState } from '../../lib/db';
 import { mapperSupported, type RomMetadata } from '../../lib/rom-utils';
-import { ago, assetUrl, bytes, download, dur, owned, paths, tagOf } from '../../lib/ui';
+import { ago, assetUrl, bytes, download, dur, owned, paths, tagOf, touchOnly } from '../../lib/ui';
 import { I } from '../icons';
 import { Cover, Title } from '../library/Cover';
 import { Frame } from '../library/Heroes';
@@ -148,7 +148,7 @@ function GameDetails({ game }: { game: GameEntry }) {
               {shots.map((s) => <figure key={s.id}><Shot png={s.png} label={t(s.kind === 'print' ? 'game.print' : 'game.shot', { ago: ago(s.timestamp) })} /><figcaption>{ago(s.timestamp)}</figcaption></figure>)}
             </div>
           ) : (
-            <div className="empty-inline">{I.cam}<span>{rich(t('game.noShots'), { b: (s) => <b>{s}</b> })}</span></div>
+            <div className="empty-inline">{I.cam}<span>{rich(t(touchOnly() ? 'game.noShotsTouch' : 'game.noShots'), { b: (s) => <b>{s}</b> })}</span></div>
           )}
           {raShown(game) && <Suspense><Achievements game={game} /></Suspense>}
         </article>
