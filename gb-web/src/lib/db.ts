@@ -105,19 +105,6 @@ export function addRom(base: string, rom: Omit<StoredRom, 'id'>, meta: Omit<Stor
   });
 }
 
-/** Remove a ROM, and the summary of it its meta keeps (favorites and play time stay). */
-export function deleteRom(id: string): Promise<void> {
-  return inTx([ROM_STORE, GAME_META_STORE], (tx, done) => {
-    tx.objectStore(ROM_STORE).delete(id);
-    const metas = tx.objectStore(GAME_META_STORE);
-    metas.get(id).onsuccess = (e) => {
-      const m = (e.target as IDBRequest<StoredGameMeta | undefined>).result;
-      if (m?.rom) { delete m.rom; metas.put(m); }
-      done(undefined);
-    };
-  });
-}
-
 /**
  * A save profile: one named battery save (cartridge SRAM) of a game. A game can have several
  * ("Main", "Léa's game"…). The game's first one is keyed by the game id itself (the layout before
@@ -224,9 +211,33 @@ export async function getScreenshots(gameId: string): Promise<StoredScreenshot[]
   return list.sort((a, b) => b.timestamp - a.timestamp);
 }
 export function deleteScreenshot(id: number): Promise<void> { return txOp(SCREENSHOT_STORE, 'readwrite', (s) => s.delete(id)).then(() => {}); }
-export async function deleteScreenshots(gameId: string): Promise<void> {
-  const ids: IDBValidKey[] = await txOp(SCREENSHOT_STORE, 'readonly', (s) => s.index('gameId').getAllKeys(gameId));
-  await Promise.all(ids.map((id) => deleteScreenshot(id as number)));
+
+/**
+ * Erase games' save profiles, save states and albums, and for `romIds` also the ROM and its summary (favorites and play
+ * time stay), all in one transaction: a few hundred games go in one pass instead of ten transactions each.
+ */
+export function eraseGames(ids: string[], romIds: string[] = []): Promise<void> {
+  return inTx([ROM_STORE, GAME_META_STORE, SAVE_STORE, SAVESTATE_STORE, SCREENSHOT_STORE], (tx, done) => {
+    const byGame = (name: string, id: string) => {
+      const store = tx.objectStore(name);
+      store.index('gameId').getAllKeys(id).onsuccess = (e) => { for (const k of (e.target as IDBRequest<IDBValidKey[]>).result) store.delete(k); };
+    };
+    const states = tx.objectStore(SAVESTATE_STORE);
+    for (const id of ids) {
+      byGame(SAVE_STORE, id);
+      byGame(SCREENSHOT_STORE, id);
+      [resumeStateId(id), ...Array.from({ length: SLOT_COUNT }, (_, i) => slotStateId(id, i))].forEach((k) => states.delete(k));
+    }
+    const roms = tx.objectStore(ROM_STORE), metas = tx.objectStore(GAME_META_STORE);
+    for (const id of romIds) {
+      roms.delete(id);
+      metas.get(id).onsuccess = (e) => {
+        const m = (e.target as IDBRequest<StoredGameMeta | undefined>).result;
+        if (m?.rom) { delete m.rom; metas.put(m); }
+      };
+    }
+    done(undefined);
+  });
 }
 
 /** Every store, for backup, restore and "erase everything". */

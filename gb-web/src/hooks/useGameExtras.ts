@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import type { GameEntry } from '../types/game';
 import { addScreenshot, createProfile, getScreenshots, listProfiles, uniqueName, type StoredSave, type StoredScreenshot } from '../lib/db';
-import { computeSha1, isGameBoyRom, parseRomHeader, savSizeError, withoutCopierHeader, type RomMetadata } from '../lib/rom-utils';
+import { computeSha1, isGameBoyRom, headerNames, parseRomHeader, parseRomTitle, savSizeError, withoutCopierHeader, type RomMetadata } from '../lib/rom-utils';
 import { lookupByHash } from '../lib/gamedb';
 import { owned, paths } from '../lib/ui';
 import { toast } from '../components/shell/actions';
@@ -73,7 +73,7 @@ export async function readRomFile(file: File): Promise<Uint8Array> {
 
 /**
  * Link the user's own file to a catalog entry. The file's SHA-1 is looked up among known dumps:
- * a match confirms it, an unknown file is linked as asked. A known dump of another game isn't this entry's: it's
+ * a match confirms it (for a GB Studio game, its header title does), an unknown file is linked as asked, with a caution. A known dump of another game isn't this entry's: it's
  * added as its own game (it would otherwise take over this page, with this author's credits and license).
  * Resolves to the ROM bytes (to start playing right away), or null when nothing was linked.
  */
@@ -92,7 +92,9 @@ export function useLinkRom(game: GameEntry | undefined) {
       return null;
     }
     await linkRomToGame(game, data, sha1);
-    if (!known) toast(t(game.madeWith ? 'game.link.ok' : 'game.link.unknown', { title: game.title }), game.madeWith ? 'c' : 'm'); // GB Studio games aren't in the GameDB
+    // GB Studio games aren't in the GameDB and most have no SHA-1: their header title is all there is to check.
+    const fits = !known && !!game.madeWith && headerNames(game.title, parseRomTitle(data));
+    if (!known) toast(t(fits ? 'game.link.ok' : 'game.link.unknown', { title: game.title }), fits ? 'c' : 'm');
     else toast(t('game.link.ok', { title: game.title }), 'c');
     return data;
   }, [game, linkRomToGame, navigate]);
