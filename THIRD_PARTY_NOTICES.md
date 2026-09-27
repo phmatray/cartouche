@@ -246,6 +246,19 @@ SOFTWARE.
   shipped unmodified as WOFF2 via `@fontsource-variable/archivo`. The license
   text is in `gb-web/public/licenses/OFL-Archivo.txt`, published with the app
   at `licenses/OFL-Archivo.txt`. It is the only typeface the app ships or loads.
+- Misaki font (美咲フォント: Misaki Gothic and Misaki Gothic 2nd) and k6x8
+  (k6x8 Gothic), Copyright (C) 2002-2021 and 2004-2023 Num Kadoma
+  (門真 なむ, https://littlelimit.net/misaki.htm and
+  https://littlelimit.net/k6x8.htm). License, as stated in both archives:
+  "These fonts are free software. Unlimited permission is granted to use,
+  copy, and distribute them, with or without modification, either
+  commercially or noncommercially. THESE FONTS ARE PROVIDED "AS IS" WITHOUT
+  WARRANTY." Live translate's reference glyphs,
+  `gb-web/src/translate/glyphs.bin`, are the 8x8 bitmaps of their kana,
+  punctuation, full-width Latin letters and digits and (Misaki Gothic only)
+  JIS X 0208 level-1 kanji, converted from the BDF files by
+  `scripts/build-glyphs.mjs`. They are matched against the tiles a game draws
+  to read its text; they are never displayed as a typeface.
 
 ### npm packages compiled into the web app
 
@@ -297,6 +310,18 @@ not part of the published build.
   browser details; see the
   [GitHub General Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
   No other third-party server is contacted: fonts are served with the app.
+
+### Live translate (opt-in, per game)
+
+- With Chrome's built-in Translator API, Chrome downloads its own on-device
+  translation model (from Google, as part of the browser) and translates in
+  the browser; Cartouche sends nothing anywhere.
+- With the player's own Anthropic API key, each line of text read from the
+  screen is sent, with the game's title and the few lines before it, from the
+  player's browser to `api.anthropic.com` (Anthropic's Messages API, model
+  Claude Haiku 4.5), and billed to that key; see
+  [Anthropic's privacy policy](https://www.anthropic.com/legal/privacy). The
+  key is stored in that browser only (localStorage) and sent nowhere else.
 - The file names used to build those URLs come from `gamedb.json` (see above;
   factual data, no images).
 
