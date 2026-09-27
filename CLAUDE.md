@@ -12,12 +12,15 @@ cartouche/
 │   │   ├── memory.rs         # Bus: region routing, DMA/HDMA, OAM-bug hooks
 │   │   ├── cartridge.rs      # ROM + MBC1/MBC2/MBC3(RTC)/MBC5
 │   │   ├── ppu.rs / apu.rs / timer.rs / interrupts.rs / joypad.rs / serial.rs
+│   │   ├── trace.rs          # Opt-in per-frame layer trace (BG/window/OBJ planes, per-line registers) + exact motion vectors
 │   │   └── boot_rom.rs       # Original 9-byte stub; no Nintendo boot ROM or logo, ever
-│   └── tests/                # blargg.rs, acid2.rs, cgb.rs, cpu_tests.rs, homebrew.rs, link.rs
+│   ├── examples/             # render.rs (PNG of a frame), harvest.rs (trace records; refuses to write inside a git repo)
+│   └── tests/                # blargg.rs, acid2.rs, cgb.rs, cpu_tests.rs, homebrew.rs, link.rs, trace.rs
 ├── gb-web/                   # React 19 + Vite + Tailwind v4 + Zustand
 │   └── src/
 │       ├── components/       # shell/, library/, game/, player/, add/, settings/, LinkCablePage
 │       ├── hooks/ lib/ store/ shaders/ workers/ audio/
+│       ├── neural/           # Neural 4× (tile-aware network + learned table) and Smooth motion, WebGL2; weights/*.bin are the only model data allowed (docs/NEURAL.md)
 │       ├── content/legal.ts  # Legal page text
 │       └── data/             # catalog.json (only verified, licensed entries), GameDB
 └── scripts/                  # build.sh, fetch-test-roms.sh, catalog/gamedb generators
@@ -59,6 +62,9 @@ cd gb-web && npm run dev:full
 
 # Full production build (served from /cartouche/)
 ./scripts/build.sh
+
+# Web unit tests (Node's test runner, pure TS modules only)
+cd gb-web && npm test
 
 # Core tests (use --no-fail-fast or cargo stops at the first failing binary)
 cd gb-core && cargo test --release --no-fail-fast

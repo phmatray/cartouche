@@ -19,6 +19,7 @@ log = "0.4"
 [dev-dependencies]
 wasm-bindgen-test = "0.3"
 png = "0.18"
+flate2 = "1"
 
 [profile.release]
 opt-level = "s"

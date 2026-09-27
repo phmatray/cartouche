@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { useSettingsStore, type ScreenSize } from '../../store/settingsStore';
 import type { ScreenKind } from '../../shaders/filters';
-import { ScreenFilters } from './ScreenFilters';
+import { MotionRows, ScreenFilters } from './ScreenFilters';
 import { Row, Seg } from './parts';
 
 /** Sample frames for the previews, drawn in the core's own colours so each filter treats them as a game frame. */
@@ -37,6 +37,8 @@ export function DisplayTab() {
         <Seg<ScreenKind> label="Defaults for" value={kind} options={[['dmg', 'Game Boy'], ['cgb', 'Color']]} set={setKind} />
       </Row>
       <ScreenFilters key={kind} kind={kind} frame={SAMPLES[kind]} />
+      <h3>Motion</h3>
+      <MotionRows />
       <h3>Size</h3>
       <Row label="Default size" sub="Fit fills the stage; fixed sizes stay pixel-perfect">
         <Seg<ScreenSize> label="Default size" value={screenSize} options={[['fit', 'Fit'], ['2', '2×'], ['3', '3×'], ['4', '4×']]} set={setScreenSize} />

@@ -82,6 +82,11 @@ about a minute.
   exactly where you were.
 - Four LCD looks (DMG Classic, Pocket, Light, Clean), an optional pixel grid,
   and fullscreen.
+- Neural 4× upscaling: a small network trained on Game Boy tile maps rounds off
+  pixel-art edges, never moves an original pixel, and stays steady while scrolling.
+  It adds detail that wasn't in the original pixels ([how it was made](docs/NEURAL.md)).
+- Smooth motion (opt-in) for 120 Hz screens: in-between frames from the emulator's
+  exact scroll and sprite positions, for about 8 ms of added delay.
 - Screenshots with <kbd>F12</kbd>, saved to a per-game album and exportable
   as PNG.
 
@@ -197,7 +202,7 @@ other copyrighted material. Security reports go through
 Tobu Tobu Girl and Tobu Tobu Girl Deluxe by Tangram Games · µCity by Antonio
 Niño Díaz · dmg-acid2 and cgb-acid2 by Matt Currie · test ROMs by Shay Green
 (Blargg) · game metadata from GameDataBase by PigSaint and libretro-database ·
-Archivo typeface by Omnibus-Type.
+Archivo typeface by Omnibus-Type · Neural 4× learned to imitate xBRZ by Zenju.
 
 ## License
 

@@ -30,6 +30,9 @@ export interface SettingsState {
   gameDisplay: Record<string, DisplayConfig>;
   /** Player screen size: fit the stage, or a fixed integer scale. */
   screenSize: ScreenSize;
+  /** Smooth motion: in-between frames on displays over 60 Hz (or on any display when forced). */
+  smoothMotion: boolean;
+  smoothMotionForce: boolean;
 
   // Audio
   masterVolume: number;
@@ -90,6 +93,8 @@ const DEFAULT_STATE = {
   display: DEFAULT_DISPLAY,
   gameDisplay: {} as Record<string, DisplayConfig>,
   screenSize: 'fit' as ScreenSize,
+  smoothMotion: false,
+  smoothMotionForce: false,
   masterVolume: 50,
   channelMutes: { pulse1: false, pulse2: false, wave: false, noise: false },
   defaultSpeed: 1,
