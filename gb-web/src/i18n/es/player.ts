@@ -33,10 +33,13 @@ export default {
     body: '{title} no está incluido. Carga tu propio archivo .gb para jugar; se queda en este navegador.',
   },
   restart: {
-    label: 'Reiniciar el juego',
-    title: '¿Reiniciar el juego?',
-    body: 'La consola se apaga y se vuelve a encender. El guardado del cartucho se conserva; el progreso hecho desde entonces, no, y el punto de reanudación se reemplaza al salir.',
-    ok: 'Reiniciar',
+    label: 'Nueva partida',
+    title: '¿Empezar una nueva partida?',
+    body: 'El juego vuelve a empezar desde el encendido. El guardado del cartucho se conserva; el progreso hecho desde entonces, no. El punto de reanudación se reemplazará por la nueva partida; las ranuras no cambian.',
+    ok: 'Nueva partida',
+    done: 'Nueva partida: el guardado del cartucho se conserva',
+    undo: 'Deshacer',
+    undone: 'De vuelta a la partida de antes',
   },
   overwrite: {
     title: '¿Sobrescribir la ranura {n}?',

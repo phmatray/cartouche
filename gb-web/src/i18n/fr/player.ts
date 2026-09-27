@@ -33,10 +33,13 @@ export default {
     body: '{title} n’est pas inclus. Chargez votre propre fichier .gb pour jouer ; il reste dans ce navigateur.',
   },
   restart: {
-    label: 'Relancer le jeu',
-    title: 'Relancer le jeu ?',
-    body: 'La console est éteinte puis rallumée. La sauvegarde de la cartouche est conservée, pas la progression faite depuis, et le point de reprise est remplacé quand vous quittez.',
-    ok: 'Relancer',
+    label: 'Nouvelle partie',
+    title: 'Commencer une nouvelle partie ?',
+    body: 'Le jeu redémarre depuis l’allumage de la console. La sauvegarde de la cartouche est conservée, pas la progression faite depuis. Le point de reprise sera remplacé par la nouvelle partie ; les emplacements ne changent pas.',
+    ok: 'Nouvelle partie',
+    done: 'Nouvelle partie : la sauvegarde de la cartouche est conservée',
+    undo: 'Annuler',
+    undone: 'Retour à la partie d’avant',
   },
   overwrite: {
     title: 'Écraser l’emplacement {n} ?',
