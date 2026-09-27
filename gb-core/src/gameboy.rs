@@ -402,13 +402,13 @@ impl GameBoy {
 
         let wram = read_bytes!(0x8000);
         self.bus.wram.copy_from_slice(wram);
-        self.bus.wram_bank = read_u8!();
+        self.bus.wram_bank = (read_u8!() & 7).max(1); // clamped: a damaged state must not index out of WRAM
         let hram = read_bytes!(0x7F);
         self.bus.hram.copy_from_slice(hram);
 
         let vram = read_bytes!(0x4000);
         self.bus.ppu.vram.copy_from_slice(vram);
-        self.bus.ppu.vram_bank = read_u8!();
+        self.bus.ppu.vram_bank = read_u8!() & 1;
         let oam = read_bytes!(0xA0);
         self.bus.ppu.oam.copy_from_slice(oam);
         self.bus.ppu.lcdc = read_u8!();
