@@ -213,7 +213,7 @@ export default {
     wipe: 'Tout effacer',
     wipeTitle: 'Tout effacer ?',
     wipeSub: 'Supprime toutes les ROM, sauvegardes, captures et réglages de ce navigateur',
-    wipeBody: 'Toutes les ROM, emplacements de sauvegarde, points de reprise, captures et réglages seront supprimés de ce navigateur. Exportez d’abord une copie de sauvegarde pour pouvoir les récupérer.',
+    wipeBody: 'Toutes les ROM, emplacements de sauvegarde, points de reprise, captures et réglages seront supprimés de ce navigateur, ainsi que votre clé RetroAchievements et votre serveur TURN ; les appareils associés seront dissociés. Exportez d’abord une copie de sauvegarde pour pouvoir les récupérer.',
   },
   pergame: {
     more: { one: '{count} autre', other: '{count} autres' },

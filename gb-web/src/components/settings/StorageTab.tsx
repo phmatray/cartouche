@@ -12,6 +12,7 @@ import type { GameEntry } from '../../types/game';
 import { Row, SwitchRow } from './parts';
 import { PerGame, type GameUsage } from './PerGame';
 import { date, num, t as tNow, useT } from '../../i18n';
+import { engine, useSync } from '../../lib/sync/status';
 
 interface Usage { roms: number; saves: number; shots: number; perGame: Map<string, GameUsage>; nSaves: number; nShots: number }
 const gameOf = (stateId: string) => stateId.replace(/-(slot-\d+|auto)$/, '');
@@ -166,6 +167,20 @@ export function StorageTab() {
     title: t('settings.storage.wipeTitle'), danger: true, ok: t('settings.storage.wipe'),
     body: t('settings.storage.wipeBody'),
     run: async () => {
+      // Unpair every device first, telling it as Unpair does: no one using this browser next keeps a link to them.
+      const { devices } = useSync.getState();
+      if (devices.length) {
+        const sync = await engine();
+        devices.forEach((d) => sync.removeDevice(d.id));
+        await new Promise((r) => setTimeout(r, 500)); // lets the unpair messages go out
+      }
+      useSync.setState({ devices: [], auto: false, roms: false });
+      // All else the app keeps in localStorage: the RetroAchievements key, the TURN credential, sync state, controls...
+      // but cartouche-version, which only tells an update from a first visit.
+      try {
+        for (const k of Object.keys(localStorage)) if (k.startsWith('cartouche') && k !== 'cartouche-version') localStorage.removeItem(k);
+      } catch { /* storage blocked: nothing kept there */ }
+      indexedDB.deleteDatabase('cartouche-sync'); // pieces of interrupted sync transfers
       await clearAll();
       useSettingsStore.getState().resetToDefaults();
       // Box art too (the offline app shell stays: it holds no personal data).
