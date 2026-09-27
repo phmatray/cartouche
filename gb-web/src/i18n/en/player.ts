@@ -9,6 +9,7 @@ export default {
   resumeAgo: 'Resume point {ago}',
   paused: 'Paused',
   pausedSub: 'Press P or the play button to continue.',
+  resume: 'Resume',
   crashed: {
     title: 'The game stopped',
     body: 'The console hit an instruction it can’t run. Restart the game; if it stops again, the file may be damaged or need a feature Cartouche doesn’t emulate.',

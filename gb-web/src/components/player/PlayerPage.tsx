@@ -20,7 +20,7 @@ import { dpadAt, slide } from '../../lib/touch-slide';
 import { getActiveProfileId, getSaveState, getSram, resumeStateId } from '../../lib/db';
 import { bootFrom, skipSilentResume } from '../../lib/boot-from';
 import { STARTUP } from '../../lib/settings-clean';
-import { ago, owned, paths, tagOf } from '../../lib/ui';
+import { ago, owned, paths, tagOf, touchOnly } from '../../lib/ui';
 import { settled } from '../../lib/transitions';
 import { I } from '../icons';
 import { Title } from '../library/Cover';
@@ -540,6 +540,8 @@ function Player({ game }: { game: GameEntry }) {
     };
   }, [keybindings, pressButton, releaseButton, editing]);
 
+  /** Confirm, then start over with an undo (the Saves page and the pause card). */
+  const askStartOver = () => setConfirm({ title: t('player.restart.title'), body: t('player.restart.body'), ok: t('player.restart.ok'), run: startOver });
   const auto = saves.states[0];
   const [kind, label] = tagOf(game, savedIds);
   const status = needsRom ? label : savedJustNow ? t('player.savedNow') : auto ? t('player.resumeAgo', { ago: ago(auto.timestamp) }) : label;
@@ -642,7 +644,14 @@ function Player({ game }: { game: GameEntry }) {
                   <div className="acts"><button className="btn y" onClick={restart}>{t('player.crashed.restart')}</button></div>
                 </div>
               ) : (
-                <div className="overlay hold"><b>{t('player.paused')}</b><p>{t('player.pausedSub')}</p></div>
+                <div className="overlay hold">
+                  <b>{t('player.paused')}</b>{!touchOnly() && <p>{t('player.pausedSub')}</p>}
+                  {/* Paused is where a player looks for "start over"; the Saves page has it too. */}
+                  <div className="acts">
+                    <button className="btn y" onClick={togglePlay}>{I.play}{t('player.resume')}</button>
+                    {!online.on && <button className="btn line" onClick={askStartOver}>{t('player.restart.label')}</button>}
+                  </div>
+                </div>
               ))}
             </div>
           </div>
@@ -666,7 +675,7 @@ function Player({ game }: { game: GameEntry }) {
             ? setConfirm({ title: t('player.overwrite.title', { n: String(i + 1) }), body: t('player.overwrite.body', { ago: ago(saves.states[i + 1]!.timestamp) }), ok: t('player.overwrite.ok'), run: () => saveSlot(i) })
             : saveSlot(i))}
           onLoad={load} onScreenshot={screenshot} online={online.on} running={running} onRestart={restart}
-          onStartOver={() => setConfirm({ title: t('player.restart.title'), body: t('player.restart.body'), ok: t('player.restart.ok'), run: startOver })}
+          onStartOver={askStartOver}
           onEditControls={editControls}
         />
       </div>

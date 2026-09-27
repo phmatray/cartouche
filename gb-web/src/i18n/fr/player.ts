@@ -10,6 +10,7 @@ export default {
   resumeAgo: 'Point de reprise {ago}',
   paused: 'En pause',
   pausedSub: 'Appuyez sur P ou sur le bouton Jouer pour continuer.',
+  resume: 'Reprendre',
   crashed: {
     title: 'Le jeu s’est arrêté',
     body: 'La console a rencontré une instruction invalide. Relancez le jeu ; s’il s’arrête encore, le fichier est peut-être endommagé ou utilise une fonction que Cartouche n’émule pas.',
