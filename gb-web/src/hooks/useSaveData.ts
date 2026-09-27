@@ -1,6 +1,6 @@
 import { useEffect, useState, type RefObject } from 'react';
 import { gameOfSave, getSram, listProfiles, newProfileId, saveSram, setActiveProfile, uniqueName, writeProfileSram } from '../lib/db';
-import { SramWriter } from '../lib/sram-writer';
+import { SramWriter, type SramIO } from '../lib/sram-writer';
 import { useSettingsStore } from '../store/settingsStore';
 import { toast } from '../components/shell/actions';
 import { t } from '../i18n';
@@ -14,8 +14,19 @@ interface UseSaveDataOptions {
   exportSram: () => Uint8Array | null;
 }
 
+/** The battery saves in IndexedDB, as a SramWriter reads and writes them (a fork: a new profile named after the save). */
+export const sramIO: SramIO = {
+  read: getSram,
+  put: saveSram,
+  fork: async (of, id) => {
+    const gameId = gameOfSave(id), now = Date.now();
+    const name = uniqueName(await listProfiles(gameId), of?.name ?? t('player.saves.main'));
+    return { id: newProfileId(gameId), gameId, name, sram: new Uint8Array(), timestamp: now, created: now };
+  },
+};
+
 /** How often the stored save is looked at: learns the profile soon after boot, and spots a write from elsewhere. */
-const CHECK_MS = 5000;
+export const CHECK_MS = 5000;
 
 /**
  * Keeps the cartridge's battery save in IndexedDB: at the interval set in Settings (when on) and always when the
@@ -25,15 +36,7 @@ const CHECK_MS = 5000;
 export function useSaveData({ saveTo, romLoaded, hasBatteryRam, exportSram }: UseSaveDataOptions) {
   const enabled = useSettingsStore((s) => s.autoSaveEnabled);
   const seconds = useSettingsStore((s) => s.autoSaveIntervalSeconds);
-  const [writer] = useState(() => new SramWriter({
-    read: getSram,
-    put: saveSram,
-    fork: async (of, id) => {
-      const gameId = gameOfSave(id), now = Date.now();
-      const name = uniqueName(await listProfiles(gameId), of?.name ?? t('player.saves.main'));
-      return { id: newProfileId(gameId), gameId, name, sram: new Uint8Array(), timestamp: now, created: now };
-    },
-  }));
+  const [writer] = useState(() => new SramWriter(sramIO));
   useEffect(() => {
     if (!romLoaded || !hasBatteryRam()) return;
     const check = () => (saveTo.current ? writer.check(saveTo.current).catch(() => {}) : Promise.resolve());

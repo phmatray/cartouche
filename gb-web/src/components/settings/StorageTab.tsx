@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { clearAll, gameOfSave, getAllFrom, getAllGameMeta, getGameMeta, getRom, getRomIds, setGameMeta, STORES, type StoredSave, type StoredSaveState, type StoredScreenshot } from '../../lib/db';
+import { gameOfSave, getAllFrom, getAllGameMeta, getGameMeta, getRom, getRomIds, setGameMeta, STORES, type StoredSave, type StoredSaveState, type StoredScreenshot } from '../../lib/db';
 import { backupFileName, exportBackup, readBackup, restoreBackup } from '../../lib/backup';
 import { refreshSavedIds, reloadLibrary, useGameLibrary } from '../../hooks/useGameLibrary';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -12,6 +12,7 @@ import type { GameEntry } from '../../types/game';
 import { Row, SwitchRow } from './parts';
 import { PerGame, type GameUsage } from './PerGame';
 import { date, num, t as tNow, useT } from '../../i18n';
+import { eraseEverything } from '../../lib/wipe';
 
 interface Usage { roms: number; saves: number; shots: number; perGame: Map<string, GameUsage>; nSaves: number; nShots: number }
 const gameOf = (stateId: string) => stateId.replace(/-(slot-\d+|auto)$/, '');
@@ -166,10 +167,7 @@ export function StorageTab() {
     title: t('settings.storage.wipeTitle'), danger: true, ok: t('settings.storage.wipe'),
     body: t('settings.storage.wipeBody'),
     run: async () => {
-      await clearAll();
-      useSettingsStore.getState().resetToDefaults();
-      // Box art too (the offline app shell stays: it holds no personal data).
-      await deleteBoxArt();
+      await eraseEverything();
       location.assign(import.meta.env.BASE_URL); // start over from a clean load
     },
   });

@@ -285,7 +285,7 @@ class Link {
       const c = p.conflicts.find((x) => x.k === mv.from)!;
       // Changed since the snapshot (a game saved meanwhile): not moved; its pull fails the same check when it lands.
       if ((await currentHash(mv.from, games)) !== this.planned(round, mv.from)) continue;
-      await moveAside(mv.from, mv.to, games, { from: c.olderFrom, at: c.olderAt });
+      await moveAside(mv.from, mv.to, games, { from: c.olderFrom, at: c.olderAt, profile: c.profile });
       round.changed = true;
     }
     for (const w of p.write) { await writeSmall(w.k, w.v, w.t, await localGames()); round.got++; round.changed = true; }
@@ -341,7 +341,7 @@ class Link {
     // The pull fails instead and the base stays put, so the next sync sees both sides changed and keeps both.
     const g = await localGames();
     const still = !/^(sram|state):/.test(p.dest) || (!inPlay(p.dest, g, await busyNow()) &&(await currentHash(p.dest, g)) === this.planned(round, p.dest));
-    const ok = still && await storeRecord(p.k, p.dest, p.from, concat(p.got), async () => g, conflict ? { from: conflict.olderFrom, at: conflict.olderAt } : undefined).catch(() => false);
+    const ok = still && await storeRecord(p.k, p.dest, p.from, concat(p.got), async () => g, conflict ? { from: conflict.olderFrom, at: conflict.olderAt, profile: conflict.profile } : undefined).catch(() => false);
     await dropParts(p.prefix);
     if (ok) { round.got++; round.changed = true; } else round.failed.push(p.k);
     await this.maybeDone(round);

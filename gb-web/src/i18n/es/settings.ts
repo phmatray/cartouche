@@ -213,7 +213,7 @@ export default {
     wipe: 'Borrar todo',
     wipeTitle: '¿Borrar todo?',
     wipeSub: 'Elimina todas las ROM, partidas, capturas y ajustes de este navegador',
-    wipeBody: 'Todas las ROM, ranuras de guardado, puntos de reanudación, capturas y ajustes se eliminarán de este navegador. Exporta antes una copia por si quieres recuperarlos.',
+    wipeBody: 'Todas las ROM, ranuras de guardado, puntos de reanudación, capturas y ajustes se eliminarán de este navegador, junto con tu clave de RetroAchievements y tu servidor TURN; los dispositivos vinculados se desvincularán. Exporta antes una copia por si quieres recuperarlos.',
   },
   pergame: {
     more: { one: '{count} más', other: '{count} más' },

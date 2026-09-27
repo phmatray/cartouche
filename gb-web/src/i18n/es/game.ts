@@ -116,7 +116,7 @@ export default {
     bad: '{file} está dañado o no es una ROM de Game Boy',
     fromZip: '{file} contiene varias ROM: se carga {rom}',
     unknown: 'Vinculado a {title}. Este archivo no está entre los volcados conocidos, así que podría ser un hack o un volcado defectuoso.',
-    other: 'Vinculado, pero su huella indica {title}',
+    other: 'Este archivo es {title}, otro juego: añadido a tu biblioteca por separado',
     ok: '{title} reconocido: tu ROM está vinculada',
   },
 } satisfies Messages['game'];
