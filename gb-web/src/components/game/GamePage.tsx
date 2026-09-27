@@ -18,7 +18,7 @@ import { TagLinks } from '../library/TagLinks';
 import { genreLabel } from '../../lib/search';
 import { fileAccept } from '../../lib/pwa';
 import { creditOf, descOf } from '../../lib/catalog-utils';
-import { headerSize, rich, size, t as tNow, useT } from '../../i18n';
+import { date, headerSize, rich, size, t as tNow, useT } from '../../i18n';
 import { raShown } from '../../lib/retroachievements';
 
 const Achievements = lazy(() => import('./Achievements'));
@@ -32,6 +32,7 @@ export function GamePage() {
   return <GameDetails key={game.id} game={game} />;
 }
 
+const stamp = (ts: number) => date(ts, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 
 function GameDetails({ game }: { game: GameEntry }) {
   const { savedIds, toggleFavorite, deleteGame, eraseSaves } = useGameLibrary();
@@ -217,7 +218,7 @@ function GameDetails({ game }: { game: GameEntry }) {
                     <li key={i}>
                       <span className="n">{i + 1}</span>
                       <span className="th">{s?.thumbnail.length ? <Frame rgba={s.thumbnail} label={t('game.slot', { n: String(i + 1) })} /> : null}</span>
-                      <span className="w">{s ? ago(s.timestamp) : t('common.empty')}{s && profileName(s.profile) && <small>{profileName(s.profile)}</small>}</span>
+                      <span className="w">{s ? ago(s.timestamp) : t('common.empty')}{s && <small>{[stamp(s.timestamp), profileName(s.profile)].filter(Boolean).join(' · ')}</small>}</span>
                       {s ? (
                         <span className="ma">
                           <Link className="btn line sm" to={paths.play(game.id, `?slot=${i}`)}>{t('common.load')}</Link>
