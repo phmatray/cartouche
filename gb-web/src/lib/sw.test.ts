@@ -54,3 +54,31 @@ test('an opened file is the file, not the shell', { timeout: 2000 }, async () =>
   assert.equal(await get(`${SCOPE}roms/gbstudio/LICENSES.txt`).res, `net ${SCOPE}roms/gbstudio/LICENSES.txt`);
   assert.equal(await get(`${SCOPE}assets/x.js`, 'cors').res, `net ${SCOPE}assets/x.js`);
 });
+
+/** Posts 'activate' to sw.js while these window clients (urls) are open; true when the worker took over. */
+async function activates(open: string[]) {
+  const handlers: Record<string, (e: unknown) => void> = {};
+  let skipped = false;
+  const sandbox = {
+    self: {
+      registration: { scope: SCOPE },
+      addEventListener: (t: string, h: (e: unknown) => void) => { handlers[t] = h; },
+      clients: { matchAll: async () => open.map((url) => ({ url })) },
+      skipWaiting: async () => { skipped = true; },
+    },
+    URL,
+  };
+  vm.runInNewContext(readFileSync(new URL('../../public/sw.js', import.meta.url), 'utf8'), sandbox);
+  let done: Promise<unknown> = Promise.resolve();
+  handlers.message({ data: 'activate', waitUntil: (p: Promise<unknown>) => { done = p; } });
+  await done;
+  return skipped;
+}
+
+test('a waiting version takes over only a page that is alone', async () => {
+  assert.equal(await activates([SCOPE]), true);
+  // Another site on the same origin (other projects on the same Pages domain) doesn't count.
+  assert.equal(await activates([`${SCOPE}settings`, 'https://x.test/other-app/']), true);
+  // A second tab or window would lose its version's lazy chunks when the activate step prunes its cache.
+  assert.equal(await activates([SCOPE, `${SCOPE}game/ucity`]), false);
+});

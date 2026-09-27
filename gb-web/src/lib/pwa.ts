@@ -37,7 +37,8 @@ export function setupPwa(onUpdated: () => void) {
   window.addEventListener('load', async () => {
     const reg = await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL }).catch(() => null);
     // A version downloaded during an earlier session waits for this launch: it takes over now, before anything is
-    // played, and the page reloads once so the app and its cache are the same version.
+    // played, and the page reloads once so the app and its cache are the same version. Not while another tab or
+    // window of the app is open (the worker declines): that one would lose its version's lazy chunks.
     if (reg?.waiting && navigator.serviceWorker.controller) {
       navigator.serviceWorker.addEventListener('controllerchange', () => location.reload(), { once: true });
       reg.waiting.postMessage('activate');
