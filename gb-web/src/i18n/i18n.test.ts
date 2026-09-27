@@ -35,9 +35,12 @@ test('French and Spanish have exactly the English keys, placeholders and markup'
   }
 });
 
-test('French puts a no-break space before : ; ? ! (never a lone sign at the start of a line)', () => {
-  const bad = [...flat(DICTS.fr!)].filter(([, v]) => / [:;?!](\s|$)/.test(v)).map(([k]) => k);
+test('French puts a no-break space before : ; ? ! and inside « » (never a lone sign at the start of a line)', () => {
+  const wrong = (v: string) => / [:;?!]|« | »/.test(v);
+  const bad = [...flat(DICTS.fr!)].filter(([, v]) => wrong(v)).map(([k]) => k);
   assert.deepEqual(bad, []);
+  const legal = JSON.stringify(LEGAL_FR).split('"').filter(wrong);
+  assert.deepEqual(legal, []);
 });
 
 test('every plural has each form its language uses (“many” falls back to “other”)', () => {

@@ -7,7 +7,7 @@ import type { useEmulator } from '../../hooks/useEmulator';
 import type { SlotKey } from '../../hooks/useSaveStates';
 import { machineFor, useSettingsStore, type Machine, type ScreenSize, type SgbCart } from '../../store/settingsStore';
 import { ConsoleRows, MotionRows, ScreenFilters } from '../settings/ScreenFilters';
-import { ago, dur, keyLabel, paths } from '../../lib/ui';
+import { ago, dur, keyLabel, paths, touchOnly } from '../../lib/ui';
 import { I } from '../icons';
 import { Frame } from '../library/Heroes';
 import { Title } from '../library/Cover';
@@ -97,7 +97,7 @@ const Round = ({ children }: { children: ReactNode }) => <span className="key ro
 function ControlsPage({ online, onEdit }: { online?: boolean; onEdit: () => void }) {
   const k = useSettingsStore((s) => s.keybindings);
   const t = useT();
-  const [input, setInput] = useState<'keyboard' | 'gamepad' | 'touch'>('keyboard');
+  const [input, setInput] = useState<'keyboard' | 'gamepad' | 'touch'>(() => (touchOnly() ? 'touch' : 'keyboard'));
   const dpad = t('shell.keys.dpad');
   const map: Record<typeof input, [ReactNode, string, string?][]> = {
     keyboard: [
@@ -251,7 +251,7 @@ function AlbumPage({ game, shots: all, romLoaded, onScreenshot }: ManualProps) {
             </figure>
           ))}
         </div>
-      ) : <div className="empty-inline">{t('player.album.empty')}</div>}
+      ) : <div className="empty-inline">{t(touchOnly() ? 'player.album.emptyTouch' : 'player.album.empty')}</div>}
       {prints.length > 0 && <Suspense fallback={null}><PrintsSection prints={prints} title={game.title} /></Suspense>}
     </>
   );

@@ -326,7 +326,7 @@ export function LinkCablePage() {
           <button className="btn p" onClick={copyForP2}>{t('link.copyP2')}</button>
         </div>
       )}
-      {state.error && <p className="note" role="alert">{state.error}</p>}
+      {state.error && <p className="note" role="alert">{state.error.text}{state.error.detail && <><br /><small lang="en">{state.error.detail}</small></>}</p>}
       <div className="lc-bar">
         <div className="row" style={{ border: 0, padding: 0, gap: 14, color: 'var(--paper)' }}>
           <button className="switch" role="switch" aria-checked={same} aria-label={t('link.same')} disabled={state.isRunning} onClick={() => setSame(!same)} />

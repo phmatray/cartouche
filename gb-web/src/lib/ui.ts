@@ -53,9 +53,15 @@ export const mb = size;
 /** A KeyboardEvent.key as printed on a key cap. */
 export function keyLabel(k: string): string {
   if (!k) return '—';
-  const named: Record<string, string> = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', ' ': t('common.keys.space'), Control: 'Ctrl', Escape: 'Esc' };
+  const named: Record<string, string> = {
+    ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Control: 'Ctrl', Escape: 'Esc',
+    ' ': t('common.keys.space'), Enter: t('common.keys.enter'), Shift: t('common.keys.shift'), Backspace: t('common.keys.backspace'), Tab: t('common.keys.tab'),
+  };
   return named[k] ?? (k.length === 1 ? k.toUpperCase() : k);
 }
+
+/** A touch screen with no mouse or trackpad (a phone): copy that says "tap" rather than "press F12". */
+export const touchOnly = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse) and (hover: none)').matches;
 
 export const sortTitle =(t: string) => t.replace(/^The /i, '');
 export function letterOf(g: GameEntry): string {

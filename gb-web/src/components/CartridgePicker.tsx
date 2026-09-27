@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { byline, linkReady, score, searchKey, sortTitle } from '../lib/ui';
+import { byline, keyLabel, linkReady, score, searchKey, sortTitle } from '../lib/ui';
 import type { GameEntry } from '../types/game';
 import { I } from './icons';
 import { Cover } from './library/Cover';
@@ -154,7 +154,7 @@ export function CartridgePicker({ open, player, games, current, onPick, onFile, 
             ))}
           </div>
           <div className="shint pk-hint" aria-hidden="true">
-            <span>{rich(t('search.hint.move'), { keys: <><kbd>↑</kbd> <kbd>↓</kbd></> })}</span><span>{rich(t('link.pick.insert'), { keys: <kbd>Enter</kbd> })}</span><span>{rich(t('search.hint.close'), { keys: <kbd>Esc</kbd> })}</span>
+            <span>{rich(t('search.hint.move'), { keys: <><kbd>↑</kbd> <kbd>↓</kbd></> })}</span><span>{rich(t('link.pick.insert'), { keys: <kbd>{keyLabel('Enter')}</kbd> })}</span><span>{rich(t('search.hint.close'), { keys: <kbd>Esc</kbd> })}</span>
             <span>{q ? t('search.results', { count: rowIdx.length }) : t('link.pick.count', { count: games.length })}</span>
           </div>
           <div ref={list} className="pk-list" id="pk-list" role="listbox" aria-label={t('link.pick.list')} tabIndex={-1} onScroll={measure}>

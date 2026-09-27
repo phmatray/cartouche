@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { useGameLibrary, useSearchIndex } from '../../hooks/useGameLibrary';
-import { byline, folded, owned, paths, searchKey, spatialNext, tagOf } from '../../lib/ui';
+import { byline, folded, keyLabel, owned, paths, searchKey, spatialNext, tagOf } from '../../lib/ui';
 import { addFilters, facetCounts, facetKey, facetLabel, formatQuery, genreLabel, normValue, parseQuery, search, suggest, valueLabel, withoutEach, type Filter, type Key, type Query } from '../../lib/search';
 import { I } from '../icons';
 import { Cover } from '../library/Cover';
@@ -204,8 +204,8 @@ export function SearchDialog() {
           <div className="sbar">
             <svg className="icon" style={{ width: 36, height: 36 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
             <input ref={inputRef} type="search" placeholder={query.filters.length ? t('search.addWords') : t('shell.search')} autoComplete="off" autoFocus spellCheck={false}
-              role="combobox" aria-expanded={sugs.length > 0} aria-controls="ssug sres" aria-autocomplete="list"
-              aria-activedescendant={sugs.length ? `sug-${sugSel}` : undefined} aria-describedby="shelp"
+              role="combobox" aria-label={t('shell.search')} aria-expanded={sugs.length > 0} aria-controls="ssug sres" aria-autocomplete="list"
+              aria-activedescendant={sugs.length ? `sug-${sugSel}` : !loading && shown[sel] ? `res-${sel}` : undefined} aria-describedby="shelp"
               value={input} onChange={(e) => onInput(e.target.value)} />
             <button className="close" aria-label={t('search.close')} onClick={close}>{I.close}</button>
             {sugs.length > 0 && (
@@ -214,7 +214,7 @@ export function SearchDialog() {
                   <li key={s.insert} id={`sug-${i}`} role="option" aria-selected={i === sugSel}
                     onMouseDown={(e) => { e.preventDefault(); accept(s.insert); inputRef.current?.focus(); }}>
                     <b>{s.label}</b><span>{s.hint}</span>{s.count !== undefined && <span className="n">{num(s.count)}</span>}
-                    {i === sugSel && <kbd>Tab</kbd>}
+                    {i === sugSel && <kbd>{keyLabel('Tab')}</kbd>}
                   </li>
                 ))}
               </ul>
@@ -227,7 +227,7 @@ export function SearchDialog() {
                 const n = query.filters.filter((x) => x.key === k || (k === 'decade' && x.key === 'year')).length;
                 return (
                   <button key={k} className="chip" data-facet={k} aria-expanded={panel === k} aria-controls="fpanel"
-                    aria-pressed={n > 0} onClick={() => { setPanel(panel === k ? null : k); setWithin(''); }}>
+                    aria-pressed={n > 0} aria-label={n > 0 ? t('search.facetActive', { facet: facetLabel(k), count: n }) : undefined} onClick={() => { setPanel(panel === k ? null : k); setWithin(''); }}>
                     {facetLabel(k)}{n > 0 && <span className="n">{n}</span>}{I.down}
                   </button>
                 );
@@ -249,16 +249,16 @@ export function SearchDialog() {
           )}
 
           <div className="shint" id="shelp">
-            <span>{rich(t('search.hint.move'), { keys: <><kbd>↑</kbd> <kbd>↓</kbd></> })}</span><span>{rich(t('search.hint.open'), { keys: <kbd>Enter</kbd> })}</span><span>{rich(t('search.hint.close'), { keys: <kbd>Esc</kbd> })}</span>
+            <span>{rich(t('search.hint.move'), { keys: <><kbd>↑</kbd> <kbd>↓</kbd></> })}</span><span>{rich(t('search.hint.open'), { keys: <kbd>{keyLabel('Enter')}</kbd> })}</span><span>{rich(t('search.hint.close'), { keys: <kbd>Esc</kbd> })}</span>
             <span className="syn">{rich(t('search.hint.syntax'), { codes: <><code>genre:</code> <code>players:2</code> <code>-region:jp</code> <code>year:1990..1995</code></> })}</span>
             <span className="cnt" role="status">{loading ? t('common.loadingLibrary') : any ? t(results.length > MAX_RESULTS ? 'search.resultsCapped' : 'search.results', { count: results.length, max: MAX_RESULTS }) : t('library.sort.recent')}</span>
           </div>
-          <ul className="sres" id="sres" role="listbox" aria-label={t('search.resultsLabel')} aria-busy={loading}>
+          <ul className="sres" id="sres" role={!loading && shown.length ? 'listbox' : undefined} aria-label={t('search.resultsLabel')} aria-busy={loading}>
             {loading ? null : shown.length ? shown.map((g, i) => {
               const [kind, label] = tagOf(g, savedIds);
               return (
-                <li key={g.id}>
-                  <Link to={paths.game(g.id)} role="option" aria-selected={i === sel}>
+                <li key={g.id} role="presentation">
+                  <Link to={paths.game(g.id)} id={`res-${i}`} role="option" aria-selected={i === sel}>
                     <Cover game={g} aria-hidden />
                     <span className="t"><Hl text={g.title} q={q} /><small>{[byline(g), genreLabel(g)].filter(Boolean).join(' · ')}</small></span>
                     <span className={`tag ${kind}`} style={{ margin: 0 }}>{label}</span>

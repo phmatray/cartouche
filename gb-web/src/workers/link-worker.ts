@@ -18,7 +18,8 @@ export type FromLinkWorkerMsg =
   // sram: both battery saves, every SRAM_EVERY frames (kept by the page to write on unload, when a round trip can't finish)
   | { type: 'frame'; framebuffers: [ArrayBuffer | null, ArrayBuffer | null]; sram?: [ArrayBuffer | null, ArrayBuffer | null] }
   | { type: 'sram'; data: [ArrayBuffer | null, ArrayBuffer | null] }
-  | { type: 'error'; message: string };
+  // init: the core couldn't start; crashed: `player`'s game stopped. `detail`: the core's own (English) text.
+  | { type: 'error'; code: 'init' | 'crashed'; player?: LinkPlayerIndex; detail?: string };
 
 type Emulator = import('gb-core').Emulator;
 
@@ -47,7 +48,7 @@ async function initialize() {
     emus[1] = new wasm.Emulator();
     post({ type: 'ready' });
   } catch (err) {
-    post({ type: 'error', message: `WASM init failed: ${err}` });
+    post({ type: 'error', code: 'init', detail: String(err) });
   }
 }
 
@@ -62,7 +63,7 @@ function copyFramebuffer(emu: Emulator): ArrayBuffer {
   const msg = e.data;
   const [emu1, emu2] = emus;
   if (!emu1 || !emu2 || !wasmMemory) {
-    post({ type: 'error', message: 'Emulator not initialized' });
+    post({ type: 'error', code: 'init' });
     return;
   }
 
@@ -82,7 +83,7 @@ function copyFramebuffer(emu: Emulator): ArrayBuffer {
       prevButtons[i] = 0;
       post(success
         ? { type: 'romLoaded', player: msg.player, success }
-        : { type: 'romLoaded', player: msg.player, success, error: emu.get_error() ?? 'Unknown error' });
+        : { type: 'romLoaded', player: msg.player, success, error: emu.get_error() });
       break;
     }
 
@@ -94,7 +95,7 @@ function copyFramebuffer(emu: Emulator): ArrayBuffer {
 
     case 'runFrame': {
       let ok = true;
-      let failed: Emulator = emu1;
+      let failed: Emulator = emu1, player: LinkPlayerIndex = 1;
       const count = msg.count ?? 1;
       for (let k = 0; k < count && ok; k++) {
         if (loaded[0] && loaded[1]) {
@@ -104,12 +105,15 @@ function copyFramebuffer(emu: Emulator): ArrayBuffer {
             if (loaded[i] && ok && !emus[i]!.run_frame()) {
               ok = false;
               failed = emus[i]!;
+              player = (i + 1) as LinkPlayerIndex;
             }
           }
         }
       }
       if (!ok) {
-        post({ type: 'error', message: failed.get_error() ?? 'Frame error' });
+        // Linked, the core names the player that stopped: "P2: …".
+        const err = failed.get_error() ?? '', m = /^P([12]): (.*)$/s.exec(err);
+        post({ type: 'error', code: 'crashed', player: m ? (+m[1] as LinkPlayerIndex) : player, detail: m ? m[2] : err || undefined });
         return;
       }
       const framebuffers: [ArrayBuffer | null, ArrayBuffer | null] = [

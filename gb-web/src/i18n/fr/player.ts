@@ -10,6 +10,11 @@ export default {
   resumeAgo: 'Point de reprise {ago}',
   paused: 'En pause',
   pausedSub: 'Appuyez sur P ou sur le bouton Jouer pour continuer.',
+  crashed: {
+    title: 'Le jeu s’est arrêté',
+    body: 'La console a rencontré une instruction invalide. Relancez le jeu ; s’il s’arrête encore, le fichier est peut-être endommagé ou utilise une fonction que Cartouche n’émule pas.',
+    restart: 'Relancer le jeu',
+  },
   speed: 'Vitesse {x}×',
   rewindReady: 'Retour arrière prêt : {s} s',
   page: 'p. {n}',
@@ -56,9 +61,10 @@ export default {
     soundOff: 'Son coupé',
     belongs: 'Cette sauvegarde appartient à « {name} » : les prochaines y seront écrites',
     newSave: 'La sauvegarde de cartouche d’origine a été supprimée : sauvegarde dans une nouvelle, « {name} »',
-    changedElsewhere: 'Cette sauvegarde a changé ailleurs (autre onglet ou appareil) : sauvegarde dans une nouvelle, « {name} », les deux sont gardées',
+    changedElsewhere: 'Cette sauvegarde a changé ailleurs (autre onglet ou appareil) : sauvegarde dans une nouvelle, « {name} », les deux sont gardées',
   },
   error: {
+    crashed: 'Le jeu s’est arrêté : la console a rencontré une instruction invalide.',
     init: 'Émulateur non initialisé',
     unknown: 'Erreur inconnue au chargement de la ROM',
     exception: 'Exception au chargement de la ROM : {error}',
@@ -159,6 +165,7 @@ export default {
     savePng: 'Enregistrer le PNG',
     share: 'Partager',
     empty: 'Rien pour l’instant. Appuyez sur F12 en jeu.',
+    emptyTouch: 'Rien pour l’instant. Touchez Prendre une capture ci-dessus pendant une partie.',
   },
   game: {
     open: 'Ouvrir la page du jeu',

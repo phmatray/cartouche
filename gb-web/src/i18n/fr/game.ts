@@ -41,6 +41,7 @@ export default {
   shot: 'Capture d’écran, {ago}',
   print: 'Tirage, {ago}',
   noShots: 'Aucune capture pour l’instant. Appuyez sur <b>F12</b> en jeu, ou sur le bouton appareil photo, pour en ajouter une.',
+  noShotsTouch: 'Aucune capture pour l’instant. En jeu, ouvrez le <b>Manuel</b> et touchez <b>Prendre une capture</b> dans son Album.',
   playIt: 'Y jouer',
   dl: {
     button: 'Télécharger',

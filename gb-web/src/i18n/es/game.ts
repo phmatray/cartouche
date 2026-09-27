@@ -41,6 +41,7 @@ export default {
   shot: 'Captura, {ago}',
   print: 'Copia, {ago}',
   noShots: 'Aún no hay capturas. Pulsa <b>F12</b> mientras juegas, o el botón de la cámara, para añadir una.',
+  noShotsTouch: 'Aún no hay capturas. Mientras juegas, abre el <b>Manual</b> y toca <b>Hacer captura</b> en su Álbum.',
   playIt: 'Juégalo',
   dl: {
     button: 'Descargar',

@@ -21,7 +21,7 @@ export const LEGAL_FR: LegalSection[] = [
       'le démarrage ; les couleurs Game Boy Color d’un jeu Game Boy d’origine, si vous les choisissez, sont calculées ' +
       'par cette boot ROM sans être affichée. L’animation de démarrage est désactivée par défaut. Une fois activée ' +
       '(Réglages > Émulation), elle affiche le logo lu dans la cartouche du jeu, comme la console. Les cadres et couleurs Super Game Boy ' +
-      'sont dessinés à partir des données envoyées par chaque jeu ; aucun logiciel Super Game Boy ou SNES n’est inclus.\n\n' +
+      'sont dessinés à partir des données envoyées par chaque jeu ; aucun logiciel Super Game Boy ou SNES n’est inclus.\n\n' +
       'Trois jeux homebrew gratuits, redistribués sans modification à partir des versions officielles de leurs auteurs :\n\n' +
       'Tobu Tobu Girl et Tobu Tobu Girl Deluxe, © 2017 Tangram Games (sources : ' +
       'https://github.com/SimonLarsen/tobutobugirl et https://github.com/SimonLarsen/tobutobugirl-dx). ' +
@@ -42,11 +42,11 @@ export const LEGAL_FR: LegalSection[] = [
       'n’indique aucune licence ; il est inclus parce que la communauté de l’émulation le redistribue largement pour ' +
       'les tests, et il sera retiré immédiatement à la demande de l’auteur.\n\n' +
       'Quatre jeux créés avec GB Studio, hébergés sans modification parce que les licences de leurs auteurs ' +
-      'autorisent la redistribution de la ROM entière : Dawn Will Come (code MIT, graphismes et musique CC BY 4.0), ' +
+      'autorisent la redistribution de la ROM entière : Dawn Will Come (code MIT, graphismes et musique CC BY 4.0), ' +
       'Poltersprite (jeu CC BY-NC-SA 4.0, code GPL-3.0), Millennium Gun (code 0BSD, graphismes et sons CC0 1.0, ' +
       'plugin MIT) et Dusky Dungeon (MIT, graphismes CC BY 4.0, polices CC BY 4.0 et CC BY 3.0). Chacun n’est ' +
       'téléchargé qu’à votre demande. Leurs auteurs, sources et conditions de licence complètes figurent dans ' +
-      'roms/gbstudio/LICENSES.txt, lié ci-dessous. Les autres jeux de la collection GB Studio ne sont pas hébergés : ' +
+      'roms/gbstudio/LICENSES.txt, lié ci-dessous. Les autres jeux de la collection GB Studio ne sont pas hébergés : ' +
       'ils renvoient aux pages de leurs auteurs.\n\n' +
       'Une base de données de dumps Game Boy et Game Boy Color connus (empreintes de fichiers, titres et noms ' +
       'No-Intro), utilisée uniquement pour identifier les fichiers ajoutés. La bibliothèque liste des homebrews gratuits, des ' +
@@ -107,15 +107,15 @@ export const LEGAL_FR: LegalSection[] = [
       'RetroAchievements reste désactivé tant qu’aucun compte n’est connecté dans Réglages > Succès, avec un nom d’utilisateur et une ' +
       'clé d’API web (jamais le mot de passe). Les deux restent dans ce navigateur (localStorage). Une fois connecté, le navigateur ' +
       'demande à retroachievements.org (https://retroachievements.org) la liste des jeux des deux consoles et, pour un jeu ouvert, ' +
-      'ses succès et ceux déjà obtenus ; la clé et le nom d’utilisateur figurent dans ces requêtes, comme l’exige son API web. ' +
-      'Une ROM est reconnue en comparant son empreinte MD5 à ces listes dans le navigateur : ni la ROM ni son empreinte ne sont ' +
-      'envoyées. RetroAchievements reçoit l’adresse IP et les informations du navigateur. « Déconnecter » oublie la clé et arrête toute requête.\n\n' +
+      'ses succès et ceux déjà obtenus ; la clé et le nom d’utilisateur figurent dans ces requêtes, comme l’exige son API web. ' +
+      'Une ROM est reconnue en comparant son empreinte MD5 à ces listes dans le navigateur : ni la ROM ni son empreinte ne sont ' +
+      'envoyées. RetroAchievements reçoit l’adresse IP et les informations du navigateur. « Déconnecter » oublie la clé et arrête toute requête.\n\n' +
       'Le jeu en ligne (Câble Link) et la synchronisation entre appareils (Réglages > Synchro) n’envoient aucune requête ' +
       'tant qu’aucun salon n’est ouvert ou rejoint et qu’aucun appareil n’est associé. Ensuite, le navigateur contacte ' +
       'cinq relais Nostr publics que Cartouche n’exploite pas (relay02.lnfi.network, staging.yabu.me, top.testrelay.top, ' +
       'yabu.me et relay.mostro.network) pour trouver l’autre navigateur, et des serveurs STUN publics de Google et ' +
       'Cloudflare pour connaître sa propre adresse réseau. Les relais ne transmettent qu’une prise de contact chiffrée, ' +
-      'mais ils voient les adresses IP des deux navigateurs, et l’autre joueur ou appareil apprend la vôtre : c’est le ' +
+      'mais ils voient les adresses IP des deux navigateurs, et l’autre joueur ou appareil apprend la vôtre : c’est le ' +
       'principe d’une connexion directe (WebRTC). Les données de jeu et de synchronisation passent ensuite directement ' +
       'd’un navigateur à l’autre, chiffrées, sans aucun serveur de Cartouche. Si vous ajoutez votre propre serveur TURN ' +
       '(Jouer en ligne > réglages de connexion), une connexion qui ne peut pas être directe passe par lui.',
@@ -140,7 +140,7 @@ export const LEGAL_FR: LegalSection[] = [
       { file: 'LICENSE.txt', label: 'Licence de Cartouche (MIT)' },
       { file: 'THIRD_PARTY_NOTICES.txt', label: 'Mentions de tiers (jeux et cartouches de test inclus, GameDataBase, polices, jaquettes)' },
       { file: 'licenses/GPL-3.0-ucity.txt', label: 'GNU GPL version 3 (µCity)' },
-      { file: 'roms/gbstudio/LICENSES.txt', label: 'Collection GB Studio : auteurs et licences des jeux hébergés' },
+      { file: 'roms/gbstudio/LICENSES.txt', label: 'Collection GB Studio : auteurs et licences des jeux hébergés' },
       { file: 'THIRD_PARTY_LICENSES.txt', label: 'Licences complètes des paquets npm, crates Rust et polices inclus' },
     ],
   },

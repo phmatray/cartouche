@@ -40,6 +40,7 @@ export default {
   shot: 'Screenshot, {ago}',
   print: 'Print, {ago}',
   noShots: 'No screenshots yet. Press <b>F12</b> while playing, or the camera button, to add one.',
+  noShotsTouch: 'No screenshots yet. While playing, open the <b>Manual</b> and tap <b>Take screenshot</b> in its Album.',
   playIt: 'Play it',
   dl: {
     button: 'Download',

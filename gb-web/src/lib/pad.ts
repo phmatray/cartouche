@@ -34,3 +34,34 @@ export function reader() {
     return out;
   };
 }
+
+type Adjustable = Pick<HTMLElement, 'tagName' | 'dispatchEvent'> & Partial<Pick<HTMLInputElement, 'type' | 'value' | 'stepUp' | 'stepDown'>>
+  & { selectedIndex?: number; options?: ArrayLike<{ disabled: boolean }> };
+/**
+ * A slider or dropdown under the focus takes the pad's value keys, as the keyboard's arrows would: left/right step a
+ * slider, left/right (and A) cycle a dropdown's options. True when `k` was taken (the focus then stays put).
+ */
+export function adjust(el: Adjustable | null, k: PadKey): boolean {
+  const dir = k === 'ArrowRight' ? 1 : k === 'ArrowLeft' ? -1 : 0;
+  if (!el) return false;
+  if (el.tagName === 'INPUT' && el.type === 'range') {
+    if (!dir) return false;
+    const before = el.value;
+    if (dir > 0) el.stepUp!(); else el.stepDown!();
+    if (el.value === before) return true; // at an end
+  } else if (el.tagName === 'SELECT' && el.options) {
+    if (!dir && k !== 'a') return false;
+    const n = el.options.length, step = dir || 1;
+    let i = el.selectedIndex ?? -1;
+    for (let tries = 0; tries < n; tries++) {
+      i = (i + step + n) % n;
+      if (!el.options[i].disabled) break;
+    }
+    if (!n || i === el.selectedIndex) return true;
+    el.selectedIndex = i;
+  } else return false;
+  // stepUp and selectedIndex bypass React's value tracking, so these reach its onChange.
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+  return true;
+}

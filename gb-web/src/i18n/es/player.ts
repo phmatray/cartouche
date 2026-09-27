@@ -10,6 +10,11 @@ export default {
   resumeAgo: 'Punto de reanudación {ago}',
   paused: 'En pausa',
   pausedSub: 'Pulsa P o el botón Jugar para continuar.',
+  crashed: {
+    title: 'El juego se ha detenido',
+    body: 'La consola encontró una instrucción no válida. Reinicia el juego; si vuelve a detenerse, puede que el archivo esté dañado o que use una función que Cartouche no emula.',
+    restart: 'Reiniciar el juego',
+  },
   speed: 'Velocidad {x}×',
   rewindReady: 'Rebobinado listo: {s} s',
   page: 'p. {n}',
@@ -59,6 +64,7 @@ export default {
     changedElsewhere: 'Este guardado cambió en otro lugar (otra pestaña o dispositivo): ahora se guarda en uno nuevo, «{name}», y se conservan los dos',
   },
   error: {
+    crashed: 'El juego se ha detenido: la consola encontró una instrucción no válida.',
     init: 'Emulador no inicializado',
     unknown: 'Error desconocido al cargar la ROM',
     exception: 'Excepción al cargar la ROM: {error}',
@@ -159,6 +165,7 @@ export default {
     savePng: 'Guardar PNG',
     share: 'Compartir',
     empty: 'Aún no hay nada. Pulsa F12 mientras juegas.',
+    emptyTouch: 'Nada por ahora. Toca Hacer captura arriba durante una partida.',
   },
   game: {
     open: 'Abrir la página del juego',
