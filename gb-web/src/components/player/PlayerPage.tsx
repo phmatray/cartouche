@@ -636,7 +636,7 @@ function Player({ game }: { game: GameEntry }) {
                       onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; const data = f && await linkRom(f); if (data) boot(data); }} />
                   </label>
                 </div>
-              ) : online.on && online.waiting && isRunning ? <LinkWait link={online} /> : romLoaded && !isRunning && !isRewinding && (errors.at(-1)?.detail ? (
+              ) : online.on && online.waiting && isRunning ? <LinkWait link={online} /> : romLoaded && !isRunning && !isRewinding && !editing && (errors.at(-1)?.detail ? (
                 <div className="overlay">
                   <b>{t('player.crashed.title')}</b>
                   <p>{t('player.crashed.body')}</p>
