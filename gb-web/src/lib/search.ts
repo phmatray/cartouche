@@ -1,5 +1,5 @@
 import type { GameEntry } from '../types/game';
-import { byName, folded, owned, score, searchFields } from './ui.ts';
+import { byName, owned, score, searchFields, searchKey } from './ui.ts';
 import { DICTS, getLang, LANGS, langName, t, tOr, type Key as MsgKey } from '../i18n/core.ts';
 
 /**
@@ -74,7 +74,7 @@ const NAME_SYN: Record<string, string> = { 'hal labs': 'hal laboratory', hal: 'h
 // Genre labels: `search.genre.*` (the GameDB's fixed vocabulary); any other genre keeps its own spelling.
 const EU = /\b(europe|germany|france|spain|italy|united kingdom|uk|sweden|netherlands|scandinavia|australia|denmark|norway|finland|portugal)\b/i;
 
-const f = (s: string) => folded(s).s;
+const f = searchKey;
 const nameKey = (s: string) => {
   const k = f(s).replace(/\b(inc|ltd|co|corp|corporation|company|limited|kk|llc|gmbh|sa|the)\b/g, ' ').replace(/ +/g, ' ').trim();
   return NAME_SYN[k] ?? k;
