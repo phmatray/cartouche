@@ -76,6 +76,26 @@ fn a_state_load_keeps_the_live_buttons() {
     assert_eq!(gb.bus.joypad.dpad_state, 0x0E, "Right is still held");
 }
 
+#[test]
+fn a_refused_state_leaves_the_machine_untouched() {
+    let mut r = rom(&[0x18, 0xFE], &[]);
+    r[0x147] = 0x03; // MBC1+RAM+BATTERY
+    r[0x149] = 0x02; // 8 KB
+    r[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(r[i]).wrapping_sub(1));
+    let mut gb = GameBoy::new(r).unwrap();
+    gb.skip_boot_rom();
+    let old = gb.save_state();
+    gb.bus.cartridge.import_sram(&[0x5A; 0x2000]);
+    gb.bus.wram[0] = 0xA5;
+    let (sram, now) = (gb.bus.cartridge.export_sram(), gb.save_state());
+
+    assert!(!gb.load_state(&old[..old.len() - 40]), "cut short in the APU fields");
+    assert_eq!(gb.bus.cartridge.export_sram(), sram, "battery save kept");
+    assert_eq!(gb.save_state(), now, "whole machine kept");
+    assert!(gb.load_state(&old));
+    assert_ne!(gb.bus.cartridge.export_sram(), sram, "a whole state still loads");
+}
+
 /// Changes each scalar byte of a valid state (bulk RAM skipped), loads it and runs: a damaged
 /// state is refused or clamped, never a panic.
 #[test]

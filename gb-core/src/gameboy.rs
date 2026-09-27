@@ -340,8 +340,18 @@ impl GameBoy {
     }
 
     /// A state loads on the console it was saved on, or a Game Boy one on a Super Game Boy
-    /// (the same machine; the SGB side then starts fresh).
+    /// (the same machine; the SGB side then starts fresh). All or nothing: a state refused
+    /// part-way (damaged, cut short) leaves the running machine, cartridge RAM included, as it was.
     pub fn load_state(&mut self, data: &[u8]) -> bool {
+        if self.state_console(data).is_none() { return false; }
+        let before = self.save_state();
+        if self.read_state(data) { return true; }
+        let restored = self.read_state(&before);
+        debug_assert!(restored, "a state this machine just saved reads back");
+        false
+    }
+
+    fn read_state(&mut self, data: &[u8]) -> bool {
         match (self.state_console(data), self.console) {
             (Some(a), b) if a == b => {}
             (Some(Console::Dmg), Console::Sgb) => {}
