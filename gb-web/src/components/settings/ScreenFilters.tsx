@@ -10,9 +10,9 @@ import { useT } from '../../i18n';
 
 /** A frame drawn through the actual filter chain, on its own small canvas. */
 export function PresetPreview({ filters, color, frame }: { filters: Filters; color: boolean; frame: Uint8ClampedArray | null }) {
-  // A fixed 4x backing size, not the shown size: at ~1 device pixel per Game Boy pixel the grid and
-  // scanlines would fade out and every card would differ only by its colours.
-  const { canvasRef, canvasKey, renderFrame, canvas, restores } = useLcdShader(filters, color, false);
+  // Drawn at the size it is shown, like the screen: a larger backing (4x) scaled down by the browser beat the pixel
+  // grid against the device pixels into a coarse checkerboard. At thumbnail size the grid and scanlines fade out.
+  const { canvasRef, canvasKey, renderFrame, canvas, restores } = useLcdShader(filters, color);
   // Fresh: a still, not the next frame of a motion; ghosting would blend in the frame caught a second before.
   useEffect(() => { if (frame) renderFrame(frame, true); }, [frame, renderFrame, filters, color, canvas, restores]);
   return <canvas key={canvasKey} ref={canvasRef} className="lcd" width={640} height={576} aria-hidden="true" />;

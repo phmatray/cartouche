@@ -6,11 +6,10 @@ import type { FrameTrace } from '../neural/trace';
 /**
  * Draws Game Boy frames on a canvas through the filter chain. The WebGL canvas is kept at the size it
  * is shown in device pixels, so pixel-perfect sizes stay pixel-perfect. Without WebGL, a 2D canvas
- * gets the palette / colour correction and adjustments only. `follow: false` keeps the canvas's own
- * backing size (previews). Put `canvasKey` on the canvas: a failed WebGL set-up swaps in a fresh canvas
+ * gets the palette / colour correction and adjustments only. Put `canvasKey` on the canvas: a failed WebGL set-up swaps in a fresh canvas
  * for the 2D fallback, since a canvas holding a WebGL context never gives a 2D one.
  */
-export function useLcdShader(filters: Filters, color: boolean, follow = true) {
+export function useLcdShader(filters: Filters, color: boolean) {
   const engineRef = useRef<LcdEngine | null>(null);
   const [canvas, setCanvasState] = useState<HTMLCanvasElement | null>(null);
   const canvasEl = useRef<HTMLCanvasElement | null>(null);
@@ -40,7 +39,7 @@ export function useLcdShader(filters: Filters, color: boolean, follow = true) {
       const w = Math.min(2880, Math.round(e.contentRect.width * devicePixelRatio));
       if (w > 0) engine.resize(w, Math.round(w * 0.9));
     });
-    if (follow) ro.observe(canvas);
+    ro.observe(canvas);
     // iOS drops the WebGL context of a backgrounded app (and a GPU process restart does too). Without preventDefault the
     // browser never gives it back and the screen stays black: keep it restorable, then rebuild the engine on it.
     const lost = (e: Event) => { e.preventDefault(); ro.disconnect(); engine.destroy(); if (engineRef.current === engine) engineRef.current = null; };
@@ -53,7 +52,7 @@ export function useLcdShader(filters: Filters, color: boolean, follow = true) {
       canvas.removeEventListener('webglcontextrestored', restored);
       ro.disconnect(); engine.destroy(); if (engineRef.current === engine) engineRef.current = null;
     };
-  }, [canvas, follow, webglAvailable, restores]);
+  }, [canvas, webglAvailable, restores]);
 
   useEffect(() => { engineRef.current?.setFilters(filters, color); }, [filters, color, canvas]);
 
