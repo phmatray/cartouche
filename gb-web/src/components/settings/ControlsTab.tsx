@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 import { useSettingsStore, type GameBoyButton, type TouchSize } from '../../store/settingsStore';
-import { keyLabel } from '../../lib/ui';
+import { keyLabel, owned, paths } from '../../lib/ui';
+import { useGameLibrary } from '../../hooks/useGameLibrary';
+import { ControlsFileRows, SkinPicker } from '../player/TouchSkins';
 import { toast } from '../shell/actions';
 import { Row, Seg, SwitchRow } from './parts';
 import { t as tNow, useT, type Key } from '../../i18n';
@@ -23,6 +26,9 @@ export function ControlsTab() {
   const [listening, setListening] = useState<GameBoyButton | null>(null);
   const [pad, setPad] = useState(padName);
   const t = useT();
+  // The layout is edited over a real game: the last one played, else the bundled one.
+  const { games } = useGameLibrary();
+  const recent = games.filter(owned).sort((a, b) => (b.lastPlayed ?? 0) - (a.lastPlayed ?? 0))[0];
 
   useEffect(() => {
     const update = () => setPad(padName());
@@ -81,12 +87,17 @@ export function ControlsTab() {
       </dl>
 
       <h3>{t('player.controls.touch')}</h3>
+      <SkinPicker />
+      <Row label={t('settings.controls.layout')} sub={t('settings.controls.layoutSub')}>
+        <Link className="btn k" to={paths.play(recent?.id ?? 'tobu-tobu-girl', '?edit=controls')}>{t('settings.controls.edit')}</Link>
+      </Row>
       <Row label={t('settings.controls.size')} sub={t('settings.controls.sizeSub')}>
         <Seg<TouchSize> label={t('settings.controls.size')} value={touchSize} options={[['S', 'S'], ['M', 'M'], ['L', 'L']]} set={(v) => set({ touchSize: v })} />
       </Row>
       <SwitchRow label={t('settings.controls.vibrate')} sub={t('settings.controls.vibrateSub')} on={haptics} set={(v) => set({ haptics: v })} />
 
       <RumbleRows />
+      <ControlsFileRows />
     </>
   );
 }

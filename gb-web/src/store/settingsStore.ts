@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Lang } from '../i18n/core';
+import type { Layout, Shell, Skin } from '../lib/touch-layout';
 import { DEFAULT_DISPLAY, normalizeDisplay, presetOf, sameFilters, type DisplayConfig, type Filters, type PresetName, type ScreenKind } from '../shaders/filters';
 
 export type GameBoyButton = 'A' | 'B' | 'Select' | 'Start' | 'Right' | 'Left' | 'Up' | 'Down';
@@ -81,6 +82,10 @@ export interface SettingsState {
   resumePoints: boolean;
   muteWhenHidden: boolean;
   touchSize: TouchSize;
+  /** On-screen controls: the skin, its shell colour (Color skin), and the player's own layouts by device and orientation. */
+  touchSkin: Skin;
+  touchShell: Shell;
+  touchLayouts: Record<string, Layout>;
   haptics: boolean;
   /** The interface language; null: the browser's (see i18n). */
   language: Lang | null;
@@ -151,6 +156,9 @@ const DEFAULT_STATE = {
   resumePoints: true,
   muteWhenHidden: true,
   touchSize: 'M' as TouchSize,
+  touchSkin: 'box' as Skin,
+  touchShell: 'raspberry' as Shell,
+  touchLayouts: {} as Record<string, Layout>,
   haptics: true,
   language: null as Lang | null,
   rumble: true,

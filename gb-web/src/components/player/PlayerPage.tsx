@@ -26,6 +26,7 @@ import { Toasts } from '../shell/Toasts';
 import { ConfirmDialog, type ConfirmRequest } from '../shell/ConfirmDialog';
 import { useAlbum, useLinkRom, useRomHeader } from '../../hooks/useGameExtras';
 import { Manual, type Tab } from './Manual';
+import { TouchControls } from './TouchControls';
 import { fileAccept } from '../../lib/pwa';
 import { t as tNow, useT } from '../../i18n';
 import { usePeripherals } from '../../peripherals/usePeripherals';
@@ -48,17 +49,6 @@ const typing = () => {
   return !!el && (/INPUT|SELECT|TEXTAREA/.test(el.tagName) || el.isContentEditable);
 };
 
-/**
- * iOS starts a selection, the magnifier or a double-tap zoom from a touch unless its touchstart is cancelled, which
- * React's (passive) touch listeners can't do. The pads run on pointer events, which still arrive.
- */
-function holdTouches(el: HTMLElement | null) {
-  if (!el) return;
-  const stop = (e: TouchEvent) => e.preventDefault();
-  el.addEventListener('touchstart', stop, { passive: false });
-  return () => el.removeEventListener('touchstart', stop);
-}
-
 export function PlayerPage() {
   const { id = '' } = useParams<{ id: string }>();
   const { getGameById, loading } = useGameLibrary();
@@ -69,7 +59,7 @@ export function PlayerPage() {
 }
 
 function Player({ game }: { game: GameEntry }) {
-  const [q] = useSearchParams();
+  const [q, setQ] = useSearchParams();
   const { savedIds, storageError, deleteGame } = useGameLibrary();
   const navigate = useNavigate();
   const t = useT();
@@ -81,12 +71,13 @@ function Player({ game }: { game: GameEntry }) {
   const rewindSeconds = useSettingsStore((s) => s.rewindBufferSeconds);
   const screenSize = useSettingsStore((s) => s.screenSize);
   const channelMutes = useSettingsStore((s) => s.channelMutes);
-  const touchSize = useSettingsStore((s) => s.touchSize);
   const smoothMotion = useSettingsStore((s) => s.smoothMotion);
   const smoothMotionForce = useSettingsStore((s) => s.smoothMotionForce);
   const [speed, setSpeed] = useState(() => (q.get('online') ? 1 : useSettingsStore.getState().defaultSpeed));
   const [tab, setTab] = useState<Tab>(() => (q.get('tab') as Tab) || 'controls');
   const [manual, setManual] = useState(() => !!q.get('tab') || !matchMedia('(max-width:900px)').matches);
+  // Edit controls (from the manual, or Settings › Controls with ?edit=controls): the game waits meanwhile.
+  const [editing, setEditing] = useState(() => q.get('edit') === 'controls');
   const [needsRom, setNeedsRom] = useState(!owned(game));
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [savedJustNow, setSavedJustNow] = useState(false);
@@ -233,7 +224,7 @@ function Player({ game }: { game: GameEntry }) {
       if (moved) toast(tNow(`player.toast.resumedOn${ON[consoleNow()] ?? 'Dmg'}`), 'm');
       else if (!refused.current) toast(ok ? (from === 'auto' ? tNow('player.toast.resumed') : tNow('player.toast.loadedSlot', { n: String(+from + 1) })) : tNow('player.toast.gone'), ok ? 'c' : 'm');
     }
-    setIsRunning(true);
+    setIsRunning(q.get('edit') !== 'controls');
   }, [powerOn, hasBatteryRam, importSram, game.id, q, saves, setIsRunning, consoleNow, skipBoot]);
 
   const booted = useRef(false);
@@ -341,6 +332,8 @@ function Player({ game }: { game: GameEntry }) {
 
   // ---- actions ----
   const play = useCallback(() => { ensureStarted().catch(() => {}); setIsRunning(true); }, [ensureStarted, setIsRunning]);
+  // The game waits while its controls are edited, and plays again when they're done.
+  const editControls = useCallback(() => { setManual(false); setIsRunning(false); setEditing(true); }, [setIsRunning]);
   const togglePlay = useCallback(() => (isRunning ? setIsRunning(false) : play()), [isRunning, setIsRunning, play]);
   /** Switch the console off and on with the game's chosen one: the battery save carries over, like the cartridge. */
   const restart = useCallback(() => {
@@ -491,6 +484,7 @@ function Player({ game }: { game: GameEntry }) {
             ? setConfirm({ title: t('player.overwrite.title', { n: String(i + 1) }), body: t('player.overwrite.body', { ago: ago(saves.states[i + 1]!.timestamp) }), ok: t('player.overwrite.ok'), run: () => saveSlot(i) })
             : saveSlot(i))}
           onLoad={load} onScreenshot={screenshot} online={online.on} running={running} onRestart={restart}
+          onEditControls={editControls}
         />
       </div>
 
@@ -522,17 +516,9 @@ function Player({ game }: { game: GameEntry }) {
           : <button className="dk fs" onClick={toggleFullscreen} aria-pressed={immersive} aria-label={immersive ? t('player.deck.leaveImmF') : t('player.deck.immF')}>{immersive ? I.close : I.full}</button>}
       </nav>
 
-      <div className="touch" ref={holdTouches} data-size={touchSize} aria-label={t('player.touch.label')}>
-        <div className="dpad">
-          <span className="c" />
-          <button className="u" aria-label={t('player.touch.up')} {...pad('Up')}>{I.up}</button>
-          <button className="d" aria-label={t('player.touch.down')} {...pad('Down')}>{I.down}</button>
-          <button className="l" aria-label={t('player.touch.left')} {...pad('Left')}>{I.left}</button>
-          <button className="r" aria-label={t('player.touch.right')} {...pad('Right')}>{I.right}</button>
-        </div>
-        <div className="ab"><button className="b" {...pad('B')}>B</button><button className="a" {...pad('A')}>A</button></div>
-        <div className="ss"><button {...pad('Select')}>Select</button><button {...pad('Start')}>Start</button></div>
-      </div>
+      <TouchControls pad={pad} online={online.on} editing={editing} onEdit={editControls}
+        onDone={() => { setEditing(false); if (q.get('edit')) setQ({}, { replace: true }); if (!needsRom) play(); }}
+        startRewind={startRewind} stopRewind={stopRewind} speed={speed} setSpeed={setSpeed} />
 
       <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
       <Toasts />
