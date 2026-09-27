@@ -430,15 +430,15 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .key svg{width:14px;height:14px}
 .leader{height:0;border-bottom:2px dotted #b4b4ad}
 .btnname{font:900 20px/1 var(--font);font-stretch:62%;text-transform:uppercase;text-align:right;min-width:92px}
-.btnname small{display:block;font:600 11px var(--font);font-stretch:100%;text-transform:none;color:#77776f;margin-top:3px}
+.btnname small{display:block;font:600 11px var(--font);font-stretch:100%;text-transform:none;color:var(--ink-3);margin-top:3px}
 .slots{list-style:none;margin:0;padding:0}
 .slots li{display:grid;grid-template-columns:30px 88px minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--paper-2)}
 .slots .n{font:900 40px/1 var(--font);font-stretch:62%}
 .slots .n.auto{font-size:16px;writing-mode:vertical-rl;transform:rotate(180deg);letter-spacing:.06em}
-.slots .th{aspect-ratio:10/9;background:var(--paper-2);display:flex;align-items:center;justify-content:center;font:700 11px var(--font);color:#8a8a84;text-transform:uppercase}
+.slots .th{aspect-ratio:10/9;background:var(--paper-2);display:flex;align-items:center;justify-content:center;font:700 11px var(--font);color:var(--ink-2);text-transform:uppercase}
 .slots .th canvas{width:100%}
 .slots .when{font:800 15px/1.2 var(--font);overflow-wrap:break-word;min-width:0}
-.slots .when small{display:block;font:500 13px var(--font);color:#77776f}
+.slots .when small{display:block;font:500 13px var(--font);color:var(--ink-3)}
 .slots .act{display:flex;flex-direction:column;gap:6px}
 .sbtn{height:36px;padding:0 10px;border:2px solid var(--ink);background:transparent;font:800 12px var(--font);text-transform:uppercase;letter-spacing:.06em;color:var(--ink);white-space:nowrap}
 .sbtn:hover{background:var(--ink);color:var(--paper)}
