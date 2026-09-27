@@ -131,7 +131,7 @@ export default {
     denied: 'L’appareil photo n’est pas autorisé ici. Autorisez-le dans les réglages du navigateur pour ce site, ou tapez le code ci-dessous.',
     deniedIos: 'L’appareil photo n’est pas autorisé. Autorisez-le quand c’est demandé (sur iPhone, une app de l’écran d’accueil redemande à chaque lancement), ou tapez le code ci-dessous.',
     none: 'Aucun appareil photo trouvé. Tapez plutôt le code ci-dessous.',
-    offline: 'Le lecteur de code n’a pas pu se charger (hors ligne ?). Tapez plutôt le code ci-dessous.',
+    offline: 'Le lecteur de code n’a pas pu se charger (hors ligne ?). Tapez plutôt le code ci-dessous.',
     notOurs: 'Ce QR code n’est pas un code d’association Cartouche.',
     aim: 'Visez le code affiché sur l’écran de l’autre appareil.',
     close: 'Fermer l’appareil photo',

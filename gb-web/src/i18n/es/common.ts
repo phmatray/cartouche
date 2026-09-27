@@ -33,7 +33,7 @@ export default {
     hours: '{h} h {m}',
     on: 'el {date}',
   },
-  keys: { space: 'Espacio' },
+  keys: { space: 'Espacio', enter: 'Intro', shift: 'Mayús', backspace: 'Retroceso', tab: 'Tab' },
   tag: { need: 'Falta tu ROM', saved: 'Guardado', now: 'Jugar ya', rom: 'Tu ROM', author: 'Del autor' },
   games: { one: '{count} juego', other: '{count} juegos' },
   played: '{time} de juego',
