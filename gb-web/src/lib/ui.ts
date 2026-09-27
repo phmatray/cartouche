@@ -99,9 +99,13 @@ export function folded(s: string): { s: string; at: number[] } {
   let out = '';
   const at: number[] = [];
   for (let i = 0; i < s.length; i++) {
-    const c = s[i].normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().charAt(0);
-    if (!c || /['’‘`]/.test(c)) continue;
-    const ch = /[\p{L}\p{N}]/u.test(c) ? c : ' ';
+    const code = s.charCodeAt(i);
+    // ASCII (nearly every title) skips the Unicode work, which cost ~20 ms per 1,000 games on each index rebuild.
+    const c = code < 128 ? (code >= 65 && code <= 90 ? String.fromCharCode(code + 32) : s[i])
+      : s[i].normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().charAt(0);
+    if (!c || c === "'" || c === '`' || c === '’' || c === '‘') continue;
+    const ch = code < 128 ? ((code >= 48 && code <= 57) || (code | 32) >= 97 && (code | 32) <= 122 ? c : ' ')
+      : /[\p{L}\p{N}]/u.test(c) ? c : ' ';
     if (ch === ' ' && (!out || out.endsWith(' '))) continue;
     out += ch; at.push(i);
   }
@@ -109,12 +113,21 @@ export function folded(s: string): { s: string; at: number[] } {
   return { s: out, at };
 }
 /** A search query in the form `score` and `Hl` expect. */
-export const searchKey = (query: string) => folded(query).s;
+// Memoized: the search index is rebuilt on every library change (load, catalog merge, saves, imports) with the same strings.
+const keys = new Map<string, string>();
+export function searchKey(query: string): string {
+  let k = keys.get(query);
+  if (k === undefined) {
+    if (keys.size >= 20000) keys.clear(); // ponytail: wholesale reset, an LRU if a library ever outgrows it
+    keys.set(query, (k = folded(query).s));
+  }
+  return k;
+}
 
 /** The folded title and details `score` searches (computed once per game by the search index). */
 export const searchFields = (g: GameEntry) => ({
-  t: folded(g.title).s,
-  rest: folded(`${g.developer ?? ''} ${g.publisher ?? ''} ${g.year ?? ''} ${g.platform ? `${PLATFORM[g.platform]} ${g.platform}` : ''} ${g.region ?? ''} ${g.genre}`).s,
+  t: searchKey(g.title),
+  rest: searchKey(`${g.developer ?? ''} ${g.publisher ?? ''} ${g.year ?? ''} ${g.platform ? `${PLATFORM[g.platform]} ${g.platform}` : ''} ${g.region ?? ''} ${g.genre}`),
 });
 
 /** Relevance of a game for a query (from `searchKey`); 0 = no match. Every word must appear in the title or the details. */

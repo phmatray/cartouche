@@ -1,7 +1,7 @@
 // node --test: the audio device runs only while wanted (game running, page shown), and comes back from iOS's 'interrupted'.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { AudioEngine, stretch } from './AudioEngine.ts';
+import { AudioEngine, stretch, warmAudio } from './AudioEngine.ts';
 
 function fakeContext(state: string) {
   const calls: string[] = [];
@@ -48,4 +48,15 @@ test('½×: each stereo frame is played twice, so the device never runs dry', ()
   const lr = new Float32Array([0.1, -0.1, 0.2, -0.2]);
   assert.deepEqual([...stretch(lr, 0.5)].map((v) => +v.toFixed(2)), [0.1, -0.1, 0.1, -0.1, 0.2, -0.2, 0.2, -0.2]);
   assert.equal(stretch(lr, 1), lr); // normal speed: untouched
+});
+
+test('the spare context opened ahead of Play is suspended, not left rendering silence', () => {
+  const made: string[] = [];
+  const g = globalThis as unknown as { AudioContext?: unknown };
+  g.AudioContext = class { state = 'running'; async suspend() { made.push('suspend'); this.state = 'suspended'; } };
+  try {
+    warmAudio();
+    warmAudio(); // one spare only
+    assert.deepEqual(made, ['suspend']);
+  } finally { delete g.AudioContext; }
 });

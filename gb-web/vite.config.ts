@@ -100,12 +100,41 @@ const licenseFiles = (): Plugin => ({
   },
 })
 
+// French and Spanish are their own chunks, imported once the app has run (i18n/core.ts): a first visit would wait one more
+// round-trip before it renders. A tiny inline script picks the language as i18n/index.ts does and preloads its chunk at once.
+const preloadLang = (): Plugin => {
+  let base = '/'
+  return {
+    name: 'preload-lang',
+    apply: 'build',
+    configResolved(c) { base = c.base },
+    transformIndexHtml: {
+      order: 'post',
+      handler(_html, { bundle }) {
+        const urls: Record<string, string> = {}
+        for (const c of Object.values(bundle ?? {})) {
+          const m = c.type === 'chunk' && /[\\/]i18n[\\/](\w+)[\\/]index\.ts$/.exec(c.facadeModuleId ?? '')
+          if (m && m[1] !== 'en') urls[m[1]] = base + c.fileName
+        }
+        if (!Object.keys(urls).length) throw new Error('preload-lang: no language chunk found')
+        return [{
+          tag: 'script',
+          injectTo: 'head-prepend',
+          children: `try{var u=${JSON.stringify(urls)},s=JSON.parse(localStorage.getItem('gb-settings')||'{}').state,l=s&&s.language;` +
+            `if(!l)for(var x of navigator.languages||[navigator.language]){x=x.toLowerCase().split('-')[0];if(/^(en|fr|es)$/.test(x)){l=x;break}}` +
+            `if(u[l]){var k=document.createElement('link');k.rel='modulepreload';k.crossOrigin='';k.href=u[l];document.head.appendChild(k)}}catch(e){}`,
+        }]
+      },
+    },
+  }
+}
+
 const ONLINE_ONLY = /\/node_modules\/(trystero|@trystero-p2p|@noble|uqr)\//
 
 export default defineConfig(({ mode }) => ({
   // Deployed at https://phmatray.github.io/cartouche/ (build and preview); the dev server stays at '/'.
   base: mode === 'production' ? '/cartouche/' : '/',
-  plugins: [react(), wasm(), tailwindcss(), licenseFiles(), spaFallback()],
+  plugins: [react(), wasm(), tailwindcss(), licenseFiles(), preloadLang(), spaFallback()],
   worker: {
     format: 'es',
     plugins: () => [wasm()],

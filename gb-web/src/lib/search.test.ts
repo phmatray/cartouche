@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { GameEntry } from '../types/game';
 import { loadLang, setLang } from '../i18n/core.ts';
-import { byName, letterOf } from './ui.ts';
+import { byName, folded, letterOf } from './ui.ts';
 import { buildIndex, facetCounts, formatQuery, normValue, parseQuery, search, suggest, valueLabel, withoutEach } from './search.ts';
 
 const game = (id: string, o: Partial<GameEntry>): GameEntry => ({ id, title: id, description: '', genre: 'Unknown', category: 'My Collection', coverArt: '', screenshots: [], isLocal: true, ...o });
@@ -151,4 +151,23 @@ test('indexes 3,000 games and answers a query well within a frame', () => {
   const t2 = performance.now();
   assert.ok(t1 - t0 < 1000, `index ${t1 - t0} ms`);
   assert.ok((t2 - t1) / 5 < 16, `per keystroke ${(t2 - t1) / 5} ms`);
+});
+
+test('folding: the ASCII fast path folds exactly as the per-character Unicode path', () => {
+  const slow = (s: string) => {
+    let out = '';
+    const at: number[] = [];
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i].normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().charAt(0);
+      if (!c || /['’‘`]/.test(c)) continue;
+      const ch = /[\p{L}\p{N}]/u.test(c) ? c : ' ';
+      if (ch === ' ' && (!out || out.endsWith(' '))) continue;
+      out += ch; at.push(i);
+    }
+    if (out.endsWith(' ')) { out = out.slice(0, -1); at.pop(); }
+    return { s: out, at };
+  };
+  let all = '';
+  for (let c = 0; c < 0x2100; c++) all += String.fromCharCode(c);
+  for (const s of [all, "  Kobo's Quest: DX!! ", 'Jardín Épique — Édition', 'ÀÉÎÕÜ ß 123 A_B-C`x']) assert.deepEqual(folded(s), slow(s));
 });

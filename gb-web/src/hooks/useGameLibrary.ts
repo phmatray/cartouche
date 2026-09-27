@@ -57,12 +57,18 @@ function localEntry(id: string, title: string, genre: string, data: Uint8Array, 
  */
 function catalogMatch(list: GameEntry[], e: GameEntry) {
   const k = titleKey(e.title);
-  const cat = list.filter((g) => !g.isLocal);
-  const found = cat.find((g) => g.id === e.id || (!!e.sha1 && g.sha1 === e.sha1) || titleKey(g.title) === k);
+  const found = list.find((g) => !g.isLocal && (g.id === e.id || (!!e.sha1 && g.sha1 === e.sha1) || catKey(g) === k));
   const h = titleKey(e.romHeaderTitle ?? '');
   if (found || e.developer || h.length < 6) return found;
-  const hits = cat.filter((g) => titleKey(g.title).startsWith(h));
+  const hits = list.filter((g) => !g.isLocal && catKey(g).startsWith(h));
   return hits.length === 1 ? hits[0] : undefined;
+}
+// A library load matches every user ROM against the whole catalog: each catalog title is folded once, not once per ROM.
+const catKeys = new WeakMap<GameEntry, string>();
+function catKey(g: GameEntry) {
+  let k = catKeys.get(g);
+  if (k === undefined) catKeys.set(g, (k = titleKey(g.title)));
+  return k;
 }
 
 /**
