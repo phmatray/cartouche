@@ -502,7 +502,11 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;background:var(--ink);transition:transform .25s var(--ease)}
 .switch[aria-checked=true]{background:var(--y)}
 .switch[aria-checked=true]::after{transform:translateX(22px)}
-.range{display:flex;align-items:center;gap:14px;flex:1;max-width:280px}
+/* One slider width whatever its label's length; where label and slider don't both fit (the manual's side sheet, phones),
+   every slider goes under its label, so they still line up. */
+.range{display:flex;align-items:center;gap:14px;flex:none;width:min(280px,100%)}
+.row:has(>.range){flex-wrap:wrap;row-gap:8px}
+.row:has(>.range)>span:first-child{flex:1 1 220px;min-width:0}
 .range input{flex:1;accent-color:var(--ink)}
 .range output,.range .v{font:800 14px var(--font);min-width:52px;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
 .codes{list-style:none;margin:0 0 18px;padding:0}
@@ -1036,7 +1040,7 @@ body{font-family:var(--font)}
 .manual .paper .notice{margin:16px 0 0}
 .rrow{grid-template-columns:56px minmax(0,1fr) 170px 250px}
 .rrow .act{display:flex;gap:8px;justify-content:flex-end}
-@media (max-width:760px){.rrow{grid-template-columns:48px minmax(0,1fr) auto}.rrow .act{justify-content:flex-start}.row{flex-wrap:wrap}.row:has(>.switch){flex-wrap:nowrap}.range{max-width:none;min-width:200px}}
+@media (max-width:760px){.rrow{grid-template-columns:48px minmax(0,1fr) auto}.rrow .act{justify-content:flex-start}.row{flex-wrap:wrap}.row:has(>.switch){flex-wrap:nowrap}}
 .player .frame canvas{background:#000}
 .lc-bar .switch[disabled]{opacity:.5}
 /* link cable: the cartridge in each slot, and the picker sheet */
