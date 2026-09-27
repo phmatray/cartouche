@@ -704,7 +704,8 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
   .toc a small{display:none}
   .toc a[aria-current]::after{left:0;right:16px;top:auto;bottom:4px;height:4px;width:auto}
   .manual .paper{padding:24px 18px 32px}
-  .binds li{grid-template-columns:80px auto 1fr auto}
+  .binds li{grid-template-columns:80px auto 1fr}
+  .binds .sbtn{justify-self:end} /* the leader is gone: the button keeps its size at the end of the line */
   .binds .leader{display:none}
   .shortcuts{grid-template-columns:1fr}
 }
