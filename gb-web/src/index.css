@@ -391,7 +391,10 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .svp-warn{border:2px solid var(--warn);padding:12px 14px;display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;font:600 14px/1.45 var(--font);color:var(--paper)}
 .svp-warn p{margin:0;flex:1 1 240px}
 .danger-zone{border:1.5px solid #4a2a2a;padding:18px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;font:500 14px/1.4 var(--font);color:var(--mute)}
-@media (max-width:1000px){.gp .body{grid-template-columns:1fr}}
+@media (max-width:1000px){
+  .gp .body{grid-template-columns:1fr}
+  .gp .acts .btn{flex:1 1 auto} /* one per line beside the box: an even stack, not a staircase of widths */
+}
 @media (max-width:640px){
   .gp .wrap.hero{grid-template-columns:120px minmax(0,1fr);gap:18px;padding-top:24px;padding-bottom:28px;align-items:end}
   .gp .info{display:contents}
