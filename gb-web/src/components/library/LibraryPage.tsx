@@ -190,7 +190,7 @@ export function LibraryPage() {
         <section className="sec" aria-labelledby="h-cat" id="catalog" ref={catalogRef}>
           <div className="sec-h">
             <h2 id="h-cat">{t('library.all')}</h2>
-            <span className="count">{t('library.allSub', { games: t('common.games', { count: games.length }) })}</span>
+            <span className="count">{t('library.allSub', { games: t('common.games', { count: index.items.length }) })}</span>
           </div>
           <div className="tools">
             <div className="chips" role="group" aria-label={t('library.filterLabel')}>
