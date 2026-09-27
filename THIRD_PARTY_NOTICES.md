@@ -367,9 +367,24 @@ not part of the published build.
 - Those requests go to GitHub, which receives the player's IP address and
   browser details; see the
   [GitHub General Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
-  No other third-party server is contacted: fonts are served with the app.
+  No other server is contacted for box art: fonts are served with the app.
 - The file names used to build those URLs come from `gamedb.json` (see above;
   factual data, no images).
+
+### RetroAchievements (achievement lists and badges)
+
+- Source: the RetroAchievements Web API (https://retroachievements.org/API/)
+  and badge images from `media.retroachievements.org`.
+- Achievement titles, descriptions and badge images belong to RetroAchievements
+  and their authors. Cartouche does **not** copy, host or redistribute any of
+  them: the player's browser requests them directly, and only after the player
+  connected their own RetroAchievements account in Settings > Achievements
+  (off by default; "Disconnect" stops every request). Read-only: Cartouche does
+  not unlock achievements (see `docs/RETROACHIEVEMENTS.md`).
+- Those requests go to RetroAchievements, which receives the player's IP
+  address, browser details, username and web API key. ROMs and their hashes
+  are never sent.
+- RetroAchievements does not endorse Cartouche.
 
 ## 3. Downloaded for testing only, never distributed
 

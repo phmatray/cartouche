@@ -75,5 +75,6 @@ const CREDIT_LINKS = {
   sameboy: ext('https://github.com/LIJI32/SameBoy'),
   notices: (s: string) => <a href={base + 'THIRD_PARTY_NOTICES.txt'} style={ink}>{s}</a>,
   licenses: (s: string) => <a href={base + 'THIRD_PARTY_LICENSES.txt'} style={ink}>{s}</a>,
+  ra: ext('https://retroachievements.org'),
   legal: (s: string) => <Link to="/legal" style={ink}>{s}</Link>,
 };

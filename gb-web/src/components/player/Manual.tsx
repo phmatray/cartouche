@@ -16,6 +16,9 @@ import { Shot } from '../game/Shot';
 import { DebugPanel } from './DebugPanel';
 import { date, rich, useT, type Key } from '../../i18n';
 import { descOf } from '../../lib/catalog-utils';
+import { raShown } from '../../lib/retroachievements';
+
+const Achievements = lazy(() => import('../game/Achievements'));
 
 const PrintsSection = lazy(() => import('../../peripherals/PrintsSection'));
 
@@ -246,6 +249,7 @@ function GamePageTab({ game, header, emu, isRunning }: ManualProps) {
       <dl className="spec" style={{ gridTemplateColumns: '1fr' }}>
         {rows.map(([a, b]) => <div key={a}><dt>{a}</dt><dd>{b}</dd></div>)}
       </dl>
+      {raShown(game) && <Suspense><Achievements game={game} /></Suspense>}
       <p style={{ marginTop: 20 }}><Link className="btn line" to={paths.game(game.id)} style={{ color: 'var(--ink)' }}>{t('player.game.open')}</Link></p>
       <div className="row">
         <span>{t('player.game.debug')}<small>{t('player.game.debugSub')}</small></span>

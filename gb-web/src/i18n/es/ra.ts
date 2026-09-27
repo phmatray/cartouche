@@ -1,0 +1,26 @@
+import type { Messages } from '../core.ts';
+
+export default {
+  tab: 'Logros',
+  intro: 'Conecta tu cuenta de RetroAchievements para ver, en cada cartucho reconocido, los logros que has conseguido. Es solo de lectura: jugar aquí todavía no desbloquea logros, porque RetroAchievements solo acepta desbloqueos de los emuladores que ha revisado.',
+  user: 'Nombre de usuario',
+  key: 'Clave de la API web',
+  keySub: 'Está en retroachievements.org, en <a>Settings › Keys</a>. Se queda en este navegador y nunca se te pide la contraseña.',
+  connect: 'Conectar',
+  checking: 'Comprobando…',
+  connected: 'Conectado como {user}',
+  connectedSub: 'Las páginas de los juegos y el manual muestran tus logros. Este navegador solo contacta con retroachievements.org mientras estás conectado.',
+  disconnect: 'Desconectar',
+  refused: 'RetroAchievements no ha aceptado este nombre de usuario y esta clave.',
+  offline: 'No se puede contactar con RetroAchievements ahora mismo. Inténtalo más tarde.',
+  title: 'Logros',
+  looking: 'Buscando este cartucho en RetroAchievements…',
+  none: 'RetroAchievements no tiene logros para esta versión del cartucho.',
+  earned: { one: '{count} de {total} conseguido', other: '{count} de {total} conseguidos' },
+  points: '{earned} de {total} puntos',
+  hardcore: 'Hardcore',
+  locked: 'Aún sin conseguir',
+  on: 'Conseguido {date}',
+  site: 'Ver en RetroAchievements',
+  readOnly: 'Jugar aquí todavía no desbloquea logros.',
+} satisfies Messages['ra'];

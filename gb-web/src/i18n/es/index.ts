@@ -12,6 +12,7 @@ import settings from './settings.ts';
 import legal from './legal.ts';
 import periph from './periph.ts';
 import sync from './sync.ts';
+import ra from './ra.ts';
 
-const es: Messages = { common, shell, library, search, game, player, add, link, online, settings, legal, periph, sync };
+const es: Messages = { common, shell, library, search, game, player, add, link, online, settings, legal, periph, sync, ra };
 export default es;
