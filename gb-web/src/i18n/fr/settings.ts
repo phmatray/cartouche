@@ -138,9 +138,6 @@ export default {
     waveSub: 'Forme d’onde libre : lignes de basse',
     noise: 'Bruit',
     noiseSub: 'Percussions et effets',
-    behavior: 'Comportement',
-    hidden: 'Couper le son quand l’onglet est masqué',
-    hiddenSub: 'Le son s’arrête au changement d’onglet ou de fenêtre',
   },
   emu: {
     intro: 'Comment les jeux tournent et comment la progression est conservée.',

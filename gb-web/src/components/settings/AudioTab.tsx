@@ -5,7 +5,7 @@ import { pct, useT } from '../../i18n';
 const CHANNELS: (keyof ChannelMutes)[] = ['pulse1', 'pulse2', 'wave', 'noise'];
 
 export function AudioTab() {
-  const { masterVolume, setMasterVolume, channelMutes, toggleChannelMute, muteWhenHidden, set } = useSettingsStore();
+  const { masterVolume, setMasterVolume, channelMutes, toggleChannelMute } = useSettingsStore();
   const t = useT();
   return (
     <>
@@ -19,8 +19,6 @@ export function AudioTab() {
       </Row>
       <h3>{t('settings.audio.channels')}</h3>
       {CHANNELS.map((k) => <SwitchRow key={k} label={t(`settings.audio.${k}`)} sub={t(`settings.audio.${k}Sub`)} on={!channelMutes[k]} set={() => toggleChannelMute(k)} />)}
-      <h3>{t('settings.audio.behavior')}</h3>
-      <SwitchRow label={t('settings.audio.hidden')} sub={t('settings.audio.hiddenSub')} on={muteWhenHidden} set={(v) => set({ muteWhenHidden: v })} />
     </>
   );
 }
