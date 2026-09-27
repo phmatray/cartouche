@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fails if the tracked tree (index included) contains game data or training material:
 # ROMs other than the six bundled homebrew ones and the allowlisted GB Studio ones, saves and save states,
-# datasets, model checkpoints, boot ROM / BIOS images other than the three hash-pinned SameBoy ones, any file
+# datasets, model checkpoints, boot ROM / BIOS images other than Cartouche's hash-pinned ones (built from gb-core/boot-src), any file
 # over 2 MB, a copy of the Nintendo logo outside the bundled ROMs, or anything referring to a local training directory.
 # The only model data allowed in the repository is gb-web/src/neural/weights/*.bin.
 # scripts/rom-allowlist.sha1 lists each hosted GB Studio ROM ("<sha1>  <path>", shasum format): a ROM is allowed
@@ -14,11 +14,18 @@ allowed_roms='^gb-web/public/roms/(tobutobugirl\.gb|tobutobugirldx\.gb|ucity\.gb
 allowlist=scripts/rom-allowlist.sha1
 # Archives and Cartouche backups (.cartouche/.cartshelf) are banned too: the app imports both, so a ROM can hide in them.
 banned_ext='\.(gb|gbc|sgb|sav|srm|state|npz|npy|pt|pth|ckpt|safetensors|onnx|h5|pkl|zip|7z|rar|gz|tgz|bz2|xz|zst|tar|br|lz|lz4|lzma|zlib|z|cartouche|cartshelf)$'
-# Boot ROMs / BIOS dumps: only SameBoy's open-source (MIT) boot ROMs, at these paths with exactly this content
-# (THIRD_PARTY_NOTICES.md). Any other file named like a boot ROM or BIOS image fails.
-boot_roms='6f64da4cecd7e54e2f928eb3e3ba7810a7a567d0d247cc71737d1771e073a916  gb-core/boot/sameboy_dmg_boot.bin
-f767b8e7e510a255f81328c89dba6e0c996b370e1bc86aebb8584a7da47a5bba  gb-core/boot/sameboy_cgb_boot.bin
-b60d493a7944ccf74c81f1e7b6bf38c2c7029e296648ea0e74cb22b10dd1fcb8  gb-core/boot/sameboy_sgb_boot.bin'
+# Boot ROMs / BIOS dumps: only Cartouche's own boot ROMs (a fork of SameBoy's, MIT; gb-core/boot-src/build.sh
+# rebuilds them byte for byte), at these paths with exactly this content (THIRD_PARTY_NOTICES.md). Any other file named like a boot ROM or BIOS image fails.
+boot_roms='2702dbe577c818e0e54a16c17b5b7e50f96be339b3bcc28cc37020582d24c1a7  gb-core/boot/cgb_insert.bin
+99c49a4b6240603a00bd28f40f9f713abdc09c735be374c4d1b0a8dc596dc981  gb-core/boot/cgb_plain.bin
+39a492850913e1f8afb53c5956b88ff9797c9badd8ff27ed10a346c3892f197c  gb-core/boot/cgb_registration.bin
+16958515cebd136353df14fe023af3106c7ba8fca6099adb7e026b72b7db8a66  gb-core/boot/cgb_shelf.bin
+01bcbdd80449926f3ca043578814356ad9e17ed9678a9e2d6726905c14a3cf4f  gb-core/boot/dmg_insert.bin
+cd2a0138c7d22c23b8430bf4d38a12940ae840b31681e2a8bb880aac497062d9  gb-core/boot/dmg_registration.bin
+0eb1eafcff00428b50b848719d2b3f4679399ce971d10541d12c539701105fa0  gb-core/boot/dmg_shelf.bin
+e349cfdf6779a050a1f7dd6039afbd1e5b9b485a8f653053f0e2c1c2566ba8ee  gb-core/boot/sgb_insert.bin
+0e81f71c2caa729db9ace794445b88fe64dcdbac16f4b8febf212cfd2f5ec557  gb-core/boot/sgb_registration.bin
+9bfe3d15bdd8160679f890611a80d38f33f5e38a0e2721d70d5c3bdb0fbd3510  gb-core/boot/sgb_shelf.bin'
 boot_like='(boot|bios).*\.(bin|rom|gb|gbc)$|(^|/)[^/]*(rom|dmg0|cgb0)[^/]*\.(bin|rom)$|^gb-core/boot/'
 fail=0
 

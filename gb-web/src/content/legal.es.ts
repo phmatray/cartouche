@@ -15,12 +15,13 @@ export const LEGAL_ES: LegalSection[] = [
   {
     title: 'Qué contiene Cartouche',
     body:
-      'Un emulador que no contiene código de Nintendo ni ninguna copia del logo de Nintendo. Incluye las boot ROM ' +
-      'de código abierto de SameBoy, © 2015-2026 Lior Halphon, licencia MIT (https://github.com/LIJI32/SameBoy): ' +
-      'código original, no el de Nintendo. Por defecto, los juegos arrancan directamente en el estado documentado ' +
-      'posterior al arranque; los colores de Game Boy Color de un juego de Game Boy original, si los eliges, los ' +
-      'calcula esa boot ROM sin mostrarse. La animación de inicio está desactivada por defecto. Si la activas ' +
-      '(Ajustes > Emulación), muestra el logo leído del propio cartucho del juego, como la consola. Los marcos y colores de Super Game Boy ' +
+      'Un emulador que no contiene código de Nintendo ni ninguna copia del logo de Nintendo. Sus boot ROM son las ' +
+      'de Cartouche, modificadas a partir de las boot ROM de código abierto de SameBoy, © 2015-2026 Lior Halphon, ' +
+      'licencia MIT (https://github.com/LIJI32/SameBoy): código original, no el de Nintendo. Nunca leen, muestran ' +
+      'ni comprueban el logo guardado en un cartucho. La animación de inicio (Ajustes > Emulación: Registro, ' +
+      'Inserción o Estantería) es un dibujo y una melodía propios de Cartouche, sin ningún logo; desactivada, los ' +
+      'juegos arrancan directamente en el estado documentado posterior al arranque. Los colores de Game Boy Color ' +
+      'de un juego de Game Boy original, si los eliges, los calcula la boot ROM sin mostrarse. Los marcos y colores de Super Game Boy ' +
       'se dibujan a partir de los datos que envía cada juego; no se incluye ningún software de Super Game Boy ni de SNES.\n\n' +
       'Tres juegos homebrew gratuitos, redistribuidos sin modificar a partir de las versiones oficiales de sus autores:\n\n' +
       'Tobu Tobu Girl y Tobu Tobu Girl Deluxe, © 2017 Tangram Games (código fuente: ' +

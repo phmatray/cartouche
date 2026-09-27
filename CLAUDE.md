@@ -15,7 +15,7 @@ cartouche/
 │   │   ├── camera.rs / printer.rs  # Pocket camera sensor + capture unit; Game Boy Printer on the serial port
 │   │   ├── sgb.rs            # Super Game Boy: command packets over P1, palettes/attributes, mask, *_TRN via the shown frame, border, MLT_REQ
 │   │   ├── trace.rs          # Opt-in per-frame layer trace (BG/window/OBJ planes, per-line registers) + exact motion vectors
-│   │   └── boot_rom.rs       # SameBoy MIT boot ROMs (gb-core/boot/, exact hashes in the guard) + 9-byte test stub; no Nintendo boot ROM or logo, ever
+│   │   └── boot_rom.rs       # Cartouche's boot ROMs (gb-core/boot/, built by gb-core/boot-src/build.sh from a SameBoy MIT fork, exact hashes in the guard) + 9-byte test stub; no Nintendo boot ROM or logo, ever
 │   ├── examples/             # render.rs (PNG of a frame), harvest.rs (trace records; refuses to write inside a git repo)
 │   └── tests/                # blargg.rs, acid2.rs, cgb.rs, cpu_tests.rs, homebrew.rs, link.rs, sgb.rs, trace.rs
 ├── gb-web/                   # React 19 + Vite + Tailwind v4 + Zustand
@@ -30,7 +30,7 @@ cartouche/
 ```
 
 Test ROMs are downloaded by `scripts/fetch-test-roms.sh` into `gb-core/test-roms/` (gitignored).
-Never commit ROMs, boot ROM dumps (only the three SameBoy boot ROMs in `gb-core/boot/`, allowlisted by hash), box art or Nintendo artwork (the one exception: the CC BY 4.0
+Never commit ROMs, boot ROM dumps (only Cartouche's own boot ROMs in `gb-core/boot/`, built from `gb-core/boot-src/` and allowlisted by hash), box art or Nintendo artwork (the one exception: the CC BY 4.0
 key art of the bundled Tobu Tobu Girl games in `gb-web/public/covers/`, credited in
 THIRD_PARTY_NOTICES.md); the only tracked ROMs are the
 bundled ones in `gb-web/public/roms/`, each re-included by its own `.gitignore` line and listed

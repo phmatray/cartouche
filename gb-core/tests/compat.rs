@@ -19,7 +19,7 @@ fn rgb(cram: &[u8], pal: usize, id: usize) -> [u8; 4] {
 }
 
 fn colourised(palette: u8) -> GameBoy {
-    let gb = GameBoy::with_boot(dmg_rom(b"CARTOUCHE"), true, palette, false).unwrap();
+    let gb = GameBoy::with_boot(dmg_rom(b"CARTOUCHE"), true, palette, 0).unwrap();
     assert!(!gb.bus.boot_rom_active, "the boot ROM ran to its end");
     gb
 }
@@ -78,7 +78,7 @@ fn a_held_combination_picks_another_palette() {
 #[test]
 fn states_stay_on_their_console() {
     let rom = dmg_rom(b"CARTOUCHE");
-    let mut dmg = GameBoy::with_boot(rom.clone(), false, 0, false).unwrap();
+    let mut dmg = GameBoy::with_boot(rom.clone(), false, 0, 0).unwrap();
     let mut gbc = colourised(0);
     let (from_dmg, from_gbc) = (dmg.save_state(), gbc.save_state());
     assert_eq!(gbc.state_console(&from_dmg), Some(Console::Dmg));
@@ -94,9 +94,9 @@ fn a_state_brings_back_its_palette() {
     let mut gb = colourised(0);
     assert!(gb.load_state(&state));
     assert_eq!(gb.palette, 9);
-    let mut booting = GameBoy::with_boot(dmg_rom(b"CARTOUCHE"), true, 5, true).unwrap();
+    let mut booting = GameBoy::with_boot(dmg_rom(b"CARTOUCHE"), true, 5, 1).unwrap();
     let mid = booting.save_state();
-    let mut other = GameBoy::with_boot(dmg_rom(b"CARTOUCHE"), true, 0, true).unwrap();
+    let mut other = GameBoy::with_boot(dmg_rom(b"CARTOUCHE"), true, 0, 1).unwrap();
     assert!(other.load_state(&mid));
     other.finish_boot().unwrap();
     booting.finish_boot().unwrap();
@@ -105,7 +105,7 @@ fn a_state_brings_back_its_palette() {
 
 #[test]
 fn animation_plays_then_hands_over() {
-    let mut gb = GameBoy::with_boot(dmg_rom(b"CARTOUCHE"), true, 0, true).unwrap();
+    let mut gb = GameBoy::with_boot(dmg_rom(b"CARTOUCHE"), true, 0, 1).unwrap();
     assert!(gb.bus.boot_rom_active && gb.bus.cgb_mode);
     let (mut frames, mut loudest) = (0, 0f32);
     while gb.bus.boot_rom_active {
@@ -120,7 +120,7 @@ fn animation_plays_then_hands_over() {
     assert!(gb.bus.ppu.compat);
     assert!(loudest > 0.05, "the start-up chime plays ({loudest})");
     // DMG boot ROM too, on the DMG.
-    let mut dmg = GameBoy::with_boot(dmg_rom(b"CARTOUCHE"), false, 0, true).unwrap();
+    let mut dmg = GameBoy::with_boot(dmg_rom(b"CARTOUCHE"), false, 0, 1).unwrap();
     for _ in 0..600 {
         if !dmg.bus.boot_rom_active { break; }
         dmg.run_frame().unwrap();

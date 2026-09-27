@@ -10,7 +10,8 @@ const VRAM_SIZE = 0x2000; // 8192 bytes
 const START = 3; // JoypadButton.Start
 
 /** `sgb`: a Super Game Boy (only for a cartridge with its functions; `colorize` and `palette` then do not apply). */
-export interface BootOptions { colorize: boolean; palette: number; animation: boolean; sgb?: boolean }
+/** `animation`: the start-up animation, 0 none or 1-3 (the index in `STARTUP`). */
+export interface BootOptions { colorize: boolean; palette: number; animation: number; sgb?: boolean }
 /** Console numbers, as the core reports them. */
 export const CONSOLE_DMG = 0, CONSOLE_CGB = 1, CONSOLE_COMPAT = 2, CONSOLE_SGB = 3;
 
@@ -54,8 +55,8 @@ export function useEmulator() {
   }, []);
 
   /** `colorize`/`palette`: an original Game Boy cartridge on a Game Boy Color (palette 0 automatic, 1-12);
-   *  `animation`: play the start-up animation (Start skips it). */
-  const loadRom = useCallback((data: Uint8Array, boot: BootOptions = { colorize: false, palette: 0, animation: false }): boolean => {
+   *  `animation`: the start-up animation to play, 0 none (Start skips it). */
+  const loadRom = useCallback((data: Uint8Array, boot: BootOptions = { colorize: false, palette: 0, animation: 0 }): boolean => {
     const emu = emulatorRef.current;
     if (!emu) {
       addError(t('player.error.init'));

@@ -189,7 +189,8 @@ affiliated with, sponsored by or endorsed by Nintendo. Game titles belong to
 their owners and are used only to identify games.
 
 Cartouche contains no Nintendo code and no Nintendo BIOS or boot ROM; games
-start with SameBoy's open-source (MIT) boot ROMs, or directly in the documented
+start with Cartouche's own boot ROMs (modified from SameBoy's open-source, MIT ones; they
+show no logo), or directly in the documented
 post-boot state. **No commercial ROMs are provided,
 hosted or linked.** The six ROMs bundled with the app are redistributed under
 their authors' licenses, listed with checksums in

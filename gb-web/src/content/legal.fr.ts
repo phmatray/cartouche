@@ -15,12 +15,13 @@ export const LEGAL_FR: LegalSection[] = [
   {
     title: 'Ce que contient Cartouche',
     body:
-      'Un émulateur qui ne contient aucun code Nintendo ni aucune copie du logo Nintendo. Il inclut les boot ROM ' +
-      'open source de SameBoy, © 2015-2026 Lior Halphon, licence MIT (https://github.com/LIJI32/SameBoy) : du code ' +
-      'original, pas celui de Nintendo. Par défaut, les jeux démarrent directement dans l’état documenté qui suit ' +
-      'le démarrage ; les couleurs Game Boy Color d’un jeu Game Boy d’origine, si vous les choisissez, sont calculées ' +
-      'par cette boot ROM sans être affichée. L’animation de démarrage est désactivée par défaut. Une fois activée ' +
-      '(Réglages > Émulation), elle affiche le logo lu dans la cartouche du jeu, comme la console. Les cadres et couleurs Super Game Boy ' +
+      'Un émulateur qui ne contient aucun code Nintendo ni aucune copie du logo Nintendo. Ses boot ROM sont celles ' +
+      'de Cartouche, modifiées d’après les boot ROM open source de SameBoy, © 2015-2026 Lior Halphon, licence MIT ' +
+      '(https://github.com/LIJI32/SameBoy) : du code original, pas celui de Nintendo. Elles ne lisent, n’affichent ' +
+      'et ne vérifient jamais le logo enregistré dans une cartouche. L’animation de démarrage (Réglages > Émulation : ' +
+      'Repérage, Insertion ou Étagère) est un dessin et un carillon propres à Cartouche, sans aucun logo ; désactivée, ' +
+      'les jeux démarrent directement dans l’état documenté qui suit le démarrage. Les couleurs Game Boy Color d’un ' +
+      'jeu Game Boy d’origine, si vous les choisissez, sont calculées par la boot ROM sans être affichées. Les cadres et couleurs Super Game Boy ' +
       'sont dessinés à partir des données envoyées par chaque jeu ; aucun logiciel Super Game Boy ou SNES n’est inclus.\n\n' +
       'Trois jeux homebrew gratuits, redistribués sans modification à partir des versions officielles de leurs auteurs :\n\n' +
       'Tobu Tobu Girl et Tobu Tobu Girl Deluxe, © 2017 Tangram Games (sources : ' +

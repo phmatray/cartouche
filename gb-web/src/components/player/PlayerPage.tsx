@@ -19,6 +19,7 @@ import { BUTTON_NUMBERS } from '../../utils/keybindings';
 import { dpadAt, slide } from '../../lib/touch-slide';
 import { getActiveProfileId, getSaveState, getSram, resumeStateId } from '../../lib/db';
 import { bootFrom, skipSilentResume } from '../../lib/boot-from';
+import { STARTUP } from '../../lib/settings-clean';
 import { ago, owned, paths, tagOf } from '../../lib/ui';
 import { settled } from '../../lib/transitions';
 import { I } from '../icons';
@@ -149,7 +150,7 @@ function Player({ game }: { game: GameEntry }) {
   const [running, setRunning] = useState<Machine | null>(null); // what the core was powered on with
   const switchOk = useRef(false); // only the resume at start-up may follow its state onto another console
   const refused = useRef(false); // the last load was a state from another console (already explained)
-  const powerOn = useCallback((data: Uint8Array, c: Machine, animation: boolean) => {
+  const powerOn = useCallback((data: Uint8Array, c: Machine, animation: number) => {
     const sgb = c === 'sgb';
     if (!loadRom(data, { colorize: !sgb && c !== 'dmg', palette: sgb ? 0 : paletteOf(c), animation, sgb })) return false;
     romData.current = data;
@@ -165,7 +166,7 @@ function Player({ game }: { game: GameEntry }) {
     const now = consoleNow();
     // A Game Boy state also loads on the Super Game Boy (the same machine; the game sends its colours again).
     if (made !== now && MADE_ON[made] && !(made === CONSOLE_DMG && now === CONSOLE_SGB)) {
-      if (!switchOk.current || !romData.current || !powerOn(romData.current, MADE_ON[made], true)) {
+      if (!switchOk.current || !romData.current || !powerOn(romData.current, MADE_ON[made], 1)) {
         refused.current = true;
         toast(tNow(`player.toast.madeOn${ON[made]}`), 'm');
         return false;
@@ -251,14 +252,15 @@ function Player({ game }: { game: GameEntry }) {
     let from: SlotKey | null = bootFrom(q, s.resumePoints, !!resume);
     // A slot is loaded once: a reload (or iOS bringing back an evicted tab) goes on from the resume point instead.
     if (slot !== null) setQ((p) => { p.delete('slot'); if (s.resumePoints) p.set('resume', '1'); return p; }, { replace: true });
-    // A state replaces the start-up at once: the animation then costs nothing (and plays if the state is gone).
-    if (!powerOn(data, machineOf(data, game.id), s.startupAnimation || from !== null)) { setBadRom(true); return; }
+    // A state replaces the start-up at once: an animation then costs nothing (and plays if the state is gone).
+    const animation = STARTUP.indexOf(s.startupAnimation);
+    if (!powerOn(data, machineOf(data, game.id), from !== null ? Math.max(animation, 1) : animation)) { setBadRom(true); return; }
     setNeedsRom(false);
     // Moved to the Game Boy for its SNES music (see syncBorder): a resume point made on the Super Game Boy would bring the
     // silence back, so the game starts again on the Game Boy, from its cartridge save. "Resume there" still goes back to it.
     if (resume && skipSilentResume(from, MADE_ON[stateConsole(resume.data)], machineOf(data, game.id), !!s.snesMusic?.[game.id])) {
       from = null;
-      if (!s.startupAnimation) skipBoot();
+      if (animation <= 0) skipBoot();
       toast(tNow('player.toast.snesFresh'), 'm', { label: tNow('player.toast.resumeThere'), run: async () => {
         switchOk.current = true;
         const ok = await saves.load('auto');
@@ -279,7 +281,7 @@ function Player({ game }: { game: GameEntry }) {
       const r = await saves.load(from, true);
       const ok = r === true;
       switchOk.current = false;
-      if (!ok && !s.startupAnimation) skipBoot();
+      if (!ok && animation <= 0) skipBoot();
       const moved = ok && consoleNow() !== before;
       if (moved) toast(tNow(`player.toast.resumedOn${ON[consoleNow()] ?? 'Dmg'}`), 'm');
       else if (r === 'older') toast(tNow('player.toast.saveNewer'), 'm');
@@ -422,7 +424,7 @@ function Player({ game }: { game: GameEntry }) {
     const data = romData.current;
     if (!data) return;
     const sram = hasBatteryRam() ? exportSram() : null;
-    if (!powerOn(data, machineOf(data, game.id), useSettingsStore.getState().startupAnimation)) return;
+    if (!powerOn(data, machineOf(data, game.id), STARTUP.indexOf(useSettingsStore.getState().startupAnimation))) return;
     if (sram) importSram(sram);
     play();
   }, [hasBatteryRam, exportSram, importSram, powerOn, game.id, play]);

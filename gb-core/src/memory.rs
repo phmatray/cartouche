@@ -125,7 +125,7 @@ impl MemoryBus {
         }
         match addr {
             0x0000..=0x7FFF => {
-                if self.boot_rom_active && (addr < 0x100 || (0x200..0x900).contains(&addr) && self.boot_rom.len() > 0x100) {
+                if self.boot_rom_active && (addr < 0x100 || (0x200..self.boot_rom.len()).contains(&(addr as usize))) {
                     self.boot_rom[addr as usize]
                 } else {
                     self.cartridge.read_rom(addr)
