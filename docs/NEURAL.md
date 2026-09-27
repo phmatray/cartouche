@@ -41,6 +41,9 @@ image of 2-bit colour ids.
 - The frame is then rebuilt line by line from each scanline's own SCX/SCY/WX/WY and window line
   counter, with that line's palette applied last. Scrolling moves the cached result exactly,
   palette fades only recolour it, and raster effects (status bars, split scrolling) come out right.
+  A colour id that the pixel's on-screen neighbours show in a different colour (a palette rewritten
+  between lines, as in gradient skies, or a neighbour cell with another CGB palette) takes the
+  colour the screen shows there, so a flat area stays flat.
 
 **Learned-classical table** (`gb-web/src/neural/weights/lc4x.bin`, 196,648 bytes). A pixel-space
 upscaler for everything the tile path does not cover. For each quadrant of a 4×4 block, 16
@@ -53,9 +56,11 @@ the tied table makes it exactly symmetric under rotations and flips.
 come from the same layer (BG, or window) and the block's centre, rebuilt from the map and the
 palette, equals the pixel the game showed. Everything else uses the table: sprites and the pixels
 next to them, where BG meets window, map cells still being computed, VRAM or palettes written
-mid-frame, and whole frames without a usable trace (the preset previews, the frame shown right
-after a state load or during rewind). On the bundled homebrew, 95.8% of blocks take the tile
-path, 4.1% are next to sprites, and 0.05% fall back for other reasons.
+mid-frame, and whole frames without a usable trace (the preset previews, a frame switched to
+Neural 4× while paused, the frame shown right after a state load or during rewind; the note under
+the setting says so). A paused frame that was drawn with a trace keeps the tile path when other
+settings change. On the bundled homebrew, 95.8% of blocks take the tile path, 4.1% are next to
+sprites, and 0.05% fall back for other reasons.
 
 Palettes, colour correction, adjustments and LCD ghosting then run on the 4× picture, as they do
 on the 1× picture for the other upscalers. DMG palettes are mapped by interpolation there, so a
@@ -70,7 +75,7 @@ what it does not do for this use: it moves source pixels (the central 2×2 of 5.
 held-out games), and it flickers when pixels near an edge change.
 
 - **Data.** Frames recorded with the core's trace from a private collection of Game Boy and Game
-  Boy Color games, on the order of a thousand titles, played by a scripted input bot. The games,
+  Boy Color games, played by a scripted input bot. The games,
   the frames, the tiles and the datasets are not distributed and are not in this repository. Only
   the weight files are: numbers, with a header of sizes and pixel-pair indices.
 - **Held-out games.** About a tenth of the games were set aside before training and never used to
@@ -109,7 +114,7 @@ Girl Deluxe, µCity, dmg-acid2, cgb-acid2 and cpu_instrs):
 | xBRZ 4× (teacher) | 99.39 / 97.43 | 0.4002 | 1.56 | 66.9 | 0.4315 | 0.0206 |
 | Learned-classical table alone | 100 / 100 | 0.3998 | 1.89 | 59.5 | 0.4617 | 0.0350 |
 | Tile-aware network alone | 100 / 100 | 0.4006 | 1.19 | 70.3 | 0.3595 | 0.0183 |
-| **Neural 4× as shipped** | **100 / 100** | **0.4026** | **1.36** | **67.7** | **0.4117** | **0.0387** |
+| **Neural 4× as shipped** | **100 / 100** | **0.4026** | **1.36** | **67.7** | **0.4105** | **0.0375** |
 
 What this says, plainly:
 
@@ -121,7 +126,7 @@ What this says, plainly:
   need a better teacher or real high-resolution art.
 
 On the held-out games the shipped version keeps 100% exactness and flickers 15% less than xBRZ
-(0.215% against 0.253% of pixels); those frames are not shown here.
+(0.216% against 0.253% of pixels); those frames are not shown here.
 
 ### The WebGL implementation
 
@@ -138,18 +143,22 @@ for the numbers above, on the bundled homebrew:
 - These results are the same in Chrome (ANGLE Metal) and in WebKit (Safari's engine), on the same Mac.
 
 Cost on an Apple M1 Max, wall clock over hundreds of frames with a final readback, Chrome / WebKit:
-0.19 / 0.13 ms for a frame drawn by the table alone, 0.29 / 0.56 ms for a frame drawn from the tile
-cache, 1.3–1.7 / 2.5–3.9 ms for a frame that also recomputes 32–192 map cells, 23 / 26 ms to
+0.27 / 0.13 ms for a frame drawn by the table alone, 0.34 / 0.71 ms for a frame drawn from the tile
+cache, 1.1–2.0 / 2.4–3.9 ms for a frame that also recomputes 32–192 map cells, 24 / 26 ms to
 rebuild every used map at once. Phones were not measured. A full scene change is spread over
 several frames (192 cells per frame), with the table drawing the cells not yet computed. The core's
-layer trace, on while Neural 4× or Smooth motion is in use, cost 11–15% more emulation time per
-frame when it was measured.
+layer trace, on only while Neural 4× runs its tile path or Smooth motion is on, cost 11–15% more
+emulation time per frame when it was measured. It stays off without WebGL 2 and when the fallback
+below has stepped down to the table or to Nearest.
 
-**Automatic fallback.** The time of the neural passes is measured with
-`EXT_disjoint_timer_query_webgl2` when the browser has it, otherwise from the time between frames.
-When the median of the last 60 frames is over budget, Neural 4× steps down: tile network and
-table, then the table alone, then Nearest. It never steps back up by itself; changing the setting
-starts over.
+**Automatic fallback.** Only the cost of the neural passes counts, never the display rate (a
+30 Hz screen or Low Power Mode is not a reason to drop). It is measured with
+`EXT_disjoint_timer_query_webgl2` when the browser has it (every frame, a 60-frame window);
+otherwise every 6th frame the passes are timed between two 1-pixel reads that wait for the GPU (a
+10-sample window, about one second). When the median is over 8 ms, Neural 4× steps down: tile
+network and table, then the table alone, then Nearest. After about ten seconds within budget it
+tries one level up again, and every step down doubles that wait. The AI note under the setting
+says when it runs as the table only or as Nearest.
 
 **Caches.** Loading a state, rewinding and switching games throw the tile cache away; the next
 frames are drawn by the table until the maps are recomputed.
@@ -167,10 +176,14 @@ An in-between frame at time τ between two emulated frames A and B, drawn at 4×
 - **Sprites**: matched between frames by OAM slot and tile (else the nearest sprite with the same
   tile and attributes), moved to their in-between position, and put back with the DMG or CGB
   priority rules.
-- **When it holds a real frame instead**: a scene cut (the previous frame, moved by its scroll,
-  predicts less than 75% of the new one), uneven motion (the BG did not move by the same amount
-  in the last two frames, like games that scroll every other frame: an in-between frame would show
-  a position the game never drew), a loaded state, rewind, and any speed other than 1×.
+- **When it shows the real frames instead**: a scene cut (the previous frame, moved by its
+  scroll, predicts less than 75% of the new one), uneven motion (the BG did not move by the same
+  amount in the last two frames, like games that scroll every other frame: an in-between frame
+  would show a position the game never drew), a pair the rebuild does not reproduce exactly, a
+  loaded state, rewind, and any speed other than 1×. The rebuild check runs once per pair on the
+  GPU: the pair is rebuilt at τ = 0 and τ = 1 and compared with both real frames, pixel for pixel;
+  any difference (dmg-acid2 and cgb-acid2 draw their mouth with effects the layer model does not
+  cover) and the real frames are shown. Held or not, τ = 0 and τ = 1 always draw the real frames.
 
 The display runs half a Game Boy frame behind: at 120 Hz that is about 8 ms of added delay. It is
 on only when the measured display rate is over 75 Hz (or when forced), and Neural 4× pauses while
@@ -183,5 +196,8 @@ identical to the real frame (repeating the frame gets 65.9% of pixels right, a 5
 TV-style block matching 89.5%); on Tobu Tobu Girl and Tobu Tobu Girl Deluxe, 99.7% and 99.6% of
 pixels are right (98.9% and 98.8% by repeating the frame). On held-out games, 81.7% of steady-
 motion in-between frames are pixel-perfect. Uneven motion is the common case in real games, which
-is why the guard holds those frames. The perceived smoothness was not measured. Cost: 0.27 ms
-(Chrome) and 0.57 ms (WebKit) per generated frame on the M1 Max.
+is why the guard holds those frames. The perceived smoothness was not measured. Cost: 0.28 ms
+(Chrome) and 0.68 ms (WebKit) per generated frame on the M1 Max, plus the rebuild check once per
+emulated frame: about 2.2 ms of wall-clock time in both browsers, most of it waiting for the
+synchronous read. On the bundled homebrew the check holds every pair of dmg-acid2 and cgb-acid2,
+0.11% of pairs on Tobu Tobu Girl and its Deluxe version, and none on µCity or cpu_instrs.
