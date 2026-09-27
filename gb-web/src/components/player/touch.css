@@ -1,0 +1,135 @@
+/* Touch controls: skins, the player's own layouts, and the layout editor. Loaded with the player (and the Controls
+   settings, for the skin swatches), never with the library. Geometry of the pad and buttons is in index.css. */
+
+/* ---- skins: the inks. Any element with data-skin gets them (the controls, and the swatches in Settings). ---- */
+[data-skin]{
+  --tc-bg:var(--band);--tc-pad:var(--paper);--tc-pad-ink:#000;--tc-ab:var(--m);--tc-ab-ink:#fff;
+  --tc-ss:transparent;--tc-ss-line:var(--paper);--tc-ss-ink:var(--paper);--tc-print:var(--paper);--tc-x:var(--band-3);--tc-x-ink:var(--paper)}
+/* Brick: the warm grey of the first handheld, near-black cross, maroon buttons, navy lettering, slanted pills */
+[data-skin=brick]{--tc-bg:#c8c5bb;--tc-pad:#2a2a2e;--tc-pad-ink:#5b5b62;--tc-ab:#8a1f57;--tc-ab-ink:transparent;--tc-ss:#8d8c92;--tc-print:#27296e;--tc-x:#a8a59c;--tc-x-ink:#2a2a2e}
+/* Pocket: brushed silver, charcoal buttons */
+[data-skin=pocket]{--tc-bg:linear-gradient(170deg,#e3e4e7,#b4b6bb 70%,#a9abb0);--tc-pad:#1f1f22;--tc-pad-ink:#63636a;--tc-ab:#3b3c42;--tc-ab-ink:transparent;--tc-ss:#5a5b61;--tc-print:#232327;--tc-x:#9c9ea3;--tc-x-ink:#1f1f22}
+/* Color: five shells, dark buttons, lettering in the shell's own contrast */
+[data-skin=color]{--tc-bg:var(--shell);--tc-pad:#1c1c1f;--tc-pad-ink:#5e5e66;--tc-ab:#27272b;--tc-ab-ink:transparent;--tc-ss:#2c2c31;--tc-print:var(--shell-ink);--tc-x:rgb(0 0 0 / .22);--tc-x-ink:var(--shell-ink)}
+[data-shell=raspberry]{--shell:#c42a55;--shell-ink:#fff}
+[data-shell=plum]{--shell:#5b3d8f;--shell-ink:#fff}
+[data-shell=lime]{--shell:#9dc43c;--shell-ink:#15210a}
+[data-shell=sun]{--shell:#f2c230;--shell-ink:#241b00}
+[data-shell=lagoon]{--shell:#17a2a2;--shell-ink:#032424}
+[data-skin=color]:not([data-shell]){--shell:#c42a55;--shell-ink:#fff}
+/* Clear: smoked glass outlines that read over any picture, for playing over the screen */
+[data-skin=clear]{--tc-pad:rgb(20 20 20 / .4);--tc-pad-ink:var(--paper);--tc-ab:rgb(20 20 20 / .4);--tc-ab-ink:var(--paper);--tc-ss:rgb(20 20 20 / .4);--tc-ss-line:rgb(244 244 240 / .7);--tc-x:rgb(20 20 20 / .4);--tc-line:rgb(244 244 240 / .6)}
+
+.touch[data-skin]{background:var(--tc-bg)}
+.touch[data-skin] .dpad button,.touch[data-skin] .dpad .c{background:var(--tc-pad);color:var(--tc-pad-ink)}
+.touch[data-skin] .ab button{background:var(--tc-ab);color:var(--tc-ab-ink)}
+.touch[data-skin] .ss button{background:var(--tc-ss);border-color:var(--tc-ss-line);color:var(--tc-ss-ink)}
+.touch[data-skin] .dpad button.down,.touch[data-skin] .ab button.down,.touch[data-skin] .tx.down{background:var(--y);color:#000}
+.touch[data-skin] .ss button.down{background:var(--tc-ss-line);color:#000}
+.tx{width:48px;height:48px;border:0;padding:0;display:flex;align-items:center;justify-content:center;background:var(--tc-x);color:var(--tc-x-ink);touch-action:none}
+.tx svg{width:20px;height:20px}
+
+/* shells: a cross with rounded arm ends and a dimple, bevelled round buttons, pills; the letters printed on the shell */
+.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .dpad{filter:drop-shadow(0 3px 4px rgb(0 0 0 / .28))}
+.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .dpad .u{border-radius:7px 7px 0 0}
+.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .dpad .d{border-radius:0 0 7px 7px}
+.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .dpad .l{border-radius:7px 0 0 7px}
+.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .dpad .r{border-radius:0 7px 7px 0}
+.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .dpad .c::after{content:"";position:absolute;inset:13px;border-radius:50%;background:radial-gradient(circle at 50% 40%,rgb(0 0 0 / .35),rgb(255 255 255 / .06))}
+.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) :is(.ab button,.tx){border-radius:50%;box-shadow:inset 0 -5px 8px rgb(0 0 0 / .3),inset 0 3px 5px rgb(255 255 255 / .12),0 3px 6px rgb(0 0 0 / .28)}
+.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .ab button::after{content:attr(data-l);position:absolute;left:0;right:0;top:calc(100% + 3px);font:italic 800 16px/1 var(--font);font-stretch:80%;letter-spacing:.08em;color:var(--tc-print)}
+.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .ss{gap:12px}
+.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .ss button{position:relative;width:68px;height:44px;padding:0;border:0;background:none;color:transparent}
+.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .ss button::before{content:"";position:absolute;left:10px;right:10px;top:8px;height:13px;border-radius:7px;background:var(--tc-ss);box-shadow:inset 0 -3px 4px rgb(0 0 0 / .3),0 2px 3px rgb(0 0 0 / .2)}
+.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .ss button::after{content:attr(data-l);position:absolute;left:-6px;right:-6px;top:26px;font:800 10px/1 var(--font);letter-spacing:.12em;text-transform:uppercase;color:var(--tc-print)}
+.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .ss button.down{background:none}
+.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .ss button.down::before{background:var(--y)}
+.touch[data-skin=brick] .ss button{transform:rotate(-25deg)}
+.touch[data-skin=brick] .ab button::after{font-stretch:100%}
+.touch[data-skin=pocket] .ab button::after{font-style:normal}
+/* clear: a hairline of paper around smoked glass */
+.touch[data-skin=clear] :is(.dpad button,.dpad .c,.ab button,.tx){box-shadow:inset 0 0 0 1.5px rgb(244 244 240 / .6)}
+.touch[data-skin=clear] .dpad .c{box-shadow:none}
+.touch[data-skin=clear] .ss button{border-width:1.5px}
+.touch[data-skin=clear] .tx{border-radius:50%}
+.touch[data-skin=clear] .dpad button:is(.u,.d){z-index:1}
+
+/* ---- the player's own layout: parts float in a layer under the top bar, placed by the editor ---- */
+.tz{display:contents}
+.tz[data-custom]{display:block;position:fixed;inset:calc(56px + var(--sat)) 0 0;z-index:4;pointer-events:none;padding:0 var(--sar) var(--sab) var(--sal)}
+.tz[data-custom]>[data-part]{position:absolute;margin:0;zoom:1;transform:translate(-50%,-50%) scale(var(--s,1));pointer-events:auto}
+.pl.imm .tz[data-custom]{top:0}
+/* the letters printed under A and B count as part of the pair, so nothing is placed over them */
+.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .tz[data-custom] .ab{height:149px}
+.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .tz[data-custom] .ab .b{bottom:19px}
+@media (max-width:900px) and (min-height:501px){
+  /* upright and over the screen: the screen takes the room the controls had */
+  .pl:has(.tz[data-overlay]){--touch-h:0px}
+}
+@media (orientation:landscape) and (max-height:500px){
+  .tz[data-custom]{top:calc(52px + var(--sat))}
+  .pl.imm .tz[data-custom]{top:0}
+  /* shells held sideways: the shell colour on both sides of the screen */
+  .touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color])::before,
+  .touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color])::after{content:"";grid-area:l;background:var(--tc-bg)}
+  .touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color])::after{grid-area:r}
+  .pl:not(.closed) .touch::before,.pl:not(.closed) .touch::after{display:none}
+  /* over the screen: the screen as large as the height allows, the controls in the corners */
+  .pl.closed:has(.tz[data-overlay]) .screen{width:min(var(--sw,100vw),calc((100dvh - 52px - var(--sat) - var(--sab) - 16px - 24px) * 160 / 144 + 24px))}
+  .pl.imm.closed:has(.tz[data-overlay]) .screen{width:min(100vw,calc((100dvh - 16px - var(--sat) - var(--sab) - 24px) * 160 / 144 + 24px))}
+  /* immersive: the screen stays in the middle column when the controls float (no grid items left in l and r) */
+  .pl.imm.closed>.pl-body,.pl.imm.closed .stage{grid-column:2}
+  .tz[data-overlay] :is(.dpad,.ab,.ss){z-index:2}
+}
+
+/* ---- the editor ---- */
+.ced{position:fixed;inset:0;z-index:60;pointer-events:none}
+.ced,.ced *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+/* a faint grid on the layer the parts snap to */
+.tz[data-editing][data-custom]{background:radial-gradient(circle,rgb(244 244 240 / .16) 1px,transparent 1.5px) 0 0/16px 16px}
+.tz[data-editing] button{pointer-events:none}
+/* what no part may cover: the screen (unless the layout plays over it) and the deck */
+.ced-no{position:fixed;background:repeating-linear-gradient(-45deg,rgb(229 50 45 / .22) 0 2px,transparent 2px 9px);box-shadow:inset 0 0 0 1.5px rgb(229 50 45 / .55)}
+.ced-p{position:fixed;pointer-events:auto;border:0;padding:0;background:transparent;touch-action:none;cursor:grab;outline:1.5px dashed rgb(244 244 240 / .45);outline-offset:4px}
+.ced-p:active{cursor:grabbing}
+.ced-p[aria-pressed=true]{outline:3px solid var(--y);outline-offset:4px}
+.ced-p:focus-visible{outline:4px solid var(--y)}
+.ced-h{position:absolute;right:-26px;bottom:-26px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:nwse-resize;touch-action:none}
+.ced-h.l{right:auto;left:-26px;cursor:nesw-resize}
+.ced-h::before{content:"";width:18px;height:18px;background:var(--y);box-shadow:0 2px 6px rgb(0 0 0 / .45)}
+.ced-bar{position:fixed;top:0;left:0;right:0;z-index:2;pointer-events:auto;display:flex;align-items:center;gap:8px;min-height:calc(56px + var(--sat));padding:var(--sat) max(12px,var(--sar)) 0 max(12px,var(--sal));background:var(--band);border-bottom:1px solid var(--rule);color:var(--paper)}
+.ced-bar .btn{flex:none;padding:0 14px}
+.ced-bar .btn .icon{width:18px;height:18px}
+.ced-name{display:flex;flex-direction:column;min-width:0;line-height:1.1}
+.ced-name b{font:900 18px var(--font);font-stretch:62%;text-transform:uppercase;letter-spacing:.02em;white-space:nowrap}
+.ced-name small{font:600 11px var(--font);color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ced-sz{display:inline-flex;flex:none;background:var(--band-2)}
+.ced-sz button,.ced-more-btn{width:44px;height:44px;border:0;background:transparent;color:var(--paper);display:flex;align-items:center;justify-content:center;flex:none}
+.ced-sz button:disabled{opacity:.3}
+.ced-sz .icon,.ced-more-btn .icon{width:18px;height:18px}
+.ced-op{display:flex;align-items:center;gap:8px;flex:1;min-width:72px;max-width:220px;font:700 11px var(--font);text-transform:uppercase;letter-spacing:.06em;color:var(--mute)}
+.ced-op input{flex:1;min-width:0;height:44px;accent-color:var(--y)}
+.ced-more-btn{margin-left:auto}
+.ced-more-btn[aria-expanded=true]{background:var(--paper);color:#000}
+.ced-msg{margin:0;font:600 13px/1.3 var(--font);color:var(--mute)}
+.ced-more{position:fixed;z-index:2;top:calc(56px + var(--sat));right:max(12px,var(--sar));width:min(360px,calc(100vw - 24px));max-height:calc(100dvh - 72px - var(--sat));overflow:auto;pointer-events:auto;padding:4px 18px 16px;box-shadow:0 22px 44px rgb(0 0 0 / .42),0 3px 8px rgb(0 0 0 / .28);animation:ced-in .25s var(--ease)}
+.ced-more p{margin:14px 0 0}
+.ced-more .btn{color:var(--ink)}
+.ced-warn{font:600 13px/1.4 var(--font);color:var(--err)}
+@keyframes ced-in{from{opacity:0;transform:translateY(-8px)}}
+@media (max-width:520px){.ced-name{display:none}.ced-op span{display:none}}
+@media (orientation:landscape) and (max-height:500px){.ced-bar{min-height:calc(52px + var(--sat))}.ced-more{top:calc(52px + var(--sat))}}
+/* the deck waits while the layout is edited */
+.pl:has(.ced) .deck{pointer-events:none;opacity:.35}
+@media (prefers-reduced-motion:reduce){.ced-more{animation:none}}
+
+/* ---- skin swatches (Settings › Controls, Manual › Controls) ---- */
+.skins{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:10px;margin:6px 0 4px}
+.skin{display:flex;flex-direction:column;align-items:stretch;gap:0;padding:0;border:2px solid var(--paper-3);background:#fff;color:var(--ink);text-align:left;min-height:44px}
+.skin[aria-pressed=true]{border-color:var(--ink);box-shadow:inset 0 -6px 0 var(--y)}
+.skin svg{display:block;width:100%;height:auto;background:var(--tc-bg)}
+.skin span{padding:8px 10px 12px;font:800 13px var(--font);font-stretch:80%;text-transform:uppercase;letter-spacing:.04em}
+.shells{display:flex;flex-wrap:wrap;gap:6px}
+.shells button{width:44px;height:44px;border:2px solid var(--paper-3);padding:6px;background:#fff}
+.shells button i{display:block;width:100%;height:100%;background:var(--shell)}
+.shells button[aria-pressed=true]{border-color:var(--ink);box-shadow:inset 0 -4px 0 var(--y)}

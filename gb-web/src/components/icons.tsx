@@ -12,6 +12,7 @@ const STAR = 'm12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1
 export const I = {
   search: svg(<><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" strokeWidth="2.2" /><path d="m20 20-4-4" stroke="currentColor" strokeWidth="2.2" /></>),
   plus: svg(<><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.6" /></>),
+  minus: svg(<><path d="M5 12h14" stroke="currentColor" strokeWidth="2.6" /></>),
   play: svg(<><path d="M7 4v16l13-8z" fill="currentColor" /></>),
   next: svg(<><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2.6" /></>, true),
   star: svg(<><path d={STAR} fill="currentColor" /></>),
@@ -23,6 +24,7 @@ export const I = {
   menu: svg(<><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeWidth="2.4" /></>),
   pause: svg(<><path d="M6 4h4v16H6zM14 4h4v16h-4z" fill="currentColor" /></>),
   rew: svg(<><path d="M11 6v12L2 12zM21 6v12l-9-6z" fill="currentColor" /></>),
+  ff: svg(<><path d="M13 6v12l9-6zM3 6v12l9-6z" fill="currentColor" /></>),
   save: svg(<><path d="M5 3h11l3 3v15H5z" fill="none" stroke="currentColor" strokeWidth="2.2" /><path d="M8 3v6h8V3M8 21v-7h8v7" fill="none" stroke="currentColor" strokeWidth="2.2" /></>),
   load: svg(<><path d="M12 3v12m0 0-5-5m5 5 5-5M4 21h16" fill="none" stroke="currentColor" strokeWidth="2.2" /></>),
   cam: svg(<><path d="M4 7h4l2-3h4l2 3h4v13H4z" fill="none" stroke="currentColor" strokeWidth="2.2" /><circle cx="12" cy="13" r="4" fill="none" stroke="currentColor" strokeWidth="2.2" /></>),

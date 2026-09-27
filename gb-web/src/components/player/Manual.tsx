@@ -14,6 +14,7 @@ import { Title } from '../library/Cover';
 import { hardwareOf } from '../../hooks/useGameExtras';
 import { Shot } from '../game/Shot';
 import { DebugPanel } from './DebugPanel';
+import { SkinPicker } from './TouchSkins';
 import { date, rich, useT, type Key } from '../../i18n';
 import { descOf } from '../../lib/catalog-utils';
 import { raShown } from '../../lib/retroachievements';
@@ -46,6 +47,8 @@ interface ManualProps {
   /** The console the game was switched on with (null: not yet). */
   running: Machine | null;
   onRestart: () => void;
+  /** Open the touch controls' layout editor. */
+  onEditControls: () => void;
 }
 
 /** The paper manual beside the screen (a bottom sheet on phones). */
@@ -53,7 +56,7 @@ export function Manual(p: ManualProps) {
   const t = useT();
   const tab = TABS.some(([k]) => k === p.tab) ? p.tab : 'controls';
   const page: Record<Tab, () => ReactNode> = {
-    controls: () => <ControlsPage online={p.online} />,
+    controls: () => <ControlsPage online={p.online} onEdit={p.onEditControls} />,
     saves: () => <SavesPage {...p} />,
     screen: () => <ScreenPage snapshot={p.emu.framebufferSnapshot} romLoaded={p.romLoaded} inColor={!!p.inColor} gameId={p.game.id}
       dmgCart={p.header?.cgbFlag === 'DMG Only'} sgb={sgbCartOf(p.header)} running={p.running} onRestart={p.onRestart} />,
@@ -79,7 +82,7 @@ const Cap = ({ k }: { k: string }) => (
 const Wide = ({ children }: { children: ReactNode }) => <span className="key wide">{children}</span>;
 const Round = ({ children }: { children: ReactNode }) => <span className="key round">{children}</span>;
 
-function ControlsPage({ online }: { online?: boolean }) {
+function ControlsPage({ online, onEdit }: { online?: boolean; onEdit: () => void }) {
   const k = useSettingsStore((s) => s.keybindings);
   const t = useT();
   const [input, setInput] = useState<'keyboard' | 'gamepad' | 'touch'>('keyboard');
@@ -113,6 +116,13 @@ function ControlsPage({ online }: { online?: boolean }) {
           <li key={name}><span className="keys">{keys}</span><span className="leader" /><span className="btnname">{name}{sub && <small>{sub}</small>}</span></li>
         ))}
       </ul>
+      {input === 'touch' && (
+        <>
+          <h3>{t('settings.controls.skin')}</h3>
+          <SkinPicker />
+          <p style={{ marginTop: 18 }}><button className="btn k" onClick={onEdit}>{t('player.controls.editLayout')}</button></p>
+        </>
+      )}
     </>
   );
 }
