@@ -189,6 +189,8 @@ export default {
     coversSub: 'Con carátula: {covered} de {total} juegos · {size} descargados, guardados en este navegador',
     deleteArt: 'Eliminar las carátulas descargadas',
     artDeleted: 'Carátulas descargadas eliminadas',
+    deleteArtTitle: '¿Eliminar las carátulas descargadas?',
+    deleteArtBody: 'Se borran {size} de carátulas de este navegador. Puedes volver a descargarlas desde esta página.',
     downloadLabel: 'Descargar ahora las carátulas de mi biblioteca',
     canGet: { one: '{count} juego reconocido que añadiste puede tener carátula', other: '{count} juegos reconocidos que añadiste pueden tener carátula' },
     download: 'Descargar',

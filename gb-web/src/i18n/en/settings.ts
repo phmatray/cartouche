@@ -188,6 +188,8 @@ export default {
     coversSub: '{covered} of {total} games have covers · {size} downloaded, kept in this browser',
     deleteArt: 'Delete downloaded box art',
     artDeleted: 'Downloaded box art deleted',
+    deleteArtTitle: 'Delete downloaded box art?',
+    deleteArtBody: 'Removes {size} of covers from this browser. You can download them again from this page.',
     downloadLabel: 'Download box art for my library now',
     canGet: { one: '{count} recognized game you added can get a cover', other: '{count} recognized games you added can get a cover' },
     download: 'Download',
