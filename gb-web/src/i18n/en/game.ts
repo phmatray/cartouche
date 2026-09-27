@@ -42,7 +42,7 @@ export default {
     progress: 'Downloading {pct}%',
     done: '{title} is in your library: it plays offline now',
     full: 'There isn’t enough storage space left in this browser.',
-    note: 'Free to redistribute: download it once ({size}) and it plays offline from then on.',
+    note: 'Its author’s license lets Cartouche host it: download it once ({size}) and it plays offline from then on.',
   },
   author: {
     get: 'Get it from the author',
@@ -50,7 +50,7 @@ export default {
     free: 'Free',
     pwyw: 'Pay what you want',
     paid: 'Paid',
-    steps: 'Its author distributes it on their own page (it opens in a new tab). Download the .gb or .gbc file there, then come back and tap Load your ROM: the file joins this game and stays in this browser.',
+    steps: 'Its author distributes it on their own page (it opens in a new tab). Download the .gb or .gbc file there (unzip it first if it’s a .zip), then come back and tap Load your ROM: the file joins this game and stays in this browser.',
   },
   hostedErase: 'Hosted here under its author’s license. Its saves can be erased.',
   dump: 'Dump your own cartridge, then load the .gb file here or drop it anywhere on the page. Nothing leaves this browser.',

@@ -103,7 +103,7 @@ const setGames = (fn: (prev: GameEntry[]) => GameEntry[]) => useLibraryStore.set
 let loadPromise: Promise<void> | null = null;
 async function loadLibrary() {
   let stored;
-  const catalog = await fullCatalog();
+  const catalog = await fullCatalog().catch(() => CATALOG); // its chunk failed: the bundled games still show
   try {
     stored = await Promise.all([getRomIds(), getAllGameMeta(), getSavedGameIds()]);
   } catch {
@@ -258,6 +258,7 @@ export async function fetchRom(game: GameEntry): Promise<Uint8Array> {
   if (stored) return stored.data;
   if (game.isLocal) throw new Error(t('player.error.notStored'));
   if (!game.romUrl) throw new Error(`NO_ROM_URL`);
+  if (game.madeWith && game.sha1) return fetchHosted(game); // hosted: checked against its SHA-1
   const response = await fetch(assetUrl(game.romUrl)).catch(() => null); // offline: a TypeError in the browser's language
   if (!response?.ok) throw new Error(t('player.error.download'));
   return new Uint8Array(await response.arrayBuffer());

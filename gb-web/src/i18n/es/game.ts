@@ -43,7 +43,7 @@ export default {
     progress: 'Descargando {pct} %',
     done: '{title} está en tu biblioteca: ya se juega sin conexión',
     full: 'No queda suficiente espacio de almacenamiento en este navegador.',
-    note: 'De libre redistribución: descárgalo una vez ({size}) y a partir de entonces se juega sin conexión.',
+    note: 'Su licencia permite que Cartouche lo aloje: descárgalo una vez ({size}) y a partir de entonces se juega sin conexión.',
   },
   author: {
     get: 'Conseguirlo del autor',
@@ -51,7 +51,7 @@ export default {
     free: 'Gratis',
     pwyw: 'Paga lo que quieras',
     paid: 'De pago',
-    steps: 'Su autor lo distribuye en su propia página (se abre en una pestaña nueva). Descarga allí el archivo .gb o .gbc, vuelve y toca Carga tu ROM: el archivo se une a este juego y se queda en este navegador.',
+    steps: 'Su autor lo distribuye en su propia página (se abre en una pestaña nueva). Descarga allí el archivo .gb o .gbc (descomprímelo antes si es un .zip), vuelve y toca Carga tu ROM: el archivo se une a este juego y se queda en este navegador.',
   },
   hostedErase: 'Alojado aquí según la licencia de su autor. Sus partidas guardadas se pueden borrar.',
   dump: 'Vuelca tu propio cartucho y luego carga el archivo .gb aquí o suéltalo en cualquier parte de la página. Nada sale de este navegador.',

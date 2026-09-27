@@ -42,7 +42,7 @@ Total: 3,407,872 bytes (3.25 MB).
 - Licenses, as stated in the source repository README and on the official page:
   - The game: [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/). Cartouche is free,
     without ads or sales; it redistributes the game unmodified and non-commercially.
-  - The code: [GNU GPL v3](https://www.gnu.org/licenses/gpl-3.0.html) (full text also in `licenses/GPL-3.0-ucity.txt`).
+  - The code: [GNU GPL v3](https://www.gnu.org/licenses/gpl-3.0.html) (full text also at https://phmatray.github.io/cartouche/licenses/GPL-3.0-ucity.txt).
 - File: `Poltersprite2.0.4.gb` from the official v2.0.4 release
   (https://github.com/inkusalters/Poltersprite/releases/tag/v2.0.4). Changes: none (renamed to `poltersprite.gb`).
 
@@ -55,7 +55,8 @@ Total: 3,407,872 bytes (3.25 MB).
   graphics and audio under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). It uses a modified
   version of the OnlyPlatforms plugin, © 2022 becomingplural (Peter McDonald), modified by KirbyKing186 and
   Finny, under the MIT License (text below).
-- File: `build/rom/millennium-gun_jam.gb` from the official repository, identical to the ROM of the author's
+- File: `build/rom/millennium-gun_jam.gb` from the GB Compo 2025 organisers' import of the author's submitted source (its
+  `CREDITS.txt` written by the author), identical to the ROM of the author's
   itch.io build. Changes: none (renamed to `millennium-gun.gb`).
 
 ## Dusky Dungeon

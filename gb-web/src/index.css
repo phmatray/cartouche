@@ -338,7 +338,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
   .gp .info{display:contents}
   .gp .crumbs{grid-column:1/-1;grid-row:1;margin:0}
   .gp .facts,.gp .acts,.gp .meta{grid-column:1/-1;margin:0}
-  .gp .acts .btn{flex:1}
+  .gp .acts .btn{flex:1 1 auto;min-width:0;white-space:normal;text-align:center;height:auto;min-height:56px;padding-block:12px}
   .sheet-card{padding:22px 18px 26px}
   .spec{grid-template-columns:1fr}
   .album{grid-template-columns:repeat(2,1fr)}
