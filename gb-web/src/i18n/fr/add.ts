@@ -50,5 +50,6 @@ export default {
     damaged: 'Archive zip endommagée',
     incomplete: 'Archive zip endommagée ou incomplète',
     method: 'Compression non prise en charge (méthode {method})',
+    nested: 'un zip dans un zip dans un zip, ou trop gros :décompressez-le d’abord',
   },
 } satisfies Messages['add'];

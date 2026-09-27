@@ -49,5 +49,6 @@ export default {
     damaged: 'Damaged zip archive',
     incomplete: 'Damaged or incomplete zip archive',
     method: 'Unsupported compression (method {method})',
+    nested: 'a zip inside a zip inside a zip, or too large: unzip it first',
   },
 };

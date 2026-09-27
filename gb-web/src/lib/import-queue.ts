@@ -45,22 +45,32 @@ const asRow = (o: ImportOutcome): Partial<ImportRow> => ({ st: o.status, id: o.i
 export const HIDDEN = /(^|\/)(__MACOSX\/|\.)/;
 let seq = 0;
 
+/** A zip inside a zip (a folder of per-game .zip files, compressed on an iPhone) is opened too, one level deep. */
+const INNER_ZIP_MAX = 64 << 20;
+
 async function expand(files: File[]): Promise<{ rows: ImportRow[]; ignored: number }> {
   const rows: ImportRow[] = [];
   let ignored = 0;
+  const bad = (name: string, size: number, err: unknown, from?: string) =>
+    rows.push({ key: String(++seq), name, size, from, st: 'bad', note: err instanceof ZipError ? err.message : t('add.unreadable') });
+  const zip = async (z: Blob, label: string, nested: boolean) => {
+    for (const e of await listZip(z)) {
+      if (e.name.endsWith('/') || HIDDEN.test(e.name)) { ignored++; continue; }
+      const name = e.name.split('/').pop()!;
+      if (/\.zip$/i.test(name)) {
+        if (nested || e.size > INNER_ZIP_MAX) { rows.push({ key: String(++seq), name, size: e.size, from: label, st: 'bad', note: t('add.zip.nested') }); continue; }
+        try { await zip(new Blob([await readEntry(z, e) as BlobPart]), `${label} › ${name}`, true); } catch (err) { bad(name, e.size, err, label); }
+        continue;
+      }
+      rows.push({ key: String(++seq), name, size: e.size, from: label, st: 'work', read: () => readEntry(z, e) });
+    }
+  };
   for (const f of files) {
     if (!/\.zip$/i.test(f.name)) {
       rows.push({ key: String(++seq), name: f.name, size: f.size, st: 'work', read: async () => new Uint8Array(await f.arrayBuffer()) });
       continue;
     }
-    try {
-      for (const e of await listZip(f)) {
-        if (e.name.endsWith('/') || HIDDEN.test(e.name)) { ignored++; continue; }
-        rows.push({ key: String(++seq), name: e.name.split('/').pop()!, size: e.size, from: f.name, st: 'work', read: () => readEntry(f, e) });
-      }
-    } catch (err) {
-      rows.push({ key: String(++seq), name: f.name, size: f.size, st: 'bad', note: err instanceof ZipError ? err.message : t('add.unreadable') });
-    }
+    try { await zip(f, f.name, false); } catch (err) { bad(f.name, f.size, err); }
   }
   return { rows, ignored };
 }
