@@ -5,7 +5,7 @@ import { useGameLibrary } from '../../hooks/useGameLibrary';
 import { createProfile, getActiveProfileId, getGameSaveStates, listProfiles, uniqueName, type StoredSave, type StoredSaveState } from '../../lib/db';
 import { ago, bytes, focusIfLost, linkReady, owned, paths, PLATFORM, sortTitle } from '../../lib/ui';
 import { inviteUrl, parseCode, spaced } from '../../lib/p2p/code';
-import { loadTurn, saveTurn, validTurn } from '../../lib/p2p/room';
+import { loadTurn, saveTurn, useOnline, validTurn } from '../../lib/p2p/room';
 import { closeRoom, hold, openRoom, other, setSeat, useNet, type Seat } from '../../lib/netlink/session';
 import type { GameEntry } from '../../types/game';
 import { CartridgePicker } from '../CartridgePicker';
@@ -23,6 +23,7 @@ export function OnlineLinkPage() {
   const net = useNet();
   const t = useT();
   const invited = parseCode(q.get('room') ?? '');
+  const online = useOnline();
 
   useEffect(() => { document.title = t('common.docTitle', { page: t('online.title') }); }, [t]);
   useEffect(() => hold(), []);
@@ -38,6 +39,7 @@ export function OnlineLinkPage() {
         <h1>{t('online.title')}</h1>
         <p>{t('online.intro')}</p>
       </div>
+      {!online && <p className="nl-warn" role="alert">{t('common.offlineNet')}</p>}
       {net.phase === 'idle' ? <Doors /> : <Lobby />}
       <Notes />
     </main>
@@ -47,6 +49,7 @@ export function OnlineLinkPage() {
 /** No room yet: host one, or type a code. */
 function Doors() {
   const { error } = useNet();
+  const online = useOnline();
   const t = useT();
   const [code, setCode] = useState('');
   const [bad, setBad] = useState(false);
@@ -61,7 +64,7 @@ function Doors() {
       <section aria-labelledby="h-host">
         <h2 id="h-host">{t('online.doors.host')}</h2>
         <p>{t('online.doors.hostSub')}</p>
-        <button className="btn y lg" onClick={() => openRoom()}>{I.link}{t('online.doors.open')}</button>
+        <button className="btn y lg" disabled={!online} onClick={() => openRoom()}>{I.link}{t('online.doors.open')}</button>
       </section>
       <section aria-labelledby="h-join">
         <h2 id="h-join">{t('online.doors.join')}</h2>
@@ -70,7 +73,7 @@ function Doors() {
           <input className="nl-code-in" aria-label={t('online.doors.code')} aria-invalid={bad} aria-describedby="nl-join-err" value={code} placeholder="K7M·Q3P"
             autoCapitalize="characters" autoComplete="off" autoCorrect="off" spellCheck={false} enterKeyHint="go"
             onChange={(e) => { setCode(e.target.value); setBad(false); }} />
-          <button className="btn k lg" disabled={!code.trim()}>{t('online.doors.go')}</button>
+          <button className="btn k lg" disabled={!code.trim() || !online}>{t('online.doors.go')}</button>
         </form>
         <small id="nl-join-err" className="nl-err" role="alert">{bad ? t('online.doors.bad') : error ? t(`online.error.${error}`) : ''}</small>
       </section>
@@ -134,6 +137,7 @@ function Lobby() {
     return () => { clearTimeout(timer); setSlowFind(false); };
   }, [phase]);
   const failed = error === 'connect' && phase !== 'linked';
+  const online = useOnline(); // offline, the page says so instead of blaming the networks
 
   const them = other(me.host);
   const cable = starting ? t('online.cable.plugging') : phase === 'linked' ? (ping !== null ? t('online.cable.ms', { ms: ping }) : t('online.cable.linked'))
@@ -142,7 +146,7 @@ function Lobby() {
     <>
       <Ticket code={code!} compact={phase === 'linked'} />
       {phase === 'full' && <p className="nl-warn" role="alert">{t('online.full')}</p>}
-      {error ? <p className="nl-warn" role="alert">{t(`online.error.${error}`)}</p>
+      {!online ? null : error ? <p className="nl-warn" role="alert">{t(`online.error.${error}`)}</p>
         : slowFind && <p className="nl-hint" role="status">{t('online.error.slow')}</p>}
       <div className={`lc nl-lc${starting ? ' go' : ''}`}>
         <section className="player" aria-labelledby="h-me">

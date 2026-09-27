@@ -7,6 +7,7 @@ import { getAllGameMeta, getRomIds } from '../../lib/db';
 import { useGameLibrary } from '../../hooks/useGameLibrary';
 import { ago, rich, size, useT, type Key } from '../../i18n';
 import { isIos } from '../../lib/pwa';
+import { useOnline } from '../../lib/p2p/room';
 import { focusIfLost } from '../../lib/ui';
 import { I } from '../icons';
 import { toast } from '../shell/actions';
@@ -25,6 +26,7 @@ export function SyncTab() {
   const { me, devices, auto, roms, links, pairing } = useSync();
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [local, setLocal] = useState<{ count: number; bytes: number } | null>(null);
+  const online = useOnline();
 
   // While this page is open, every paired device's room is joined: "Sync now" is instant, the other device shows up live.
   // Leaving it also ends a pairing: the code is only good while it's on screen (docs/SYNC.md).
@@ -56,6 +58,7 @@ export function SyncTab() {
     <>
       <h2>{t('settings.tabs.sync')}</h2>
       <p className="intro">{t('sync.intro')}</p>
+      {!online && <p className="sy-off" role="alert">{t('common.offlineNet')}</p>}
       <NameRow name={me.name} />
 
       {devices.length > 0 && (
@@ -189,6 +192,7 @@ const summary = (got: number, sent: number, me: string, them: string, t: T) =>
 /** No pairing yet: this device shows a code, or reads the one the other device shows. */
 function Doors() {
   const t = useT();
+  const online = useOnline();
   const [scan, setScan] = useState(false);
   const [code, setCode] = useState('');
   const [bad, setBad] = useState(false);
@@ -202,20 +206,20 @@ function Doors() {
       <section aria-labelledby="sy-h-show">
         <h4 id="sy-h-show">{t('sync.doors.show')}</h4>
         <p>{t('sync.doors.showSub')}</p>
-        <button className="btn y lg" onClick={() => engine().then((e) => e.showCode())}>{I.link}{t('sync.doors.showBtn')}</button>
+        <button className="btn y lg" disabled={!online} onClick={() => engine().then((e) => e.showCode())}>{I.link}{t('sync.doors.showBtn')}</button>
       </section>
       <section aria-labelledby="sy-h-scan">
         <h4 id="sy-h-scan">{t('sync.doors.read')}</h4>
         <p>{isIos() ? t('sync.doors.readSubIos') : t('sync.doors.readSub')}</p>
         {scan
           ? <Scanner onClose={() => setScan(false)} onCode={async (text) => { const ok = await (await engine()).enterCode(text); if (ok) setScan(false); return ok; }} />
-          : <button className="btn k lg" onClick={() => setScan(true)}>{I.cam}{t('sync.doors.scan')}</button>}
+          : <button className="btn k lg" disabled={!online} onClick={() => setScan(true)}>{I.cam}{t('sync.doors.scan')}</button>}
         <form className="sy-type" onSubmit={submit}>
           <label htmlFor="sy-code">{t('sync.doors.type')}</label>
           <textarea id="sy-code" className="sy-code-in" rows={2} value={code} placeholder={CODE_SHAPE} aria-invalid={bad} aria-describedby="sy-code-err"
             autoCapitalize="characters" autoComplete="off" autoCorrect="off" spellCheck={false}
             onChange={(e) => { setCode(e.target.value); setBad(false); }} />
-          <button className="btn line" disabled={code.replace(/\W/g, '').length < 54}>{t('sync.doors.pair')}</button>
+          <button className="btn line" disabled={code.replace(/\W/g, '').length < 54 || !online}>{t('sync.doors.pair')}</button>
           <small id="sy-code-err" className="sy-err" role="alert">{bad ? t('sync.doors.bad') : ''}</small>
         </form>
       </section>

@@ -48,6 +48,7 @@
 .sy-code-in::placeholder{color:var(--paper-3)}
 .sy-code-in:focus{outline:none;box-shadow:0 0 0 3px var(--y)}
 .sy-code-in[aria-invalid=true]{border-color:var(--err)}
+.sy-off{border:2px solid var(--err);padding:10px 14px;margin:0 0 16px;font:600 14px/1.45 var(--font);color:var(--ink);background:#fff}
 .sy-err{grid-column:1/-1;font:600 13px/1.4 var(--font);color:#b3261e;min-height:1.4em;margin:0}
 
 /* ---------- the camera, in a Game Boy's bezel ---------- */
