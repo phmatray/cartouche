@@ -122,10 +122,18 @@ jobs:
             || curl -fsSL -o ucity-1.3-source.tar.gz https://codeberg.org/SkyLyrac/ucity/archive/v1.3.tar.gz
           tar tzf ucity-1.3-source.tar.gz | grep '/gpl-3.0.txt$' >/dev/null
 
+      # GPL-3.0 section 6: the same for Poltersprite's code (its author publishes the source as a zip in the
+      # repository, not as a tag), pinned to the commit that added it and checked by SHA-256.
+      - name: Poltersprite 2.0.4 source
+        run: |
+          curl -fsSL -o poltersprite-2.0.4-source.zip \
+            https://raw.githubusercontent.com/inkusalters/Poltersprite/3e86ecb700c5ec10e85640181683d985263e8c77/Polterspritev2.0.4.zip
+          echo "d3e18aff042ab6eb8cae6ec579f2e55408ae207b103b06cc7a0f7ec8e26056bf  poltersprite-2.0.4-source.zip" | sha256sum -c -
+
       # --clobber keeps a re-run idempotent.
       - name: Attach assets to the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload "$TAG" "cartouche-web-${TAG}.zip" ucity-1.3-source.tar.gz --clobber
+          gh release upload "$TAG" "cartouche-web-${TAG}.zip" ucity-1.3-source.tar.gz poltersprite-2.0.4-source.zip --clobber
           gh release edit "$TAG" --title "Cartouche ${TAG}"
