@@ -4,7 +4,10 @@
    The bundled ROMs in roms/ (under 1 MB together) are ordinary built files, so they are kept here too; not roms/gbstudio/
    (the GB Studio collection), which the page downloads into IndexedDB only when the player asks, through the network below.
    Updates: a new version installs in the background and waits. It never takes over a running page (whose lazy
-   chunks would then be gone from the cache); the page asks it to take over on the next launch (see lib/pwa.ts). */
+   chunks would then be gone from the cache); the page asks it to take over on the next launch (see lib/pwa.ts).
+   Pages come from this version's cache first, so the page always matches the files this worker holds (a newer
+   index.html from the network would ask for chunks only the waiting version has), and a launch on a stalled
+   connection shows the app at once instead of waiting on the network. */
 const VERSION = 'dev';
 const FILES = [/*__FILES__*/];
 const CACHE = `cartouche-shell-${VERSION}`;
@@ -35,10 +38,11 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   // Other sites (box art from GitHub) are never touched here: the page keeps those in its own cache.
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
-  // Pages: network first (always the newest app), the cached shell when offline. Every route is the SPA.
-  if (req.mode === 'navigate') {
+  // Pages: every route is the SPA, served from this version's cache (the network only before it's cached).
+  // Opened files (a .txt license in a new tab) are not pages: they go the way of other files, below.
+  if (req.mode === 'navigate' && !/\.(?!html$)[^/.]+$/.test(new URL(req.url).pathname)) {
     // no-store: never an HTTP-cached page from another version (Pages caches even its 404.html for 10 minutes).
-    e.respondWith(fetch(req, { cache: 'no-store' }).catch(() => caches.match(INDEX, { cacheName: CACHE })));
+    e.respondWith(caches.match(INDEX, { cacheName: CACHE }).then((hit) => hit || fetch(req, { cache: 'no-store' })));
     return;
   }
   // Built files have hashed names, so a cached copy is always right.
