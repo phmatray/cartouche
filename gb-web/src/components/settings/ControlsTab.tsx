@@ -56,6 +56,14 @@ export function ControlsTab() {
     return () => window.removeEventListener('keydown', capture, true);
   }, [listening, keybindings, updateKeybinding]);
 
+  // One press wipes a whole custom layout: say so, with a way back.
+  const resetKeys = () => {
+    const before = keybindings;
+    resetKeybindings();
+    setListening(null);
+    toast(tNow('settings.controls.resetDone'), 'c', { label: tNow('settings.pergame.undo'), run: () => set({ keybindings: before }) });
+  };
+
   return (
     <>
       <h2>{t('settings.tabs.controls')}</h2>
@@ -74,7 +82,7 @@ export function ControlsTab() {
         ))}
       </ul>
       <p style={{ marginTop: 14 }}>
-        <button className="btn line" style={{ color: 'var(--ink)' }} onClick={() => { resetKeybindings(); setListening(null); toast(tNow('settings.controls.resetDone'), 'c'); }}>{t('settings.controls.reset')}</button>
+        <button className="btn line" style={{ color: 'var(--ink)' }} onClick={resetKeys}>{t('settings.controls.reset')}</button>
       </p>
 
       <h3>{t('player.controls.gamepad')}</h3>
