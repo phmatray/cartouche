@@ -4,7 +4,7 @@ import type { GameEntry } from '../types/game';
 import { I } from './icons';
 import { Cover } from './library/Cover';
 import { Hl } from './shell/SearchDialog';
-import { num, rich, useT, type Key } from '../i18n';
+import { num, regionName, rich, useT, type Key } from '../i18n';
 
 type Chip = 'all' | 'link' | 'gb' | 'gbc';
 // [key, label, short label for narrow screens]
@@ -163,7 +163,7 @@ export function CartridgePicker({ open, player, games, current, onPick, onFile, 
                 {shown.map((i) => {
                   const e = entries[i], top = tops[i];
                   if (!isRow(e)) return <div key={e.h} className="pk-h" aria-hidden="true" style={{ top }}>{e.h}</div>;
-                  const g = e.g, sub = [byline(g), g.region].filter(Boolean).join(' · '), n = rowIdx.indexOf(i);
+                  const g = e.g, sub = [byline(g), g.region && regionName(g.region)].filter(Boolean).join(' · '), n = rowIdx.indexOf(i);
                   return (
                     <div key={e.key} id={`pk-${e.key}`} className="pk-row" role="option" aria-selected={i === sel} style={{ top }}
                       aria-setsize={rowIdx.length} aria-posinset={n + 1}

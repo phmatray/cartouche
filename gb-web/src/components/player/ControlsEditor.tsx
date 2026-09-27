@@ -4,7 +4,7 @@ import { SwitchRow } from '../settings/parts';
 import { geometry as zoneGeometry, hits, holdTouches, outside, rectOf } from './touch-dom';
 import { toast } from '../shell/actions';
 import { I } from '../icons';
-import { useT } from '../../i18n';
+import { pct, useT } from '../../i18n';
 
 interface Props {
   /** The controls' layer (.tz): positions are relative to it. */
@@ -269,7 +269,7 @@ export default function ControlsEditor({ zone, layout, layoutName, onDraft, onCo
             <label className="ced-op">
               <span>{t('player.edit.opacity')}</span>
               <input type="range" min={MIN_OPACITY * 100} max={100} step={5} value={Math.round(p.o * 100)}
-                aria-valuetext={`${Math.round(p.o * 100)}%`}
+                aria-valuetext={pct(Math.round(p.o * 100))}
                 onChange={(e) => { const l = cur.current!; apply({ ...l, parts: { ...l.parts, [sel]: { ...l.parts[sel]!, o: +e.target.value / 100 } } }); }} />
             </label>
           </>
