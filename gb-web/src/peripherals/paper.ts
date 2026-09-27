@@ -10,16 +10,21 @@ export const MS_PER_ROW = 8;
 export interface Job { marginBefore: number; marginAfter: number; shades: Uint8Array }
 export interface Paper { shades: Uint8Array; rows: number; /** a feed after the last job: the strip is finished */ done: boolean }
 
-/** `[margins, exposure, shades...]` from `printer_take_job`; null for an empty or malformed one. */
+/** `[margins, exposure, shades...]` from `printer_take_job` (no shades: a paper feed); null when malformed. */
 export function parseJob(raw: Uint8Array): Job | null {
   const n = raw.length - 2;
-  if (n <= 0 || n % PAPER_W) return null;
+  if (n < 0 || n % PAPER_W) return null;
   return { marginBefore: raw[0] >> 4, marginAfter: raw[0] & 0x0f, shades: raw.subarray(2) };
 }
 
-/** The strip after `job`: appended to `paper` while it is still open, else a new strip. */
-export function feed(paper: Paper | null, job: Job): Paper {
-  const base = paper && !paper.done ? paper.shades : new Uint8Array(0);
+/**
+ * The strip after `job`: appended to `paper` while it is still open, else a new strip.
+ * A feed alone (no rows) finishes the open strip if it moves the paper; with no open strip it shows nothing (null).
+ */
+export function feed(paper: Paper | null, job: Job): Paper | null {
+  const open = paper && !paper.done ? paper : null;
+  if (!job.shades.length) return open && { ...open, done: job.marginBefore + job.marginAfter > 0 };
+  const base = open ? open.shades : new Uint8Array(0);
   const shades = new Uint8Array(base.length + job.shades.length);
   shades.set(base);
   shades.set(job.shades, base.length);

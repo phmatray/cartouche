@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useSettingsStore } from '../store/settingsStore';
 import { Row, Slider, SwitchRow } from '../components/settings/parts';
+import { useT } from '../i18n';
 import { rumbleOutputs, testRumble } from './rumble';
 
 /** Settings › Controls › Rumble: for cartridges with a rumble motor. Says plainly what this device can do. */
 export function RumbleRows() {
+  const t = useT();
   const { rumble, rumbleIntensity, rumbleShake, set } = useSettingsStore();
   const [out, setOut] = useState(rumbleOutputs);
   useEffect(() => {
@@ -13,18 +15,17 @@ export function RumbleRows() {
     window.addEventListener('gamepaddisconnected', update);
     return () => { window.removeEventListener('gamepadconnected', update); window.removeEventListener('gamepaddisconnected', update); };
   }, []);
-  const where = out.pad ? 'Your gamepad’s motors rumble.'
-    : out.vibrate ? 'This device vibrates (on phones; most computers have no motor). A gamepad with rumble works too.'
-    : out.tick ? 'iPhone has no vibration for websites: with iOS 18 or later you feel a light tick on each touch-button press while the motor runs. A gamepad with rumble works fully.'
-    : 'No motor found here: connect a gamepad with rumble, or keep the screen shake.';
+  const where = out.pad ? t('periph.rumble.pad') : out.vibrate ? t('periph.rumble.vibrate') : out.tick ? t('periph.rumble.iphone') : t('periph.rumble.none');
+  // The test runs a gamepad or phone motor; with neither (iPhone, most computers) it could only do nothing.
+  const testable = out.pad || out.vibrate;
   return (
     <>
-      <h3>Rumble</h3>
-      <SwitchRow label="Rumble" sub="For cartridges with a rumble motor" on={rumble} set={(v) => set({ rumble: v })} />
-      <Slider label="Strength" value={rumbleIntensity} min={10} max={100} set={(v) => set({ rumbleIntensity: v })} />
-      <SwitchRow label="Shake the screen" sub="A small jolt of the screen while the motor runs. Off when your system asks for reduced motion." on={rumbleShake} set={(v) => set({ rumbleShake: v })} />
-      <Row label="On this device" sub={where}>
-        <button className="sbtn" disabled={!rumble} onClick={() => testRumble(rumbleIntensity)}>Test</button>
+      <h3>{t('periph.rumble.title')}</h3>
+      <SwitchRow label={t('periph.rumble.on')} sub={t('periph.rumble.onSub')} on={rumble} set={(v) => set({ rumble: v })} />
+      <Slider label={t('periph.rumble.strength')} value={rumbleIntensity} min={10} max={100} set={(v) => set({ rumbleIntensity: v })} />
+      <SwitchRow label={t('periph.rumble.shake')} sub={t('periph.rumble.shakeSub')} on={rumbleShake} set={(v) => set({ rumbleShake: v })} />
+      <Row label={t('periph.rumble.here')} sub={where}>
+        {testable ? <button className="sbtn" disabled={!rumble} onClick={() => testRumble(rumbleIntensity)}>{t('periph.rumble.test')}</button> : null}
       </Row>
     </>
   );

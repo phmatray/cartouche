@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { I } from '../components/icons';
 import { toast } from '../components/shell/actions';
+import { date, t as tNow, useT } from '../i18n';
 import { download, printOut, share } from './output';
 import { MS_PER_ROW, PAPER_W, paperRgba } from './paper';
 import type { Printout } from './usePeripherals';
@@ -15,6 +16,7 @@ const fileName = (gameId: string, id: number) => `${gameId}-print-${new Date(id)
  * tears off when the print is done, and goes to the album. Reduced motion: it appears at once.
  */
 export default function PrinterTray({ paper, gameId, title, onClose }: { paper: Printout; gameId: string; title: string; onClose: () => void }) {
+  const t = useT();
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const c = canvas.current?.getContext('2d');
@@ -40,28 +42,28 @@ export default function PrinterTray({ paper, gameId, title, onClose }: { paper: 
     '--rows': paper.rows, '--from': paper.from, '--bands': Math.max(1, Math.ceil(added / 8)), '--ms': `${added * MS_PER_ROW}ms`,
   } as CSSProperties;
   const name = fileName(gameId, paper.id);
-  const caption = `${title} · printed ${new Date(paper.id).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  const caption = t('periph.printer.caption', { title, date: date(paper.id, { day: 'numeric', month: 'short', year: 'numeric' }) });
 
   return (
-    <section ref={tray} className="ptray" aria-label="Printer">
+    <section ref={tray} className={`ptray${fed ? ' fed' : ''}`} aria-label={t('periph.printer.label')}>
       <div className="pt-out">
         {/* keyed by length: every new job feeds from where the last one stopped */}
-        <div key={paper.rows} className={`pt-paper${fed ? ' torn' : ''}`} style={style} onAnimationEnd={() => setFedRows(paper.rows)}>
-          <canvas ref={canvas} width={PAPER_W} height={paper.rows} aria-label={`Printed strip, ${PAPER_W} × ${paper.rows} dots`} />
+        <div key={paper.rows} className={`pt-paper${fed ? ' torn' : ''}`} style={style} onAnimationEnd={() => setFedRows(paper.rows)} onClick={fed ? onClose : undefined}>
+          <canvas ref={canvas} width={PAPER_W} height={paper.rows} aria-label={t('periph.printer.strip', { w: PAPER_W, h: paper.rows })} />
         </div>
       </div>
       <div className="pt-body">
         <i className="pt-slot" aria-hidden="true" />
         <div className="pt-row">
           <span className={`pt-led${fed ? '' : ' busy'}`} aria-hidden="true" />
-          <span className="pt-state" role="status">{fed ? <>{PAPER_W} × {paper.rows}<span className="pt-long"> · in the album</span></> : 'Printing…'}</span>
-          <button className="pt-x" onClick={onClose} aria-label="Close the printer tray">{I.close}</button>
+          <span className="pt-state" role="status">{fed ? <>{PAPER_W} × {paper.rows}<span className="pt-long"> · {t('periph.printer.inAlbum')}</span></> : t('periph.printer.printing')}</span>
+          <button className="pt-x" onClick={onClose} aria-label={t('periph.printer.close')}>{I.close}</button>
         </div>
         {fed && paper.png && (
           <div className="pt-acts">
-            <button className="pt-btn" aria-label="Save as PNG" onClick={() => { download(paper.png!, name); toast('Print saved as a PNG (4×)', 'c'); }}>{I.save}<span>Save</span></button>
-            <button className="pt-btn" aria-label="Share" onClick={() => void share(paper.png!, name, title)}>{I.share}<span>Share</span></button>
-            <button className="pt-btn" aria-label="Print on paper" onClick={() => printOut(paper.png!, caption)}>{PrinterIcon}<span>Print</span></button>
+            <button className="pt-btn" aria-label={t('periph.printer.saveLong')} onClick={() => { download(paper.png!, name); toast(tNow('periph.printer.saved'), 'c'); }}>{I.save}<span>{t('periph.printer.save')}</span></button>
+            <button className="pt-btn" aria-label={t('periph.printer.share')} onClick={() => void share(paper.png!, name, title)}>{I.share}<span>{t('periph.printer.share')}</span></button>
+            <button className="pt-btn" aria-label={t('periph.printer.printLong')} onClick={() => printOut(paper.png!, caption)}>{PrinterIcon}<span>{t('periph.printer.print')}</span></button>
           </div>
         )}
       </div>

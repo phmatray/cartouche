@@ -34,6 +34,7 @@ export default {
   },
   album: 'Álbum',
   shot: 'Captura, {ago}',
+  print: 'Copia, {ago}',
   noShots: 'Aún no hay capturas. Pulsa <b>F12</b> mientras juegas, o el botón de la cámara, para añadir una.',
   playIt: 'Juégalo',
   dump: 'Vuelca tu propio cartucho y luego carga el archivo .gb aquí o suéltalo en cualquier parte de la página. Nada sale de este navegador.',

@@ -288,7 +288,7 @@ function Detail({ id, line, onSize, onChanged, onRemove, confirm }: { id: string
               {data.shots.map((s) => (
                 <li key={s.id}>
                   <Shot png={s.png} label={`${g.title}, ${date(s.timestamp, STAMP)}`} />
-                  <button className="sbtn" aria-label={t('settings.pergame.deleteShot', { date: date(s.timestamp, STAMP) })} onClick={() => dropShot(s)}>{I.close}</button>
+                  <button className="sbtn" aria-label={t(s.kind === 'print' ? 'settings.pergame.deletePrint' : 'settings.pergame.deleteShot', { date: date(s.timestamp, STAMP) })} onClick={() => dropShot(s)}>{I.close}</button>
                 </li>
               ))}
             </ul>

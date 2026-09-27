@@ -80,7 +80,7 @@ function Player({ game }: { game: GameEntry }) {
   const linkRom = useLinkRom(game);
   const onPrinted = useCallback(() => {
     album.reload();
-    toast('Print added to the album', '', { label: 'View', run: () => { setTab('album'); setManual(true); } });
+    toast(tNow('periph.printer.added'), '', { label: tNow('player.toast.view'), run: () => { setTab('album'); setManual(true); } });
   }, [album]);
   const frameEl = useCallback(() => rootRef.current?.querySelector<HTMLElement>('.screen .frame') ?? null, []);
   const periph = usePeripherals(emu.core, romLoaded, game.id, onPrinted, frameEl);
@@ -279,6 +279,8 @@ function Player({ game }: { game: GameEntry }) {
     };
     const down = (e: KeyboardEvent) => {
       if (typing() || document.querySelector('dialog[open]') || e.ctrlKey || e.metaKey || e.altKey) return;
+      // Keys on the camera lens or the printer tray work their own controls (Enter presses the button, not Start).
+      if (e.target instanceof Element && e.target.closest('.cdock,.ptray')) return;
       const a = actions.current;
       const b = buttonOf(e.key);
       if (b !== undefined) { e.preventDefault(); if (!e.repeat) pressButton(b); return; }
@@ -308,16 +310,19 @@ function Player({ game }: { game: GameEntry }) {
   const pad = (b: string) => ({
     'data-pad': b,
     onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
-      e.preventDefault();
+      // An armed rumble tick (iPhone, see peripherals/rumble.ts) needs the tap to reach its switch: no preventDefault then.
+      const tick = !!e.currentTarget.querySelector('.rtick input:enabled');
+      if (!tick) e.preventDefault();
       // Capture can throw (pointer already released or cancelled by the system): never lose the press over it.
-      try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* keep going */ }
+      if (!tick) try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* keep going */ }
       e.currentTarget.classList.add('down');
       if (useSettingsStore.getState().haptics) navigator.vibrate?.(8);
-      periph.touch();
       pressButton(BUTTON_NUMBERS[b]);
     },
     onPointerUp: (e: React.PointerEvent<HTMLButtonElement>) => { e.currentTarget.classList.remove('down'); releaseButton(BUTTON_NUMBERS[b]); },
     onPointerCancel: (e: React.PointerEvent<HTMLButtonElement>) => { e.currentTarget.classList.remove('down'); releaseButton(BUTTON_NUMBERS[b]); },
+    // Uncaptured (an armed rumble tick): sliding off the button lets it go.
+    onPointerLeave: (e: React.PointerEvent<HTMLButtonElement>) => { if (e.currentTarget.classList.contains('down')) { e.currentTarget.classList.remove('down'); releaseButton(BUTTON_NUMBERS[b]); } },
     onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
   });
 
@@ -363,10 +368,14 @@ function Player({ game }: { game: GameEntry }) {
               )}
             </div>
           </div>
-          <Suspense fallback={null}>
-            {periph.camera && <CameraDock feed={periph.feedCamera} running={isRunning} />}
-            {periph.paper && <PrinterTray paper={periph.paper} gameId={game.id} title={game.title} onClose={periph.dismiss} />}
-          </Suspense>
+          {(periph.camera || periph.paper) && (
+            <div className="periph">
+              <Suspense fallback={null}>
+                {periph.camera && <CameraDock feed={periph.feedCamera} running={isRunning} />}
+                {periph.paper && <PrinterTray paper={periph.paper} gameId={game.id} title={game.title} onClose={periph.dismiss} />}
+              </Suspense>
+            </div>
+          )}
           <div className="cap">
             <span>{display.custom ? t('settings.screen.custom') : t(`settings.screen.presets.${presetOf(display.cfg.preset)!.name}.label`)}</span><i /><span>{t('player.speed', { x: speed === 0.5 ? '½' : String(speed) })}</span><i /><span>{t('player.rewindReady', { s: String(Math.round(bufferFill * rewindSeconds)) })}</span>
           </div>

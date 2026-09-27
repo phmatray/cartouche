@@ -33,6 +33,7 @@ export default {
   },
   album: 'Album',
   shot: 'Screenshot, {ago}',
+  print: 'Print, {ago}',
   noShots: 'No screenshots yet. Press <b>F12</b> while playing, or the camera button, to add one.',
   playIt: 'Play it',
   dump: 'Dump your own cartridge, then load the .gb file here or drop it anywhere on the page. Nothing leaves this browser.',

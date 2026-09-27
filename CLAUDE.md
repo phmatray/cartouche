@@ -21,7 +21,7 @@ cartouche/
 │   └── src/
 │       ├── components/       # shell/, library/, game/, player/, add/, settings/, LinkCablePage
 │       ├── hooks/ lib/ store/ shaders/ workers/ audio/
-│       ├── peripherals/      # Camera lens (getUserMedia → sensor), printer tray + album prints, rumble (gamepad / vibrate / iPhone switch tick)
+│       ├── peripherals/      # Camera lens (getUserMedia → sensor), printer tray + album prints, rumble (gamepad / vibrate / iPhone switch-tick overlay on the touch buttons)
 │       ├── neural/           # Neural 4× (tile-aware network + learned table) and Smooth motion, WebGL2; weights/*.bin are the only model data allowed (docs/NEURAL.md)
 │       ├── content/legal.ts  # Legal page text
 │       └── data/             # catalog.json (only verified, licensed entries), GameDB

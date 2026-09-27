@@ -34,6 +34,7 @@ export default {
   },
   album: 'Album',
   shot: 'Capture d’écran, {ago}',
+  print: 'Tirage, {ago}',
   noShots: 'Aucune capture pour l’instant. Appuyez sur <b>F12</b> en jeu, ou sur le bouton appareil photo, pour en ajouter une.',
   playIt: 'Y jouer',
   dump: 'Copiez la ROM de votre propre cartouche, puis chargez le fichier .gb ici ou déposez-le n’importe où sur la page. Rien ne quitte ce navigateur.',
