@@ -24,7 +24,7 @@ export function LegalPage() {
             <h2>{s.title}</h2><p>{linkify(s.body)}</p>
             {s.links && (
               <ul>
-                {s.links.map((l) => <li key={l.file}><a href={import.meta.env.BASE_URL + l.file}>{l.label}</a></li>)}
+                {s.links.map((l) => <li key={l.file}><a href={import.meta.env.BASE_URL + l.file} target="_blank" rel="noreferrer">{l.label}</a></li>)}
               </ul>
             )}
           </section>
