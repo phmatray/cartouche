@@ -48,7 +48,11 @@ pub struct Ppu {
     /// and the line is 4 dots short.
     pub(crate) lcd_on_line0: bool,
 
+    /// The line-by-line picture being drawn.
     pub framebuffer: [u8; FRAMEBUFFER_SIZE],
+    /// The last complete picture, copied from `framebuffer` at VBlank entry: what is shown, so a
+    /// frame the emulator stops in the middle of never mixes two emulated frames.
+    pub front: Vec<u8>,
     pub frame_ready: bool,
 
     // Per-scanline BG color ID buffer for OBJ-to-BG priority
@@ -96,6 +100,7 @@ impl Ppu {
             window_was_active: false,
             lcd_on_line0: false,
             framebuffer: [0; FRAMEBUFFER_SIZE],
+            front: vec![0; FRAMEBUFFER_SIZE],
             frame_ready: false,
             bg_color_ids: [0; SCREEN_WIDTH],
             stat_irq_line: false,
@@ -253,6 +258,7 @@ impl Ppu {
                     if self.ly == 144 {
                         self.mode = PpuMode::VBlank;
                         self.frame_ready = true;
+                        self.front.copy_from_slice(&self.framebuffer);
                         if let Some(t) = self.trace.as_deref_mut() {
                             t.finish_frame(&self.framebuffer, &self.oam, &self.bg_cram, &self.obj_cram, &self.vram, self.cgb_mode, self.compat);
                         }
@@ -909,5 +915,25 @@ mod tests {
         assert_eq!(p.read_register(0xFF41) & 0x04, 0x04);
         p.write_register(0xFF40, 0x80); // LCD on: live again (LY 0 != LYC)
         assert_eq!(p.read_register(0xFF41) & 0x04, 0);
+    }
+
+    /// The shown picture is the last whole frame: stopping mid-frame (as a fixed-length
+    /// `run_frame` does once the LCD has been toggled) must not mix two frames.
+    #[test]
+    fn front_buffer_holds_the_last_complete_frame() {
+        let mut p = Ppu::new();
+        p.lcdc = 0x91;
+        p.vram[0..16].copy_from_slice(&[0xFF, 0x00].repeat(8)); // tile 0: colour 1
+        p.bgp = 0x00; // colour 1 -> shade 0
+        while !p.frame_ready { p.step(4); }
+        p.frame_ready = false;
+        p.bgp = 0x0C; // colour 1 -> shade 3
+        while p.ly != 72 { p.step(4); }
+        let last_line = (SCREEN_HEIGHT - 1) * SCREEN_WIDTH * 4;
+        assert_eq!(p.framebuffer[0..4], PALETTE_COLORS[3]);
+        assert_eq!(p.framebuffer[last_line..last_line + 4], PALETTE_COLORS[0]);
+        assert!(p.front.chunks(4).all(|px| px == PALETTE_COLORS[0]));
+        while !p.frame_ready { p.step(4); }
+        assert!(p.front.chunks(4).all(|px| px == PALETTE_COLORS[3]));
     }
 }

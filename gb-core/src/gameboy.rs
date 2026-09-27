@@ -113,7 +113,7 @@ impl GameBoy {
 
     /// The picture shown, 160x144 RGBA: the PPU's, or on a Super Game Boy the one it coloured.
     pub fn screen(&self) -> &[u8] {
-        self.bus.sgb.as_deref().map_or(&self.bus.ppu.framebuffer[..], |s| &s.out[..])
+        self.bus.sgb.as_deref().map_or(&self.bus.ppu.front[..], |s| &s.out[..])
     }
 
     /// The picture is in colour: a CGB cartridge, or a DMG one colourised by the CGB.
