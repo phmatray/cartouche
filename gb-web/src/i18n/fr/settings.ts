@@ -189,6 +189,8 @@ export default {
     coversSub: 'Avec jaquette : {covered} sur {total} jeux · {size} téléchargés, conservés dans ce navigateur',
     deleteArt: 'Supprimer les jaquettes téléchargées',
     artDeleted: 'Jaquettes téléchargées supprimées',
+    deleteArtTitle: 'Supprimer les jaquettes téléchargées ?',
+    deleteArtBody: 'Retire {size} de jaquettes de ce navigateur. Vous pourrez les télécharger à nouveau depuis cette page.',
     downloadLabel: 'Télécharger maintenant les jaquettes de la bibliothèque',
     canGet: { one: '{count} jeu reconnu ajouté peut recevoir une jaquette', other: '{count} jeux reconnus ajoutés peuvent recevoir une jaquette' },
     download: 'Télécharger',

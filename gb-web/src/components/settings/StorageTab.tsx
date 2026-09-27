@@ -205,7 +205,7 @@ export function StorageTab() {
       <Row label={t('settings.storage.covers')} sub={artProgress.of
         ? <span className="artprog"><span className="progress" role="progressbar" aria-label={t('shell.fetchingArt')} aria-valuemin={0} aria-valuemax={artProgress.of} aria-valuenow={artProgress.n}><i style={{ width: `${(artProgress.n / artProgress.of) * 100}%` }} /></span>{t('shell.progress', { label: t('shell.fetchingArt'), n: artProgress.n, of: artProgress.of })}</span>
         : t('settings.storage.coversSub', { covered, total: shelf.length, size: mb(art.bytes) })}>
-        <button className="btn danger" disabled={!art.bytes && !showBoxArt} onClick={removeArt}>{t('settings.storage.deleteArt')}</button>
+        <button className="btn danger" disabled={!art.bytes && !showBoxArt} onClick={() => setConfirm({ title: t('settings.storage.deleteArtTitle'), danger: true, ok: t('settings.storage.deleteArt'), body: t('settings.storage.deleteArtBody', { size: mb(art.bytes) }), run: removeArt })}>{t('settings.storage.deleteArt')}</button>
       </Row>
       <Row label={t('settings.storage.downloadLabel')}
         sub={recognized.length ? t('settings.storage.canGet', { count: recognized.length }) : NO_COVERS()}>
