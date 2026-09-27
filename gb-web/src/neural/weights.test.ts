@@ -78,7 +78,7 @@ function tileWeights(net: TileNet, ids: Uint8Array, n: number): Float32Array {
       return present[i] ? v : -1e4;
     });
     const m = Math.max(...lg), e = lg.map((v) => Math.exp(v - m)), sum = e.reduce((a, v) => a + v);
-    const wt = e.map((v) => (v / sum >= SNAP ? v / sum : 0)), kept = wt.reduce((a, v) => a + v);
+    const cut = Math.min(SNAP, Math.max(...e) / sum), wt = e.map((v) => (v / sum >= cut ? v / sum : 0)), kept = wt.reduce((a, v) => a + v);
     for (let i = 0; i < 4; i++) out[q + i] = wt[i] / kept;
   }
   return out;
@@ -104,8 +104,30 @@ test('tile network: outlined curves come out smooth, not zigzag', () => {
     }
   }
   err /= count; errNearest /= count;
-  // Over 0.6 x nearest with the network trained on xBRZ alone, which drew these rings as zigzags; 0.47 now.
+  // Over 0.6 x nearest with the network trained on xBRZ alone, which drew these rings as zigzags; 0.49 now.
   assert.ok(err < 0.55 * errNearest, `outlined-curve error ${err} vs nearest ${errNearest}`);
+});
+
+test('tile network: straight bands stay exact, whatever lies 4 to 8 pixels away', () => {
+  // Horizontal bands of 1 to 3 pixels on the pixel grid, unrelated noise past a gap (as a map's wrapped-around
+  // rows above a straight stripe): the bands and the pixels next to them must come out exactly as nearest.
+  const net = parseTileNet(new Uint8Array(readFileSync(new URL('./weights/tile4x.bin', import.meta.url))).buffer);
+  const n = 40, ids = new Uint8Array(n * n);
+  let seed = 1, bad = 0;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) >>> 0) >>> 30;
+  for (const gap of [4, 6, 8]) for (const bands of [[1, 1, 2], [2, 1], [3], [1, 2, 3]]) for (const flip of [false, true]) {
+    const top = 14, bottom = top + bands.reduce((a, b) => a + b);
+    const rows: number[] = [];
+    for (let y = 0; y < n; y++) rows.push(y < top - gap || y >= bottom + gap ? -1 : 0);
+    bands.reduce((y, t, i) => { rows.fill(1 + (i % 3), y, y + t); return y + t; }, top);
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) ids[flip ? x * n + y : y * n + x] = rows[y] < 0 ? rnd() : rows[y];
+    const w = tileWeights(net, ids, n);
+    for (let y = top - 2; y < bottom + 2; y++) for (let x = 0; x < n; x++) {
+      const [px, py] = flip ? [y, x] : [x, y], lo = ids[py * n + px];
+      for (let s = 0; s < 16; s++) bad += +(w[4 * ((4 * py + (s >> 2)) * 4 * n + 4 * px + (s & 3)) + lo] !== 1);
+    }
+  }
+  assert.equal(bad, 0, `${bad} subpixels off nearest on straight bands`);
 });
 
 test('parseLc + lcTexture', () => {

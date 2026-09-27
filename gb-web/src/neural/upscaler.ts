@@ -102,7 +102,7 @@ void main() {
   lg = mix(vec4(-1e4), lg, present); // no colour that is not in the 3x3 neighbourhood
   vec4 e = exp(lg - max(max(lg.x, lg.y), max(lg.z, lg.w)));
   vec4 wt = e / dot(e, vec4(1.0));
-  wt *= step(${SNAP.toFixed(2)}, wt);
+  wt *= step(min(${SNAP.toFixed(2)}, max(max(wt.x, wt.y), max(wt.z, wt.w))), wt); // the strongest id always stays
   o = wt / dot(wt, vec4(1.0));
 }`;
 
