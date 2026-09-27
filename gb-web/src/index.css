@@ -206,9 +206,9 @@ canvas.lcd,img.lcd{display:block;width:100%;height:auto;image-rendering:pixelate
 .chip{border:1.5px solid #4a4a47;background:transparent;height:38px;padding:0 14px;font:800 12px var(--font);text-transform:uppercase;letter-spacing:.07em;color:#d2d2cd;white-space:nowrap}
 .chip:hover{border-color:var(--paper);color:var(--paper)}
 .chip[aria-pressed=true]{background:var(--paper);color:#000;border-color:var(--paper)}
-.tools .right{margin-left:auto;display:flex;gap:18px;align-items:center}
-.sel{display:flex;align-items:center;gap:10px;font:600 14px var(--font);color:var(--mute)}
-.sel select{appearance:none;background:transparent;color:var(--paper);border:0;border-bottom:2px solid var(--paper);font:800 14px var(--font);text-transform:uppercase;letter-spacing:.05em;padding:6px 22px 6px 0;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:right 6px center,right 1px center;background-size:5px 5px;background-repeat:no-repeat}
+.tools .right{margin-left:auto;min-width:0;display:flex;gap:18px;align-items:center}
+.sel{display:flex;align-items:center;gap:10px;min-width:0;font:600 14px var(--font);color:var(--mute)}
+.sel select{appearance:none;background:transparent;color:var(--paper);border:0;border-bottom:2px solid var(--paper);font:800 14px var(--font);text-transform:uppercase;letter-spacing:.05em;padding:6px 22px 6px 0;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:right 6px center,right 1px center;background-size:5px 5px;background-repeat:no-repeat;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .sel option{background:var(--band);color:var(--paper)}
 .paper .sel{color:var(--ink-3)}
 .paper .sel select{color:var(--ink);border-color:var(--ink)}
@@ -461,7 +461,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .switch[aria-checked=true]::after{transform:translateX(22px)}
 .range{display:flex;align-items:center;gap:14px;flex:1;max-width:280px}
 .range input{flex:1;accent-color:var(--ink)}
-.range output,.range .v{font:800 14px var(--font);min-width:44px;text-align:right;font-variant-numeric:tabular-nums}
+.range output,.range .v{font:800 14px var(--font);min-width:52px;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
 .codes{list-style:none;margin:0 0 18px;padding:0}
 .codes li{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--paper-2)}
 .codes code{font:700 14px ui-monospace,Menlo,monospace;letter-spacing:.04em}
@@ -544,8 +544,10 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
   .ss button{height:40px;padding:0 20px;border:2px solid var(--paper);background:transparent;font:800 12px var(--font);letter-spacing:.08em;text-transform:uppercase;touch-action:none}
   .ss button.down{background:var(--paper);color:#000}
 }
-/* Narrow sheets: the buttons go under the slot's text (SAUVEGARDER/CHARGER would squeeze it to a letter per line). */
-@media (max-width:520px){
+/* Narrow sheets (phones upright, and the side sheet of a phone held sideways): the buttons go under the slot's text
+   (SAUVEGARDER/CHARGER would squeeze it to a letter per line). Keyed on the panel's width, not the viewport's. */
+.page:has(>.slots){container-type:inline-size}
+@container (max-width:420px){
   .slots li{grid-template-columns:30px 64px minmax(0,1fr);row-gap:8px}
   .slots .n,.slots .th{grid-row:span 2}
   .slots .act{flex-direction:row;flex-wrap:wrap}
@@ -1186,6 +1188,8 @@ html:has(.pl),body:has(.pl){overscroll-behavior:none}
 .ihint .in{position:relative;padding:14px 16px 16px}
 .ihint .x{position:absolute;top:4px;right:4px;width:44px;height:44px;border:0;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:center}
 .ihint h2{font:900 26px/.9 var(--font);font-stretch:62%;text-transform:uppercase;margin:0 44px 8px 0}
+/* The heading names the device: never 'L’I-/PHONE' (.paper h2 hyphenates). */
+.ihint h2,.isheet h2{hyphens:manual}
 .ihint p,.ios-install p,.isheet p{margin:0 0 12px;font:500 15px/1.5 var(--font);color:var(--ink-2);max-width:60ch}
 .ios-install p{margin:0}
 .ios-step{display:block;color:var(--ink);font-weight:600}
