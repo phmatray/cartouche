@@ -395,9 +395,17 @@ function Player({ game }: { game: GameEntry }) {
       if (b !== undefined) releaseButton(b);
       else if (e.key.toLowerCase() === 'r') actions.current.stopRewind();
     };
+    // A key released in another window never comes back as a keyup: let go of everything when the page loses focus.
+    const releaseAll = () => { Object.values(BUTTON_NUMBERS).forEach((n) => releaseButton(n)); actions.current.stopRewind(); };
+    const onHidden = () => { if (document.visibilityState === 'hidden') releaseAll(); };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
-    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
+    window.addEventListener('blur', releaseAll);
+    document.addEventListener('visibilitychange', onHidden);
+    return () => {
+      window.removeEventListener('keydown', down); window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', releaseAll); document.removeEventListener('visibilitychange', onHidden);
+    };
   }, [keybindings, pressButton, releaseButton]);
 
   const auto = saves.states[0];
