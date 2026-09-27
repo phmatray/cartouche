@@ -17,6 +17,11 @@ export default {
     body: 'It’s damaged or isn’t a Game Boy ROM.',
     remove: 'Remove from library',
   },
+  failed: {
+    title: 'Couldn’t load',
+    hosted: 'Download it on its page to play offline.',
+    retry: 'Try again',
+  },
   insert: {
     title: 'Insert your ROM',
     body: '{title} isn’t included. Load your own .gb file to play; it stays in this browser.',
