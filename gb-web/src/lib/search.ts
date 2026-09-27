@@ -312,11 +312,13 @@ const textMemo = new WeakMap<SearchIndex, { q: string; hits: Map<Indexed, number
 function textHits(index: SearchIndex, text: string): Map<Indexed, number> | null {
   const q = f(text);
   if (!q) return null;
+  const memo = `${getLang()}\0${q}`;
   const m = textMemo.get(index);
-  if (m?.q === q) return m.hits;
+  if (m?.q === memo) return m.hits;
   const hits = new Map<Indexed, number>();
-  for (const it of index.items) { const n = score(it.g, q, it); if (n) hits.set(it, n); }
-  textMemo.set(index, { q, hits });
+  // Also the genre as the cards show it in this language ('aventure' finds Adventure); `rest` has the English one.
+  for (const it of index.items) { const n = score(it.g, q, { t: it.t, rest: `${it.rest} ${f(genreLabel(it.g))}` }); if (n) hits.set(it, n); }
+  textMemo.set(index, { q: memo, hits });
   return hits;
 }
 
@@ -388,7 +390,7 @@ export interface Suggestion { insert: string; label: string; hint: string; count
  * `ge` → `genre:`, `genre:r` → `genre:rpg` (with counts), a plain word → facet values it starts (`rpg` → `genre:rpg`).
  */
 export function suggest(index: SearchIndex, q: Query, partial: string, max = 8): Suggestion[] {
-  const m = partial.match(/^(-?)([a-z]*)(?::"?([^"]*))?$/i);
+  const m = partial.match(/^(-?)(\p{L}*)(?::"?([^"]*))?$/iu);
   if (!m || !partial.replace('-', '')) return [];
   const [, neg, rawKey, rawVal] = m;
   const values = (key: Key, typed: string, strict: boolean) => {

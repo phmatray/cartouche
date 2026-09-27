@@ -53,7 +53,7 @@ export function keyLabel(k: string): string {
 
 export const sortTitle =(t: string) => t.replace(/^The /i, '');
 export function letterOf(g: GameEntry): string {
-  const c = sortTitle(g.title).charAt(0).toUpperCase();
+  const c = sortTitle(g.title).charAt(0).normalize('NFD').charAt(0).toUpperCase(); // 'Ō' files under O, where it sorts
   return /[A-Z]/.test(c) ? c : '#';
 }
 

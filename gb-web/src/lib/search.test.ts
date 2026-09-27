@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { GameEntry } from '../types/game';
-import { loadLang } from '../i18n/core.ts';
+import { loadLang, setLang } from '../i18n/core.ts';
+import { letterOf } from './ui.ts';
 import { buildIndex, facetCounts, formatQuery, normValue, parseQuery, search, suggest, valueLabel, withoutEach } from './search.ts';
 
 const game = (id: string, o: Partial<GameEntry>): GameEntry => ({ id, title: id, description: '', genre: 'Unknown', category: 'My Collection', coverArt: '', screenshots: [], isLocal: true, ...o });
@@ -120,6 +121,20 @@ test('suggests keys and values with counts', () => {
   assert.ok(suggest(index, parseQuery(''), 'rpg').some((s) => s.insert === 'genre:rpg '));
   assert.equal(suggest(index, parseQuery(''), '-reg')[0].insert, '-region:');
   assert.deepEqual(suggest(index, parseQuery(''), 'nope:x'), []);
+});
+
+test('a genre typed as the cards show it in French finds its games and suggests it', () => {
+  setLang('fr');
+  try {
+    assert.deepEqual(titles('reflexion'), ['Tile Tumble']); // 'Puzzle' reads 'Réflexion'
+    assert.ok(suggest(index, parseQuery('réflexion'), 'réflexion').some((s) => s.insert === 'genre:puzzle '));
+  } finally { setLang('en'); }
+  assert.deepEqual(titles('puzzle'), ['Tile Tumble']);
+});
+
+test('A–Z letters: an accented initial files under its letter, where it sorts', () => {
+  const l = (title: string) => letterOf(game(title, {}));
+  assert.deepEqual(['Ōkami Tale', 'Élan', 'The Zone', 'zap', '1942', '"Quoted"'].map(l), ['O', 'E', 'Z', 'Z', '#', '#']);
 });
 
 test('indexes 3,000 games and answers a query well within a frame', () => {
