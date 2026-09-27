@@ -101,14 +101,21 @@ impl MemoryBus {
     }
 
     /// Whether a CPU read collides with the running OAM DMA: OAM itself, or an address on
-    /// the same bus as the DMA source (VRAM, or the external bus: ROM, cartridge RAM, WRAM).
-    /// I/O and HRAM stay reachable, and a DMA from VRAM leaves ROM fetches alone.
+    /// the bus the DMA reads from. Buses: VRAM, the external one (ROM, cartridge RAM, and WRAM
+    /// on a Game Boy) and, on a Game Boy Color, WRAM's own. I/O and HRAM stay reachable, so a
+    /// DMA from VRAM (or from WRAM on a Color) leaves ROM fetches alone. The Color quirks
+    /// follow SameBoy: WRAM is busy unless the DMA reads VRAM, and a DMA from echo RAM
+    /// ($E000+) blocks everything but VRAM.
     fn dma_conflict(&self, addr: u16) -> bool {
-        let vram = |a: u16| (0x8000..=0x9FFF).contains(&a);
+        let cgb = self.cgb_mode || self.ppu.compat; // Color hardware, whatever the mode
+        let bus = |a: u16| match a { 0x8000..=0x9FFF => 1, 0xC000.. if cgb => 2, _ => 0 };
+        let src = (self.dma_source as u16) << 8;
         match addr {
             0xFE00..=0xFEFF => true,
-            0xFF00..=0xFFFF => false,
-            _ => vram(addr) == vram((self.dma_source as u16) << 8),
+            0xFF00.. => false,
+            0xC000.. if cgb => bus(src) != 1,
+            _ if cgb && src >= 0xE000 => bus(addr) != 1,
+            _ => bus(addr) == bus(src),
         }
     }
 

@@ -47,6 +47,21 @@ fn dma_conflicts_only_on_its_own_bus() {
 }
 
 #[test]
+fn a_color_dma_from_wram_leaves_rom_fetches_alone() {
+    let mut r = rom(&[0x3E, 0xC0, 0xE0, 0x46, 0xCD, 0x00, 0x02, 0x18, 0xFE], &[0x06, 0x42, 0xC9]);
+    r[0x143] = 0xC0; // Game Boy Color only
+    r[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(r[i]).wrapping_sub(1));
+    let mut gb = GameBoy::new(r).unwrap();
+    gb.skip_boot_rom();
+    gb.cpu.regs.b = 0;
+    for _ in 0..5 { gb.step_instruction().unwrap(); }
+    assert_eq!(gb.cpu.regs.b, 0x42, "WRAM has its own bus on a Color");
+    gb.bus.write_byte(0xFF46, 0xC0);
+    assert_eq!(gb.bus.read_byte(0xC000), 0xFF, "WRAM is busy");
+    assert_ne!(gb.bus.read_byte(0x0100), 0xFF);
+}
+
+#[test]
 fn a_state_load_keeps_the_live_buttons() {
     let mut gb = boot(&[0x18, 0xFE], &[]);
     gb.bus.joypad.set_button(JoypadButton::Right, true);
