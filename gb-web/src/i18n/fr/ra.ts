@@ -2,7 +2,7 @@ import type { Messages } from '../core.ts';
 
 export default {
   tab: 'Succès',
-  intro: 'Connectez votre compte RetroAchievements pour voir, sur chaque cartouche reconnue, les succès que vous avez obtenus. C’est en lecture seule : jouer ici ne débloque pas encore de succès, car le service de déblocage de RetroAchievements n’accepte pas les requêtes des pages web.',
+  intro: 'Connectez votre compte RetroAchievements pour voir, sur chaque cartouche reconnue, les succès que vous avez obtenus. C’est en lecture seule : jouer ici ne débloque pas encore de succès, car le service de déblocage de RetroAchievements n’accepte pas les requêtes des pages web.',
   user: 'Nom d’utilisateur',
   key: 'Clé d’API web',
   keySub: 'Elle se trouve sur retroachievements.org, dans <a>Settings › Keys</a>. Elle reste dans ce navigateur, et votre mot de passe n’est jamais demandé.',

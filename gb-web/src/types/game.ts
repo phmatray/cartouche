@@ -1,4 +1,5 @@
 export type RegionFilter = 'US' | 'EU' | 'JP';
+export type CreditField = 'license' | 'changes' | 'coverCredit';
 
 export interface GameEntry {
   id: string;
@@ -28,6 +29,8 @@ export interface GameEntry {
   licenseUrl?: string;
   source?: string;
   changes?: string;
+  /** license, changes and coverCredit in the other languages (catalog entries). */
+  credits?: Partial<Record<'fr' | 'es', Partial<Record<CreditField, string>>>>;
   /** Test cartridges: what a pass looks like, shown under the box. */
   hint?: string;
   hints?: Partial<Record<'fr' | 'es', string>>;

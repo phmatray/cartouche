@@ -57,18 +57,18 @@ export const LEGAL_ES: LegalSection[] = [
   {
     title: 'Carátulas',
     body:
-      'Los dos juegos Tobu Tobu Girl vienen con sus propias portadas (con licencia libre, ver arriba): son ' +
+      'Los dos juegos Tobu Tobu Girl vienen con sus propias carátulas (con licencia libre, ver arriba): son ' +
       'archivos de esta app, que se muestran sin preguntar y sin contactar con ningún otro sitio. Todas las demás ' +
-      'portadas están desactivadas de forma predeterminada y Cartouche nunca las aloja ni las redistribuye. Esas imágenes pertenecen a ' +
+      'carátulas están desactivadas de forma predeterminada y Cartouche nunca las aloja ni las redistribuye. Esas imágenes pertenecen a ' +
       'las editoras de los juegos y a otros titulares de derechos. En el primer inicio, un cuadro de diálogo pregunta «¿Mostrar carátulas?». ' +
       'Solo si eliges «Descargar carátulas» (o activas más tarde las carátulas en Ajustes > Almacenamiento y lo aceptas) ' +
-      'tu navegador descarga la portada de cada ROM reconocida que añadiste, directamente del ' +
+      'tu navegador descarga la carátula de cada ROM reconocida que añadiste, directamente del ' +
       'proyecto libretro-thumbnails en GitHub (https://github.com/libretro-thumbnails, servido desde ' +
       'raw.githubusercontent.com), y la guarda en el almacenamiento de este navegador (Cache Storage). Tu respuesta ' +
       'y su fecha se guardan en tus ajustes, y restaurar una copia de seguridad nunca las cambia. Solo se ' +
       'vuelve a preguntar si activas las carátulas después de haber dicho que no, o después de «Borrar todo». Con ' +
       '«Continuar sin ellas» (o Escape), la app no hace ninguna petición a libretro-thumbnails. ' +
-      'Ajustes > Almacenamiento muestra el espacio que ocupan las portadas, las elimina («Eliminar las carátulas descargadas», ' +
+      'Ajustes > Almacenamiento muestra el espacio que ocupan las carátulas, las elimina («Eliminar las carátulas descargadas», ' +
       'que también desactiva las carátulas) y las vuelve a descargar para tu biblioteca.',
   },
   {
@@ -91,7 +91,7 @@ export const LEGAL_ES: LegalSection[] = [
       'los ajustes de tu navegador para eliminarlo todo.\n\n' +
       'Solo GitHub recibe peticiones, salvo si conectas RetroAchievements (ver más abajo). GitHub Pages sirve la app y sus fuentes. Las carátulas están desactivadas de forma ' +
       'predeterminada y necesitan tu aceptación (cuadro de diálogo del primer inicio o Ajustes > Almacenamiento); solo entonces el ' +
-      'navegador carga también las portadas de las ROM reconocidas que añadiste desde raw.githubusercontent.com. Como cualquier ' +
+      'navegador carga también las carátulas de las ROM reconocidas que añadiste desde raw.githubusercontent.com. Como cualquier ' +
       'servidor web, GitHub recibe ' +
       'tu dirección IP y los datos de tu navegador; consulta la declaración general de privacidad de GitHub ' +
       '(https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).\n\n' +

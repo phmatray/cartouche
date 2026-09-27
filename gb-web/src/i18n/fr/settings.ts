@@ -57,8 +57,8 @@ export default {
     usesColor: 'Sur la Game Boy Color, ils prennent le style d’écran des jeux Color.',
     editColor: 'Modifier le style Color',
     sgb: 'Cadres et couleurs Super Game Boy',
-    sgbSub: 'Le jeu comme sur Super Game Boy : le cadre qu’il dessine autour de l’écran et les couleurs qu’il choisit pour chaque scène.',
-    sgbSubCgb: 'Ce jeu Color fonctionne aussi sur Super Game Boy : activez-le pour avoir son cadre et ses couleurs Super Game Boy à la place des siennes.',
+    sgbSub: 'Le jeu comme sur Super Game Boy : le cadre qu’il dessine autour de l’écran et les couleurs qu’il choisit pour chaque scène.',
+    sgbSubCgb: 'Ce jeu Color fonctionne aussi sur Super Game Boy : activez-le pour avoir son cadre et ses couleurs Super Game Boy à la place des siennes.',
   },
   display: {
     intro: 'L’écran avec lequel chaque jeu démarre. Les jeux Game Boy d’origine et Game Boy Color ont chacun leur réglage par défaut ; un jeu peut garder ses propres réglages depuis son manuel.',
@@ -175,7 +175,7 @@ export default {
     declined: 'Le navigateur a refusé. Il accepte souvent une fois l’app installée ou davantage utilisée.',
     library: 'Bibliothèque',
     showTests: 'Afficher les cartouches de test',
-    showTestsSub: 'cpu_instrs, dmg-acid2 et cgb-acid2, qui vérifient l’émulateur. Désactivé : elles disparaissent de la bibliothèque et de la recherche.',
+    showTestsSub: 'cpu_instrs, dmg-acid2 et cgb-acid2, qui vérifient l’émulateur. Désactivé : elles disparaissent de la bibliothèque et de la recherche.',
     art: 'Jaquettes',
     showArt: 'Afficher les jaquettes',
     showArtSub: 'Désactivé par défaut. Les jaquettes des jeux reconnus ajoutés, téléchargées par le navigateur depuis le projet libretro-thumbnails sur GitHub (qui voit l’adresse IP et les informations du navigateur) et conservées dans ce navigateur. Cartouche n’en héberge aucune. Désactivé : aucune requête n’est faite. Les jeux Tobu Tobu Girl inclus affichent toujours leurs propres jaquettes sous licence libre, fournies avec l’app.',
@@ -269,6 +269,6 @@ export default {
     asAppSub: 'S’ouvre dans sa propre fenêtre et fonctionne hors ligne après la première visite',
     installBtn: 'Installer',
     lookFor: 'Chercher « Installer » dans la barre d’adresse ou le menu du navigateur',
-    credits: 'Jaquettes facultatives des jeux personnels issues du projet libretro-thumbnails. Informations des jeux tirées de GameDataBase © 2024 par PigSaint (<ccby>CC BY 4.0</ccby>), modifiée, et noms No-Intro issus de libretro-database (<ccbysa>CC BY-SA 4.0</ccbysa>). Police : Archivo, © 2020 The Archivo Project Authors (<ofl>SIL Open Font License 1.1</ofl>), servie depuis ce site. Jeux inclus : <tobu>Tobu Tobu Girl</tobu> et <tobudx>Tobu Tobu Girl Deluxe</tobudx> © 2017 Tangram Games (code MIT, ressources <ccby>CC BY 4.0</ccby> ; leurs jaquettes sont les illustrations officielles des pages itch.io de <itch>Tobu Tobu Girl</itch> et de <itchdx>Deluxe</itchdx>, recadrées et redimensionnées) ; <ucity>µCity</ucity> © 2017-2018 Antonio Niño Díaz (<gpl>GPL-3.0-or-later</gpl> ; graphismes et musique <ccbysa>CC BY-SA 4.0</ccbysa> ; <src>source</src>). Boot ROM (Game Boy, Game Boy Color, Super Game Boy) : <sameboy>SameBoy</sameboy> © 2015-2026 Lior Halphon (MIT). Cartouches de test : dmg-acid2 et cgb-acid2 © 2020 Matt Currie (MIT) ; cpu_instrs par Shay Green (Blargg), sans licence indiquée, retiré sur simple demande de l’auteur. Chacune est créditée sur la page de son jeu. Licences open source : <notices>mentions de tiers</notices> et <licenses>textes complets des licences</licenses>. Game Boy et Game Boy Color sont des marques de Nintendo ; Cartouche n’est pas affilié à Nintendo. Voir les <legal>mentions légales</legal>. Succès, une fois un compte connecté : données et badges de <ra>RetroAchievements</ra>, qui ne cautionne pas Cartouche.',
+    credits: 'Jaquettes facultatives des jeux personnels issues du projet libretro-thumbnails. Informations des jeux tirées de GameDataBase © 2024 par PigSaint (<ccby>CC BY 4.0</ccby>), modifiée, et noms No-Intro issus de libretro-database (<ccbysa>CC BY-SA 4.0</ccbysa>). Police : Archivo, © 2020 The Archivo Project Authors (<ofl>SIL Open Font License 1.1</ofl>), servie depuis ce site. Jeux inclus : <tobu>Tobu Tobu Girl</tobu> et <tobudx>Tobu Tobu Girl Deluxe</tobudx> © 2017 Tangram Games (code MIT, ressources <ccby>CC BY 4.0</ccby> ; leurs jaquettes sont les illustrations officielles des pages itch.io de <itch>Tobu Tobu Girl</itch> et de <itchdx>Deluxe</itchdx>, recadrées et redimensionnées) ; <ucity>µCity</ucity> © 2017-2018 Antonio Niño Díaz (<gpl>GPL-3.0-or-later</gpl> ; graphismes et musique <ccbysa>CC BY-SA 4.0</ccbysa> ; <src>source</src>). Boot ROM (Game Boy, Game Boy Color, Super Game Boy) : <sameboy>SameBoy</sameboy> © 2015-2026 Lior Halphon (MIT). Cartouches de test : dmg-acid2 et cgb-acid2 © 2020 Matt Currie (MIT) ; cpu_instrs par Shay Green (Blargg), sans licence indiquée, retiré sur simple demande de l’auteur. Chacune est créditée sur la page de son jeu. Licences open source : <notices>mentions de tiers</notices> et <licenses>textes complets des licences</licenses>. Game Boy et Game Boy Color sont des marques de Nintendo ; Cartouche n’est pas affilié à Nintendo. Voir les <legal>mentions légales</legal>. Succès, une fois un compte connecté : données et badges de <ra>RetroAchievements</ra>, qui ne cautionne pas Cartouche.',
   },
 } satisfies Messages['settings'];
