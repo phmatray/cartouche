@@ -34,3 +34,15 @@ export function mover(moved: Map<string, string>) {
     meta: <T extends { id: string; activeSave?: string }>(m: T): T => ({ ...m, id: game(m.id), ...(m.activeSave !== undefined && { activeSave: save(m.activeSave) }) }),
   };
 }
+
+/**
+ * A backup's ROM record as the library can store it, or null: an id and bytes are required; a title or genre that
+ * isn't text (a hand-edited or third-party backup) falls back to the id and 'Unknown' so the library still loads.
+ */
+export function backupRom(r: unknown): { id: string; title: string; genre: string; data: Uint8Array } | null {
+  if (!r || typeof r !== 'object') return null;
+  const { id, title, genre, data } = r as Record<string, unknown>;
+  if (typeof id !== 'string' || !id || !(data instanceof Uint8Array)) return null;
+  const text = (x: unknown, or: string) => (typeof x === 'string' && x.trim() ? x : or);
+  return { id, title: text(title, id), genre: text(genre, 'Unknown'), data };
+}

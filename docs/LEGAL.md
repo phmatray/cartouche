@@ -64,7 +64,8 @@ load into it are ones you have the right to use.
   MIT) and *Dusky Dungeon* (MIT, graphics CC BY 4.0, fonts CC BY 4.0 and CC BY
   3.0). Each one is downloaded only when you ask for it. Their authors, sources
   and full license terms are in `roms/gbstudio/LICENSES.txt`, linked from the
-  in-app Legal page. The other games of the GB Studio collection are not
+  in-app Legal page. Poltersprite's GPL source is also attached to every
+  Cartouche release as `poltersprite-2.0.4-source.zip`. The other games of the GB Studio collection are not
   hosted: they link to their authors' pages.
 - A database of known Game Boy and Game Boy Color dumps (SHA-1 fingerprints,
   titles, No-Intro names), used only to identify files you add. The library

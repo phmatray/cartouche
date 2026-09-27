@@ -38,7 +38,9 @@ Total: 3,407,872 bytes (3.25 MB).
 - Author: Inkus Alters, © 2024-2025. A GitHub Game Off 2024 entry, updated to 2.0.4 in 2025.
 - Official page: https://inkusalters.itch.io/poltersprite
 - Source: https://github.com/inkusalters/Poltersprite. The complete corresponding source of this version is
-  `Polterspritev2.0.4.zip` in that repository.
+  `Polterspritev2.0.4.zip` in that repository (commit `3e86ecb700c5ec10e85640181683d985263e8c77`, SHA-256
+  `d3e18aff042ab6eb8cae6ec579f2e55408ae207b103b06cc7a0f7ec8e26056bf`), and every Cartouche GitHub release attaches
+  a copy of it (`poltersprite-2.0.4-source.zip`).
 - Licenses, as stated in the source repository README and on the official page:
   - The game: [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/). Cartouche is free,
     without ads or sales; it redistributes the game unmodified and non-commercially.
