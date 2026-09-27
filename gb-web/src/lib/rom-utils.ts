@@ -26,6 +26,18 @@ export function savSizeError(rom: Uint8Array, bytes: number): string | null {
   return ok.includes(bytes) ? null : t('game.sav.wrongSize', { size: num(bytes), ram: size(ram), bytes: num(ram) });
 }
 
+/** A title as compared across the app: no accents, case, spaces or punctuation. */
+export const titleKey = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * Whether a ROM's header title names this catalog game: the same title, or (6+ characters) the start of it, as GB Studio
+ * headers cut long titles ('OPOSSUMCOUNTR'). All a file with no known SHA-1 can be checked against.
+ */
+export function headerNames(title: string, header: string) {
+  const k = titleKey(title), h = titleKey(header);
+  return !!h && (h === k || (h.length >= 6 && k.startsWith(h)));
+}
+
 /**
  * Extract the game title from a Game Boy ROM header.
  * Title is at bytes 0x0134-0x0143 (up to 16 ASCII chars, null-padded).

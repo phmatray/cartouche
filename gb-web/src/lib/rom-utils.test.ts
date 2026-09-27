@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { isGameBoyRom, withoutCopierHeader } from './rom-utils.ts';
+import { headerNames, isGameBoyRom, withoutCopierHeader } from './rom-utils.ts';
 
 const TOBU = new Uint8Array(readFileSync(new URL('../../public/roms/tobutobugirl.gb', import.meta.url)));
 
@@ -15,4 +15,13 @@ test('a 512-byte copier header is dropped, a clean dump is kept as is', () => {
   assert.equal(rom.buffer.byteLength, TOBU.length, 'a copy, not a view over the header');
   assert.deepEqual(rom, TOBU);
   assert.equal(withoutCopierHeader(TOBU), TOBU);
+});
+
+test('a header title names a catalog game by its whole title or a 6+ character start of it', () => {
+  assert.equal(headerNames('Opossum Country', 'OPOSSUMCOUNTR'), true);
+  assert.equal(headerNames('Tobu Tobu Girl', 'TOBU TOBU GIRL'), true);
+  assert.equal(headerNames('Tobu', 'TOBU'), true);
+  assert.equal(headerNames('Some Game', 'ULTRA3'), false);
+  assert.equal(headerNames('Tobu Tobu Girl', 'TOBU'), false, 'too short to be a prefix');
+  assert.equal(headerNames('Some Game', ''), false);
 });
