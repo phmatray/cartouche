@@ -366,7 +366,8 @@ impl Sgb {
         }
     }
 
-    /// Everything but the packet in flight and the derived pictures (redrawn from the rest).
+    /// Everything but the derived pictures (redrawn from the rest). The command in flight comes
+    /// last, so a state without it (saved by an older version) still loads.
     pub fn export_state(&self, out: &mut Vec<u8>) {
         out.extend_from_slice(&[self.players, self.player, self.mask, trn_code(self.trn), self.trn_wait]);
         for p in self.pals.iter().flatten().chain(&self.sys_pals) { out.extend_from_slice(&p.to_le_bytes()); }
@@ -375,6 +376,10 @@ impl Sgb {
         out.extend_from_slice(&self.tiles);
         out.extend_from_slice(&self.map);
         out.push(self.has_border as u8);
+        out.extend_from_slice(&[self.last_p1, self.receiving as u8, self.bit as u8]);
+        out.extend_from_slice(&self.packet);
+        out.push(self.command.len() as u8);
+        out.extend_from_slice(&self.command);
     }
 
     /// With nothing left in `data` (a Game Boy state loaded here), the SGB side starts fresh:
@@ -403,6 +408,23 @@ impl Sgb {
             s.tiles.copy_from_slice(take(256 * 32));
             s.map.copy_from_slice(take(0x880));
             s.has_border = take(1)[0] != 0;
+            // The packets of a command received so far: without them the rest would run as
+            // commands of their own. Absent from older states.
+            if let Some(&[p1, receiving, bit]) = data.get(*pos..*pos + 3) {
+                let Some(packet) = data.get(*pos + 3..*pos + 19) else { return false };
+                let Some(&n) = data.get(*pos + 19) else { return false };
+                let n = n as usize;
+                let Some(command) = data.get(*pos + 20..*pos + 20 + n) else { return false };
+                *pos += 20 + n;
+                s.last_p1 = p1 & 0x30;
+                s.receiving = receiving != 0;
+                s.bit = (bit as usize).min(128);
+                s.packet.copy_from_slice(packet);
+                // At most 7 whole packets, and never a finished command.
+                if n % 16 == 0 && !command.is_empty() && n / 16 < (command[0] & 7) as usize {
+                    s.command.extend_from_slice(command);
+                }
+            }
         }
         s.pads = self.pads;
         (s.snes_sound, s.snes_frames, s.gb_sound_frames) = (self.snes_sound, self.snes_frames, self.gb_sound_frames);

@@ -25,20 +25,26 @@ fn sgb() -> GameBoy {
 
 /// Sends one command (1-7 packets of 16 bytes, `data` zero-padded) the way games do.
 fn send(gb: &mut GameBoy, cmd: u8, data: &[u8]) {
+    for p in command(cmd, data).chunks(16) { send_packet(gb, p); }
+}
+
+fn command(cmd: u8, data: &[u8]) -> Vec<u8> {
     let packets = (data.len() + 1).div_ceil(16).max(1);
     let mut bytes = vec![0u8; packets * 16];
     bytes[0] = cmd << 3 | packets as u8;
     bytes[1..=data.len()].copy_from_slice(data);
-    for p in bytes.chunks(16) {
-        gb.bus.write_byte(0xFF00, 0x00);
-        gb.bus.write_byte(0xFF00, 0x30);
-        for i in 0..128 {
-            gb.bus.write_byte(0xFF00, if p[i / 8] >> (i % 8) & 1 != 0 { 0x10 } else { 0x20 });
-            gb.bus.write_byte(0xFF00, 0x30);
-        }
-        gb.bus.write_byte(0xFF00, 0x20); // stop bit
+    bytes
+}
+
+fn send_packet(gb: &mut GameBoy, p: &[u8]) {
+    gb.bus.write_byte(0xFF00, 0x00);
+    gb.bus.write_byte(0xFF00, 0x30);
+    for i in 0..128 {
+        gb.bus.write_byte(0xFF00, if p[i / 8] >> (i % 8) & 1 != 0 { 0x10 } else { 0x20 });
         gb.bus.write_byte(0xFF00, 0x30);
     }
+    gb.bus.write_byte(0xFF00, 0x20); // stop bit
+    gb.bus.write_byte(0xFF00, 0x30);
 }
 
 fn rgb(c: u16) -> [u8; 4] {
@@ -344,4 +350,39 @@ fn a_game_boy_state_loads_on_the_super_game_boy() {
     pal01(&mut gb, RED, GREEN);
     frame(&mut gb);
     assert_eq!(px(&gb, 0, 0), rgb(RED));
+}
+
+#[test]
+fn a_state_saved_between_the_packets_of_a_command_keeps_them() {
+    // ATTR_BLK in two packets; its third data set (cells (2,2)-(5,5) inside: palette 1) straddles them.
+    let mut d = [0u8; 19];
+    d[0] = 3;
+    d[13..19].copy_from_slice(&[0x01, 0x01, 2, 2, 5, 5]);
+    let bytes = command(0x04, &d);
+    let mut gb = sgb();
+    for y in 0..18 { for x in 0..20 { dark_cell(&mut gb, x, y); } }
+    pal01(&mut gb, RED, GREEN);
+    send_packet(&mut gb, &bytes[..16]);
+    let state = gb.save_state();
+
+    let mut loaded = sgb();
+    assert!(loaded.load_state(&state));
+    // Half-way through the second packet too: the bits received so far are kept.
+    let p = &bytes[16..];
+    loaded.bus.write_byte(0xFF00, 0x00);
+    loaded.bus.write_byte(0xFF00, 0x30);
+    for i in 0..128 {
+        if i == 40 {
+            let mid = loaded.save_state();
+            loaded = sgb();
+            assert!(loaded.load_state(&mid));
+        }
+        loaded.bus.write_byte(0xFF00, if p[i / 8] >> (i % 8) & 1 != 0 { 0x10 } else { 0x20 });
+        loaded.bus.write_byte(0xFF00, 0x30);
+    }
+    loaded.bus.write_byte(0xFF00, 0x20);
+    loaded.bus.write_byte(0xFF00, 0x30);
+    frame(&mut loaded);
+    assert_eq!(px(&loaded, 3 * 8, 3 * 8), rgb(GREEN), "the command completes after the load");
+    assert_eq!(px(&loaded, 8 * 8, 8 * 8), rgb(RED));
 }
