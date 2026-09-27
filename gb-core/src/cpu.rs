@@ -36,6 +36,7 @@ impl Cpu {
 
         if let Some(vector) = bus.interrupts.acknowledge() {
             self.ime = false;
+            self.ime_pending = false; // the handler starts with interrupts off
             bus.cycle_tick(); // M1: internal
             self.push_u16(bus, self.regs.pc); // M2: SP-- ; M3+M4: push PC
             self.regs.pc = vector;
@@ -464,7 +465,7 @@ impl Cpu {
 
             // === DI / EI ===
             0xF3 => { self.ime = false; Ok(4) }
-            0xFB => { self.ime_pending = true; Ok(4) }
+            0xFB => { self.ime_pending = !self.ime; Ok(4) } // no-op while IME is already on
 
             // === CB prefix ===
             0xCB => self.execute_cb(bus),

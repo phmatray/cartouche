@@ -241,3 +241,21 @@ fn test_scf() {
     assert!(!cpu.regs.subtract());
     assert!(!cpu.regs.half_carry());
 }
+
+// ─── Interrupts ───
+
+/// `ei; ei` with an interrupt pending: the second EI (IME already on) must not
+/// re-arm the delayed enable, so the handler starts with IME off.
+#[test]
+fn test_ei_while_ime_on_does_not_reenable_in_handler() {
+    let (mut cpu, mut bus) = setup(&[0xFB, 0xFB, 0x00]);
+    bus.interrupts.interrupt_enable = 0x01;
+    bus.interrupts.interrupt_flag = 0x01;
+    for _ in 0..3 {
+        cpu.handle_interrupts(&mut bus);
+        step(&mut cpu, &mut bus);
+    }
+    assert_eq!(cpu.regs.pc, 0x0041); // dispatched to $40, first handler NOP ran
+    assert!(!cpu.ime);
+    assert!(!cpu.ime_pending);
+}

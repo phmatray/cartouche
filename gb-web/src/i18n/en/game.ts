@@ -9,6 +9,8 @@ export default {
   about: 'About this game',
   getIt: 'This game isn’t bundled with the app. Get it from its author (<a>official page</a>), then load the file here; it stays in this browser.',
   loadIt: 'This game isn’t bundled with the app. Load the file here; it stays in this browser.',
+  unsupported: 'Not supported yet',
+  unsupportedBody: 'This cartridge uses a {mapper} chip, which Cartouche can’t run yet.',
   credits: 'Credits',
   license: 'license',
   source: 'Source:',

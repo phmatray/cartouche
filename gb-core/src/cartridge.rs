@@ -361,7 +361,8 @@ impl Cartridge {
                     *rom_bank = if bank == 0 { 1 } else { bank };
                 }
                 0x4000..=0x5FFF => {
-                    if value <= 0x03 {
+                    // 0-7: MBC30 (64 KB) has 8 RAM banks; on a 32 KB MBC3 banks 4-7 mirror 0-3.
+                    if value <= 0x07 {
                         *ram_bank = value;
                         if let Some(ref mut rtc) = self.rtc {
                             rtc.selected_register = None;
@@ -526,16 +527,17 @@ impl Cartridge {
         !self.ram.is_empty()
     }
 
+    /// SRAM, plus on MBC3+TIMER the 48-byte clock footer used by VBA-M, BGB, mGBA and SameBoy:
+    /// live s/m/h/DL/DH and latched s/m/h/DL/DH as u32 LE, then the unix time (u64 LE) they were taken at.
     pub fn export_sram(&self) -> Vec<u8> {
         let mut data = self.ram.clone();
-        // Append RTC state if present (48 bytes)
         if let Some(ref rtc) = self.rtc {
-            data.extend_from_slice(&rtc.base_timestamp.to_le_bytes()); // 8 bytes
-            data.push(rtc.halted as u8);                                // 1 byte
-            data.extend_from_slice(&rtc.halted_elapsed.to_le_bytes()); // 8 bytes
-            data.extend_from_slice(&rtc.latched);                       // 5 bytes
-            // Pad to 48 bytes for future expansion
-            data.extend_from_slice(&[0u8; 26]);
+            let mut live = Rtc { latched: [0; 5], ..*rtc };
+            live.latch();
+            for b in live.latched.iter().chain(rtc.latched.iter()) {
+                data.extend_from_slice(&(*b as u32).to_le_bytes());
+            }
+            data.extend_from_slice(&((now_ms() / 1000.0) as u64).to_le_bytes());
         }
         data
     }
@@ -582,7 +584,24 @@ impl Cartridge {
 
         // Restore RTC state if present
         if let Some(ref mut rtc) = self.rtc {
-            if data.len() >= ram_len + 17 {
+            let footer = data.get(ram_len..).unwrap_or(&[]);
+            let word = |i: usize| u32::from_le_bytes(footer[i * 4..i * 4 + 4].try_into().unwrap());
+            // Standard footer (44 B with a u32 time, 48 B with a u64): ten u32 registers, all < 256.
+            // The legacy Cartouche layout starts with an f64 ms timestamp, whose bytes 1-3 are never all 0.
+            if (footer.len() == 44 || footer.len() == 48) && (0..10).all(|i| word(i) < 256) {
+                let saved_at = if footer.len() == 48 {
+                    u64::from_le_bytes(footer[40..48].try_into().unwrap()) as f64
+                } else {
+                    word(10) as f64
+                };
+                let dh = word(4) as u8;
+                let days = (word(3) & 0xFF) as u64 | ((dh as u64 & 1) << 8) | if dh & 0x80 != 0 { 512 } else { 0 };
+                let total = (word(0) % 60 + (word(1) % 60) * 60 + (word(2) % 24) * 3600) as u64 + days * 86400;
+                rtc.halted = dh & 0x40 != 0;
+                rtc.halted_elapsed = total as f64;
+                rtc.base_timestamp = (saved_at - total as f64) * 1000.0;
+                for (i, l) in rtc.latched.iter_mut().enumerate() { *l = word(5 + i) as u8; }
+            } else if data.len() >= ram_len + 17 {
                 let rtc_data = &data[ram_len..];
                 rtc.base_timestamp = f64::from_le_bytes(
                     rtc_data[0..8].try_into().unwrap_or([0; 8]),
@@ -738,5 +757,76 @@ mod tests {
         c.write_ram(0, 0x77);
         c.write_rom(0x4000, 0x00);
         assert_ne!(c.read_ram(0), 0x77);
+    }
+
+    /// Latches the MBC3 clock and reads $08-$0C.
+    fn read_clock(c: &mut Cartridge) -> [u8; 5] {
+        c.write_rom(0x0000, 0x0A);
+        c.write_rom(0x6000, 0x00);
+        c.write_rom(0x6000, 0x01);
+        core::array::from_fn(|i| { c.write_rom(0x4000, 0x08 + i as u8); c.read_ram(0) })
+    }
+
+    #[test]
+    fn rtc_reads_the_standard_sav_footer_44_and_48_bytes() {
+        let now = (now_ms() / 1000.0) as u64;
+        for long in [false, true] {
+            let mut c = cart(0x10, 0x03);
+            let mut sav = vec![0u8; 0x8000];
+            for v in [30u32, 45, 13, 5, 0, 1, 2, 3, 4, 0] { sav.extend_from_slice(&v.to_le_bytes()); }
+            if long { sav.extend_from_slice(&now.to_le_bytes()) } else { sav.extend_from_slice(&(now as u32).to_le_bytes()) }
+            c.import_sram(&sav);
+            let r = read_clock(&mut c);
+            assert_eq!((r[1], r[2], r[3], r[4]), (45, 13, 5, 0), "running, day 5 13:45");
+            assert!(r[0] >= 30 && r[0] < 33);
+            // A halted clock stays put.
+            sav[0x8000 + 16] = 0x40;
+            c.import_sram(&sav);
+            assert_eq!(read_clock(&mut c), [30, 45, 13, 5, 0x40]);
+        }
+    }
+
+    #[test]
+    fn rtc_sav_export_is_standard_and_round_trips() {
+        let mut c = cart(0x10, 0x03);
+        c.write_rom(0x0000, 0x0A);
+        for (reg, v) in [(0x0C, 0x40), (0x08, 7), (0x09, 8), (0x0A, 9), (0x0B, 10), (0x0C, 0x41)] {
+            c.write_rom(0x4000, reg);
+            c.write_ram(0, v);
+        }
+        let sav = c.export_sram();
+        assert_eq!(sav.len(), 0x8000 + 48);
+        let f = &sav[0x8000..];
+        assert_eq!(&f[..20], &[7, 0, 0, 0, 8, 0, 0, 0, 9, 0, 0, 0, 10, 0, 0, 0, 0x41, 0, 0, 0]);
+        let mut d = cart(0x10, 0x03);
+        d.import_sram(&sav);
+        assert_eq!(read_clock(&mut d), [7, 8, 9, 10, 0x41]);
+    }
+
+    #[test]
+    fn rtc_still_reads_the_legacy_cartouche_footer() {
+        let mut c = cart(0x10, 0x03);
+        let mut sav = vec![0u8; 0x8000];
+        sav.extend_from_slice(&1.7e12f64.to_le_bytes());
+        sav.push(1); // halted
+        sav.extend_from_slice(&(3.0 * 86400.0 + 62.0f64).to_le_bytes());
+        sav.extend_from_slice(&[0; 5]);
+        sav.extend_from_slice(&[0; 26]);
+        c.import_sram(&sav);
+        assert_eq!(read_clock(&mut c), [2, 1, 0, 3, 0x40]);
+    }
+
+    #[test]
+    fn mbc30_has_eight_distinct_ram_banks() {
+        let mut c = cart(0x10, 0x05);
+        c.write_rom(0x0000, 0x0A);
+        c.write_rom(0x4000, 0x00);
+        c.write_ram(0, 0x11);
+        c.write_rom(0x4000, 0x05);
+        c.write_ram(0, 0x55);
+        c.write_rom(0x4000, 0x00);
+        assert_eq!(c.read_ram(0), 0x11);
+        c.write_rom(0x4000, 0x05);
+        assert_eq!(c.read_ram(0), 0x55);
     }
 }
