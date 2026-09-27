@@ -531,7 +531,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
   .deck .dk .lbl,.deck .dk .k,.deck .hide-m,.deck .gap{display:none}
   .speed button{height:44px;min-width:38px}
   .touch{display:grid;grid-template-columns:1fr 1fr;align-items:center;padding:24px 20px 40px;gap:28px 12px;background:var(--band)}
-  .dpad{position:relative;width:150px;height:150px}
+  .dpad{position:relative;width:150px;height:150px;touch-action:none}
   .dpad button{position:absolute;border:0;background:var(--paper);width:52px;height:52px;display:flex;align-items:center;justify-content:center;color:#000;touch-action:none}
   .dpad button.down,.ab button.down{background:var(--y);color:#000}
   .dpad .u{left:49px;top:0}.dpad .d{left:49px;bottom:0}.dpad .l{left:0;top:49px}.dpad .r{right:0;top:49px}

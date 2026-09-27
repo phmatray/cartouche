@@ -445,42 +445,46 @@ function Player({ game }: { game: GameEntry }) {
   const noStore = disabled || storageError; // save slots and the album need IndexedDB
   // Each finger holds what's under it: a thumb rolls across the D-pad (diagonals on the way) or from B onto A.
   const held = useRef(new Map<number, string[]>());
-  const hold = (e: React.PointerEvent<HTMLButtonElement>, now: string[]) => {
+  const hold = (e: React.PointerEvent<HTMLElement>, now: string[]) => {
     const root = e.currentTarget.closest('.touch');
     const { press, release } = slide(held.current, e.pointerId, now);
     for (const b of release) { root?.querySelector(`[data-pad="${b}"]`)?.classList.remove('down'); releaseButton(BUTTON_NUMBERS[b]); }
     for (const b of press) { root?.querySelector(`[data-pad="${b}"]`)?.classList.add('down'); pressButton(BUTTON_NUMBERS[b]); }
     if (press.length && useSettingsStore.getState().haptics) navigator.vibrate?.(8);
   };
-  const letGo = (e: React.PointerEvent<HTMLButtonElement>) => hold(e, []);
-  const pad = (b: string) => ({
-    'data-pad': b,
-    onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
+  const letGo = (e: React.PointerEvent<HTMLElement>) => hold(e, []);
+  /** The D-pad directions under the pointer, or null off the pad: the whole box is one control (centre and corners too). */
+  const onDpad = (e: React.PointerEvent<HTMLElement>) => {
+    const r = e.currentTarget.closest('.touch')?.querySelector('.dpad')?.getBoundingClientRect();
+    if (!r || e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return null;
+    return dpadAt(e.clientX - (r.left + r.right) / 2, e.clientY - (r.top + r.bottom) / 2, r.width);
+  };
+  /** `b`: one button; 'dpad': the D-pad box, which reads the directions from where the thumb is. */
+  const handlers = (b: string) => ({
+    onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
       // An armed rumble tick (iPhone, see peripherals/rumble.ts) needs the tap to reach its switch: no preventDefault then.
-      const tick = !!e.currentTarget.querySelector('.rtick input:enabled');
+      const tick = e.target instanceof Element && !!e.target.closest('.rtick')?.querySelector('input:enabled');
       if (!tick) e.preventDefault();
       // Capture can throw (pointer already released or cancelled by the system): never lose the press over it.
       if (!tick) try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* keep going */ }
-      hold(e, [b]);
+      hold(e, b === 'dpad' ? onDpad(e) ?? [] : [b]);
     },
-    onPointerMove: (e: React.PointerEvent<HTMLButtonElement>) => {
-      if (!held.current.has(e.pointerId) || !e.currentTarget.hasPointerCapture(e.pointerId)) return;
-      const root = e.currentTarget.closest('.touch');
-      const dpad = root?.querySelector('.dpad')?.getBoundingClientRect();
-      if (dpad && e.clientX >= dpad.left && e.clientX <= dpad.right && e.clientY >= dpad.top && e.clientY <= dpad.bottom) {
-        hold(e, dpadAt(e.clientX - (dpad.left + dpad.right) / 2, e.clientY - (dpad.top + dpad.bottom) / 2, dpad.width));
-        return;
-      }
+    onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
+      if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+      const dirs = onDpad(e);
+      if (dirs) { hold(e, dirs); return; }
       // Over another button: that one. Over nothing: the thumb keeps what it holds (it overshoots the edges).
+      const root = e.currentTarget.closest('.touch');
       const other = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[data-pad]');
       if (other?.dataset.pad && root?.contains(other)) hold(e, [other.dataset.pad]);
     },
     onPointerUp: letGo,
     onPointerCancel: letGo,
     // Uncaptured (an armed rumble tick): sliding off the button lets it go.
-    onPointerLeave: (e: React.PointerEvent<HTMLButtonElement>) => { if (!e.currentTarget.hasPointerCapture(e.pointerId)) letGo(e); },
+    onPointerLeave: (e: React.PointerEvent<HTMLElement>) => { if (!e.currentTarget.hasPointerCapture(e.pointerId)) letGo(e); },
     onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
   });
+  const pad = (b: string) => (b === 'dpad' ? handlers(b) : { 'data-pad': b, ...handlers(b) });
 
   return (
     <div ref={rootRef} className={`pl${manual ? '' : ' closed'}${idle ? ' idle' : ''}${immersive ? ' imm' : ''}${bordered ? ' sgb' : ''}`} style={{ '--flood': ink } as CSSProperties}>
