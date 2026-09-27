@@ -63,6 +63,11 @@ function GameDetails({ game }: { game: GameEntry }) {
   }, [game.id, savedIds]);
   const profileName = (id?: string) => (profiles.length > 1 && id ? profiles.find((p) => p.id === id)?.name : undefined);
 
+  // New game: a power-on from the battery save, the resume point left alone until the new game writes over it.
+  const newGame = () => setConfirm({
+    title: t('player.restart.title'), ok: t('player.restart.ok'), body: t('player.restart.body'),
+    run: () => navigate(paths.play(game.id, '?new=1')),
+  });
   const remove = () => setConfirm(game.isLocal ? {
     title: t('game.remove.title'), danger: true, ok: t('game.remove.ok'),
     body: t('game.remove.body', { title: game.title }),
@@ -93,7 +98,10 @@ function GameDetails({ game }: { game: GameEntry }) {
               ) : unsupported ? (
                 <button className="btn lg play" disabled>{I.play}{t('game.unsupported')}</button>
               ) : (
-                <Link className="btn lg play" to={paths.play(game.id, auto ? '?resume=1' : '')}>{I.play}{auto ? t('library.hero.continue') : t('library.hero.play')}</Link>
+                <>
+                  <Link className="btn lg play" to={paths.play(game.id, auto ? '?resume=1' : '')}>{I.play}{auto ? t('library.hero.continue') : t('library.hero.play')}</Link>
+                  {auto && <button className="btn lg line" onClick={newGame}>{I.plus}{t('player.restart.label')}</button>}
+                </>
               )}
               {hosted && <Download game={game} />}
               <button className="btn lg line" aria-pressed={!!game.isFavorite} onClick={() => toggleFavorite(game.id)}>

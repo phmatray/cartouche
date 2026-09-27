@@ -19,6 +19,11 @@ test('no ?resume: the resume point when one exists (Save slots, Edit layout, a r
   assert.equal(bootFrom(q(''), false, true), null); // resume points switched off
 });
 
+test('New game powers on from the battery save, never over a resume point it was not asked for', () => {
+  assert.equal(bootFrom(q('?new=1'), true, true), null);
+  assert.equal(bootFrom(q('?new=1&tab=saves'), true, true), null);
+});
+
 test('the online link page keeps its own choice', () => {
   assert.equal(bootFrom(q('?online=abc&save=g'), true, true), null);
   assert.equal(bootFrom(q('?online=abc&save=g&resume=1'), true, true), 'auto');

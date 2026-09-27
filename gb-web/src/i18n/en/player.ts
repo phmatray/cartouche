@@ -32,10 +32,13 @@ export default {
     body: '{title} isn’t included. Load your own .gb file to play; it stays in this browser.',
   },
   restart: {
-    label: 'Restart the game',
-    title: 'Restart the game?',
-    body: 'The console is switched off and on again. The cartridge’s own save carries over; progress made since doesn’t, and the resume point is replaced when you leave.',
-    ok: 'Restart',
+    label: 'New game',
+    title: 'Start a new game?',
+    body: 'The game starts again from power-on. The cartridge’s own save carries over; progress made since doesn’t. The resume point will be replaced by the new game; your save slots don’t change.',
+    ok: 'New game',
+    done: 'New game: the cartridge’s own save carried over',
+    undo: 'Undo',
+    undone: 'Back to the game as it was',
   },
   overwrite: {
     title: 'Overwrite slot {n}?',
