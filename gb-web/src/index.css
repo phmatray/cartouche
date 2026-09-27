@@ -190,6 +190,7 @@ canvas.lcd,img.lcd{display:block;width:100%;height:auto;image-rendering:pixelate
 .noart{background:var(--paper);color:var(--ink);display:flex;flex-direction:column;justify-content:space-between;padding:14px}
 .noart b{font:900 30px/.9 var(--font);font-stretch:62%;text-transform:uppercase;overflow-wrap:break-word;hyphens:auto;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 .noart b[data-long]{font-size:22px}
+.noart b{hyphenate-limit-chars:8 3 3} /* no "POF-FIN", "SPI-DER" or "DUN-GEON": only words of 8+ letters break */
 .noart small{font:700 11px var(--font);text-transform:uppercase;letter-spacing:.06em;color:var(--ink-2)}
 .noart .bar{display:grid;grid-template-columns:repeat(3,1fr);height:8px;margin-top:8px}
 .bar i:nth-child(1){background:var(--c)}.bar i:nth-child(2){background:var(--m)}.bar i:nth-child(3){background:var(--y)}
