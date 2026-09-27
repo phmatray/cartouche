@@ -18,6 +18,11 @@ export default {
     body: 'Il est endommagé ou ce n’est pas une ROM Game Boy.',
     remove: 'Retirer de la bibliothèque',
   },
+  failed: {
+    title: 'Chargement impossible',
+    hosted: 'Téléchargez-le sur sa page pour y jouer hors ligne.',
+    retry: 'Réessayer',
+  },
   insert: {
     title: 'Insérez votre ROM',
     body: '{title} n’est pas inclus. Chargez votre propre fichier .gb pour jouer ; il reste dans ce navigateur.',

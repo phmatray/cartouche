@@ -12,8 +12,8 @@ import { useT } from '../../i18n';
 export function PresetPreview({ filters, color, frame }: { filters: Filters; color: boolean; frame: Uint8ClampedArray | null }) {
   // A fixed 4x backing size, not the shown size: at ~1 device pixel per Game Boy pixel the grid and
   // scanlines would fade out and every card would differ only by its colours.
-  const { canvasRef, canvasKey, renderFrame, canvas } = useLcdShader(filters, color, false);
-  useEffect(() => { if (frame) renderFrame(frame); }, [frame, renderFrame, filters, color, canvas]);
+  const { canvasRef, canvasKey, renderFrame, canvas, restores } = useLcdShader(filters, color, false);
+  useEffect(() => { if (frame) renderFrame(frame); }, [frame, renderFrame, filters, color, canvas, restores]);
   return <canvas key={canvasKey} ref={canvasRef} className="lcd" width={640} height={576} aria-hidden="true" />;
 }
 

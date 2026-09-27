@@ -108,7 +108,7 @@ function Player({ game }: { game: GameEntry }) {
   // and it has its own default screen settings (the core decides, from header byte 0x143 bit 7).
   const inColor = romLoaded && isCgb;
   const display = useDisplay(inColor ? 'cgb' : 'dmg', game.id);
-  const { canvasRef, canvasKey, renderFrame, setMotion, drawMotion, usesTrace } = useLcdShader(display.cfg.filters, inColor);
+  const { canvasRef, canvasKey, renderFrame, setMotion, drawMotion, usesTrace, restores } = useLcdShader(display.cfg.filters, inColor);
   const { ensureStarted, feedSamples, muted, toggleMute } = useAudio(isRunning);
   const saveTo = useRef<string | null>(null); // the save profile played solo (the game's active one)
 
@@ -171,6 +171,11 @@ function Player({ game }: { game: GameEntry }) {
     if (fb) { renderFrame(new Uint8ClampedArray(fb.buffer, fb.byteOffset, fb.length), true); setLit(true); }
     return true;
   }, [loadState, framebufferSnapshot, renderFrame, stateConsole, consoleNow, powerOn, paletteNow, syncBorder]);
+  // A WebGL context given back after a loss (iOS, backgrounded app) starts blank: redraw the frame, even paused.
+  useEffect(() => {
+    const fb = restores && framebufferSnapshot();
+    if (fb) renderFrame(new Uint8ClampedArray(fb.buffer, fb.byteOffset, fb.length), true);
+  }, [restores, framebufferSnapshot, renderFrame]);
   const saves = useSaveStates(game.id, { ...emu, loadState: loadAndShow }, saveTo);
   // Rewinding stops quietly at a restart onto another console.
   const rewindLoad = useCallback((data: Uint8Array, frame?: Uint8ClampedArray) => stateConsole(data) === consoleNow() && loadAndShow(data, frame), [stateConsole, consoleNow, loadAndShow]);
@@ -263,12 +268,17 @@ function Player({ game }: { game: GameEntry }) {
     setIsRunning(q.get('edit') !== 'controls');
   }, [powerOn, hasBatteryRam, importSram, game.id, q, setQ, saves, setIsRunning, consoleNow, skipBoot, saveWriter]);
 
+  // A ROM that can't be fetched (a hosted game streamed while offline, say) keeps its reason on the screen, with a retry.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const start = useCallback(() => {
+    fetchRom(game).then(boot).catch((e) => setLoadError(e instanceof Error ? e.message : String(e)));
+  }, [game, boot]);
   const booted = useRef(false);
   useEffect(() => {
     if (!isReady || booted.current || !owned(game)) return;
     booted.current = true;
-    fetchRom(game).then(boot).catch((e) => toast(tNow('player.toast.loadFailed', { error: e instanceof Error ? e.message : String(e) }), 'm'));
-  }, [isReady, game, boot]);
+    start();
+  }, [isReady, game, start]);
 
   // ---- frame loop: real-time paced (60 Hz or 120 Hz screens alike), speed ½–4× ----
   const pace = useRef({ last: 0, acc: 0 });
@@ -525,6 +535,12 @@ function Player({ game }: { game: GameEntry }) {
                     {game.isLocal && <button className="btn y" onClick={async () => { await deleteGame(game.id); toast(tNow('game.removed', { title: game.title }), 'm'); navigate('/'); }}>{t('player.bad.remove')}</button>}
                     <Link className="btn line" to={paths.game(game.id)}>{t('common.back')}</Link>
                   </div>
+                </div>
+              ) : loadError ? (
+                <div className="overlay slim" role="alert">
+                  <b>{t('player.failed.title')}</b>
+                  <p>{loadError.charAt(0).toLocaleUpperCase() + loadError.slice(1)}.{game.madeWith && !game.isLocal && <> {t('player.failed.hosted')}</>}</p>
+                  <button className="btn y" onClick={() => { setLoadError(null); start(); }}>{t('player.failed.retry')}</button>
                 </div>
               ) : needsRom ? (
                 <div className="overlay">
