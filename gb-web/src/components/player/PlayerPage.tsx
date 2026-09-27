@@ -31,6 +31,7 @@ import { useAlbum, useLinkRom, useRomHeader } from '../../hooks/useGameExtras';
 import { Manual, type Tab } from './Manual';
 import { TouchControls } from './TouchControls';
 import { fileAccept } from '../../lib/pwa';
+import { holdGame } from '../../lib/play-lock';
 import { t as tNow, useT } from '../../i18n';
 import { usePeripherals } from '../../peripherals/usePeripherals';
 
@@ -186,6 +187,8 @@ function Player({ game }: { game: GameEntry }) {
     return () => ro.disconnect();
   }, []);
   useEffect(() => { document.title = t('common.docTitle', { page: game.title }); }, [game.title, t]);
+  // Sync in another tab leaves this game's saves alone while it's open (lib/play-lock).
+  useEffect(() => holdGame(game.id), [game.id]);
   // Settings › Audio › Channels (applied again after each power-on: a restart builds a new console).
   const { setChannelMuted } = emu;
   useEffect(() => {

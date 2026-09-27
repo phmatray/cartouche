@@ -87,7 +87,10 @@ export const useSync = create<SyncState>()(persist((): SyncState => ({
   partialize: ({ me, devices, auto, roms }) => ({ me, devices, auto, roms }),
 }));
 
-export const IDLE: LinkState = { phase: 'offline', got: 0, want: 0, sent: 0, give: 0 };
+// Another tab paired, unpaired, synced or changed a choice: take its devices and choices (one tab runs the links, engine.ts).
+if (typeof window !== 'undefined') window.addEventListener('storage', (e) => { if (e.key === 'cartouche.sync') void useSync.persist.rehydrate(); });
+
+export const IDLE: LinkState ={ phase: 'offline', got: 0, want: 0, sent: 0, give: 0 };
 export const linkOf = (id: string) => useSync.getState().links[id] ?? IDLE;
 export function setLink(id: string, patch: Partial<LinkState>) {
   useSync.setState((s) => ({ links: { ...s.links, [id]: { ...(s.links[id] ?? IDLE), ...patch } } }));

@@ -14,10 +14,11 @@ import { joinRoom, type DataPayload, type P2PRoom } from '../p2p/room';
 import { codeToSecret, concat, deriveKeys, open, prove, randomBytes, rekey, seal, secretToCode, verify, type Keys, type Msg } from './crypto';
 import { agreed, gameOfKey, plan, total, type Conflict, type Games, type Manifest, type Plan, type Pull } from './manifest';
 import { addPart, currentHash, dropParts, loadRecord, localGames, moveAside, partKey, partsOf, readLocal, rememberAlias, storeRecord, writeSmall, type Snapshot } from './local';
-import { linkOf, setDevice, setLink, useSync, type Device, type Note, type SyncReport } from './status';
+import { IDLE, linkOf, setDevice, setLink, useSync, type Device, type LinkState, type Note, type SyncReport } from './status';
 import { refreshSavedIds, reloadLibrary } from '../../hooks/useGameLibrary';
 import { toast } from '../../components/shell/actions';
 import { t } from '../../i18n';
+import { inUse } from '../play-lock';
 
 const APP = 'cartouche-sync-v1';
 const CHUNK = 192 * 1024;
@@ -32,8 +33,15 @@ const str = (x: unknown) => (typeof x === 'string' ? x : '');
 const running = () => { const m = /\/game\/([^/]+)\/play/.exec(location.pathname); return m ? decodeURIComponent(m[1]) : null; };
 /** On the link cable pages (same screen or online), any game may be running: no save is touched there. */
 const onLinkCable = () => /\/link-cable(\/|$)/.test(location.pathname);
-/** A save or state the running emulator would write over (checked when planning, and again when it lands). */
-const inPlay = (k: string, games: Games) => /^(sram|state):/.test(k) && (onLinkCable() || (!!running() && gameOfKey(k) === games.key(running()!)));
+interface Busy { games: string[]; link: boolean }
+/** What runs in this tab or any other of this browser (lib/play-lock). */
+async function busyNow(): Promise<Busy> {
+  const all = await inUse();
+  const here = running();
+  return { games: here ? [here, ...all.games] : all.games, link: all.link || onLinkCable() };
+}
+/** A save or state a running emulator would write over (checked when planning, and again when it lands). */
+const inPlay = (k: string, games: Games, busy: Busy) => /^(sram|state):/.test(k) && (busy.link || busy.games.some((id) => gameOfKey(k) === games.key(id)));
 /** A round that ended with items missing is tried again this soon (a few times), auto-sync or not. */
 const RETRY_MS = 15_000;
 /** Alone this long with the room open: rejoin it. */
@@ -261,10 +269,12 @@ class Link {
     const p = plan(mine, theirs, dev.base ?? {});
     // A game being played keeps its saves as they are: the running emulator would write over them.
     const games = round.snap.games;
-    const keep = (k: string) => !inPlay(k, games);
-    if (p.pull.some((x) => !keep(x.k)) || p.moves.some((x) => !keep(x.from))) {
-      const playing = running();
-      round.notes.push(onLinkCable() || !playing ? { key: 'linkBusy' } : { game: playing, key: 'running' });
+    const busy = await busyNow();
+    const keep = (k: string) => !inPlay(k, games, busy);
+    const blocked = [...p.pull.map((x) => x.k), ...p.moves.map((x) => x.from)].filter((k) => !keep(k));
+    if (blocked.length) {
+      const playing = busy.link ? undefined : busy.games.find((id) => blocked.some((k) => gameOfKey(k) === games.key(id)));
+      round.notes.push(playing ? { game: playing, key: 'running' } : { key: 'linkBusy' });
     }
     p.pull = p.pull.filter((x) => keep(x.k));
     p.moves = p.moves.filter((x) => keep(x.from));
@@ -330,7 +340,7 @@ class Link {
     // Only over what the plan saw: a save written here since (the game played meanwhile) is never overwritten.
     // The pull fails instead and the base stays put, so the next sync sees both sides changed and keeps both.
     const g = await localGames();
-    const still = !/^(sram|state):/.test(p.dest) || (!inPlay(p.dest, g) && (await currentHash(p.dest, g)) === this.planned(round, p.dest));
+    const still = !/^(sram|state):/.test(p.dest) || (!inPlay(p.dest, g, await busyNow()) &&(await currentHash(p.dest, g)) === this.planned(round, p.dest));
     const ok = still && await storeRecord(p.k, p.dest, p.from, concat(p.got), async () => g, conflict ? { from: conflict.olderFrom, at: conflict.olderAt } : undefined).catch(() => false);
     await dropParts(p.prefix);
     if (ok) { round.got++; round.changed = true; } else round.failed.push(p.k);
@@ -390,15 +400,54 @@ let unsub: (() => void) | null = null;
 
 const wanted = () => holds > 0 || useSync.getState().auto;
 
+/*
+ * One tab per browser runs the links: every tab has the same device id, and the other device only talks to the last
+ * one that proved itself (a second tab's round would wait forever). The others wait for the lock, show what the one
+ * running does (its link states, over a BroadcastChannel) and hand it their "Sync now" and unpairing.
+ * No Web Locks (old browsers): every tab runs its own, as before.
+ */
+const ENGINE = 'cartouche-sync-engine';
+let owner = !navigator.locks;
+let waiting: AbortController | null = null;
+let letGo: (() => void) | null = null;
+type Relay = { links?: Record<string, LinkState>; ask?: true; now?: string; unpair?: string };
+const relay = typeof BroadcastChannel === 'function' ? new BroadcastChannel(ENGINE) : null;
+const post = (m: Relay) => relay?.postMessage(m);
+const leading = () => owner && !!letGo;
+if (relay) relay.onmessage = ({ data: m }: MessageEvent<Relay>) => {
+  if (waiting && m.links) useSync.setState({ links: m.links });
+  if (!leading()) return;
+  if (m.ask) post({ links: useSync.getState().links });
+  if (m.now) syncNow(m.now);
+  if (m.unpair) removeDevice(m.unpair);
+};
+
+function lockEngine(on: boolean) {
+  if (on && !owner && !waiting) {
+    const w = waiting = new AbortController();
+    navigator.locks.request(ENGINE, { signal: w.signal }, () => {
+      if (waiting !== w) return; // no longer wanted
+      waiting = null;
+      owner = true;
+      return new Promise<void>((r) => { letGo = r; reconcile(); });
+    }).catch(() => {});
+    post({ ask: true });
+  }
+  if (!on && waiting) { waiting.abort(); waiting = null; }
+  if (!on && letGo) { letGo(); letGo = null; owner = false; }
+}
+
 function reconcile() {
   const { devices } = useSync.getState();
-  const on = wanted();
+  lockEngine(wanted());
+  const on = wanted() && owner;
   for (const [id, l] of links) if (!on || !devices.some((d) => d.id === id)) { l.close(); links.delete(id); setLink(id, { phase: 'offline' }); }
   if (!on) return;
   for (const d of devices) {
     if (links.has(d.id)) continue;
     const l = new Link(new Uint8Array(0), d.id);
     links.set(d.id, l);
+    setLink(d.id, IDLE); // what another tab showed until now
     codeToSecret(d.code).then((s) => { if (!s || l.closed) return; l.secret = s; return l.start(); }).catch((e) => { console.warn('sync:', e); setLink(d.id, { phase: 'error', error: 'failed' }); });
   }
 }
@@ -407,7 +456,10 @@ function ensure() {
   if (unsub) return;
   let last = useSync.getState();
   unsub = useSync.subscribe((s) => {
-    if (s.devices !== last.devices || s.auto !== last.auto) { last = s; reconcile(); }
+    const prev = last;
+    last = s;
+    if (s.links !== prev.links && leading()) post({ links: s.links });
+    if (s.devices !== prev.devices || s.auto !== prev.auto) reconcile();
   });
 }
 
@@ -423,6 +475,11 @@ export function startAuto() { ensure(); reconcile(); }
 
 /** false: the other device isn't here (its app closed, or not on this page with auto-sync off). */
 export function syncNow(id: string): boolean {
+  if (waiting) { // another tab runs the links
+    if (!['online', 'done', 'interrupted'].includes(linkOf(id).phase)) return false;
+    post({ now: id });
+    return true;
+  }
   const l = links.get(id);
   if (!l?.active) return false;
   l.begin();
@@ -433,6 +490,7 @@ export function syncNow(id: string): boolean {
 export const forgetTransfers = () => dropParts('');
 
 export function removeDevice(id: string, tell = true) {
+  if (waiting && tell) { post({ unpair: id }); return; } // the tab running the links tells the other device and forgets it
   const l = links.get(id);
   const done = () => { l?.close(); links.delete(id); dropParts(`${id}|`); useSync.setState((s) => ({ devices: s.devices.filter((d) => d.id !== id) })); setLink(id, { phase: 'offline' }); };
   if (tell && l?.active) l.send({ t: 'unpair' }).finally(() => setTimeout(done, 300)); else done();
