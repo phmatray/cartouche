@@ -202,6 +202,7 @@ function GameDetails({ game }: { game: GameEntry }) {
               <Saves game={game} header={header} setConfirm={setConfirm} />
               <section>
                 <h3>{t('library.hero.slots')}</h3>
+                <p className="note" style={{ margin: '0 0 6px' }}>{t('game.slots.note')}</p>
                 <ul className="minislots">
                   {auto && (
                     <li>
@@ -335,7 +336,7 @@ function Saves({ game, header, setConfirm }: { game: GameEntry; header: RomMetad
 
   return (
     <section aria-labelledby="h-saves">
-      <h3 id="h-saves">{t('game.saves.title')}</h3>
+      <h3 id="h-saves">{t('game.saves.heading')}</h3>
       {list && !list.length && <p className="note" style={{ margin: '0 0 14px' }}>{t('game.saves.none')}</p>}
       <ul className="profiles">
         {list?.map((p) => (

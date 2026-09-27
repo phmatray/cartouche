@@ -66,6 +66,7 @@ export default {
   resume: 'Resume',
   slot: 'Slot {n}',
   slots: {
+    note: 'The resume point is written every time you leave the game. A slot keeps the moment you choose, from the Manual’s Saves page.',
     deleteOf: 'Delete slot {n}',
     deleteTitle: 'Delete slot {n}?',
     deleteBody: 'The save made {ago} in slot {n} is deleted from this browser. The cartridge’s own save and the other slots don’t change. This can’t be undone.',
@@ -93,6 +94,7 @@ export default {
   },
   saves: {
     title: 'Saves',
+    heading: 'Cartridge saves',
     none: 'No battery save yet. One appears here once you play; add more for other players, or import a .sav file.',
     renamedTo: 'Another save is named “{name}”: renamed to “{unique}”',
     copyName: '{name} (copy)',

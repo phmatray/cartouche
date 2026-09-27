@@ -160,7 +160,7 @@ function SavesPage({ header, states, romLoaded, onSave, onLoad, online, onStartO
   return (
     <>
       <h2>{t('player.tabs.saves')}</h2>
-      <p>{battery ? `${t('player.saves.battery')} ` : ''}{t('player.saves.resume')}</p>
+      <p>{battery ? `${t('player.saves.battery')} ` : ''}{t('player.saves.resume')} {t('player.saves.slots')}</p>
       <ul className="slots">
         <li>
           <span className="n auto">{t('game.auto')}</span>

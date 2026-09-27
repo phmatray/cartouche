@@ -67,6 +67,7 @@ export default {
   resume: 'Reprendre',
   slot: 'Emplacement {n}',
   slots: {
+    note: 'Le point de reprise s’enregistre chaque fois que vous quittez le jeu. Un emplacement garde l’instant que vous choisissez, depuis la page Parties du Manuel.',
     deleteOf: 'Supprimer l’emplacement {n}',
     deleteTitle: 'Supprimer l’emplacement {n} ?',
     deleteBody: 'La sauvegarde faite {ago} dans l’emplacement {n} est supprimée de ce navigateur. La sauvegarde de la cartouche et les autres emplacements ne changent pas. Action irréversible.',
@@ -94,6 +95,7 @@ export default {
   },
   saves: {
     title: 'Sauvegardes',
+    heading: 'Sauvegardes de cartouche',
     none: 'Pas encore de sauvegarde de cartouche. Elle apparaît ici dès la première partie ; d’autres peuvent être ajoutées pour d’autres joueurs, ou importées depuis un fichier .sav.',
     renamedTo: 'Une autre sauvegarde s’appelle déjà « {name} » : renommée en « {unique} »',
     copyName: '{name} (copie)',
