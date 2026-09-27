@@ -137,6 +137,7 @@ export function valueLabel(key: Key, value: string, labels?: Map<string, string>
     const [a, b] = value.split('..');
     return b === undefined ? value : !a ? t('search.year.upTo', { y: b }) : !b ? t('search.year.from', { y: a }) : `${a}–${b}`;
   }
+  if (key === 'decade') return t('search.decade', { y: value.slice(0, -1) });
   if (key === 'players') return value === '2+' ? t('search.players.link') : t('search.players.n', { count: Number(value) });
   if (key === 'language') return langName(value);
   if (key === 'genre') return tOr(`search.genre.${value}`, labels?.get(`genre\0${value}`) ?? value.replace(/\b\w/g, (c) => c.toUpperCase()));

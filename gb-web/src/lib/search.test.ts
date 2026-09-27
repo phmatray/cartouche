@@ -128,7 +128,9 @@ test('a genre typed as the cards show it in French finds its games and suggests 
   try {
     assert.deepEqual(titles('reflexion'), ['Tile Tumble']); // 'Puzzle' reads 'Réflexion'
     assert.ok(suggest(index, parseQuery('réflexion'), 'réflexion').some((s) => s.insert === 'genre:puzzle '));
+    assert.equal(valueLabel('decade', '1990s'), 'années 1990');
   } finally { setLang('en'); }
+  assert.equal(valueLabel('decade', '1990s'), '1990s');
   assert.deepEqual(titles('puzzle'), ['Tile Tumble']);
 });
 
