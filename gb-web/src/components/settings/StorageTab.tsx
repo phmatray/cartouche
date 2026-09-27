@@ -10,6 +10,7 @@ import { mb, owned } from '../../lib/ui';
 import { isInstalled, isIos, fileAccept } from '../../lib/pwa';
 import type { GameEntry } from '../../types/game';
 import { Row, SwitchRow } from './parts';
+import { engine, useSync } from '../../lib/sync/status';
 import { PerGame, type GameUsage } from './PerGame';
 import { date, num, t as tNow, useT } from '../../i18n';
 
@@ -166,10 +167,20 @@ export function StorageTab() {
     title: t('settings.storage.wipeTitle'), danger: true, ok: t('settings.storage.wipe'),
     body: t('settings.storage.wipeBody'),
     run: async () => {
+      // Unpair first (a paired device online is told): a wiped browser must never sync its reset values over the other one.
+      const sync = await engine().catch(() => null);
+      if (sync) {
+        for (const d of useSync.getState().devices) sync.removeDevice(d.id);
+        await sync.forgetTransfers().catch(() => {});
+        await new Promise((r) => setTimeout(r, 500)); // the unpair messages go out
+      }
+      useSync.setState({ devices: [], auto: false, roms: false });
       await clearAll();
       useSettingsStore.getState().resetToDefaults();
       // Box art too (the offline app shell stays: it holds no personal data).
       await deleteBoxArt();
+      // What else this browser keeps: the pairing and its sync memory, the RetroAchievements key, the TURN server, link choices.
+      try { for (const k of Object.keys(localStorage)) if (/^cartouche(\.sync|\.p2p|\.netlink|-ra)/.test(k)) localStorage.removeItem(k); } catch { /* storage blocked */ }
       location.assign(import.meta.env.BASE_URL); // start over from a clean load
     },
   });
