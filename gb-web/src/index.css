@@ -942,7 +942,7 @@ body{font-family:var(--font)}
 .legal p{font:500 16px/1.6 var(--font);color:var(--ink-2);margin:0 0 12px;white-space:pre-line;overflow-wrap:anywhere}
 .legal ul{font:500 16px/1.6 var(--font);color:var(--ink-2);margin:0 0 12px;padding-left:20px;overflow-wrap:anywhere}
 .legal a,.credit a{color:var(--ink)}
-.legal a{text-decoration:underline;text-underline-offset:3px}
+.legal a,.intro a,.credit a{text-decoration:underline;text-underline-offset:3px}
 .credit{font:500 15px/1.55 var(--font);color:var(--ink-2);margin:0;max-width:62ch;overflow-wrap:anywhere}
 .loading{padding:120px 0;font:600 15px var(--font);color:var(--mute)}
 /* "Show box art?" (first launch) */
