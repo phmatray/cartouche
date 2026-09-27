@@ -34,6 +34,7 @@ export default {
   suggestions: 'Sugerencias',
   filters: 'Filtros',
   active: 'Filtros activos',
+  facetActive: { one: '{facet}, {count} filtro activo', other: '{facet}, {count} filtros activos' },
   remove: 'Quitar {label}',
   clear: 'Borrar filtros',
   hint: {
