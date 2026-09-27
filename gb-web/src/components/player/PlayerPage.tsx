@@ -221,6 +221,18 @@ function Player({ game }: { game: GameEntry }) {
     const t = setInterval(() => leaveRef.current(), 30_000);
     return () => clearInterval(t);
   }, [isRunning]);
+  // The screen stays awake while a game runs. The browser drops the lock when the page is hidden: taken again on return.
+  useEffect(() => {
+    if (!isRunning || !('wakeLock' in navigator)) return;
+    let lock: WakeLockSentinel | undefined, gone = false;
+    const take = () => {
+      if (document.visibilityState !== 'visible' || (lock && !lock.released)) return;
+      navigator.wakeLock.request('screen').then((l) => { if (gone) l.release(); else lock = l; }).catch(() => {});
+    };
+    take();
+    document.addEventListener('visibilitychange', take);
+    return () => { gone = true; document.removeEventListener('visibilitychange', take); lock?.release().catch(() => {}); };
+  }, [isRunning]);
   useEffect(() => {
     const onHide = () => { if (document.visibilityState === 'hidden') leaveRef.current(); };
     const onPageHide = () => leaveRef.current();
