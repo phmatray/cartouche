@@ -19,12 +19,20 @@ import { CHECK_MS, sramIO } from '../hooks/useSaveData';
 import { rich, t as tNow, useT } from '../i18n';
 
 // Fixed two-player keys: player 1 on the right of the keyboard, player 2 on the left.
+// Keyed by physical key (KeyboardEvent.code), so the clusters sit in the same place on AZERTY, QWERTZ...
 // Values are the core's button numbers (A 0, B 1, Select 2, Start 3, Right 4, Left 5, Up 6, Down 7).
 const KEYS: Record<LinkPlayer, Record<string, number>> = {
-  1: { ArrowUp: 6, ArrowDown: 7, ArrowLeft: 5, ArrowRight: 4, z: 0, x: 1, Enter: 3, Shift: 2 },
-  2: { w: 6, s: 7, a: 5, d: 4, n: 0, m: 1, t: 3, y: 2 },
+  1: { ArrowUp: 6, ArrowDown: 7, ArrowLeft: 5, ArrowRight: 4, KeyZ: 0, KeyX: 1, Enter: 3, NumpadEnter: 3, ShiftLeft: 2, ShiftRight: 2 },
+  2: { KeyW: 6, KeyS: 7, KeyA: 5, KeyD: 4, KeyN: 0, KeyM: 1, KeyT: 3, KeyY: 2 },
 };
-const LEGEND: Record<LinkPlayer, string> = { 1: '{arrows} · Z · X · Enter · Shift', 2: 'W A S D · N · M · T · Y' };
+// The legend's physical keys, groups joined by " · "; letters are shown as this keyboard prints them.
+const LEGEND: Record<LinkPlayer, string[][]> = {
+  1: [['{arrows}'], ['KeyZ'], ['KeyX'], ['Enter'], ['Shift']],
+  2: [['KeyW', 'KeyA', 'KeyS', 'KeyD'], ['KeyN'], ['KeyM'], ['KeyT'], ['KeyY']],
+};
+type LayoutMap = { get(code: string): string | undefined };
+const keyName = (code: string, layout: LayoutMap | null) =>
+  code.startsWith('Key') ? (layout?.get(code) ?? code.slice(3)).toUpperCase() : code;
 const FILE = '__file';
 
 /**
@@ -229,9 +237,8 @@ export function LinkCablePage() {
     const held: Record<LinkPlayer, number> = { 1: 0, 2: 0 };
     const on = (down: boolean) => (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || document.querySelector('dialog[open]')) return;
-      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       for (const p of [1, 2] as LinkPlayer[]) {
-        const b = KEYS[p][key];
+        const b = KEYS[p][e.code];
         if (b === undefined) continue;
         e.preventDefault();
         const next = down ? held[p] | (1 << b) : held[p] & ~(1 << b);
@@ -243,6 +250,12 @@ export function LinkCablePage() {
     window.addEventListener('keyup', up);
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); setInput(1, 0); setInput(2, 0); };
   }, [state.isRunning, setInput]);
+
+  // The letters this keyboard prints on the fixed keys (Chromium only; elsewhere the QWERTY letters).
+  const [layout, setLayout] = useState<LayoutMap | null>(null);
+  useEffect(() => {
+    (navigator as Navigator & { keyboard?: { getLayoutMap?: () => Promise<LayoutMap> } }).keyboard?.getLayoutMap?.().then(setLayout, () => {});
+  }, []);
 
   const ready = state.p1Ready && state.p2Ready;
   /** The cartridge in a player's slot: box, title, platform, link support, and the "Change" button. */
@@ -313,7 +326,7 @@ export function LinkCablePage() {
     return (
       <section className="player" aria-labelledby={`h-p${p}`}>
         <h2 id={`h-p${p}`}><i style={{ background: p === 1 ? 'var(--c)' : 'var(--m)' }} />{t('link.player', { p: String(p) })}</h2>
-        <div className="ctl">{LEGEND[p].replace('{arrows}', t('link.arrows'))}</div>
+        <div className="ctl">{LEGEND[p].map((g) => g.map((c) => (c === '{arrows}' ? t('link.arrows') : keyName(c, layout))).join(' ')).join(' · ')}</div>
         <div className="frame">
           <canvas ref={p === 1 ? link.p1CanvasRef : link.p2CanvasRef} className="lcd" width={160} height={144} aria-label={t('link.screen', { p: String(p) })} />
         </div>
