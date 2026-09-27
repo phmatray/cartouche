@@ -194,7 +194,13 @@ export function LinkCablePage() {
     const onHide = () => { if (document.visibilityState === 'hidden') leave(); };
     document.addEventListener('visibilitychange', onHide);
     window.addEventListener('pagehide', leave);
-    return () => { window.clearInterval(t); document.removeEventListener('visibilitychange', onHide); window.removeEventListener('pagehide', leave); };
+    window.addEventListener('beforeunload', leave); // WebKit drops a write issued in pagehide during a reload or close
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('pagehide', leave);
+      window.removeEventListener('beforeunload', leave);
+    };
   }, [state.isRunning, autoSave, autoSeconds, flush, flushNow]);
 
   // Both players' keys, only while the cable is connected.
