@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { held, reader, type PadKey } from '../lib/pad';
+import { adjust, held, reader, type PadKey } from '../lib/pad';
 import { spatialNext } from '../lib/ui';
 
 /**
@@ -17,6 +17,7 @@ function act(k: PadKey) {
   if (padNav.game) return;
   const dlg = document.querySelector<HTMLDialogElement>('dialog[open]');
   const cur = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+  if (adjust(cur, k)) return; // a slider or dropdown takes left/right (and A)
   if (k === 'a') { cur?.click(); return; }
   if (k === 'b') {
     // As Escape does: a dialog closes (unless it handles its own cancel), else back one page.
@@ -31,7 +32,7 @@ function act(k: PadKey) {
   next.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 
-/** A gamepad in the menus (TV use): D-pad or left stick moves the focus on screen, A presses, B goes back. */
+/** A gamepad in the menus (TV use): D-pad or left stick moves the focus on screen (left/right change a slider or dropdown), A presses, B goes back. */
 export function useGamepadNav() {
   useEffect(() => {
     if (!navigator.getGamepads) return;
