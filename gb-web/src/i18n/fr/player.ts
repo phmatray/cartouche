@@ -32,6 +32,7 @@ export default {
     loadedSlot: 'Emplacement {n} chargé',
     loadedResume: 'Point de reprise chargé',
     gone: 'Cette sauvegarde n’existe plus. Nouvelle partie.',
+    saveNewer: 'Votre sauvegarde est plus récente que le point de reprise. La partie repart de votre sauvegarde.',
     madeOnDmg: 'Cette sauvegarde a été faite sur Game Boy. Choisissez la console Game Boy pour la charger.',
     madeOnGbc: 'Cette sauvegarde a été faite sur Game Boy Color. Choisissez la console Game Boy Color pour la charger.',
     madeOnSgb: 'Cette sauvegarde a été faite sur Super Game Boy. Activez les cadres et couleurs Super Game Boy dans la page Écran pour la charger.',

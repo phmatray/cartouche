@@ -31,6 +31,7 @@ export default {
     loadedSlot: 'Loaded slot {n}',
     loadedResume: 'Loaded the resume point',
     gone: 'That save is gone. Starting fresh.',
+    saveNewer: 'Your save is newer than the resume point. Starting from your save.',
     madeOnDmg: 'That save was made on the Game Boy. Set Console to Game Boy to load it.',
     madeOnGbc: 'That save was made on the Game Boy Color. Set Console to Game Boy Color to load it.',
     madeOnSgb: 'That save was made on the Super Game Boy. Turn on Super Game Boy borders and colors on the Screen page to load it.',

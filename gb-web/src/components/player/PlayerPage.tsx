@@ -235,11 +235,13 @@ function Player({ game }: { game: GameEntry }) {
     if (from !== null) {
       const before = consoleNow();
       switchOk.current = true;
-      const ok = await saves.load(from);
+      const r = await saves.load(from, true);
+      const ok = r === true;
       switchOk.current = false;
       if (!ok && !s.startupAnimation) skipBoot();
       const moved = ok && consoleNow() !== before;
       if (moved) toast(tNow(`player.toast.resumedOn${ON[consoleNow()] ?? 'Dmg'}`), 'm');
+      else if (r === 'older') toast(tNow('player.toast.saveNewer'), 'm');
       else if (!refused.current) toast(ok ? (from === 'auto' ? tNow('player.toast.resumed') : tNow('player.toast.loadedSlot', { n: String(+from + 1) })) : tNow('player.toast.gone'), ok ? 'c' : 'm');
     }
     setIsRunning(q.get('edit') !== 'controls');
