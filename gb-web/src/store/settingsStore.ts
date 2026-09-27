@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Lang } from '../i18n/core';
 import type { Layout, Shell, Skin } from '../lib/touch-layout';
+import type { Startup } from '../lib/settings-clean';
 import { DEFAULT_DISPLAY, normalizeDisplay, presetOf, sameFilters, type DisplayConfig, type Filters, type PresetName, type ScreenKind } from '../shaders/filters';
 
 export type GameBoyButton = 'A' | 'B' | 'Select' | 'Start' | 'Right' | 'Left' | 'Up' | 'Down';
@@ -71,8 +72,8 @@ export interface SettingsState {
   rewindBufferSeconds: number;
   autoSaveEnabled: boolean;
   autoSaveIntervalSeconds: number;
-  /** Play the boot ROM’s start-up logo and chime when a game starts fresh (Start skips it). */
-  startupAnimation: boolean;
+  /** The start-up animation and chime played when a game starts fresh (Start skips it), or 'off'. */
+  startupAnimation: Startup;
   /** The console original Game Boy games run on, and a game’s own choice (by game id). */
   console: ConsoleChoice;
   gameConsole: Record<string, ConsoleChoice>;
@@ -134,6 +135,10 @@ const DEFAULT_KEYBINDINGS: Record<GameBoyButton, string> = {
   Select: 'Shift',
 };
 
+/** The start-up animation a new (or migrated) player gets: none for anyone who asked for reduced motion. */
+const startupDefault = (): Startup =>
+  typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'off' : 'registration';
+
 const DEFAULT_STATE = {
   keybindings: DEFAULT_KEYBINDINGS,
   display: DEFAULT_DISPLAY,
@@ -147,7 +152,7 @@ const DEFAULT_STATE = {
   rewindBufferSeconds: 10,
   autoSaveEnabled: true,
   autoSaveIntervalSeconds: 60,
-  startupAnimation: false,
+  startupAnimation: startupDefault(),
   console: 'dmg' as ConsoleChoice,
   gameConsole: {} as Record<string, ConsoleChoice>,
   gameSgb: {} as Record<string, boolean>,
@@ -213,7 +218,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'gb-settings',
-      version: 4,
+      version: 5,
       migrate: (state, version) => {
         let s = state as SettingsValues;
         // v2: box art became opt-in; an earlier default of "on" was never the player's choice.
@@ -225,6 +230,9 @@ export const useSettingsStore = create<SettingsState>()(
           const { shaderPreset, pixelGrid, ...rest } = s as SettingsValues & { shaderPreset?: string; pixelGrid?: boolean };
           s = { ...rest, display: displayFromV3(shaderPreset, pixelGrid), gameDisplay: {} };
         }
+        // v5: Cartouche's own start-up animations replace the console logo that kept it off by default: on for everyone
+        // (but those who asked for reduced motion).
+        if (version < 5) s = { ...s, startupAnimation: startupDefault() };
         return s;
       },
       partialize: (state) => Object.fromEntries(SETTINGS_KEYS.map((k) => [k, state[k]])) as SettingsValues,

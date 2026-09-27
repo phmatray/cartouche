@@ -8,6 +8,13 @@ const pick = <T,>(v: Obj, ok: (x: unknown) => x is T) => Object.fromEntries(Obje
 const isStr = (x: unknown): x is string => typeof x === 'string' && x.length > 0;
 const isBool = (x: unknown): x is boolean => typeof x === 'boolean';
 
+/** The start-up animations, in the core's order (the index is its `animation` argument, 0 none). */
+export const STARTUP = ['off', 'registration', 'insert', 'shelf'] as const;
+export type Startup = (typeof STARTUP)[number];
+/** A stored start-up animation made safe; before 1.3 it was a switch (true: on). */
+export const startupOf = (v: unknown): Startup | undefined =>
+  v === true ? 'registration' : v === false ? 'off' : (STARTUP as readonly unknown[]).includes(v) ? (v as Startup) : undefined;
+
 /**
  * Returns `value` made safe for setting `key`, merged over `cur` (the value in use now) where it is a fixed-shape record,
  * or undefined to drop it. A partial record keeps the current value for what it leaves out; unknown fields are dropped.
@@ -35,6 +42,8 @@ export function cleanSetting(key: string, value: unknown, cur: unknown): unknown
       for (const [k, l] of Object.entries(value)) { const c = cleanLayout(l); if (c) out[k] = c; }
       return out;
     }
+    case 'startupAnimation':
+      return startupOf(value);
     case 'touchSkin':
       return (SKINS as readonly unknown[]).includes(value) ? value : undefined;
     case 'touchShell':

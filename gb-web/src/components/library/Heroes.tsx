@@ -57,7 +57,7 @@ function Attract({ game, label }: { game?: GameEntry; label: string }) {
       if (stopped) return;
       emu = new wasm.Emulator();
       const c = machineFor(useSettingsStore.getState(), game.id, sgbCartOf(parseRomHeader(rom))); // the console the game itself plays on
-      if (!(c === 'sgb' ? emu.load_rom_sgb(rom, false) : emu.load_rom_with(rom, c !== 'dmg', paletteOf(c), false))) return;
+      if (!(c === 'sgb' ? emu.load_rom_sgb(rom, 0) : emu.load_rom_with(rom, c !== 'dmg', paletteOf(c), 0))) return;
       const ctx = canvas.getContext('2d')!;
       const img = ctx.createImageData(160, 144);
       const still = matchMedia('(prefers-reduced-motion: reduce)').matches;

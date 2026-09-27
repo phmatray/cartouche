@@ -29,3 +29,9 @@ test('a display is normalized for both kinds; plain values pass through', () => 
   assert.ok(d.dmg.preset && d.cgb.preset);
   assert.equal(cleanSetting('masterVolume', 40, 50), 40);
 });
+test('a start-up animation from a backup: one of the four, or the old switch read as on / off', () => {
+  assert.equal(cleanSetting('startupAnimation', 'shelf', 'off'), 'shelf');
+  assert.equal(cleanSetting('startupAnimation', true, 'off'), 'registration');
+  assert.equal(cleanSetting('startupAnimation', false, 'insert'), 'off');
+  assert.equal(cleanSetting('startupAnimation', 'logo', 'off'), undefined);
+});

@@ -18,12 +18,13 @@ export const LEGAL_SECTIONS: LegalSection[] = [
   {
     title: 'What Cartouche contains',
     body:
-      'An emulator that contains no Nintendo code and no copy of the Nintendo logo. It includes the open-source ' +
-      'boot ROMs of SameBoy, © 2015-2026 Lior Halphon, MIT License (https://github.com/LIJI32/SameBoy): original ' +
-      'code, not Nintendo\'s. By default games start directly in the documented post-boot state; the Game Boy ' +
-      'Color colours of an original Game Boy game, when chosen, are worked out by that boot ROM out of sight. ' +
-      'The start-up animation is off by default. Turned on (Settings > Emulation), it shows the logo read from ' +
-      'the game\'s own cartridge, as the console does. Super Game Boy borders and colors are drawn from the data ' +
+      'An emulator that contains no Nintendo code and no copy of the Nintendo logo. Its boot ROMs are Cartouche\'s ' +
+      'own, modified from the open-source boot ROMs of SameBoy, © 2015-2026 Lior Halphon, MIT License ' +
+      '(https://github.com/LIJI32/SameBoy): original code, not Nintendo\'s. They never read, show or check the logo ' +
+      'stored in a cartridge. The start-up animation (Settings > Emulation: Registration, Insert or Shelf pick) is ' +
+      'Cartouche\'s own artwork and chime, and shows no logo; turned off, games start directly in the documented ' +
+      'post-boot state. The Game Boy Color colours of an original Game Boy game, when chosen, are worked out by the ' +
+      'boot ROM out of sight. Super Game Boy borders and colors are drawn from the data ' +
       'each game sends; no Super Game Boy or SNES software is included.\n\n' +
       'Three free homebrew games, redistributed unmodified from their authors\' official releases:\n\n' +
       'Tobu Tobu Girl and Tobu Tobu Girl Deluxe, © 2017 Tangram Games (sources: ' +

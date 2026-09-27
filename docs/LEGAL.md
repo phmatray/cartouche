@@ -20,13 +20,14 @@ load into it are ones you have the right to use.
 
 - An emulator written from public hardware documentation. It contains **no
   Nintendo code**: no Nintendo BIOS or boot ROM is included, and no copy of the
-  Nintendo logo. It includes the open-source boot ROMs of
-  [SameBoy](https://github.com/LIJI32/SameBoy) (© 2015-2026 Lior Halphon, MIT
-  License), original code. By default games start directly in the documented
-  post-boot state; the Game Boy Color colours of an original Game Boy game, when
-  chosen, are worked out by that boot ROM out of sight. The start-up animation
-  is **off by default**. Turned on (Settings › Emulation), it shows the logo read
-  from the game's own cartridge, as the console does. Super Game Boy borders and
+  Nintendo logo. Its boot ROMs are Cartouche's own, modified from the
+  open-source boot ROMs of [SameBoy](https://github.com/LIJI32/SameBoy)
+  (© 2015-2026 Lior Halphon, MIT License), original code; they never read, show
+  or check the logo stored in a cartridge. The start-up animation (Settings ›
+  Emulation: Registration, the default, Insert or Shelf pick) is Cartouche's own
+  artwork and chime and shows no logo; turned off, games start directly in the
+  documented post-boot state. The Game Boy Color colours of an original Game
+  Boy game, when chosen, are worked out by the boot ROM out of sight. Super Game Boy borders and
   colors are drawn from the data each game sends; no Super Game Boy or SNES
   software is included.
 - Three free homebrew games, redistributed unmodified from their authors'

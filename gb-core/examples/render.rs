@@ -50,9 +50,9 @@ fn main() {
     let rom = std::fs::read(&args[0]).expect("cannot read ROM");
     let gbc = args.iter().position(|a| a == "--gbc").map(|i| args[i + 1].parse::<u8>().expect("palette 0-12"));
     let mut gb = if args.iter().any(|a| a == "--sgb") {
-        GameBoy::with_sgb(rom, false)
+        GameBoy::with_sgb(rom, 0)
     } else {
-        GameBoy::with_boot(rom, gbc.is_some(), gbc.unwrap_or(0), false)
+        GameBoy::with_boot(rom, gbc.is_some(), gbc.unwrap_or(0), 0)
     }
     .expect("cannot load ROM");
 

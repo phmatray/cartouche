@@ -451,7 +451,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .presets{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
 .preset{border:2px solid var(--paper-3);background:#fff;padding:10px;text-align:left;color:var(--ink)}
 .preset canvas{box-shadow:0 0 0 4px #0b0b0b;margin:4px 4px 12px;width:calc(100% - 8px)}
-.preset b{display:block;font:900 18px/1 var(--font);font-stretch:62%;text-transform:uppercase}
+.preset b{display:block;font:900 18px/1 var(--font);font-stretch:62%;text-transform:uppercase;word-spacing:.15em}
 .preset small{font:500 12px var(--font);color:var(--ink-3)}
 .preset[aria-pressed=true],.preset[aria-current=true]{border-color:var(--ink);box-shadow:inset 0 -6px 0 var(--y)}
 .row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0;border-bottom:1px solid var(--paper-2);font:600 15px/1.35 var(--font)}
@@ -954,6 +954,11 @@ body{font-family:var(--font)}
 @media (max-width:480px){.artdlg .in{padding:22px 20px 20px}.artdlg .acts .btn{flex:1 1 100%}}
 /* settings, add ROMs, link cable (part 3) */
 .presets-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.presets-4 .preset{display:flex;flex-direction:column;justify-content:flex-start}
+.boot-acts{display:flex;flex-wrap:wrap;gap:8px}
+.boot-acts .sbtn{display:inline-flex;align-items:center;gap:8px;min-height:44px}
+.boot-acts .sbtn .icon{width:16px;height:16px}
+.boot-acts .sbtn[aria-pressed=true]{background:var(--ink);color:var(--paper)}
 @media (max-width:760px){.presets-4{grid-template-columns:repeat(2,minmax(0,1fr))}}
 /* Screen filters (manual Screen page, Settings › Display) */
 .filters .presets{grid-template-columns:repeat(auto-fill,minmax(128px,1fr))}

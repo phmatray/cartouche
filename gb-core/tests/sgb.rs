@@ -15,7 +15,7 @@ fn sgb_rom() -> Vec<u8> {
 }
 
 fn sgb() -> GameBoy {
-    let mut gb = GameBoy::with_sgb(sgb_rom(), false).unwrap();
+    let mut gb = GameBoy::with_sgb(sgb_rom(), 0).unwrap();
     assert_eq!(gb.console, Console::Sgb);
     // Tile 1: shade 3 everywhere; the map shows tile 0 (shade 0), BGP identity.
     for i in 0..16 { gb.bus.write_byte(0x8010 + i, 0xFF); }
@@ -276,14 +276,14 @@ fn states_keep_the_sgb_side_and_stay_on_their_console() {
     frame(&mut fresh);
     assert_eq!(px(&fresh, 0, 0), rgb(GREEN), "palettes and attributes come back");
 
-    let mut dmg = GameBoy::with_boot(sgb_rom(), false, 0, false).unwrap();
+    let mut dmg = GameBoy::with_boot(sgb_rom(), false, 0, 0).unwrap();
     assert_eq!(dmg.console, Console::Dmg);
     assert!(!dmg.load_state(&state), "an SGB state never loads on a Game Boy");
 }
 
 #[test]
 fn boot_rom_reaches_the_cartridge_and_needs_sgb_support() {
-    let mut gb = GameBoy::with_sgb(sgb_rom(), true).unwrap();
+    let mut gb = GameBoy::with_sgb(sgb_rom(), 1).unwrap();
     for _ in 0..300 {
         if !gb.bus.boot_rom_active { break; }
         gb.run_frame().unwrap();
@@ -303,7 +303,7 @@ fn boot_rom_reaches_the_cartridge_and_needs_sgb_support() {
     let mut plain = sgb_rom();
     plain[0x14B] = 0x01; // no SGB functions without the old licensee $33
     plain[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(plain[i]).wrapping_sub(1));
-    assert_eq!(GameBoy::with_sgb(plain, false).unwrap().console, Console::Dmg);
+    assert_eq!(GameBoy::with_sgb(plain, 0).unwrap().console, Console::Dmg);
 }
 
 #[test]
@@ -334,7 +334,7 @@ fn a_state_saved_mid_transfer_still_transfers() {
 
 #[test]
 fn a_game_boy_state_loads_on_the_super_game_boy() {
-    let mut dmg = GameBoy::with_boot(sgb_rom(), false, 0, false).unwrap();
+    let mut dmg = GameBoy::with_boot(sgb_rom(), false, 0, 0).unwrap();
     for i in 0..16 { dmg.bus.write_byte(0x8010 + i, 0xFF); }
     dmg.bus.write_byte(0xFF47, 0xE4);
     dark_cell(&mut dmg, 0, 0);

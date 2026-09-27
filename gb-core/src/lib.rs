@@ -40,12 +40,13 @@ impl Emulator {
 
     /// Starts from the post-boot state, each cartridge on its own console.
     pub fn load_rom(&mut self, rom_data: &[u8]) -> bool {
-        self.load_rom_with(rom_data, false, 0, false)
+        self.load_rom_with(rom_data, false, 0, 0)
     }
 
     /// `colorize`: run a DMG-only cartridge on a Game Boy Color, `palette` 0 automatic or 1-12
-    /// (see `GameBoy::with_boot`); `animation`: play the boot ROM's start-up animation.
-    pub fn load_rom_with(&mut self, rom_data: &[u8], colorize: bool, palette: u8, animation: bool) -> bool {
+    /// (see `GameBoy::with_boot`); `animation`: the start-up animation, 0 none, 1 Registration,
+    /// 2 Insert, 3 Shelf pick (`true` still reads as 1, `false` as 0).
+    pub fn load_rom_with(&mut self, rom_data: &[u8], colorize: bool, palette: u8, animation: u8) -> bool {
         match GameBoy::with_boot(rom_data.to_vec(), colorize, palette, animation) {
             Ok(gb) => {
                 self.gb = Some(gb);
@@ -61,7 +62,7 @@ impl Emulator {
 
     /// A Super Game Boy (palettes, border, multiplayer) for a cartridge with SGB support; any
     /// other cartridge starts as with `load_rom_with(rom, false, 0, animation)`.
-    pub fn load_rom_sgb(&mut self, rom_data: &[u8], animation: bool) -> bool {
+    pub fn load_rom_sgb(&mut self, rom_data: &[u8], animation: u8) -> bool {
         match GameBoy::with_sgb(rom_data.to_vec(), animation) {
             Ok(gb) => {
                 self.gb = Some(gb);
