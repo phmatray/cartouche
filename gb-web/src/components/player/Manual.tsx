@@ -65,11 +65,14 @@ export function Manual(p: ManualProps) {
     album: () => <AlbumPage {...p} />,
     game: () => <GamePageTab {...p} />,
   };
+  // The tab last focused by a click (Chrome, Firefox): forgotten when focus moves on, or when the click focused nothing (Safari).
+  const clicked = useRef<Element | null>(null);
   // ARIA tabs: the arrow keys (and Home/End) move between tabs, which are one Tab stop; they don't reach the D-pad.
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     const i = TABS.findIndex(([k]) => k === tab);
     const n = ({ ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: TABS.length - 1 } as Record<string, number>)[e.key];
-    if (n === undefined) return;
+    // A tab focused by a click leaves the arrows to the game, like Enter and Space (PlayerPage).
+    if (n === undefined || e.target === clicked.current) return;
     e.preventDefault();
     e.stopPropagation();
     const j = (n + TABS.length) % TABS.length;
@@ -78,7 +81,11 @@ export function Manual(p: ManualProps) {
   };
   return (
     <aside className="sheet" id="sheet" aria-label={t('player.manual')}>
-      <div className="tabs" role="tablist" onKeyDown={onKey}>
+      <div className="tabs" role="tablist" onKeyDown={onKey}
+        onPointerDown={(e) => { clicked.current = (e.target as Element).closest('[role=tab]'); }}
+        onClick={() => { if (document.activeElement !== clicked.current) clicked.current = null; }}
+        onFocus={(e) => { if (e.target !== clicked.current) clicked.current = null; }}
+        onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) clicked.current = null; }}>
         {TABS.map(([k, label, pg]) => (
           <button key={k} id={`mt-${k}`} role="tab" aria-selected={tab === k} aria-controls="mt-panel" tabIndex={tab === k ? 0 : -1}
             onClick={() => p.onTab(k)}>{t(label)}<small>{t('player.page', { n: String(pg) })}</small></button>
