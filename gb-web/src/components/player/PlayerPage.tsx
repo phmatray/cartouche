@@ -27,6 +27,8 @@ import { useAlbum, useLinkRom, useRomHeader } from '../../hooks/useGameExtras';
 import { Manual, type Tab } from './Manual';
 import { fileAccept } from '../../lib/pwa';
 import { t as tNow, useT } from '../../i18n';
+import { toggleTranslate, useLiveTranslate } from '../../translate/useLiveTranslate';
+import { TranslateOverlay, TranslateMark } from '../../translate/TranslateOverlay';
 
 const FPS = 4194304 / 70224; // 59.73 Hz, the Game Boy's real frame rate
 const SPEEDS = [0.5, 1, 2, 4];
@@ -73,6 +75,7 @@ function Player({ game }: { game: GameEntry }) {
   const header = useRomHeader(game);
   const album = useAlbum(game.id);
   const linkRom = useLinkRom(game);
+  const { on: translating, want: wantText, feed: feedText } = useLiveTranslate(game.id, game.title);
 
   // A cartridge the core runs in Game Boy Color mode keeps its own colours: DMG palettes never apply to it,
   // and it has its own default screen settings (the core decides, from header byte 0x143 bit 7).
@@ -186,14 +189,16 @@ function Player({ game }: { game: GameEntry }) {
     const motion = smoothMotion && (smoothMotionForce || hz > 75) && speedRef.current === 1 && !isRewinding;
     setMotion(motion);
     const traced = usesTrace(); // only while Neural 4× really runs its tile path, or Smooth motion is on
-    setTraceEnabled(traced);
+    const reading = n > 0 && !isRewinding && wantText(); // Live translate samples a frame now and then
+    setTraceEnabled(traced || reading);
     let fb: Uint8ClampedArray | null = null;
     for (let i = 0; i < n; i++) fb = wrapRunFrame(runOne) ?? fb;
-    const trace = fb && traced && !isRewinding ? getTrace() : null; // a rewound frame has no trace of its own
-    if (fb) { renderFrame(fb, false, trace, p.acc); setLit(true); }
+    const trace = fb && (traced || reading) && !isRewinding ? getTrace() : null; // a rewound frame has no trace of its own
+    if (reading && trace) feedText(trace.meta);
+    if (fb) { renderFrame(fb, false, traced ? trace : null, p.acc); setLit(true); }
     else if (motion) drawMotion(p.acc);
     if (n) { played.current += dt; dirty.current = true; }
-  }, [wrapRunFrame, runOne, renderFrame, isRewinding, smoothMotion, smoothMotionForce, setTraceEnabled, getTrace, setMotion, drawMotion, usesTrace]);
+  }, [wrapRunFrame, runOne, renderFrame, isRewinding, smoothMotion, smoothMotionForce, setTraceEnabled, getTrace, setMotion, drawMotion, usesTrace, wantText, feedText]);
   const looping = romLoaded && (isRunning || isRewinding);
   useEffect(() => { if (!looping) { pace.current.last = 0; refresh.current = []; } }, [looping]);
   useAnimationFrame(onFrame, looping);
@@ -325,6 +330,7 @@ function Player({ game }: { game: GameEntry }) {
           <div className="screen">
             <div className="frame">
               <canvas key={canvasKey} ref={canvasRef} className={`lcd${lit ? ' lit' : ''}`} width={800} height={720} aria-label={t('player.screenOf', { title: game.title })} />
+              <TranslateOverlay gameId={game.id} />
               {badRom ? (
                 <div className="overlay">
                   <b>{t('player.bad.title')}</b>
@@ -383,6 +389,11 @@ function Player({ game }: { game: GameEntry }) {
         <button className="dk hide-m" onClick={() => loadSlot(0)} disabled={noStore} aria-label={t('player.deck.loadF8')}>{I.load}<span className="lbl">{t('common.load')}</span><span className="k">F8</span></button>
         <button className="dk hide-m" onClick={screenshot} disabled={noStore} aria-label={t('player.deck.shotF12')}>{I.cam}<span className="lbl">{t('player.deck.photo')}</span><span className="k">F12</span></button>
         <span className="push" />
+        {(translating || game.regions?.includes('JP')) && (
+          <button className="dk tlb" onClick={() => toggleTranslate(game.id, !translating)} aria-pressed={translating} aria-label="Live translate" title="Live translate">
+            <TranslateMark /><span className="lbl">Translate</span>
+          </button>
+        )}
         <button className="dk hide-m" onClick={mute} aria-pressed={muted} aria-label={t('player.deck.muteM')}>{muted ? I.mute : I.sound}</button>
         {document.fullscreenEnabled
           ? <button className="dk fs" onClick={toggleFullscreen} aria-label={t('player.deck.fullF')}>{I.full}</button>

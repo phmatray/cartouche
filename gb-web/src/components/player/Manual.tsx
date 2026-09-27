@@ -16,6 +16,7 @@ import { Shot } from '../game/Shot';
 import { DebugPanel } from './DebugPanel';
 import { date, rich, useT, type Key } from '../../i18n';
 import { descOf } from '../../lib/catalog-utils';
+import { TranslatePanel } from '../../translate/TranslatePanel';
 
 export type Tab = 'controls' | 'saves' | 'screen' | 'album' | 'game';
 // The Codes page of the printed manual is left out until the core can apply cheat codes.
@@ -217,6 +218,7 @@ function GamePageTab({ game, header, emu, isRunning }: ManualProps) {
         {rows.map(([a, b]) => <div key={a}><dt>{a}</dt><dd>{b}</dd></div>)}
       </dl>
       <p style={{ marginTop: 20 }}><Link className="btn line" to={paths.game(game.id)} style={{ color: 'var(--ink)' }}>{t('player.game.open')}</Link></p>
+      <TranslatePanel gameId={game.id} />
       <div className="row">
         <span>{t('player.game.debug')}<small>{t('player.game.debugSub')}</small></span>
         <button className="switch" role="switch" aria-checked={debug} aria-label={t('player.game.debug')} onClick={() => setDebug(!debug)} />

@@ -87,14 +87,18 @@ export const LEGAL_SECTIONS: LegalSection[] = [
       'Your ROMs, saves, save states, settings, favorites and play time are stored only in this ' +
       'browser (IndexedDB and localStorage) and never leave your device. Clear this site\'s data in ' +
       'your browser settings to delete everything.\n\n' +
-      'Only GitHub receives requests. GitHub Pages serves the app and its fonts. Box art is off by ' +
+      'Only GitHub receives requests (unless you give Live translate an API key, below). GitHub Pages serves the app and its fonts. Box art is off by ' +
       'default and needs your yes (first-launch dialog or Settings > Storage); only then does the ' +
       'browser also load covers of recognized ROMs you added from raw.githubusercontent.com. Like any ' +
       'web server, GitHub receives ' +
       'your IP address and browser details; see the GitHub General Privacy Statement ' +
       '(https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).\n\n' +
       'Downloaded box art is kept in this browser (Cache Storage) and never sent anywhere. Delete it anytime with ' +
-      '"Delete downloaded box art" in Settings > Storage, or by clearing the site data.',
+      '"Delete downloaded box art" in Settings > Storage, or by clearing the site data.\n\n' +
+      'Live translate is off until you turn it on for a game. With Chrome\'s built-in translator, the text is ' +
+      'translated inside your browser. With your own Anthropic API key, each line read from the screen is sent, ' +
+      'with the game\'s title, from your browser to api.anthropic.com and billed to your key; the key is kept ' +
+      'in this browser only.',
   },
   {
     title: 'Takedown requests',

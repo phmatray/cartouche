@@ -87,6 +87,12 @@ about a minute.
   It adds detail that wasn't in the original pixels ([how it was made](docs/NEURAL.md)).
 - Smooth motion (opt-in) for 120 Hz screens: in-between frames from the emulator's
   exact scroll and sprite positions, for about 8 ms of added delay.
+- Live translate for Japanese games: the text is read straight from the tile
+  maps (no screenshots, no OCR service), matched against a free 8x8 Japanese
+  bitmap font, and translated into English, French or Spanish over the game's
+  own text box, by Chrome's on-device translator or by Claude with your own
+  API key. Recognition is approximate (every game draws its own letters);
+  correct a character once and that game remembers it.
 - Screenshots with <kbd>F12</kbd>, saved to a per-game album and exportable
   as PNG.
 
@@ -139,12 +145,16 @@ cd gb-core && cargo test --release --no-fail-fast
 - No account, no server, no analytics, no cookies, no tracking.
 - Your ROMs, saves, screenshots and settings stay in your browser (IndexedDB).
   Nothing is uploaded.
-- Only GitHub is contacted. GitHub Pages serves the app. Box art is off until
+- Only GitHub is contacted (unless you give Live translate an API key, below).
+  GitHub Pages serves the app. Box art is off until
   you agree in the "Show box art?" dialog; after that, covers of recognized
   games come from `raw.githubusercontent.com`. Like any web server, GitHub sees
   your IP address
   ([GitHub privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)).
 - Settings › Storage shows what is stored and deletes it, box art included.
+- Live translate is off until you turn it on for a game. With Chrome's built-in
+  translator nothing leaves the browser; with your own Anthropic API key, the
+  text read from the screen goes to `api.anthropic.com`, billed to your key.
 
 ## Your own cartridges
 

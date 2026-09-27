@@ -21,6 +21,7 @@ cartouche/
 │       ├── components/       # shell/, library/, game/, player/, add/, settings/, LinkCablePage
 │       ├── hooks/ lib/ store/ shaders/ workers/ audio/
 │       ├── neural/           # Neural 4× (tile-aware network + learned table) and Smooth motion, WebGL2; weights/*.bin are the only model data allowed (docs/NEURAL.md)
+│       ├── translate/        # Live translate: reads text from the traced tile maps (ocr.ts, worker), glyphs.bin (Misaki/k6x8 bitmaps, scripts/build-glyphs.mjs), providers, overlay
 │       ├── content/legal.ts  # Legal page text
 │       └── data/             # catalog.json (only verified, licensed entries), GameDB
 └── scripts/                  # build.sh, fetch-test-roms.sh, catalog/gamedb generators
