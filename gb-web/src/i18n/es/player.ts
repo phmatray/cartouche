@@ -10,6 +10,7 @@ export default {
   resumeAgo: 'Punto de reanudación {ago}',
   paused: 'En pausa',
   pausedSub: 'Pulsa P o el botón Jugar para continuar.',
+  resume: 'Continuar',
   crashed: {
     title: 'El juego se ha detenido',
     body: 'La consola encontró una instrucción no válida. Reinicia el juego; si vuelve a detenerse, puede que el archivo esté dañado o que use una función que Cartouche no emula.',
