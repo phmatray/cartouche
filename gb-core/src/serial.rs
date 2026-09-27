@@ -15,6 +15,8 @@ pub struct Serial {
     pub(crate) incoming: u8,
     /// Set when an internal-clock transfer starts; the link cable consumes it.
     started: bool,
+    /// A Game Boy Printer on the port (solo play only: a link partner replaces it).
+    pub printer: Option<crate::printer::Printer>,
 }
 
 impl Serial {
@@ -26,6 +28,7 @@ impl Serial {
             remaining: 0,
             incoming: 0xFF,
             started: false,
+            printer: None,
         }
     }
 
@@ -46,7 +49,7 @@ impl Serial {
                     // Blargg's test ROMs print through the serial port.
                     self.output.push(self.data);
                     self.remaining = if value & 0x02 != 0 { 8 * 16 } else { 8 * 512 };
-                    self.incoming = 0xFF;
+                    self.incoming = self.printer.as_mut().map_or(0xFF, |p| p.exchange(self.data));
                     self.started = true;
                 } else if value & 0x80 == 0 {
                     self.remaining = 0;
@@ -58,6 +61,7 @@ impl Serial {
 
     /// Tick serial by CPU cycles. Returns true if the serial interrupt should fire.
     pub fn tick(&mut self, cycles: u32) -> bool {
+        if let Some(p) = &mut self.printer { p.tick(1); }
         if self.remaining == 0 {
             return false;
         }
