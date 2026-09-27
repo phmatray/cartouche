@@ -65,8 +65,9 @@ export async function splitJson(file: Blob, key: string, chunk = 8 << 20): Promi
         else if (c === 0x5c) esc = true; // \
         else if (c === 0x22) { inStr = false; if (depth === 1) lastKey = str; continue; } // "
         else if (depth > 1) { // jump over the string's body (base64: megabytes) to its next " or \
-          const q = b.indexOf(0x22, i + 1), s = b.indexOf(0x5c, i + 1);
-          i = (q < 0 ? s < 0 ? b.length : s : s < 0 ? q : Math.min(q, s)) - 1;
+          // The \ is looked for only up to that ": searching the rest of the chunk for every short string is quadratic.
+          const q = b.indexOf(0x22, i + 1), end = q < 0 ? b.length : q, s = b.subarray(i + 1, end).indexOf(0x5c);
+          i = (s < 0 ? end : i + 1 + s) - 1;
           continue;
         }
         if (depth === 1 && str.length <= key.length) str += String.fromCharCode(c);

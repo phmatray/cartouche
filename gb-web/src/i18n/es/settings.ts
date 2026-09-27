@@ -194,6 +194,7 @@ export default {
     restoreLabel: 'Restaurar una copia',
     restoreSub: 'Se fusiona con esta biblioteca; nada se sobrescribe sin preguntar',
     import: 'Importar copia',
+    reading: 'Leyendo la copia…',
     restoreTitle: '¿Restaurar esta copia?',
     restoreWhat: '{roms}, {saves} y {shots}, del {date}.',
     restoreWhatNoDate: '{roms}, {saves} y {shots}.',

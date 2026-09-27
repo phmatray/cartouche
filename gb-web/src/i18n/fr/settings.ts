@@ -194,6 +194,7 @@ export default {
     restoreLabel: 'Restaurer une copie de sauvegarde',
     restoreSub: 'Fusionne avec cette bibliothèque ; rien n’est écrasé sans confirmation',
     import: 'Importer une copie',
+    reading: 'Lecture de la copie…',
     restoreTitle: 'Restaurer cette copie ?',
     restoreWhat: '{roms}, {saves} et {shots}, du {date}.',
     restoreWhatNoDate: '{roms}, {saves} et {shots}.',

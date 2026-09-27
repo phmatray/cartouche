@@ -34,6 +34,16 @@ test('splitJson reads the ROM list item by item, in any key order, across chunk 
   await assert.rejects(splitJson(new Blob(['PK\x03\x04']), 'roms'), SyntaxError);
 });
 
+// Many short strings in one big chunk (no \ anywhere): each one's \ search must stop at its closing ", not run to the chunk end.
+test('splitJson scans many short strings in linear time', async () => {
+  const item = JSON.stringify({ id: 'x', title: 'short', genre: 'Puzzle', data: { $b64: 'QUJD' } });
+  const file = new Blob([`{"app":"cartouche","roms":[${Array(10000).fill(item).join(',')}]}`]); // 0.8 MB, 90,000 strings
+  const t0 = performance.now();
+  const { items } = await splitJson(file, 'roms');
+  assert.equal(items.length, 10000);
+  assert.ok(performance.now() - t0 < 1000, `${performance.now() - t0} ms`); // quadratic: ~10 s
+});
+
 // Restore can't read a big backup whole (a string stops near 512 MB): the ROMs are read back one at a time.
 test('a streamed backup reads back one item at a time, split anywhere', async () => {
   const rom = (id: string, n: number) => ({ id, title: `${id} "q" \\ {[`, genre: 'Puzzle', data: Uint8Array.from({ length: n }, (_, i) => i * 7) });
