@@ -51,6 +51,8 @@ export default {
     resumedOnGbc: 'Reprise sur Game Boy Color, là où cette sauvegarde a été faite. Redémarrez depuis la page Écran pour changer.',
     resumedOnSgb: 'Reprise sur Super Game Boy, là où cette sauvegarde a été faite. Redémarrez depuis la page Écran pour changer.',
     loadFailed: 'Impossible de charger la ROM : {error}',
+    saveFull: 'Sauvegarde impossible : le stockage est plein. Libérez de l’espace dans Réglages › Stockage, sinon votre progression sera perdue à la fermeture de l’app.',
+    saveFailed: 'Impossible de sauvegarder votre progression : le stockage ne répond pas. Gardez l’app ouverte et réessayez.',
     resumeSaved: 'Point de reprise enregistré pour {title}',
     saved: 'Sauvegardé dans l’emplacement {n}',
     noResume: 'Pas encore de point de reprise',

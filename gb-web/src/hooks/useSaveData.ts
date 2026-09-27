@@ -25,6 +25,18 @@ export const sramIO: SramIO = {
   },
 };
 
+let warnedAt = -Infinity;
+/**
+ * A battery save, resume point or slot that couldn't be stored: says so (at most every 30 s while it keeps failing),
+ * pointing to Settings › Storage when the device is full. Never silent: the player would go on trusting a save.
+ */
+export function warnSaveFailed(e: unknown) {
+  const now = Date.now();
+  if (now - warnedAt < 30_000) return;
+  warnedAt = now;
+  toast(t(e instanceof DOMException && e.name === 'QuotaExceededError' ? 'player.toast.saveFull' : 'player.toast.saveFailed'), 'm');
+}
+
 /** How often the stored save is looked at: learns the profile soon after boot, and spots a write from elsewhere. */
 export const CHECK_MS = 5000;
 
@@ -45,9 +57,9 @@ export function useSaveData({ saveTo, romLoaded, hasBatteryRam, exportSram }: Us
       if (!id || !data?.length) return;
       const w = writer.write(id, data, t('player.saves.main'));
       // ponytail: blind read-then-write before the first check (the first seconds after boot or a profile switch).
-      if (w === 'unknown') { writeProfileSram(id, data).catch(() => {}); return; }
+      if (w === 'unknown') { writeProfileSram(id, data).catch(warnSaveFailed); return; }
       if (!w) return;
-      w.done.catch(() => {});
+      w.done.catch(warnSaveFailed);
       if (w.to.id === id) return;
       saveTo.current = w.to.id;
       setActiveProfile(w.to.gameId, w.to.id).catch(() => {});
