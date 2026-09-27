@@ -258,7 +258,7 @@ export default function ControlsEditor({ zone, layout, layoutName, onDraft, onCo
       })}
 
       <div className="ced-bar" ref={bar} role="toolbar" aria-label={t('player.edit.title')}>
-        <button type="button" className="btn y" onClick={onDone}>{I.check}{t('player.edit.done')}</button>
+        <button type="button" className="btn y" onClick={onDone}>{I.check}<span className="ced-done">{t('player.edit.done')}</span></button>
         {rects.hidden ? <p className="ced-msg">{t('player.edit.hidden')}</p> : p && (
           <>
             <span className="ced-name"><b>{name(sel)}</b><small>{layoutName}</small></span>
