@@ -971,8 +971,12 @@ body{font-family:var(--font)}
 }
 .touch[data-size=S] .dpad,.touch[data-size=S] .ab{zoom:.82}
 .touch[data-size=L] .dpad,.touch[data-size=L] .ab{zoom:1.18}
-/* Under 375 px the pad and the buttons don't fit side by side at full size: the whole block scales down (Large = Medium there). */
-@media (max-width:374px){.touch{zoom:.86}.touch[data-size=L] .dpad,.touch[data-size=L] .ab{zoom:1}}
+/* Under 375 px the pad and the buttons don't fit side by side at full size: they scale down (Large = Medium there);
+   Select/Start keep their 44 px. */
+@media (max-width:374px){
+  .touch .dpad,.touch .ab,.touch[data-size=L] .dpad,.touch[data-size=L] .ab{zoom:.86}
+  .touch[data-size=S] .dpad,.touch[data-size=S] .ab{zoom:.71}
+}
 
 /* Touch: every control gets at least a 44 px hit area (an invisible ::before), without changing its look. */
 @media (pointer:coarse){
@@ -1006,6 +1010,7 @@ body{font-family:var(--font)}
 /* The menu drops down under the header over a dimmed page; a tap on the page closes it. */
 .mnav.open{inset:calc(60px + var(--sat)) 0 auto;max-height:calc(100dvh - 60px - var(--sat));padding:4px max(16px,var(--sar)) 4px max(16px,var(--sal));overflow:auto;overscroll-behavior:contain;border-bottom:1px solid var(--rule);box-shadow:0 22px 44px rgba(0,0,0,.42)}
 .mnav>:last-child{border-bottom:0}
+body:has(.mnav.open) .ihint{display:none}
 .mscrim{position:fixed;inset:0;z-index:45;background:rgba(0,0,0,.6);animation:vt-in .2s linear}
 @media (min-width:641px){.mnav.open{top:calc(72px + var(--sat));max-height:calc(100dvh - 72px - var(--sat))}}
 .foot .wrap{padding-bottom:calc(40px + var(--sab))}
@@ -1064,11 +1069,12 @@ html:has(.pl),body:has(.pl){overscroll-behavior:none}
   .sheet{height:58dvh}
   .pl:not(.closed):not(.imm) .screen{width:min(var(--sw,100%),100%,calc((42dvh - 56px - var(--sat) - 32px - 24px) * 160 / 144 + 24px))}
 }
+@media (max-width:374px) and (min-height:501px){.pl{--touch-h:calc(209px + max(24px,calc(8px + var(--sab))))}}
 
 /* Phones held sideways: screen in the middle, D-pad on the left, A/B and Start/Select on the right; top bar and deck share one row. */
 @media (orientation:landscape) and (max-height:500px){
   .pl{height:100dvh;min-height:0;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);grid-template-rows:calc(52px + var(--sat)) minmax(0,1fr);
-    grid-template-areas:"top deck deck" "l stage r"}
+    grid-template-areas:"top deck deck" "l stage r";--sheet-w:min(460px,max(50vw,320px))}
   .pl-body,.touch{display:contents}
   .pl-top{grid-area:top;min-width:0;padding-right:8px;gap:8px;border-bottom:1px solid var(--rule)}
   .pl-top h1{font-size:20px}
@@ -1083,11 +1089,16 @@ html:has(.pl),body:has(.pl){overscroll-behavior:none}
   .touch .ss{grid-area:r;align-self:end;justify-self:center;margin:0 var(--sar) calc(12px + var(--sab)) 0;gap:8px}
   .touch .ss button{padding:0 12px}
   /* the manual slides in from the right, full height */
-  .sheet{top:0;bottom:0;left:auto;width:min(460px,72vw);height:auto;padding:var(--sat) var(--sar) var(--sab) 0;transform:translateX(100%);box-shadow:-20px 0 40px rgba(0,0,0,.5)}
+  .sheet{top:0;bottom:0;left:auto;width:var(--sheet-w);height:auto;padding:var(--sat) var(--sar) var(--sab) 0;transform:translateX(100%);box-shadow:-20px 0 40px rgba(0,0,0,.5)}
   .pl.imm{grid-template-rows:minmax(0,1fr);grid-template-areas:"l stage r"}
   .pl.imm .stage{height:100%;padding:calc(8px + var(--sat)) 8px calc(8px + var(--sab))}
   .pl.imm .screen{width:min(calc((100dvh - 16px - var(--sat) - var(--sab) - 24px) * 160 / 144 + 24px),calc(100vw - 360px - var(--sal) - var(--sar)))}
   .pl.imm .deck{position:fixed;top:calc(8px + var(--sat));right:max(8px,var(--sar));padding:0}
+  /* manual open: the screen moves into the room left of the sheet (the controls sit under the sheet, as upright) */
+  .pl:not(.closed) .touch>*{visibility:hidden}
+  .pl:not(.closed) .stage{grid-column:1/-1;padding-right:calc(var(--sheet-w) + 8px)}
+  .pl:not(.closed) .screen{width:min(var(--sw,100vw),calc((100dvh - 52px - var(--sat) - var(--sab) - 16px - 24px) * 160 / 144 + 24px),calc(100vw - var(--sheet-w) - 16px - var(--sal)))}
+  .pl.imm:not(.closed) .screen{width:min(calc((100dvh - 16px - var(--sat) - var(--sab) - 24px) * 160 / 144 + 24px),calc(100vw - var(--sheet-w) - 16px - var(--sal)))}
 }
 
 /* "Install on your iPhone": a one-time card, and the same steps in Settings › About */

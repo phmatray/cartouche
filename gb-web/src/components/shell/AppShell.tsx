@@ -95,7 +95,8 @@ export function AppShell() {
 
   return (
     <>
-      <header className="top">
+      {/* a link or button in the header also closes the menu (the dimmed page sits under the header) */}
+      <header className="top" onClick={(e) => { if (menu && (e.target as Element).closest('a,button:not(.menu)')) closeMenu(false); }}>
         <div className="wrap">
           <Wordmark />
           <nav className="nav" aria-label="Main">
@@ -111,9 +112,11 @@ export function AppShell() {
         <ArtProgress />
       </header>
       {menu && <div className="mscrim" aria-hidden="true" onClick={() => closeMenu()} />}
-      {/* A choice closes it, the current page included (no route change then: focus returns to the button). */}
+      {/* A choice closes it; without a route change (the current page, GitHub in a new tab) focus returns to the button.
+          Tabbing out of it closes it too. */}
       <nav className={`mnav${menu ? ' open' : ''}`} id="mnav" aria-label="Main"
-        onClick={(e) => { const a = (e.target as Element).closest('a'); if (a) closeMenu(!!a.getAttribute('aria-current')); }}>
+        onClick={(e) => { const a = (e.target as Element).closest('a'); if (a) closeMenu(!!a.getAttribute('aria-current') || a.target === '_blank'); }}
+        onBlur={(e) => { const to = e.relatedTarget; if (to && !e.currentTarget.contains(to) && to !== menuBtn.current) setMenu(false); }}>
         {NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === '/'}>{label}{I.next}</NavLink>)}
         <NavLink to="/add">Add ROMs{I.next}</NavLink>
         {canInstall && <button type="button" onClick={() => { closeMenu(); startInstall(); }}>Install the app{I.load}</button>}
