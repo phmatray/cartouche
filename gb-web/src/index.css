@@ -97,6 +97,7 @@ kbd{border:1px solid #3a3a3a;padding:3px 7px;font:700 11px var(--font);color:var
 .mnav button{width:100%;border-width:0 0 1px;border-style:solid;border-color:var(--rule);background:none;color:inherit;text-align:left}
 .mnav a[aria-current]{color:var(--y)}
 @media (max-height:700px){.mnav a,.mnav button{font-size:32px;padding:14px 0}} /* short phones: room left to tap outside it */
+@media (max-height:500px){.mnav a,.mnav button{font-size:22px;padding:11px 0}.mnav .langs{padding:10px 0}} /* phones in landscape: the whole menu and a strip of page to tap fit */
 /* Language switch (mobile menu and footer): each language named in itself. */
 .langs{display:flex;flex-wrap:wrap;gap:6px}
 .langs button{border:1.5px solid #4a4a47;background:transparent;min-height:44px;padding:0 12px;font:700 13px var(--font);color:#d2d2cd}
