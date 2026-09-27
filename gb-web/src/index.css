@@ -333,7 +333,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .ra-list .when .tag{margin:0;padding:3px 5px;font-size:10px}
 .ra-list .pt{font:900 30px/1 var(--font);font-stretch:62%;font-variant-numeric:tabular-nums;min-width:2ch;text-align:right}
 .ra-list li:not(.got) .pt,.ra-list li:not(.got) .w b{color:var(--ink-3)}
-.ra-foot{margin:12px 0 0}
+.ra-foot{margin:12px 0 0;color:var(--ink-3)}
 .ra-foot a{color:var(--ink)}
 .ra-form{display:grid;gap:14px;max-width:440px;margin-top:8px}
 .ra-form label{display:grid;gap:6px;font:700 14px var(--font)}

@@ -36,10 +36,10 @@ Checked on 2026-09-27:
 2. **The Web API has no achievement logic.** In the documented `API_GetGameExtended`
    example, `MemAddr` is a 32-digit hex hash, not a trigger definition, so a set cannot be
    evaluated locally from it.
-3. **Unlocks need an identified, reviewed client.** The server reads the `User-Agent`
+3. **Hardcore unlocks need an identified, reviewed client.** The server reads the `User-Agent`
    (format `Cartouche/1.2.1 (OS) core/x.y`) to recognize an emulator; an unknown one gets
    a "Warning: Unknown Emulator" entry and its hardcore unlocks are demoted to softcore.
-   A browser can't set `User-Agent` on `fetch`.
+   Chrome and Safari don't let `fetch` set `User-Agent`.
 4. A proxy (server or public CORS proxy) would work around 1 and 3. It is deliberately
    **not** built: it would hide the client's identity from RetroAchievements and route
    players' keys through a third party.
@@ -62,11 +62,12 @@ Checked on 2026-09-27:
    - a way for a browser client to reach the emulator API: CORS on `dorequest.php` for
      `https://phmatray.github.io`, and accepting the client identity from a header a
      browser can send (for example `X-RA-Client`) or from a request parameter, since
-     `User-Agent` can't be set from `fetch`.
+     Chrome and Safari don't let `fetch` set `User-Agent`.
    Mention that it is a static, client-only web app (no server), MIT, source public.
 4. **Only after their answer**, build the client: compile rcheevos (MIT) to WASM next to
-   `gb-core` (memory callback through a `peek` export covering WRAM, HRAM and cartridge
-   RAM per RetroAchievements' Game Boy memory map), `rc_client_begin_login_with_token`
+   `gb-core` (memory callback through a `peek` export covering rcheevos' Game Boy
+   memory map in `consoleinfo.c`: the whole 16-bit bus, then Color work RAM banks 2-7 at
+   `$10000-$15FFF` and cartridge RAM banks 1-15 at `$16000-$33FFF`), `rc_client_begin_login_with_token`
    (token in localStorage, never the password), per-frame `rc_client_do_frame`, unlock
    toasts, an offline unlock queue, and the hardcore rules above wired into the player.
    Credit rcheevos in `THIRD_PARTY_NOTICES.md` and the About credits.

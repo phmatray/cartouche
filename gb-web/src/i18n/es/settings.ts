@@ -245,7 +245,7 @@ export default {
     source: 'Código fuente',
     sourceSub: 'Código abierto con licencia MIT. Se agradecen incidencias y contribuciones.',
     data: 'Tus datos',
-    dataBody: 'Sin cuenta, sin servidor, sin rastreo, sin analíticas. Las ROM, las partidas, las capturas y los ajustes se guardan en este navegador (IndexedDB y almacenamiento local) y nunca se suben. Las portadas de los juegos Tobu Tobu Girl incluidos vienen con la app. Las únicas peticiones a otros sitios son para las carátulas de las ROM reconocidas que añadiste, del proyecto libretro-thumbnails en GitHub (raw.githubusercontent.com), y solo si lo aceptas (está desactivado de forma predeterminada; cámbialo en <a>Almacenamiento</a>). Cartouche nunca ofrece ROM comerciales: trae tus propios volcados.',
+    dataBody: 'Sin cuenta, sin servidor, sin rastreo, sin analíticas. Las ROM, las partidas, las capturas y los ajustes se guardan en este navegador (IndexedDB y almacenamiento local) y nunca se suben. Las portadas de los juegos Tobu Tobu Girl incluidos vienen con la app. Las únicas peticiones a otros sitios son para las carátulas de las ROM reconocidas que añadiste, del proyecto libretro-thumbnails en GitHub (raw.githubusercontent.com), y solo si lo aceptas (está desactivado de forma predeterminada; cámbialo en <a>Almacenamiento</a>) y, solo si lo conectas en <ra>Logros</ra>, retroachievements.org (tu nombre de usuario y tu clave de la API web, solo lectura). Cartouche nunca ofrece ROM comerciales: trae tus propios volcados.',
     install: 'Instalar',
     asApp: 'Instalar como app',
     installedSub: 'Instalada: estás usando la app.',

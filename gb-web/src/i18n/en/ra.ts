@@ -1,7 +1,7 @@
 // RetroAchievements: its settings page, and the achievements list on the game page and in the manual.
 export default {
   tab: 'Achievements',
-  intro: 'Connect your RetroAchievements account to see, on each recognized cartridge, the achievements you’ve earned. It’s read-only: games played here don’t unlock achievements yet, because RetroAchievements only accepts unlocks from emulators it has reviewed.',
+  intro: 'Connect your RetroAchievements account to see, on each recognized cartridge, the achievements you’ve earned. It’s read-only: games played here don’t unlock achievements yet, because RetroAchievements’ unlock service doesn’t accept requests from web pages.',
   user: 'Username',
   key: 'Web API key',
   keySub: 'Find it on retroachievements.org under <a>Settings › Keys</a>. It stays in this browser, and your password is never asked for.',
@@ -9,6 +9,7 @@ export default {
   checking: 'Checking…',
   connected: 'Connected as {user}',
   connectedSub: 'Game pages and the manual show your achievements. Only while you’re connected does this browser contact retroachievements.org.',
+  noUser: 'RetroAchievements has no player with this username.',
   disconnect: 'Disconnect',
   refused: 'RetroAchievements didn’t accept this username and key.',
   offline: 'RetroAchievements can’t be reached right now. Try again later.',
@@ -17,6 +18,7 @@ export default {
   none: 'RetroAchievements has no achievements for this version of the cartridge.',
   earned: { one: '{count} of {total} earned', other: '{count} of {total} earned' },
   points: '{earned} of {total} points',
+  pts: { one: 'point', other: 'points' },
   hardcore: 'Hardcore',
   locked: 'Not earned yet',
   on: 'Earned {date}',

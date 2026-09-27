@@ -1,22 +1,34 @@
 import { useEffect, useState } from 'react';
 import type { GameEntry } from '../../types/game';
 import { fetchRom } from '../../hooks/useGameLibrary';
-import { BADGES, gameIdOf, getCreds, md5, progressOf, RaError, type RaGame } from '../../lib/retroachievements';
+import { BADGES, gameIdOf, getCreds, md5, progressOf, RaError, type RaFail, type RaGame } from '../../lib/retroachievements';
 import { date, useT } from '../../i18n';
 
-type State = RaGame | null | 'auth' | 'net';
-/** One lookup per game and session: the game page and the manual share it. */
+type State = RaGame | null | RaFail;
+/** The ROM's MD5 off the main thread (up to ~0.1 s for 8 MB: a stutter while a game runs); inline if the worker fails. */
+function hash(rom: Uint8Array): Promise<string> {
+  return new Promise((done) => {
+    const w = new Worker(new URL('../../workers/md5-worker.ts', import.meta.url), { type: 'module' });
+    const end = (h: string) => { w.terminate(); done(h); };
+    w.onmessage = (e: MessageEvent<string>) => end(e.data);
+    w.onerror = () => end(md5(rom));
+    w.postMessage(rom);
+  });
+}
+/** One lookup per account, game and session: the game page and the manual share it. */
 const seen = new Map<string, Promise<State>>();
 function load(game: GameEntry): Promise<State> {
-  let p = seen.get(game.id);
+  const c = getCreds();
+  if (!c) return Promise.resolve(null);
+  const k = `${c.user}|${c.key}|${game.id}`;
+  let p = seen.get(k);
   if (!p) {
-    const c = getCreds();
-    p = !c ? Promise.resolve(null) : fetchRom(game).then(async (rom) => {
-      const id = await gameIdOf(md5(rom), c);
+    p = fetchRom(game).then(async (rom) => {
+      const id = await gameIdOf(await hash(rom), c);
       return id === null ? null : progressOf(id, c);
     }).catch((e) => (e instanceof RaError ? e.kind : 'net'));
-    p.then((s) => { if (s === 'net') seen.delete(game.id); }); // offline: try again next time
-    seen.set(game.id, p);
+    p.then((s) => { if (s === 'net') seen.delete(k); }); // offline: try again next time
+    seen.set(k, p);
   }
   return p;
 }
@@ -59,7 +71,7 @@ export default function Achievements({ game }: { game: GameEntry }) {
                 {a.earnedHardcore && <span className="tag now">{t('ra.hardcore')}</span>}
               </small>
             </span>
-            <span className="pt">{a.points}</span>
+            <span className="pt">{a.points}<span className="sr"> {t('ra.pts', { count: a.points })}</span></span>
           </li>
         ))}
       </ul>

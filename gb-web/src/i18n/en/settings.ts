@@ -244,7 +244,7 @@ export default {
     source: 'Source code',
     sourceSub: 'Open source under the MIT License. Issues and contributions welcome.',
     data: 'Your data',
-    dataBody: 'No account, no server, no tracking, no analytics. ROMs, saves, screenshots and settings are stored in this browser (IndexedDB and local storage) and never uploaded. The covers of the bundled Tobu Tobu Girl games come with the app. The only requests to other sites are for box art of recognized ROMs you added, from the libretro-thumbnails project on GitHub (raw.githubusercontent.com), and only if you agree to it (it’s off by default; change it in <a>Storage</a>). Cartouche never offers commercial ROMs: bring your own dumps.',
+    dataBody: 'No account, no server, no tracking, no analytics. ROMs, saves, screenshots and settings are stored in this browser (IndexedDB and local storage) and never uploaded. The covers of the bundled Tobu Tobu Girl games come with the app. The only requests to other sites are for box art of recognized ROMs you added, from the libretro-thumbnails project on GitHub (raw.githubusercontent.com), and only if you agree to it (it’s off by default; change it in <a>Storage</a>), and, only if you connect it in <ra>Achievements</ra>, retroachievements.org (your username and web API key, read-only). Cartouche never offers commercial ROMs: bring your own dumps.',
     install: 'Install',
     asApp: 'Install as an app',
     installedSub: 'Installed: you’re using the app.',

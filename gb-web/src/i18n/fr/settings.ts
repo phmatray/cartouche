@@ -245,7 +245,7 @@ export default {
     source: 'Code source',
     sourceSub: 'Open source sous licence MIT. Tickets et contributions bienvenus.',
     data: 'Les données',
-    dataBody: 'Pas de compte, pas de serveur, pas de pistage, pas de statistiques. ROM, sauvegardes, captures et réglages sont stockés dans ce navigateur (IndexedDB et stockage local) et jamais envoyés. Les jaquettes des jeux Tobu Tobu Girl inclus sont fournies avec l’app. Les seules requêtes vers d’autres sites concernent les jaquettes des ROM reconnues ajoutées, depuis le projet libretro-thumbnails sur GitHub (raw.githubusercontent.com), et uniquement après accord (désactivé par défaut ; à changer dans <a>Stockage</a>). Cartouche ne propose jamais de ROM commerciales : vous apportez vos propres copies.',
+    dataBody: 'Pas de compte, pas de serveur, pas de pistage, pas de statistiques. ROM, sauvegardes, captures et réglages sont stockés dans ce navigateur (IndexedDB et stockage local) et jamais envoyés. Les jaquettes des jeux Tobu Tobu Girl inclus sont fournies avec l’app. Les seules requêtes vers d’autres sites concernent les jaquettes des ROM reconnues ajoutées, depuis le projet libretro-thumbnails sur GitHub (raw.githubusercontent.com), et uniquement après accord (désactivé par défaut ; à changer dans <a>Stockage</a>), et, seulement si vous le connectez dans <ra>Succès</ra>, retroachievements.org (nom d’utilisateur et clé d’API web, en lecture seule). Cartouche ne propose jamais de ROM commerciales : vous apportez vos propres copies.',
     install: 'Installation',
     asApp: 'Installer comme app',
     installedSub: 'Installée : c’est l’app qui est utilisée.',

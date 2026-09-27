@@ -2,7 +2,7 @@ import type { Messages } from '../core.ts';
 
 export default {
   tab: 'Succès',
-  intro: 'Connectez votre compte RetroAchievements pour voir, sur chaque cartouche reconnue, les succès que vous avez obtenus. C’est en lecture seule : jouer ici ne débloque pas encore de succès, car RetroAchievements n’accepte que les déblocages des émulateurs qu’il a examinés.',
+  intro: 'Connectez votre compte RetroAchievements pour voir, sur chaque cartouche reconnue, les succès que vous avez obtenus. C’est en lecture seule : jouer ici ne débloque pas encore de succès, car le service de déblocage de RetroAchievements n’accepte pas les requêtes des pages web.',
   user: 'Nom d’utilisateur',
   key: 'Clé d’API web',
   keySub: 'Elle se trouve sur retroachievements.org, dans <a>Settings › Keys</a>. Elle reste dans ce navigateur, et votre mot de passe n’est jamais demandé.',
@@ -10,6 +10,7 @@ export default {
   checking: 'Vérification…',
   connected: 'Connecté en tant que {user}',
   connectedSub: 'Les pages des jeux et le manuel affichent vos succès. Ce navigateur ne contacte retroachievements.org que tant que vous êtes connecté.',
+  noUser: 'RetroAchievements ne connaît aucun joueur avec ce nom d’utilisateur.',
   disconnect: 'Déconnecter',
   refused: 'RetroAchievements n’a pas accepté ce nom d’utilisateur et cette clé.',
   offline: 'RetroAchievements est injoignable pour le moment. Réessayez plus tard.',
@@ -18,9 +19,10 @@ export default {
   none: 'RetroAchievements n’a aucun succès pour cette version de la cartouche.',
   earned: { one: '{count} sur {total} obtenu', other: '{count} sur {total} obtenus' },
   points: '{earned} points sur {total}',
+  pts: { one: 'point', other: 'points' },
   hardcore: 'Hardcore',
   locked: 'Pas encore obtenu',
-  on: 'Obtenu {date}',
+  on: 'Obtenu le {date}',
   site: 'Voir sur RetroAchievements',
   readOnly: 'Jouer ici ne débloque pas encore de succès.',
 } satisfies Messages['ra'];

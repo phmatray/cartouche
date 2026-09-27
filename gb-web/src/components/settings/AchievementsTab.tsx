@@ -16,10 +16,11 @@ export function AchievementsTab() {
     if (!c.user || !c.key) return;
     setBusy(true); setErr('');
     try {
-      await checkCreds(c);
+      c.user = await checkCreds(c);
       setCreds(c); setState(c);
     } catch (x) {
-      setErr(x instanceof RaError && x.kind === 'auth' ? t('ra.refused') : t('ra.offline'));
+      const kind = x instanceof RaError ? x.kind : 'net';
+      setErr(kind === 'auth' ? t('ra.refused') : kind === 'missing' ? t('ra.noUser') : t('ra.offline'));
     }
     setBusy(false);
   };

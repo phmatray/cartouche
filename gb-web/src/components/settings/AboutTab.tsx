@@ -24,7 +24,7 @@ export function AboutTab() {
 
       <h3>{t('settings.about.data')}</h3>
       <p className="intro" style={{ margin: '8px 0 0' }}>
-        {rich(t('settings.about.dataBody'), { a: (s) => <Link to="/settings/storage" style={{ color: 'var(--ink)' }}>{s}</Link> })}
+        {rich(t('settings.about.dataBody'), { a: (s) => <Link to="/settings/storage" style={{ color: 'var(--ink)' }}>{s}</Link>, ra: (s) => <Link to="/settings/achievements" style={{ color: 'var(--ink)' }}>{s}</Link> })}
       </p>
 
       <h3>{t('settings.about.install')}</h3>

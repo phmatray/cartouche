@@ -26,21 +26,25 @@ export function setCreds(c: RaCreds | null) {
 /** The achievements list shows for a connected player's games whose ROM is in this browser (never downloads one). */
 export const raShown = (g: { romUrl?: string; isLocal?: boolean; madeWith?: string }) => !!getCreds() && (g.isLocal || (!!g.romUrl && !g.madeWith));
 
-/** Why a call failed: the key was refused, or RetroAchievements could not be reached. */
-export class RaError extends Error { kind: 'auth' | 'net'; constructor(kind: 'auth' | 'net') { super(kind); this.kind = kind; } }
+/** Why a call failed: the key was refused, no such user (or game), or RetroAchievements could not be reached. */
+export type RaFail = 'auth' | 'missing' | 'net';
+export class RaError extends Error { kind: RaFail; constructor(kind: RaFail) { super(kind); this.kind = kind; } }
 
 async function call<T>(endpoint: string, params: Record<string, string | number>, c: RaCreds): Promise<T> {
   const q = new URLSearchParams({ ...Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)])), y: c.key });
   let r: Response;
   try { r = await fetch(`${API}${endpoint}.php?${q}`); } catch { throw new RaError('net'); }
   if (r.status === 401 || r.status === 403) throw new RaError('auth');
+  if (r.status === 404) throw new RaError('missing');
   if (!r.ok) throw new RaError('net');
   return r.json();
 }
 
-/** Check a username and key (the profile answers only to a valid key). */
-export async function checkCreds(c: RaCreds): Promise<void> {
-  await call('API_GetUserProfile', { u: c.user }, c);
+/** Check a username and key (the profile answers only to a valid key); returns the username as RetroAchievements spells it. */
+export async function checkCreds(c: RaCreds): Promise<string> {
+  const p = await call<{ User?: string } | null>('API_GetUserProfile', { u: c.user }, c);
+  if (!p?.User) throw new RaError('missing');
+  return p.User;
 }
 
 /** The game's RetroAchievements id for this MD5, from the Game Boy and Color lists (kept a week), or null. */
