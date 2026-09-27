@@ -324,6 +324,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .album canvas,.album img{box-shadow:0 0 0 6px #0b0b0b}
 .album figcaption{font:600 12px var(--font);color:var(--ink-3);margin-top:12px}
 .empty-inline{border:2px dashed var(--paper-3);padding:22px;font:600 14px/1.5 var(--font);color:var(--ink-3);display:flex;gap:12px;align-items:center}
+.empty-inline .linkbtn{flex:none;white-space:nowrap} /* "Tout afficher" stays one line beside the message */
 .side h3{font:900 26px/1 var(--font);font-stretch:62%;text-transform:uppercase;margin:0 0 12px;border-top:3px solid var(--paper);padding-top:12px}
 .side section+section{margin-top:40px}
 .stats{margin:0}
