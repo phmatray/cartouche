@@ -10,10 +10,10 @@ export function SwitchRow({ label, sub, on, set }: { label: string; sub?: ReactN
   );
 }
 
-/** Segmented choice (Fit / 2× / 3×…). */
-export function Seg<T extends string | number>({ label, value, options, set }: { label: string; value: T; options: [T, string][]; set: (v: T) => void }) {
+/** Segmented choice (Fit / 2× / 3×…). `wrap`: two rows on narrow screens (for five or more options). */
+export function Seg<T extends string | number>({ label, value, options, set, wrap }: { label: string; value: T; options: [T, string][]; set: (v: T) => void; wrap?: boolean }) {
   return (
-    <div className="seg" role="group" aria-label={label}>
+    <div className={wrap ? 'seg wrap' : 'seg'} role="group" aria-label={label}>
       {options.map(([v, l]) => <button key={String(v)} aria-pressed={value === v} onClick={() => set(v)}>{l}</button>)}
     </div>
   );

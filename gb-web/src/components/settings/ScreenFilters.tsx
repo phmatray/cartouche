@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useLcdShader } from '../../hooks/useLcdShader';
-import { useDisplay } from '../../store/settingsStore';
+import { useDisplay, useSettingsStore } from '../../store/settingsStore';
+import { supportsWebGL2 } from '../../shaders/lcd-engine';
 import { PALETTES, presetOf, presetsFor, type Correction, type Filters, type ScreenKind, type Upscale } from '../../shaders/filters';
 import { Row, Seg, Slider, SwitchRow } from './parts';
 
@@ -14,6 +15,34 @@ export function PresetPreview({ filters, color, frame }: { filters: Filters; col
 }
 
 const pct = (v: number) => Math.round(v * 100);
+
+/** The AI disclosure shown wherever Neural 4× is on. */
+export function NeuralNote() {
+  return (
+    <div className="notice ai">
+      <span className="ic">AI</span>
+      <span>
+        Upscaled by a neural network trained on Game Boy frames; it adds detail that wasn’t in the original pixels.
+        {!supportsWebGL2() && <> <b>This browser has no WebGL 2, so it shows Nearest.</b></>}
+      </span>
+    </div>
+  );
+}
+
+/** Smooth motion: a player-wide switch (not part of a preset or a game’s own settings). */
+export function MotionRows() {
+  const { smoothMotion, smoothMotionForce, set } = useSettingsStore();
+  return (
+    <>
+      <SwitchRow label="Smooth motion (120 Hz)" on={smoothMotion} set={(v) => set({ smoothMotion: v })}
+        sub="In-between frames from the game’s exact scroll and sprite positions, on screens over 60 Hz. About 8 ms more delay; Neural 4× pauses while it runs." />
+      {smoothMotion && (
+        <SwitchRow label="Also on 60 Hz screens" on={smoothMotionForce} set={(v) => set({ smoothMotionForce: v })}
+          sub="Off by default: a 60 Hz screen has no room for extra frames, it only adds delay" />
+      )}
+    </>
+  );
+}
 const SHADES = ['Lightest', 'Light', 'Dark', 'Darkest'];
 
 /**
@@ -75,8 +104,9 @@ export function ScreenFilters({ kind, gameId, frame }: { kind: ScreenKind; gameI
       )}
       <Slider label="Ghosting" sub="LCD persistence: moving sprites leave a trail, flicker blends" value={pct(f.ghosting)} min={0} max={70} set={(v) => tweak({ ghosting: v / 100 })} />
       <div className="row col">
-        <span>Upscaling<small>Nearest and Smooth keep square pixels; Scale2x and 3x round off pixel-art edges</small></span>
-        <Seg<Upscale> label="Upscaling" value={f.upscale} options={[['nearest', 'Nearest'], ['scale2x', 'Scale2x'], ['scale3x', 'Scale3x'], ['smooth', 'Smooth']]} set={(upscale) => tweak({ upscale })} />
+        <span>Upscaling<small>Nearest and Smooth keep square pixels; Scale2x, 3x and Neural 4× round off pixel-art edges</small></span>
+        <Seg<Upscale> label="Upscaling" value={f.upscale} options={[['nearest', 'Nearest'], ['scale2x', 'Scale2x'], ['scale3x', 'Scale3x'], ['smooth', 'Smooth'], ['neural', 'Neural 4×']]} set={(upscale) => tweak({ upscale })} wrap />
+        {f.upscale === 'neural' && <NeuralNote />}
       </div>
       <Slider label="Pixel grid" sub="The LCD’s dot matrix" value={pct(f.grid)} min={0} max={100} set={(v) => tweak({ grid: v / 100 })} />
       <Slider label="Scanlines" value={pct(f.scanlines)} min={0} max={100} set={(v) => tweak({ scanlines: v / 100 })} />

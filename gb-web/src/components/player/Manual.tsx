@@ -6,7 +6,7 @@ import type { RomMetadata } from '../../lib/rom-utils';
 import type { useEmulator } from '../../hooks/useEmulator';
 import type { SlotKey } from '../../hooks/useSaveStates';
 import { useSettingsStore, type ScreenSize } from '../../store/settingsStore';
-import { ScreenFilters } from '../settings/ScreenFilters';
+import { MotionRows, ScreenFilters } from '../settings/ScreenFilters';
 import { ago, dur, paths } from '../../lib/ui';
 import { I } from '../icons';
 import { Frame } from '../library/Heroes';
@@ -151,6 +151,8 @@ function ScreenPage({ snapshot, romLoaded, inColor, gameId }: { snapshot: () => 
         <div className="notice"><span className="ic">i</span><span>This is a Game Boy Color game: it keeps its own colors, so palettes don’t apply. Color correction does.</span></div>
       )}
       <ScreenFilters kind={inColor ? 'cgb' : 'dmg'} gameId={gameId} frame={frame} />
+      <h3>Motion</h3>
+      <MotionRows />
       <h3>Size</h3>
       <div className="seg" role="group" aria-label="Scale">
         {(['fit', '2', '3', '4'] as ScreenSize[]).map((s) => <button key={s} aria-pressed={screenSize === s} onClick={() => setScreenSize(s)}>{s === 'fit' ? 'Fit' : `${s}×`}</button>)}
