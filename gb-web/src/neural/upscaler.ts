@@ -19,7 +19,7 @@
  */
 import tileUrl from './weights/tile4x.bin?url';
 import lcUrl from './weights/lc4x.bin?url';
-import { lcTexture, packTileNet, parseLc, parseTileNet, type LcTable, type TileNet } from './weights';
+import { SNAP, lcTexture, packTileNet, parseLc, parseTileNet, type LcTable, type TileNet } from './weights';
 import {
   COMBOS, H, L, LINES_OFF, LINE_LEN, MapState, W, bgCombo, clearRect, isCgb, lineReg, linePalettes, planRegion, rendered,
   validTrace, vramOf, winCombo, wrapSpans, type FrameTrace, type Rect,
@@ -39,8 +39,6 @@ export function loadWeights(): Promise<NeuralWeights> {
 }
 
 export const OUT_W = W * 4, OUT_H = H * 4;
-/** Snap: subpixel weights under this are dropped (faint tints that only flicker), the rest renormalised. */
-const SNAP = 0.2;
 
 const VS = `#version 300 es
 in vec2 a_position;
@@ -104,7 +102,7 @@ void main() {
   lg = mix(vec4(-1e4), lg, present); // no colour that is not in the 3x3 neighbourhood
   vec4 e = exp(lg - max(max(lg.x, lg.y), max(lg.z, lg.w)));
   vec4 wt = e / dot(e, vec4(1.0));
-  wt *= step(${SNAP.toFixed(2)}, wt);
+  wt *= step(min(${SNAP.toFixed(2)}, max(max(wt.x, wt.y), max(wt.z, wt.w))), wt); // the strongest id always stays
   o = wt / dot(wt, vec4(1.0));
 }`;
 

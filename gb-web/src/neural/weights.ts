@@ -14,6 +14,9 @@ export interface TileNet {
   layers: { w: Float32Array; b: Float32Array; cin: number; cout: number; k: number }[];
 }
 
+/** Snap: subpixel weights under this are dropped (faint tints that only flicker), the rest renormalised. */
+export const SNAP = 0.3;
+
 export interface LcTable { pairs: [number, number][]; table: Uint8Array; nb: number }
 
 export function halfToFloat(h: number): number {
