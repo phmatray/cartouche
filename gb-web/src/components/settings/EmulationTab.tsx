@@ -184,8 +184,8 @@ export function EmulationTab() {
       </Row>
       <Row label={t('settings.emu.rewind')} sub={t('settings.emu.rewindSub')}>
         <span className="range">
-          <input type="range" min={5} max={60} step={5} value={s.rewindBufferSeconds} aria-label={t('settings.emu.rewind')} onChange={(e) => s.setRewindBufferSeconds(+e.target.value)} />
-          <output>{s.rewindBufferSeconds} s</output>
+          <input type="range" min={5} max={60} step={5} value={s.rewindBufferSeconds} aria-label={t('settings.emu.rewind')} aria-valuetext={`${s.rewindBufferSeconds} s`} onChange={(e) => s.setRewindBufferSeconds(+e.target.value)} />
+          <span className="v" aria-hidden="true">{s.rewindBufferSeconds} s</span>
         </span>
       </Row>
       <StartupRows />
