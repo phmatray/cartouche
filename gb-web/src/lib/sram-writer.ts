@@ -50,3 +50,13 @@ export class SramWriter {
     return { to, done };
   }
 }
+
+/** A battery save written this soon after a resume point comes from the same leave (the same RAM, ms apart). */
+const SAME_LEAVE_MS = 500;
+/**
+ * A resume point holds the cartridge RAM of its moment. A battery save written well after it (a link cable session,
+ * online play, a sync, an autosave the tab outlived) is newer: loading the state would write its old RAM over that save.
+ * ponytail: timestamps only; a save flushed by the timer just after a 30 s resume point with the same RAM also counts
+ * as newer (the game then starts from its save, nothing lost). Compare the state's RAM if that ever matters.
+ */
+export const resumeOlderThan = (stateAt: number, save: { timestamp: number } | undefined) => !!save && save.timestamp > stateAt + SAME_LEAVE_MS;

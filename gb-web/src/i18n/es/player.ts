@@ -32,6 +32,7 @@ export default {
     loadedSlot: 'Ranura {n} cargada',
     loadedResume: 'Punto de reanudación cargado',
     gone: 'Ese guardado ya no existe. Empezando de cero.',
+    saveNewer: 'Tu guardado es más reciente que el punto de reanudación. Empezando desde tu guardado.',
     madeOnDmg: 'Ese guardado se hizo en Game Boy. Elige la consola Game Boy para cargarlo.',
     madeOnGbc: 'Ese guardado se hizo en Game Boy Color. Elige la consola Game Boy Color para cargarlo.',
     madeOnSgb: 'Ese guardado se hizo en Super Game Boy. Activa los marcos y colores de Super Game Boy en la página Pantalla para cargarlo.',

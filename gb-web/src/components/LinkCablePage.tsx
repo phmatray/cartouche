@@ -13,6 +13,7 @@ import { Cover, NoArt } from './library/Cover';
 import { I } from './icons';
 import { toast } from './shell/actions';
 import { fileAccept } from '../lib/pwa';
+import { holdLinkCable } from '../lib/play-lock';
 import { rich, t as tNow, useT } from '../i18n';
 
 // Fixed two-player keys: player 1 on the right of the keyboard, player 2 on the left.
@@ -145,6 +146,7 @@ export function LinkCablePage() {
   };
 
   useEffect(() => { document.title = t('common.docTitle', { page: t('link.title') }); }, [t]);
+  useEffect(() => holdLinkCable(), []); // sync in another tab leaves every save alone meanwhile (lib/play-lock)
 
   const choose = (p: LinkPlayer, v: string) => {
     if (v === FILE) { fileInput.current[p]?.click(); return; }
@@ -194,7 +196,13 @@ export function LinkCablePage() {
     const onHide = () => { if (document.visibilityState === 'hidden') leave(); };
     document.addEventListener('visibilitychange', onHide);
     window.addEventListener('pagehide', leave);
-    return () => { window.clearInterval(t); document.removeEventListener('visibilitychange', onHide); window.removeEventListener('pagehide', leave); };
+    window.addEventListener('beforeunload', leave); // WebKit drops a write issued in pagehide during a reload or close
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('pagehide', leave);
+      window.removeEventListener('beforeunload', leave);
+    };
   }, [state.isRunning, autoSave, autoSeconds, flush, flushNow]);
 
   // Both players' keys, only while the cable is connected.

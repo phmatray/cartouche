@@ -87,7 +87,8 @@ sides. Manifests carry hashes, modification times and sizes; small records carry
 - Play time, sessions, last played: the larger of each.
 - Deletions of saves and states don't sync: a save deleted on one device comes back from the other.
 - The game running at the moment is left alone (its saves sync next time), and so are all saves while a link
-  cable page (same screen or online) is open.
+  cable page (same screen or online) is open. This holds across the browser's tabs: an open player and the local
+  link cable page hold a shared Web Lock (`lib/play-lock.ts`) that sync checks when it plans and when a record lands.
 
 ## What stays on each device
 
@@ -105,4 +106,6 @@ screenshots.
   about 1 MB/s.
 - A room where nobody has proved itself for 16 s is joined again from scratch (a device that reloads sometimes
   never gets its new connection up otherwise). In tests a WebKit reload relinked in 7 to 9 s, once in 21 s.
+- One tab per browser runs the links (Web Lock `cartouche-sync-engine`): the others show its link states and pass it
+  their "Sync now" and unpairing over a BroadcastChannel, and the next one takes over when it closes.
 - Test knob: `localStorage['cartouche.sync.throttle']` = ms to wait between the chunks a browser sends.

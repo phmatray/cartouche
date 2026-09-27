@@ -1,7 +1,7 @@
 // node --test: a player writes its battery save at once, only when it changed, and never over a save written elsewhere.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SramWriter } from './sram-writer.ts';
+import { resumeOlderThan, SramWriter } from './sram-writer.ts';
 import type { StoredSave } from './db.ts';
 
 function store() {
@@ -65,4 +65,11 @@ test('measured against the record the game loaded, even when the store moved bef
   assert.ok(r && r !== 'unknown');
   assert.equal(r.to.id, 'g~2');
   assert.deepEqual(db.get('g')!.sram, b(9));
+});
+
+test('a resume point is older than a battery save written well after it, not one from the same leave', () => {
+  assert.equal(resumeOlderThan(10_000, undefined), false); // no battery save
+  assert.equal(resumeOlderThan(10_000, { timestamp: 9_000 }), false); // the save is older
+  assert.equal(resumeOlderThan(10_000, { timestamp: 10_050 }), false); // the same leave wrote both
+  assert.equal(resumeOlderThan(10_000, { timestamp: 60_000 }), true); // a link session wrote it later
 });

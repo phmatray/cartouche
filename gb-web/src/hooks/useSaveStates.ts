@@ -3,6 +3,7 @@ import { useState, useCallback, useEffect, type RefObject } from 'react';
 import { createProfile, getGameSaveStates, getSaveState, getSram, listProfiles, saveSaveState, resumeStateId, setActiveProfile, slotStateId, uniqueName, type StoredSaveState } from '../lib/db';
 import { refreshSavedIds } from './useGameLibrary';
 import { toast } from '../components/shell/actions';
+import { resumeOlderThan } from '../lib/sram-writer';
 
 /** 'auto' is the resume point written when leaving; numbers are the 5 slots. */
 export type SlotKey = 'auto' | number;
@@ -48,12 +49,17 @@ export function useSaveStates(
     return true;
   }, [gameId, idOf, saveState, framebufferSnapshot, reload, profileRef]);
 
-  const load = useCallback(async (k: SlotKey) => {
+  /**
+   * `atBoot`: the game starting from its resume point ("Continue"). A resume point older than its profile's battery
+   * save (written since by a link cable session, online play, a sync) is not loaded: 'older', the game starts from that save.
+   */
+  const load = useCallback(async (k: SlotKey, atBoot = false): Promise<boolean | 'older'> => {
     if (!gameId) return false;
     const entry = await getSaveState(idOf(k));
     if (!entry) return false;
     // Look the profile up before loading: once the state is in, a battery write must already go to the right profile.
     const owner = entry.profile ?? gameId; // states from before profiles belong to Main
+    if (atBoot && k === 'auto' && resumeOlderThan(entry.timestamp, await getSram(owner).catch(() => undefined))) return 'older';
     const switching = !!profileRef?.current && owner !== profileRef.current;
     const other = switching ? await getSram(owner).catch(() => undefined) : undefined;
     if (!loadState(entry.data, entry.thumbnail)) return false;
