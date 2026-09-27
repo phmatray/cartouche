@@ -3,6 +3,7 @@ import { clearAll, gameOfSave, getAllFrom, getAllGameMeta, getGameMeta, getRom, 
 import { backupFileName, exportBackup, readBackup, restoreBackup } from '../../lib/backup';
 import { refreshSavedIds, reloadLibrary, useGameLibrary } from '../../hooks/useGameLibrary';
 import { useSettingsStore } from '../../store/settingsStore';
+import { useSync } from '../../lib/sync/status';
 import { toast } from '../shell/actions';
 import { ConfirmDialog, type ConfirmRequest } from '../shell/ConfirmDialog';
 import { askBoxArt, boxArtBytes, boxArtPerGame, deleteBoxArt, fetchBoxArtFor, needsDownload, NO_COVERS, useBoxArtProgress } from '../../lib/cover-art';
@@ -170,6 +171,12 @@ export function StorageTab() {
       useSettingsStore.getState().resetToDefaults();
       // Box art too (the offline app shell stays: it holds no personal data).
       await deleteBoxArt();
+      // Unpair first: other tabs pick the empty list up (a cleared key alone leaves theirs in memory) and auto
+      // sync can't pull the erased saves back. Then the rest: RetroAchievements key, sync and TURN details, flags.
+      useSync.setState({ devices: [], auto: false, roms: false });
+      indexedDB.deleteDatabase('cartouche-sync');
+      // Only this app's keys: the origin (a GitHub Pages user site) is shared with other projects.
+      try { Object.keys(localStorage).filter((k) => k.startsWith('cartouche') || k === 'gb-settings').forEach((k) => localStorage.removeItem(k)); } catch { /* storage blocked */ }
       location.assign(import.meta.env.BASE_URL); // start over from a clean load
     },
   });
