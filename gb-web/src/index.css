@@ -340,7 +340,6 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .ra-form small{font:500 13px/1.45 var(--font);color:var(--ink-3)}
 .ra-form small a{color:var(--ink)}
 .ra-form .btn{justify-self:start}
-.ra-form .field{font-size:16px} /* iOS zooms into smaller text fields */
 /* link cable: which battery save each player plays and writes to */
 .svp{margin-top:16px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
 .svp .sel{min-width:0}
@@ -1040,6 +1039,7 @@ body{font-family:var(--font)}
   .chips{padding-top:3px;padding-bottom:3px}
   .vt button{width:44px}
   .sel select{min-height:44px}
+  .field,.sel select{font-size:16px} /* iOS zooms into a text field or select under 16px when it's focused */
   .pl-top .back{min-width:44px;justify-content:center}
   .touch .ss button{height:44px}
   .range input,input[type=range]{height:44px}
