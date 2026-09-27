@@ -440,8 +440,9 @@ impl GameBoy {
         self.bus.cartridge.import_sram(ram_data);
 
         self.bus.joypad.select = read_u8!();
-        self.bus.joypad.button_state = read_u8!();
-        self.bus.joypad.dpad_state = read_u8!();
+        // The held buttons are the player's live input, not the state's: skip them, or a button
+        // held at the save stays pressed after a load (the host sends no release for it).
+        pos += 2;
 
         self.bus.cgb_mode = read_u8!() != 0;
         self.cgb_mode = self.bus.cgb_mode;
