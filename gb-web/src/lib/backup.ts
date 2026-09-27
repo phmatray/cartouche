@@ -1,6 +1,7 @@
 import { t } from '../i18n';
 import { decode, jsonBlob } from './backup-json';
 import { asProfile, getAllFrom, getRom, getRomIds, putInto, STORES, type StoredGameMeta, type StoredRom, type StoredSave, type StoredSaveState, type StoredScreenshot } from './db';
+import { cleanSetting } from './settings-clean';
 import { SETTINGS_KEYS, displayFromV3, useSettingsStore, type SettingsValues } from '../store/settingsStore';
 
 /** A .cartouche backup is JSON (see ./backup-json): every IndexedDB store plus the settings. */
@@ -109,7 +110,10 @@ export async function restoreBackup(b: Backup, withSettings: boolean): Promise<R
     const raw = b.settings as Record<string, unknown>;
     const settings = raw.display === undefined && ('shaderPreset' in raw || 'pixelGrid' in raw)
       ? { ...raw, display: displayFromV3(raw.shaderPreset, raw.pixelGrid) } : raw;
-    const known = Object.fromEntries(Object.entries(settings).filter(([k, v]) => (SETTINGS_KEYS as string[]).includes(k) && !own.includes(k) && typeof v === typeof cur[k] && (v === null) === (cur[k] === null) && Array.isArray(v) === Array.isArray(cur[k])));
+    const known = Object.fromEntries(Object.entries(settings)
+      .filter(([k, v]) => (SETTINGS_KEYS as string[]).includes(k) && !own.includes(k) && typeof v === typeof cur[k] && (v === null) === (cur[k] === null) && Array.isArray(v) === Array.isArray(cur[k]))
+      .map(([k, v]) => [k, cleanSetting(k, v, cur[k])]) // records checked field by field: a partial keybindings would break the player
+      .filter(([, v]) => v !== undefined));
     useSettingsStore.getState().set(known as Partial<SettingsValues>);
   }
   return count;
