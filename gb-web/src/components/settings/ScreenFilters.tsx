@@ -13,7 +13,8 @@ export function PresetPreview({ filters, color, frame }: { filters: Filters; col
   // A fixed 4x backing size, not the shown size: at ~1 device pixel per Game Boy pixel the grid and
   // scanlines would fade out and every card would differ only by its colours.
   const { canvasRef, canvasKey, renderFrame, canvas, restores } = useLcdShader(filters, color, false);
-  useEffect(() => { if (frame) renderFrame(frame); }, [frame, renderFrame, filters, color, canvas, restores]);
+  // Fresh: a still, not the next frame of a motion; ghosting would blend in the frame caught a second before.
+  useEffect(() => { if (frame) renderFrame(frame, true); }, [frame, renderFrame, filters, color, canvas, restores]);
   return <canvas key={canvasKey} ref={canvasRef} className="lcd" width={640} height={576} aria-hidden="true" />;
 }
 
