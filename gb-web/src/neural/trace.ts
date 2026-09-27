@@ -193,13 +193,16 @@ export function cramRgb(cram: Uint8Array, out: Uint8Array, at = 0): void {
 
 /**
  * The BG colours each scanline used, 144 rows x 32 RGBA (palette * 4 + colour id), into `out`.
- * DMG: the line's BGP through the core's shades (palette 0 only). CGB: the VBlank CRAM snapshot, then every
- * (palette, id) the line visibly drew from the BG or window plane overrides it, which follows games that
- * rewrite palettes mid-frame. `maps` must be synced for the combos these lines use.
+ * DMG: the line's BGP through the core's shades (palette 0 only). CGB: every (palette, id) a line visibly drew
+ * from the BG or window plane is that line's colour; a line that did not draw it takes the nearest line that
+ * did (the line above on a tie), and one no line drew takes the VBlank CRAM snapshot. This follows games that
+ * rewrite palettes mid-frame: a neighbour pixel from the next line is coloured the way that line showed it.
+ * `maps` must be synced for the combos these lines use.
  */
 export function linePalettes(t: FrameTrace, maps: MapState[], out: Uint8Array): void {
   const meta = t.meta, cgb = isCgb(meta);
   const cram = new Uint8Array(128);
+  const seen = new Uint8Array(H * 32);
   if (cgb) cramRgb(meta.subarray(BG_CRAM_OFF, BG_CRAM_OFF + 64), cram);
   for (let y = 0; y < H; y++) {
     const row = y * 128;
@@ -222,9 +225,21 @@ export function linePalettes(t: FrameTrace, maps: MapState[], out: Uint8Array): 
         const p = (y * W + x) * 4;
         if (!plane[p + 3]) continue;
         const mx = win ? Math.min(255, Math.max(0, x + dx)) : (x + dx) & 255;
-        const e = row + ((m.attr[(my >> 3) * 32 + (mx >> 3)] & 7) * 4 + m.ids[my * 256 + mx]) * 4;
+        const k = (m.attr[(my >> 3) * 32 + (mx >> 3)] & 7) * 4 + m.ids[my * 256 + mx], e = row + k * 4;
         out[e] = plane[p]; out[e + 1] = plane[p + 1]; out[e + 2] = plane[p + 2];
+        seen[y * 32 + k] = 1;
       }
+    }
+  }
+  if (!cgb) return;
+  const prev = new Int16Array(H);
+  for (let k = 0; k < 32; k++) {
+    let q = -1, n = -1;
+    for (let y = 0; y < H; y++) { if (seen[y * 32 + k]) q = y; prev[y] = q; }
+    for (let y = H - 1; y >= 0; y--) {
+      if (seen[y * 32 + k]) { n = y; continue; }
+      const src = prev[y] < 0 ? n : n < 0 || y - prev[y] <= n - y ? prev[y] : n;
+      if (src >= 0) out.copyWithin(y * 128 + k * 4, src * 128 + k * 4, src * 128 + k * 4 + 3);
     }
   }
 }

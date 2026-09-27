@@ -7,6 +7,8 @@
  *   in a 1024x1024 atlas per map and only the cells whose tiles or map entries changed are recomputed, a
  *   bounded number per frame. The frame is then rebuilt from each line's scroll/window registers, with that
  *   line's palette applied last, so scrolling moves the cached result exactly and fades only recolour it.
+ *   A colour id that the pixel's on-screen neighbours show in another colour (a palette rewritten between
+ *   lines, a neighbour cell with another CGB palette) takes the colour the screen shows.
  * - Learned-classical table (lc4x.bin): a 16-bit colour-equality key over a 5x5 window picks, per subpixel,
  *   a neighbour and a blend amount. Used where the tile path does not apply: next to sprites or where layers
  *   meet, map cells still being computed, blocks whose centre does not reproduce the frame (VRAM or palette
@@ -170,8 +172,25 @@ void main() {
         uint cid = texelFetch(uIds, ivec3(m4 >> 2, combo), 0).r;
         if (pal(pe + int(cid)) != raw(P)) route = 3;
         else {
+          // Each colour id is coloured the way the screen shows it around the pixel: this line's palette when an
+          // on-screen neighbour with that id shows it, else the first on-screen neighbour with that id (a palette
+          // rewritten between lines, or a neighbour cell with another CGB palette).
+          vec3 base[4] = vec3[4](pal(pe), pal(pe + 1), pal(pe + 2), pal(pe + 3));
+          vec3 first[4] = base;
+          bool has[4] = bool[4](false, false, false, false);
+          bool match[4] = has;
+          for (int t = 0; t < 9; t++) {
+            ivec2 d = ivec2(t % 3 - 1, t / 3 - 1), s = P + d;
+            if (s.x < 0 || s.y < 0 || s.x > ${W - 1} || s.y > ${H - 1}) continue;
+            int j = int(texelFetch(uIds, ivec3(((m4 >> 2) + d) & 255, combo), 0).r);
+            vec3 r = raw(s);
+            if (r == base[j]) match[j] = true;
+            if (!has[j]) first[j] = r;
+            has[j] = true;
+          }
+          for (int j = 0; j < 4; j++) if (has[j] && !match[j]) base[j] = first[j];
           vec4 w = texelFetch(uAtlas, ivec3(m4, combo), 0);
-          vec3 c = w.x * pal(pe) + w.y * pal(pe + 1) + w.z * pal(pe + 2) + w.w * pal(pe + 3);
+          vec3 c = w.x * base[0] + w.y * base[1] + w.z * base[2] + w.w * base[3];
           o = uDebug == 1 ? vec4(1.0 / 255.0, 0.0, 0.0, 1.0) : vec4(c / 255.0, 1.0);
           return;
         }

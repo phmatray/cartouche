@@ -91,7 +91,7 @@ test('planRegion: budgeted rows, one-cell margin, whole axis at the map edge', (
   assert.deepEqual(planRegion(e, 64)!.calc, { x0: 0, y0: -1, x1: 32, y1: 3 });
 });
 
-test('linePalettes: DMG uses each line BGP, CGB takes what the line drew over the CRAM snapshot', () => {
+test('linePalettes: DMG uses each line BGP, CGB takes what the nearest line drew over the CRAM snapshot', () => {
   const plane = () => new Uint8Array(W * H * 4);
   const t: FrameTrace = { meta: new Uint8Array(META_LEN), final: plane(), bg: plane(), win: plane(), obj: plane(), info: plane() };
   t.meta.set([0x43, 0x54, 0x52, 0x43, 1, 0]);
@@ -118,4 +118,19 @@ test('linePalettes: DMG uses each line BGP, CGB takes what the line drew over th
   linePalettes(t, maps, out);
   assert.deepEqual([...out.subarray(y * 128 + (4 + 1) * 4, y * 128 + (4 + 1) * 4 + 4)], [255, 0, 0, 255]); // snapshot
   assert.deepEqual([...out.subarray(y * 128 + (4 + 2) * 4, y * 128 + (4 + 2) * 4 + 3)], [1, 2, 3]); // observed
+  // Mid-frame palette write: line 14 draws the same (palette, id) in another colour. Lines that did not draw it
+  // take the nearest line that did (the line above on a tie); an entry no line drew keeps the snapshot.
+  const y2 = 14;
+  t.meta.copyWithin(LINES_OFF + y2 * LINE_LEN, LINES_OFF + y * LINE_LEN, LINES_OFF + (y + 1) * LINE_LEN);
+  t.meta[LINES_OFF + y2 * LINE_LEN + L.SCY] = 252; // map row 10 again: tile row 2 -> id 2
+  t.bg.set([7, 8, 9, 255], (y2 * W + 2) * 4);
+  linePalettes(t, maps, out);
+  const e = (line: number, k: number) => [...out.subarray(line * 128 + k * 4, line * 128 + k * 4 + 3)];
+  assert.deepEqual(e(y2, 6), [7, 8, 9]);
+  assert.deepEqual(e(11, 6), [1, 2, 3]);
+  assert.deepEqual(e(12, 6), [1, 2, 3]); // tie: the line above
+  assert.deepEqual(e(13, 6), [7, 8, 9]);
+  assert.deepEqual(e(0, 6), [1, 2, 3]);
+  assert.deepEqual(e(143, 6), [7, 8, 9]);
+  assert.deepEqual(e(100, 5), [255, 0, 0]);
 });
