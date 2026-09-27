@@ -6,6 +6,7 @@ export default {
     live: 'En direct',
     photo: 'Photo',
     off: 'Éteint',
+    setUp: 'Touchez pour régler',
     sees: 'Ce que voit la cartouche caméra',
     ask: 'Cette cartouche a une caméra. Laisser le jeu voir par la vôtre ? L’image reste sur cet appareil : rien n’est enregistré ni envoyé.',
     useCamera: 'Utiliser ma caméra',

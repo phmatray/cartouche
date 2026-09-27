@@ -19,7 +19,8 @@ export default function CameraDock({ feed, running }: { feed: (lum: Uint8Array) 
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [device, setDevice] = useState('');
   const [mirror, setMirror] = useState(true);
-  const [open, setOpen] = useState(true);
+  // Phones start folded: open, the prompt would sit on the touch controls. The header (lens, "Off") unfolds it.
+  const [open, setOpen] = useState(() => !matchMedia('(pointer: coarse)').matches);
   const [visible, setVisible] = useState(() => document.visibilityState === 'visible');
   const video = useRef<HTMLVideoElement>(null);
   const preview = useRef<HTMLCanvasElement>(null);
@@ -112,7 +113,7 @@ export default function CameraDock({ feed, running }: { feed: (lum: Uint8Array) 
     </label>
   );
   const lit = (state === 'live' && awake) || state === 'photo';
-  const status = state === 'live' ? (awake ? t('periph.lens.live') : t('periph.lens.paused')) : state === 'photo' ? t('periph.lens.photo') : t('periph.lens.off');
+  const status = state === 'live' ? (awake ? t('periph.lens.live') : t('periph.lens.paused')) : state === 'photo' ? t('periph.lens.photo') : open ? t('periph.lens.off') : t('periph.lens.setUp');
 
   return (
     <section className={`cdock${open ? ' open' : ''}${lit ? ' lit' : ''}`} aria-label={t('periph.lens.label')}>

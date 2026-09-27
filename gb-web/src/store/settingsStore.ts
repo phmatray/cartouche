@@ -80,7 +80,6 @@ export interface SettingsState {
   gameSgb: Record<string, boolean>;
   /** Keep a resume point every time the player is left. */
   resumePoints: boolean;
-  muteWhenHidden: boolean;
   touchSize: TouchSize;
   /** On-screen controls: the skin, its shell colour (Color skin), and the player's own layouts by device and orientation. */
   touchSkin: Skin;
@@ -154,7 +153,6 @@ const DEFAULT_STATE = {
   showBoxArt: false, // opt-in: box art is third-party content fetched from GitHub
   boxArtAnswer: null as BoxArtAnswer | null,
   resumePoints: true,
-  muteWhenHidden: true,
   touchSize: 'M' as TouchSize,
   touchSkin: 'box' as Skin,
   touchShell: 'raspberry' as Shell,

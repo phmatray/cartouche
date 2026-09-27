@@ -17,7 +17,8 @@ import { parseRomHeader, sgbCartOf } from '../../lib/rom-utils';
 import { presetOf } from '../../shaders/filters';
 import { BUTTON_NUMBERS } from '../../utils/keybindings';
 import { dpadAt, slide } from '../../lib/touch-slide';
-import { getActiveProfileId, getSram } from '../../lib/db';
+import { getActiveProfileId, getSaveState, getSram, resumeStateId } from '../../lib/db';
+import { bootFrom } from '../../lib/boot-from';
 import { ago, owned, paths, tagOf } from '../../lib/ui';
 import { settled } from '../../lib/transitions';
 import { I } from '../icons';
@@ -233,7 +234,8 @@ function Player({ game }: { game: GameEntry }) {
   const boot = useCallback(async (data: Uint8Array) => {
     const s = useSettingsStore.getState();
     const slot = q.get('slot');
-    const from: SlotKey | null = q.get('resume') ? 'auto' : slot !== null ? +slot : null;
+    const hasResume = !!(await getSaveState(resumeStateId(game.id)).catch(() => undefined));
+    const from: SlotKey | null = bootFrom(q, s.resumePoints, hasResume);
     // A slot is loaded once: a reload (or iOS bringing back an evicted tab) goes on from the resume point instead.
     if (slot !== null) setQ((p) => { p.delete('slot'); if (s.resumePoints) p.set('resume', '1'); return p; }, { replace: true });
     // A state replaces the start-up at once: the animation then costs nothing (and plays if the state is gone).
@@ -415,7 +417,8 @@ function Player({ game }: { game: GameEntry }) {
       return undefined;
     };
     const down = (e: KeyboardEvent) => {
-      if (typing() || document.querySelector('dialog[open]') || e.ctrlKey || e.metaKey || e.altKey) return;
+      // The touch layout editor has the page (arrows and +/- move its parts): the game waits, no shortcut gets through.
+      if (editing || typing() || document.querySelector('dialog[open]') || e.ctrlKey || e.metaKey || e.altKey) return;
       // Keys on the camera lens or the printer tray work their own controls (Enter presses the button, not Start).
       if (e.target instanceof Element && e.target.closest('.cdock,.ptray')) return;
       const a = actions.current;
@@ -443,7 +446,7 @@ function Player({ game }: { game: GameEntry }) {
       window.removeEventListener('keydown', down); window.removeEventListener('keyup', up);
       window.removeEventListener('blur', releaseAll); document.removeEventListener('visibilitychange', onHidden);
     };
-  }, [keybindings, pressButton, releaseButton]);
+  }, [keybindings, pressButton, releaseButton, editing]);
 
   const auto = saves.states[0];
   const [kind, label] = tagOf(game, savedIds);
@@ -454,42 +457,46 @@ function Player({ game }: { game: GameEntry }) {
   const noStore = disabled || storageError; // save slots and the album need IndexedDB
   // Each finger holds what's under it: a thumb rolls across the D-pad (diagonals on the way) or from B onto A.
   const held = useRef(new Map<number, string[]>());
-  const hold = (e: React.PointerEvent<HTMLButtonElement>, now: string[]) => {
+  const hold = (e: React.PointerEvent<HTMLElement>, now: string[]) => {
     const root = e.currentTarget.closest('.touch');
     const { press, release } = slide(held.current, e.pointerId, now);
     for (const b of release) { root?.querySelector(`[data-pad="${b}"]`)?.classList.remove('down'); releaseButton(BUTTON_NUMBERS[b]); }
     for (const b of press) { root?.querySelector(`[data-pad="${b}"]`)?.classList.add('down'); pressButton(BUTTON_NUMBERS[b]); }
     if (press.length && useSettingsStore.getState().haptics) navigator.vibrate?.(8);
   };
-  const letGo = (e: React.PointerEvent<HTMLButtonElement>) => hold(e, []);
-  const pad = (b: string) => ({
-    'data-pad': b,
-    onPointerDown: (e: React.PointerEvent<HTMLButtonElement>) => {
+  const letGo = (e: React.PointerEvent<HTMLElement>) => hold(e, []);
+  /** The D-pad directions under the pointer, or null off the pad: the whole box is one control (centre and corners too). */
+  const onDpad = (e: React.PointerEvent<HTMLElement>) => {
+    const r = e.currentTarget.closest('.touch')?.querySelector('.dpad')?.getBoundingClientRect();
+    if (!r || e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return null;
+    return dpadAt(e.clientX - (r.left + r.right) / 2, e.clientY - (r.top + r.bottom) / 2, r.width);
+  };
+  /** `b`: one button; 'dpad': the D-pad box, which reads the directions from where the thumb is. */
+  const handlers = (b: string) => ({
+    onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
       // An armed rumble tick (iPhone, see peripherals/rumble.ts) needs the tap to reach its switch: no preventDefault then.
-      const tick = !!e.currentTarget.querySelector('.rtick input:enabled');
+      const tick = e.target instanceof Element && !!e.target.closest('.rtick')?.querySelector('input:enabled');
       if (!tick) e.preventDefault();
       // Capture can throw (pointer already released or cancelled by the system): never lose the press over it.
       if (!tick) try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* keep going */ }
-      hold(e, [b]);
+      hold(e, b === 'dpad' ? onDpad(e) ?? [] : [b]);
     },
-    onPointerMove: (e: React.PointerEvent<HTMLButtonElement>) => {
-      if (!held.current.has(e.pointerId) || !e.currentTarget.hasPointerCapture(e.pointerId)) return;
-      const root = e.currentTarget.closest('.touch');
-      const dpad = root?.querySelector('.dpad')?.getBoundingClientRect();
-      if (dpad && e.clientX >= dpad.left && e.clientX <= dpad.right && e.clientY >= dpad.top && e.clientY <= dpad.bottom) {
-        hold(e, dpadAt(e.clientX - (dpad.left + dpad.right) / 2, e.clientY - (dpad.top + dpad.bottom) / 2, dpad.width));
-        return;
-      }
+    onPointerMove: (e: React.PointerEvent<HTMLElement>) => {
+      if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+      const dirs = onDpad(e);
+      if (dirs) { hold(e, dirs); return; }
       // Over another button: that one. Over nothing: the thumb keeps what it holds (it overshoots the edges).
+      const root = e.currentTarget.closest('.touch');
       const other = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[data-pad]');
       if (other?.dataset.pad && root?.contains(other)) hold(e, [other.dataset.pad]);
     },
     onPointerUp: letGo,
     onPointerCancel: letGo,
     // Uncaptured (an armed rumble tick): sliding off the button lets it go.
-    onPointerLeave: (e: React.PointerEvent<HTMLButtonElement>) => { if (!e.currentTarget.hasPointerCapture(e.pointerId)) letGo(e); },
+    onPointerLeave: (e: React.PointerEvent<HTMLElement>) => { if (!e.currentTarget.hasPointerCapture(e.pointerId)) letGo(e); },
     onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
   });
+  const pad = (b: string) => (b === 'dpad' ? handlers(b) : { 'data-pad': b, ...handlers(b) });
 
   return (
     <div ref={rootRef} className={`pl${manual ? '' : ' closed'}${idle ? ' idle' : ''}${immersive ? ' imm' : ''}${bordered ? ' sgb' : ''}`} style={{ '--flood': ink } as CSSProperties}>

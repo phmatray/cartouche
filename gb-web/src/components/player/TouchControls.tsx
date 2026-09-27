@@ -22,6 +22,7 @@ function useMedia(q: string) {
 
 type PadProps = (b: string) => object;
 interface Props {
+  /** A button's props; 'dpad': the D-pad box's handlers (the whole box is one control, its arms only show what's held). */
   pad: PadProps;
   /** Online link cable: no rewind, no fast-forward. */
   online: boolean;
@@ -87,12 +88,12 @@ export function TouchControls({ pad, online, editing, onEdit, onDone, startRewin
     <>
     <div className="touch" ref={holdTouches} role="group" data-size={layout ? undefined : touchSize} data-skin={skin} data-shell={skin === 'color' ? shell : undefined} aria-label={t('player.touch.label')}>
       <div className="tz" ref={zone} data-custom={layout ? '' : undefined} data-overlay={overlay ? '' : undefined} data-editing={editing ? '' : undefined}>
-        <div className="dpad" data-part="dpad" style={place('dpad')}>
+        <div className="dpad" data-part="dpad" style={place('dpad')} {...(editing ? {} : pad('dpad'))}>
           <span className="c" />
-          <button className="u" aria-label={t('player.touch.up')} {...p('Up')}>{I.up}</button>
-          <button className="d" aria-label={t('player.touch.down')} {...p('Down')}>{I.down}</button>
-          <button className="l" aria-label={t('player.touch.left')} {...p('Left')}>{I.left}</button>
-          <button className="r" aria-label={t('player.touch.right')} {...p('Right')}>{I.right}</button>
+          <button className="u" aria-label={t('player.touch.up')} {...off('Up')}>{I.up}</button>
+          <button className="d" aria-label={t('player.touch.down')} {...off('Down')}>{I.down}</button>
+          <button className="l" aria-label={t('player.touch.left')} {...off('Left')}>{I.left}</button>
+          <button className="r" aria-label={t('player.touch.right')} {...off('Right')}>{I.right}</button>
         </div>
         <div className="ab" data-part="ab" style={place('ab')}><button className="b" data-l="B" {...p('B')}>B</button><button className="a" data-l="A" {...p('A')}>A</button></div>
         <div className="ss" data-part="ss" style={place('ss')}><button data-l="Select" {...p('Select')}>Select</button><button data-l="Start" {...p('Start')}>Start</button></div>

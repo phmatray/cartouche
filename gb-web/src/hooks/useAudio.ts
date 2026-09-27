@@ -33,14 +33,9 @@ export function useAudio(running: boolean) {
     await sync();
   }, [sync]);
 
-  // Settings › Audio › Mute when the tab is hidden.
+  // A hidden page runs no frames (requestAnimationFrame stops): the audio device rests with it.
   useEffect(() => {
-    const onVis = () => {
-      sync()?.catch(() => {});
-      if (!useSettingsStore.getState().muteWhenHidden || mutedRef.current) return;
-      if (document.visibilityState === 'hidden') engineRef.current?.mute();
-      else engineRef.current?.unmute(useSettingsStore.getState().masterVolume / 100);
-    };
+    const onVis = () => { sync()?.catch(() => {}); };
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [sync]);

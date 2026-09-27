@@ -138,9 +138,6 @@ export default {
     waveSub: 'Forma de onda libre: líneas de bajo',
     noise: 'Ruido',
     noiseSub: 'Percusión y efectos',
-    behavior: 'Comportamiento',
-    hidden: 'Silenciar cuando la pestaña está oculta',
-    hiddenSub: 'El sonido se detiene al cambiar de pestaña o de ventana',
   },
   emu: {
     intro: 'Cómo se ejecutan los juegos y cómo se conserva tu progreso.',

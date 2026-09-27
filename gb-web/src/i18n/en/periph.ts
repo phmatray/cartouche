@@ -6,6 +6,7 @@ export default {
     live: 'Live',
     photo: 'Photo',
     off: 'Off',
+    setUp: 'Tap to set up',
     sees: 'What the camera cartridge sees',
     ask: 'This cartridge has a camera. Let the game see through yours? The picture stays on this device: nothing is recorded or sent.',
     useCamera: 'Use my camera',

@@ -137,9 +137,6 @@ export default {
     waveSub: 'Custom waveform: bass lines',
     noise: 'Noise',
     noiseSub: 'Drums and effects',
-    behavior: 'Behavior',
-    hidden: 'Mute when the tab is hidden',
-    hiddenSub: 'Sound stops when you switch tabs or windows',
   },
   emu: {
     intro: 'How games run and how your progress is kept.',
