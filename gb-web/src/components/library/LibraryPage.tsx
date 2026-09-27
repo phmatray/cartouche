@@ -92,7 +92,7 @@ export function LibraryPage() {
   const [held, setHeld] = useState<string>();
   const { cont, shelf, free, tests, gbs, hasRoms } = useMemo(() => {
     const when = (g: GameEntry) => g.lastPlayed || g.importedAt || 0;
-    const mine = games.filter((g) => owned(g) && when(g)).sort((a, b) => when(b) - when(a));
+    const mine = games.filter((g) => owned(g) && when(g) && (showTests || g.category !== TEST_CATEGORY)).sort((a, b) => when(b) - when(a));
     const i = importing && held ? mine.findIndex((g) => g.id === held) : -1;
     if (i > 0) mine.unshift(...mine.splice(i, 1));
     return {
