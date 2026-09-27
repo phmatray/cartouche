@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import type { Lang } from '../i18n/core';
 import { DEFAULT_DISPLAY, normalizeDisplay, presetOf, sameFilters, type DisplayConfig, type Filters, type PresetName, type ScreenKind } from '../shaders/filters';
 
 export type GameBoyButton = 'A' | 'B' | 'Select' | 'Start' | 'Right' | 'Left' | 'Up' | 'Down';
@@ -49,6 +50,8 @@ export interface SettingsState {
   muteWhenHidden: boolean;
   touchSize: TouchSize;
   haptics: boolean;
+  /** The interface language; null: the browser's (see i18n). */
+  language: Lang | null;
 
   // Library
   /** Fetch box art from libretro-thumbnails (only for recognized ROMs the user added). When off, no request is ever made. */
@@ -108,6 +111,7 @@ const DEFAULT_STATE = {
   muteWhenHidden: true,
   touchSize: 'M' as TouchSize,
   haptics: true,
+  language: null as Lang | null,
 };
 export type SettingsValues = typeof DEFAULT_STATE;
 /** Keys saved in a backup and in localStorage. */
