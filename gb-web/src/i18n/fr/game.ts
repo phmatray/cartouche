@@ -10,6 +10,8 @@ export default {
   about: 'À propos de ce jeu',
   getIt: 'Ce jeu n’est pas fourni avec l’app. Récupérez-le auprès de son auteur (<a>page officielle</a>), puis chargez le fichier ici ; il reste dans ce navigateur.',
   loadIt: 'Ce jeu n’est pas fourni avec l’app. Chargez le fichier ici ; il reste dans ce navigateur.',
+  unsupported: 'Pas encore pris en charge',
+  unsupportedBody: 'Cette cartouche utilise une puce {mapper}, que Cartouche ne sait pas encore faire tourner.',
   credits: 'Crédits',
   license: 'licence',
   source: 'Source :',

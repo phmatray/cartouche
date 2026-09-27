@@ -10,6 +10,8 @@ export default {
   about: 'Sobre este juego',
   getIt: 'Este juego no viene con la app. Consíguelo de su autor (<a>página oficial</a>) y luego carga el archivo aquí; se queda en este navegador.',
   loadIt: 'Este juego no viene con la app. Carga el archivo aquí; se queda en este navegador.',
+  unsupported: 'Aún no compatible',
+  unsupportedBody: 'Este cartucho usa un chip {mapper}, que Cartouche todavía no puede ejecutar.',
   credits: 'Créditos',
   license: 'licencia',
   source: 'Código fuente:',

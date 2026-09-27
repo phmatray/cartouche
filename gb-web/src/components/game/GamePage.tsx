@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import type { GameEntry } from '../../types/game';
 import { downloadGame, FetchError, refreshSavedIds, useGameLibrary } from '../../hooks/useGameLibrary';
 import { createProfile, deleteSave, getActiveProfileId, getGameSaveStates, getSram, listProfiles, saveSram, setActiveProfile, uniqueName, type StoredSave, type StoredSaveState } from '../../lib/db';
-import type { RomMetadata } from '../../lib/rom-utils';
+import { mapperSupported, type RomMetadata } from '../../lib/rom-utils';
 import { ago, assetUrl, bytes, download, dur, owned, paths, tagOf } from '../../lib/ui';
 import { I } from '../icons';
 import { Cover, Title } from '../library/Cover';
@@ -47,6 +47,7 @@ function GameDetails({ game }: { game: GameEntry }) {
   const [profiles, setProfiles] = useState<StoredSave[]>([]);
   const [kind, label] = tagOf(game, savedIds);
   const need = !owned(game);
+  const unsupported = !!header && !mapperSupported(header);
   /** GB Studio collection: a hosted game not downloaded yet, or one its author distributes (link-out). */
   const hosted = !!game.madeWith && !!game.romUrl && !game.isLocal;
   const author = !!game.madeWith && need && !!game.homepage;
@@ -89,6 +90,8 @@ function GameDetails({ game }: { game: GameEntry }) {
                   <input type="file" accept={fileAccept('.gb,.gbc,.zip')} className="sr" tabIndex={-1}
                     onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f && await linkRom(f)) navigate(paths.play(game.id)); }} />
                 </label>
+              ) : unsupported ? (
+                <button className="btn lg play" disabled>{I.play}{t('game.unsupported')}</button>
               ) : (
                 <Link className="btn lg play" to={paths.play(game.id, auto ? '?resume=1' : '')}>{I.play}{auto ? t('library.hero.continue') : t('library.hero.play')}</Link>
               )}
@@ -107,6 +110,7 @@ function GameDetails({ game }: { game: GameEntry }) {
           <h2>{t('game.about')}</h2>
           {descOf(game) && <p className="lede">{descOf(game)}</p>}
           {hosted && game.size && <p className="lede" style={{ fontSize: 15 }}>{t('game.dl.note', { size: size(game.size) })}</p>}
+          {unsupported && <p className="lede" style={{ fontSize: 15 }}>{t('game.unsupportedBody', { mapper: header.cartridgeType })}</p>}
           {need && <p className="lede" style={{ fontSize: 15 }}>{game.homepage ? rich(t('game.getIt'), { a: (s) => <a href={game.homepage} target="_blank" rel="noreferrer">{s}</a> }) : t('game.loadIt')}</p>}
           {game.license && (
             <>
