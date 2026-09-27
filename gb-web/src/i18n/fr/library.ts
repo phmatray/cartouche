@@ -23,6 +23,7 @@ export default {
   list: 'Liste',
   jump: 'Aller à la lettre',
   jumpTo: 'Aller à {letter}',
+  noFav: 'Pas encore de favori : marquez un jeu de l’étoile sur sa page ou dans la vue en liste.',
   noMatch: 'Aucun jeu ne correspond à ce filtre.',
   showAll: 'Tout afficher',
   col: { title: 'Titre', played: 'Temps de jeu', last: 'Dernière partie', status: 'Statut' },
