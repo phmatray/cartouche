@@ -45,7 +45,7 @@ function localEntry(id: string, title: string, genre: string, data: Uint8Array, 
     platform: dbEntry?.platform ?? (data[0x143] & 0x80 ? 'gbc' : 'gb'), // unknown dump: the header's CGB flag
     libretroName: dbEntry?.libretroName,
     // Header facts the search filters on (publisher, color support, battery save).
-    publisher: h && !/^(Unknown|None)/.test(h.publisher) ? h.publisher : undefined,
+    publisher: h?.publisher || undefined,
     compatibility: h ? ({ 'DMG Only': 'mono', 'CGB Compatible': 'dual', 'CGB Only': 'color' } as const)[h.cgbFlag] : undefined,
     saveType: h ? (/BATTERY/.test(h.cartridgeType) ? 'battery' : 'none') : undefined,
   };

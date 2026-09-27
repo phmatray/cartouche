@@ -96,7 +96,6 @@ const RAM_SIZE_MAP: Record<number, string> = {
 
 /** New licensee codes (bytes 0x0144-0x0145, when old licensee = 0x33) */
 const NEW_LICENSEE_MAP: Record<string, string> = {
-  '00': 'None',
   '01': 'Nintendo R&D1',
   '08': 'Capcom',
   '13': 'Electronic Arts',
@@ -161,7 +160,6 @@ const NEW_LICENSEE_MAP: Record<string, string> = {
 
 /** Old licensee codes (byte 0x014B) */
 const OLD_LICENSEE_MAP: Record<number, string> = {
-  0x00: 'None',
   0x01: 'Nintendo',
   0x08: 'Capcom',
   0x09: 'HOT-B',
@@ -326,6 +324,7 @@ export interface RomMetadata {
   romSize: string;
   ramSize: string;
   region: Region;
+  /** '' when the header names none, or a code not in the lists. */
   publisher: string;
   romVersion: number;
 }
@@ -375,15 +374,9 @@ export function parseRomHeader(data: Uint8Array): RomMetadata | null {
   // Region: byte 0x014A
   const region: Region = data[0x014A] === 0x00 ? 'Japan' : 'International';
 
-  // Publisher: old licensee at 0x014B; if 0x33 use new licensee at 0x0144-0x0145
+  // Publisher: old licensee at 0x014B; if 0x33 use new licensee at 0x0144-0x0145. '' for none (code 00) or an unknown code.
   const oldLicensee = data[0x014B];
-  let publisher: string;
-  if (oldLicensee === 0x33) {
-    const newCode = String.fromCharCode(data[0x0144], data[0x0145]);
-    publisher = NEW_LICENSEE_MAP[newCode] ?? `Unknown (${newCode})`;
-  } else {
-    publisher = OLD_LICENSEE_MAP[oldLicensee] ?? `Unknown (0x${oldLicensee.toString(16).toUpperCase().padStart(2, '0')})`;
-  }
+  const publisher = (oldLicensee === 0x33 ? NEW_LICENSEE_MAP[String.fromCharCode(data[0x0144], data[0x0145])] : OLD_LICENSEE_MAP[oldLicensee]) ?? '';
 
   // ROM version: byte 0x014C
   const romVersion = data[0x014C];
