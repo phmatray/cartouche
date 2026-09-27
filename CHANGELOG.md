@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.2.0](https://github.com/phmatray/cartouche/compare/v1.1.0...v1.2.0) (2026-09-27)
+
+
+### Added
+
+* neural upscaling and exact-motion frame generation ([#33](https://github.com/phmatray/cartouche/issues/33)) ([c7c1bc9](https://github.com/phmatray/cartouche/commit/c7c1bc9b65eab8d4f8078d8a90f4f30b1414f144))
+* **web:** install from the menu, and import ROM folders from iPhone (zip) ([#32](https://github.com/phmatray/cartouche/issues/32)) ([2ba3b90](https://github.com/phmatray/cartouche/commit/2ba3b9033f4405457c5aa263f392247997355fee))
+* **web:** installable on iPhone (PWA) ([#28](https://github.com/phmatray/cartouche/issues/28)) ([36164ed](https://github.com/phmatray/cartouche/commit/36164ed6715efb2cc48140e422131ba401285416))
+* **web:** search by tags and metadata ([#30](https://github.com/phmatray/cartouche/issues/30)) ([775b86c](https://github.com/phmatray/cartouche/commit/775b86cbd9194a9b21376ba3e0705ef15f7cda32))
+* **web:** shared-element page transitions ([#31](https://github.com/phmatray/cartouche/issues/31)) ([ac2f599](https://github.com/phmatray/cartouche/commit/ac2f5998ad74c150c42940270b074d808120cbe3))
+
+
+### Fixed
+
+* **deps:** update dependency react-router to v8 ([#27](https://github.com/phmatray/cartouche/issues/27)) ([5857e35](https://github.com/phmatray/cartouche/commit/5857e35026d2074802992c67b799d7b20c6053e8))
+* **web:** opaque status bar in the installed iPhone app ([5379a15](https://github.com/phmatray/cartouche/commit/5379a15b61cfb94fe9364f75cfcf1883431f63be))
+* **web:** ROMs, saves and backups are selectable in the iPhone file picker ([0a35844](https://github.com/phmatray/cartouche/commit/0a358446e869eb5a6fe8c5e7b6b78d34f750a1ab))
+* **web:** screen presets show their previews in the player ([f6deff1](https://github.com/phmatray/cartouche/commit/f6deff1df750144afb94158e7448e26964d8713e))
+
+
+### Changed
+
+* keep gb-core's Cargo.lock version in step on release ([200aec4](https://github.com/phmatray/cartouche/commit/200aec459c7fab883b79b44738b908c59e1dd8fc))
+
 ## [1.1.0](https://github.com/phmatray/cartouche/compare/v1.0.0...v1.1.0) (2026-09-26)
 
 
