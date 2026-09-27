@@ -45,9 +45,11 @@ const ON = ['Dmg', 'Gbc', 'Gbc', 'Sgb'] as const;
 /** What a game is switched on with, from its settings and its cartridge. */
 const machineOf = (data: Uint8Array, gameId: string) => machineFor(useSettingsStore.getState(), gameId, sgbCartOf(parseRomHeader(data)));
 const SPEEDS = [0.5, 1, 2, 4];
+/** Text is being typed: a slider, a switch or a button keeping focus leaves the keys to the game. */
 const typing = () => {
   const el = document.activeElement as HTMLElement | null;
-  return !!el && (/INPUT|SELECT|TEXTAREA/.test(el.tagName) || el.isContentEditable);
+  if (el instanceof HTMLInputElement) return !/^(range|checkbox|radio|button|submit|reset|color|file|image)$/.test(el.type);
+  return !!el && (/SELECT|TEXTAREA/.test(el.tagName) || el.isContentEditable);
 };
 
 export function PlayerPage() {
