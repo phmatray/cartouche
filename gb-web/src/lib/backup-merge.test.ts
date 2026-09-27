@@ -1,7 +1,7 @@
 // node --test: a backup's game that shares an id with a different game here gets its own id, and its saves follow it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mover, placeRom } from './backup-merge.ts';
+import { backupRom, mover, placeRom } from './backup-merge.ts';
 
 test('backup ROMs are matched by SHA-1, and a taken id moves the game and its saves', () => {
   const here = new Map([['rom', 'aaa'], ['puzzle', 'ccc'], ['x', 'fff'], ['x-2', 'fff']]);
@@ -21,6 +21,16 @@ test('backup ROMs are matched by SHA-1, and a taken id moves the game and its sa
   assert.deepEqual(m.state({ id: 'rom-2-slot-3', profile: 'rom-2~x1' }), { id: 'rom-2-2-slot-3', profile: 'rom-2-2~x1' });
   assert.deepEqual(m.state({ id: 'puzzle-2-auto' }), { id: 'puzzle-auto' });
   assert.deepEqual(m.meta({ id: 'rom', activeSave: 'rom~y' }), { id: 'rom-2', activeSave: 'rom-2~y' });
-  assert.deepEqual(m.save({ id: 'zelda', gameId: 'zelda' }), { id: 'zelda', gameId: 'zelda' }); // not moved
+  assert.deepEqual(m.save({ id: 'other', gameId: 'other' }), { id: 'other', gameId: 'other' }); // not moved
   assert.equal(m.game('rom'), 'rom-2');
+});
+
+test('a backup ROM record with a missing or non-text title or genre is repaired, one without id or bytes dropped', () => {
+  const data = new Uint8Array([1, 2]);
+  assert.deepEqual(backupRom({ id: 'x', title: null, data }), { id: 'x', title: 'x', genre: 'Unknown', data });
+  assert.deepEqual(backupRom({ id: 'x', title: 123, genre: {}, data }), { id: 'x', title: 'x', genre: 'Unknown', data });
+  assert.deepEqual(backupRom({ id: 'x', title: 'Acid', genre: 'Test', data, extra: 1 }), { id: 'x', title: 'Acid', genre: 'Test', data });
+  assert.equal(backupRom({ id: 7, title: 'a', data }), null);
+  assert.equal(backupRom({ id: 'x', title: 'a', data: [1, 2] }), null);
+  assert.equal(backupRom(null), null);
 });

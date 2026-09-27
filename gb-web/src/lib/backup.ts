@@ -1,6 +1,6 @@
 import { t } from '../i18n';
 import { decode, jsonBlob, splitJson } from './backup-json';
-import { mover, placeRom } from './backup-merge';
+import { backupRom, mover, placeRom } from './backup-merge';
 import { computeSha1 } from './rom-utils';
 import { asProfile, getAllFrom, getAllGameMeta, getRom, getRomIds, putInto, STORES, type StoredGameMeta, type StoredRom, type StoredSave, type StoredSaveState, type StoredScreenshot } from './db';
 import { cleanSetting } from './settings-clean';
@@ -64,8 +64,7 @@ export async function readBackup(file: File): Promise<Backup> {
     settings: b.settings && typeof b.settings === 'object' ? b.settings : {},
     romCount: items.length,
     roms: items.map(([start, end]) => async () => {
-      const r = decode(JSON.parse(await file.slice(start, end).text())) as StoredRom;
-      return r && typeof r === 'object' && str(r.id) && r.data instanceof Uint8Array ? r : null;
+      return backupRom(decode(JSON.parse(await file.slice(start, end).text())));
     }),
     // Save profiles; a backup from before profiles has one save per game, which becomes its "Main".
     saves: list<StoredSave>(b.saves, (r) => str(r.id) && r.sram instanceof Uint8Array).map(asProfile),
