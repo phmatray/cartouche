@@ -286,7 +286,8 @@ function Player({ game }: { game: GameEntry }) {
   const auto = saves.states[0];
   const [kind, label] = tagOf(game, savedIds);
   const status = needsRom ? label : savedJustNow ? 'Saved just now' : auto ? `Resume point ${ago(auto.timestamp)}` : label;
-  const screenStyle: CSSProperties | undefined = screenSize === 'fit' ? undefined : { width: 160 * +screenSize + 24, maxWidth: '100%' };
+  // A fixed size (2×–4×) is the most the screen takes: the CSS still shrinks it to the room there is.
+  const screenStyle = screenSize === 'fit' ? undefined : { '--sw': `${160 * +screenSize + 24}px` } as CSSProperties;
   const disabled = !romLoaded;
   const noStore = disabled || storageError; // save slots and the album need IndexedDB
   const pad = (b: string) => ({
@@ -308,7 +309,7 @@ function Player({ game }: { game: GameEntry }) {
     <div ref={rootRef} className={`pl${manual ? '' : ' closed'}${idle ? ' idle' : ''}${immersive ? ' imm' : ''}`} style={{ '--flood': ink } as CSSProperties}>
       <header className="pl-top">
         <Link className="back" to={paths.game(game.id)}>{I.back}<span className="lbl">Back</span></Link>
-        <h1><Link to={paths.game(game.id)}><Title text={game.title} /></Link></h1>
+        <h1><Link to={paths.game(game.id)} title={game.title}><Title text={game.title} /></Link></h1>
         <span className={`tag ${savedJustNow || auto ? 'saved' : kind}`}>{status}</span>
         <div className="right">
           <span className={`pad${gamepad ? ' on' : ''}`}><i /><span>{gamepad ? 'Gamepad' : 'No gamepad'}</span></span>
@@ -317,9 +318,9 @@ function Player({ game }: { game: GameEntry }) {
       </header>
 
       <div className="pl-body">
-        <div className="stage">
+        <div className="stage" style={screenStyle}>
           <div className={`rw${isRewinding ? ' on' : ''}`}>{I.rew}Rewinding<span className="meter"><i style={{ width: `${bufferFill * 100}%` }} /></span></div>
-          <div className="screen" style={screenStyle}>
+          <div className="screen">
             <div className="frame">
               <canvas key={canvasKey} ref={canvasRef} className={`lcd${lit ? ' lit' : ''}`} width={800} height={720} aria-label={`${game.title} screen`} />
               {badRom ? (
@@ -373,6 +374,8 @@ function Player({ game }: { game: GameEntry }) {
         <div className="speed" role="group" aria-label="Speed">
           {SPEEDS.map((s) => <button key={s} aria-pressed={speed === s} onClick={() => setSpeed(s)}>{s === 0.5 ? '½' : s}×</button>)}
         </div>
+        {/* Narrow phones: one button steps through the speeds (the group doesn't fit). */}
+        <button className="dk spd" onClick={() => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length])} aria-label={`Speed ${speed}×, change`}>{speed === 0.5 ? '½' : speed}×</button>
         <span className="gap" />
         <button className="dk" onClick={() => saveSlot(0)} disabled={noStore} aria-label="Save to slot 1, F5">{I.save}<span className="lbl">Save</span><span className="k">F5</span></button>
         <button className="dk hide-m" onClick={() => loadSlot(0)} disabled={noStore} aria-label="Load slot 1, F8">{I.load}<span className="lbl">Load</span><span className="k">F8</span></button>
