@@ -15,6 +15,12 @@ export const paths = {
  */
 export const searchState = () => ({ from: (history.state as { idx?: number } | null)?.idx ?? 0 });
 
+/**
+ * A ref for what replaces the button just pressed (a code, a ticket): it takes the focus when the focus fell to
+ * <body> with that button, so keyboard and screen-reader users land on (and hear) what appeared. Stable: runs on mount only.
+ */
+export const focusIfLost = (el: HTMLElement | null) => { if (el && (!document.activeElement || document.activeElement === document.body)) el.focus(); };
+
 /** The focusable in `pool` nearest to `from` in an arrow key's direction (TV-style spatial navigation), or null. */
 export function spatialNext(from: Element, key: string, pool: Iterable<HTMLElement>): HTMLElement | null {
   const d = ({ ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] } as Record<string, number[]>)[key];

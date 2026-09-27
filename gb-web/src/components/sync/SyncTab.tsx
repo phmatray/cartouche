@@ -7,6 +7,7 @@ import { getAllGameMeta, getRomIds } from '../../lib/db';
 import { useGameLibrary } from '../../hooks/useGameLibrary';
 import { ago, rich, size, useT, type Key } from '../../i18n';
 import { isIos } from '../../lib/pwa';
+import { focusIfLost } from '../../lib/ui';
 import { I } from '../icons';
 import { toast } from '../shell/actions';
 import { ConfirmDialog, type ConfirmRequest } from '../shell/ConfirmDialog';
@@ -240,7 +241,7 @@ function PairPanel({ p, me }: { p: Pairing; me: string }) {
         </div>
       </div>
       {p.phase === 'showing' && qr && (
-        <div className="sy-ticket">
+        <div className="sy-ticket" ref={focusIfLost} tabIndex={-1}>
           <svg className="sy-qr" viewBox={`-2 -2 ${qr.size + 4} ${qr.size + 4}`} role="img" aria-label={t('sync.pair.qr')} shapeRendering="crispEdges">
             <rect x="-2" y="-2" width={qr.size + 4} height={qr.size + 4} fill="#fff" /><path d={path} fill="currentColor" />
           </svg>
