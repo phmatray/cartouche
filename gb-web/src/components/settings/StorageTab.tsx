@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { clearAll, gameOfSave, getAllFrom, STORES, type StoredRom, type StoredSave, type StoredSaveState, type StoredScreenshot } from '../../lib/db';
+import { clearAll, gameOfSave, getAllFrom, getAllGameMeta, getGameMeta, getRom, getRomIds, setGameMeta, STORES, type StoredSave, type StoredSaveState, type StoredScreenshot } from '../../lib/db';
 import { backupFileName, exportBackup, readBackup, restoreBackup } from '../../lib/backup';
 import { refreshSavedIds, reloadLibrary, useGameLibrary } from '../../hooks/useGameLibrary';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -16,10 +16,18 @@ import { date, num, t as tNow, useT } from '../../i18n';
 interface Usage { roms: number; saves: number; shots: number; perGame: Map<string, GameUsage>; nSaves: number; nShots: number }
 const gameOf = (stateId: string) => stateId.replace(/-(slot-\d+|auto)$/, '');
 
+/** A ROM stored before summaries had a size: read it once (alone) and keep its size. */
+async function romSize(id: string): Promise<number> {
+  const n = (await getRom(id))?.data.length ?? 0;
+  const m = await getGameMeta(id);
+  if (m?.rom) await setGameMeta({ ...m, rom: { ...m.rom, size: n } }).catch(() => {});
+  return n;
+}
+
 /** Everything stored, per game: ROMs, cartridge saves + save states, screenshots, downloaded box art. */
 async function measure(games: GameEntry[]): Promise<Usage> {
-  const [roms, sram, states, shots, art] = await Promise.all([
-    getAllFrom<StoredRom>(STORES.roms), getAllFrom<StoredSave>(STORES.saves),
+  const [romIds, metas, sram, states, shots, art] = await Promise.all([
+    getRomIds(), getAllGameMeta(), getAllFrom<StoredSave>(STORES.saves),
     getAllFrom<StoredSaveState>(STORES.states), getAllFrom<StoredScreenshot>(STORES.screenshots),
     boxArtPerGame(games),
   ]);
@@ -29,7 +37,10 @@ async function measure(games: GameEntry[]): Promise<Usage> {
     if (!g) perGame.set(id, (g = { rom: 0, saves: 0, nSaves: 0, shots: 0, nShots: 0, art: 0 }));
     return g;
   };
-  for (const r of roms) of(r.id).rom = r.data.length;
+  // ROM sizes from their summaries: reading every ROM would hold the whole library in memory.
+  const sizes = new Map(metas.map((m) => [m.id, m.rom?.size]));
+  let romBytes = 0;
+  for (const id of romIds) romBytes += of(id).rom = sizes.get(id) ?? await romSize(id);
   for (const s of sram) { const g = of(gameOfSave(s.id)); g.saves += s.sram.length; g.nSaves++; }
   for (const s of states) { const g = of(gameOf(s.id)); g.saves += s.data.length + s.thumbnail.length; g.nSaves++; }
   for (const s of shots) { const g = of(s.gameId); g.shots += s.png.size; g.nShots++; }
@@ -37,7 +48,7 @@ async function measure(games: GameEntry[]): Promise<Usage> {
   for (const [id, n] of art) if (perGame.has(id)) perGame.get(id)!.art = n;
   let saves = 0, nSaves = 0, shotBytes = 0;
   for (const g of perGame.values()) { saves += g.saves; nSaves += g.nSaves; shotBytes += g.shots; }
-  return { roms: roms.reduce((a, r) => a + r.data.length, 0), saves, shots: shotBytes, perGame, nSaves, nShots: shots.length };
+  return { roms: romBytes, saves, shots: shotBytes, perGame, nSaves, nShots: shots.length };
 }
 
 export function StorageTab() {
@@ -130,11 +141,19 @@ export function StorageTab() {
         ),
         ok: tNow('settings.storage.restore'),
         run: async () => {
-          const n = await restoreBackup(b, withSettings.current);
-          await reloadLibrary();
-          await refreshSavedIds();
-          await refresh();
-          toast(tNow('settings.storage.restored', { roms: tNow('settings.storage.nRoms', { count: n.roms }), saves: tNow('settings.storage.nSaves', { count: n.saves }), shots: tNow('settings.storage.nShots', { count: n.screenshots }) }), 'c');
+          const n = { roms: 0, saves: 0, screenshots: 0 };
+          const what = () => ({ roms: tNow('settings.storage.nRoms', { count: n.roms }), saves: tNow('settings.storage.nSaves', { count: n.saves }), shots: tNow('settings.storage.nShots', { count: n.screenshots }) });
+          try {
+            await restoreBackup(b, withSettings.current, n);
+            toast(tNow('settings.storage.restored', what()), 'c');
+          } catch (e) {
+            // A full disk (or any storage error) midway: say what landed; running it again skips that.
+            toast(tNow(e instanceof DOMException && e.name === 'QuotaExceededError' ? 'settings.storage.restoreFull' : 'settings.storage.restoreFailed', what()), 'm');
+          } finally {
+            await reloadLibrary();
+            await refreshSavedIds().catch(() => {});
+            await refresh().catch(() => {});
+          }
         },
       });
     } catch (e) {

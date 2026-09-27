@@ -120,7 +120,15 @@ export function LibraryPage() {
     setLetter(l);
     const el = bodyRef.current?.querySelector<HTMLElement>(`[data-letter="${l}"]`);
     if (!el) return;
-    el.scrollIntoView({ behavior: motion(), block: 'center' });
+    // Off-screen rows and boxes have estimated heights (content-visibility) until drawn, so a smooth scroll lands off
+    // target: jump, then center again each frame until the rows around it have their real size.
+    let last = NaN;
+    const center = (n: number) => {
+      el.scrollIntoView({ block: 'center' });
+      const top = el.getBoundingClientRect().top;
+      if (top !== last && n < 20) { last = top; requestAnimationFrame(() => center(n + 1)); }
+    };
+    center(0);
     el.classList.remove('hl');
     void el.offsetWidth; // restart the highlight animation
     el.classList.add('hl');

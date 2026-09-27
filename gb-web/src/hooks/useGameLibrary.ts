@@ -101,9 +101,11 @@ const useLibraryStore = create<LibraryState>(() => ({ games: [], savedIds: new S
 const setGames = (fn: (prev: GameEntry[]) => GameEntry[]) => useLibraryStore.setState((s) => ({ games: fn(s.games) }));
 
 let loadPromise: Promise<void> | null = null;
+/** The catalog as last loaded: what a removed catalog game goes back to. */
+let catalogList: GameEntry[] = CATALOG;
 async function loadLibrary() {
   let stored;
-  const catalog = await fullCatalog().catch(() => CATALOG); // its chunk failed: the bundled games still show
+  const catalog = catalogList = await fullCatalog().catch(() => CATALOG); // its chunk failed: the bundled games still show
   try {
     stored = await Promise.all([getRomIds(), getAllGameMeta(), getSavedGameIds()]);
   } catch {
@@ -135,7 +137,7 @@ async function loadLibrary() {
 }
 
 const summarize = async (title: string, genre: string, data: Uint8Array): Promise<RomSummary> =>
-  ({ title, genre, sha1: await computeSha1(data), head: data.slice(0, 0x150) });
+  ({ title, genre, sha1: await computeSha1(data), head: data.slice(0, 0x150), size: data.length });
 
 /** A ROM's summary, from its meta; computed from the ROM once (added before summaries, or restored from a backup) and kept. */
 async function romSummary(id: string, meta: StoredGameMeta | undefined): Promise<RomSummary | undefined> {
@@ -185,7 +187,7 @@ export async function importRom(name: string, data: Uint8Array, force = false): 
   const title = dbEntry?.title || name.replace(/^.*\//, '').replace(/\.[^.]+$/, '');
   const genre = dbEntry?.genre || 'Unknown';
   const importedAt = Date.now();
-  const summary = { title, genre, sha1, head: data.slice(0, 0x150) };
+  const summary = { title, genre, sha1, head: data.slice(0, 0x150), size: data.length };
   const cat = catalogMatch(useLibraryStore.getState().games, localEntry('', title, genre, data, sha1, dbEntry));
   // A catalog game keeps its id (and its page's address) once its file is here.
   const id = await addRom(cat?.id ?? (slugify(title) || 'rom'), { title, genre, data }, { importedAt, rom: summary });
@@ -291,8 +293,13 @@ export function useGameLibrary() {
   /** Remove the user's ROM and everything saved for it. */
   const deleteGame = useCallback(async (gameId: string) => {
     await Promise.all([deleteRom(gameId), eraseSaves(gameId)]);
-    // ponytail: the catalog entry a ROM replaced comes back on the next library load, not immediately.
-    setGames((prev) => prev.filter((g) => g.id !== gameId));
+    // A catalog game (a downloaded GB Studio ROM keeps the catalog id) goes back to its catalog entry, "on the server".
+    // ponytail: a ROM that replaced a catalog entry under another id (same title) brings it back on the next load only.
+    setGames((prev) => prev.flatMap((g) => {
+      if (g.id !== gameId) return [g];
+      const cat = catalogList.find((c) => c.id === gameId);
+      return cat ? [{ ...cat, isFavorite: g.isFavorite, lastPlayed: g.lastPlayed, totalPlayTime: g.totalPlayTime, sessions: g.sessions, importedAt: g.importedAt }] : [];
+    }));
   }, [eraseSaves]);
 
   const toggleFavorite = useCallback(async (gameId: string) => {

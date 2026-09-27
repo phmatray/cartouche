@@ -23,6 +23,11 @@ test('normalizes synonyms, accents and case', () => {
   assert.equal(normValue('genre', 'RPG'), 'rpg');
   assert.equal(normValue('region', 'Japan'), 'jp');
   assert.equal(normValue('region', 'mars'), '');
+  assert.equal(normValue('region', 'japon'), 'jp');
+  assert.equal(normValue('region', 'Japón'), 'jp');
+  assert.equal(normValue('region', 'europa'), 'eu');
+  assert.equal(normValue('region', 'États-Unis'), 'us');
+  assert.equal(normValue('region', 'estados unidos'), 'us');
   assert.equal(normValue('players', '2 players'), '2');
   assert.equal(normValue('players', 'link'), '2+');
   assert.equal(normValue('decade', '90s'), '1990s');

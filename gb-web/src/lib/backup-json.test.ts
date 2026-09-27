@@ -1,7 +1,7 @@
 // node --test: a backup written one ROM at a time reads back like one written whole (the format before).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { arrayItems, decode, encode, jsonBlob, readStreamed } from './backup-json.ts';
+import { decode, encode, jsonBlob, splitJson } from './backup-json.ts';
 
 test('streamed backup round-trips and matches the whole-file JSON', async () => {
   const rom = (id: string, n: number) => ({ id, title: id, genre: 'Puzzle', data: Uint8Array.from({ length: n }, (_, i) => i * 7) });
@@ -17,27 +17,38 @@ test('streamed backup round-trips and matches the whole-file JSON', async () => 
   assert.deepEqual(JSON.parse(await (await jsonBlob({}, 'roms', (async function* () {})())).text()), { roms: [] });
 });
 
+test('splitJson reads the ROM list item by item, in any key order, across chunk boundaries', async () => {
+  const rom = (id: string, title: string) => ({ id, title, genre: 'x', data: Uint8Array.from({ length: 300 }, (_, i) => i) });
+  const roms = [rom('rom', 'つき "{[ roms ]}" \\'), rom('rom-2', 'b')];
+  const head = { app: 'cartouche', note: '"roms":[', meta: [{ id: 'rom', roms: [1, 2] }], saves: [{ id: 'rom', sram: new Uint8Array([7]) }] };
+  const streamed = await jsonBlob(head, 'roms', (async function* () { yield* roms; })());
+  const whole = new Blob([JSON.stringify(await encode({ app: 'cartouche', roms, ...head }))]); // an older backup: roms first
+  for (const file of [streamed, whole]) {
+    for (const chunk of [1, 7, 1 << 20]) {
+      const { head: h, items } = await splitJson(file, 'roms', chunk);
+      assert.deepEqual(decode(h), { ...head, roms: [] });
+      const back = await Promise.all(items.map(async ([s, e]) => decode(JSON.parse(await file.slice(s, e).text()))));
+      assert.deepEqual(back, roms);
+    }
+  }
+  await assert.rejects(splitJson(new Blob(['PK\x03\x04']), 'roms'), SyntaxError);
+});
+
 // Restore can't read a big backup whole (a string stops near 512 MB): the ROMs are read back one at a time.
 test('a streamed backup reads back one item at a time, split anywhere', async () => {
   const rom = (id: string, n: number) => ({ id, title: `${id} "q" \\ {[`, genre: 'Puzzle', data: Uint8Array.from({ length: n }, (_, i) => i * 7) });
   const roms = [rom('a', 0x10000), rom('b', 3), rom('c', 0x9001)];
   const head = { app: 'cartouche', saves: [{ id: 's', sram: new Uint8Array([1, 2]), note: ',"roms":[' }] };
   const blob = await jsonBlob(head, 'roms', (async function* () { yield* roms; })());
-  const r = await readStreamed(blob, 'roms', 'saves');
-  assert.ok(r);
-  assert.deepEqual(r.head, head);
-  for (let pass = 0; pass < 2; pass++) {
-    const back = [];
-    for await (const x of r.items()) back.push(decode(x));
-    assert.deepEqual(back, roms);
-  }
-  // Any chunk boundary: one character at a time.
+  const read = async (file: Blob, chunk?: number) => {
+    const { head: h, items } = await splitJson(file, 'roms', chunk);
+    return { head: decode(h), roms: await Promise.all(items.map(async ([s, e]) => decode(JSON.parse(await file.slice(s, e).text())))) };
+  };
+  for (const chunk of [1, 4096, undefined]) assert.deepEqual(await read(blob, chunk), { head: { ...head, roms: [] }, roms }); // any chunk boundary
+  // Written whole, before streaming (the ROMs before the saves): read the same way.
+  const whole = new Blob([JSON.stringify(await encode({ app: 'cartouche', settings: {}, roms, saves: [] }))]);
+  assert.deepEqual(await read(whole, 5), { head: { app: 'cartouche', settings: {}, roms: [], saves: [] }, roms });
+  // Cut short (an interrupted download): not a backup.
   const text = await blob.text();
-  const body = text.slice(text.lastIndexOf(',"roms":[') + 9);
-  const items = [];
-  for await (const x of arrayItems((async function* () { yield* body; })())) items.push(decode(JSON.parse(x)));
-  assert.deepEqual(items, roms);
-  // Written whole, before streaming (the ROMs before the saves): not this layout, read whole.
-  assert.equal(await readStreamed(new Blob([JSON.stringify(await encode({ app: 'cartouche', settings: {}, roms, saves: [] }))]), 'roms', 'saves'), null);
-  await assert.rejects(async () => { for await (const x of arrayItems((async function* () { yield '{"a":1},{"b":'; })())) void x; }, SyntaxError);
+  for (const cut of [text.indexOf('"roms":[') + 20, text.length - 2]) await assert.rejects(splitJson(new Blob([text.slice(0, cut)]), 'roms', 7), SyntaxError);
 });

@@ -46,75 +46,49 @@ export async function jsonBlob(head: object, key: string, items: AsyncIterable<u
   return new Blob([out, ']}'], { type: 'application/json' });
 }
 
-/** A Blob's text, a chunk at a time (a reader loop: Safari's streams aren't async-iterable). */
-async function* textChunks(blob: Blob): AsyncGenerator<string> {
-  const reader = blob.stream().pipeThrough(new TextDecoderStream()).getReader();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) return;
-    yield value;
-  }
-}
-
 /**
- * The items of a JSON array of objects, one at a time, as their JSON text. `chunks` start right after the '['
- * and may split anywhere; it stops at the closing ']'. Only one item is held in memory at a time.
+ * Read a backup without holding it as one string (a big library's backup is past the longest string a browser allows):
+ * the bytes are scanned in chunks; `head` is the JSON with `key`'s array left empty, and each item of that array is a
+ * byte range of `file`, parsed only when read. JSON's structural characters are ASCII, never part of a UTF-8 sequence.
+ * Throws SyntaxError when it isn't a JSON object.
  */
-export async function* arrayItems(chunks: AsyncIterable<string>): AsyncGenerator<string> {
-  let depth = 0, inStr = false, esc = false, parts: string[] = [];
-  const quoteOrSlash = /["\\]/g;
-  for await (const c of chunks) {
-    let start = 0;
-    for (let i = 0; i < c.length; i++) {
+export async function splitJson(file: Blob, key: string, chunk = 8 << 20): Promise<{ head: unknown; items: [number, number][] }> {
+  const parts: Blob[] = [];
+  const items: [number, number][] = [];
+  let depth = 0, inStr = false, esc = false, str = '', lastKey = '', inList = false, itemAt = -1, headAt = 0, started = false;
+  for (let at = 0; at < file.size; at += chunk) {
+    const b = new Uint8Array(await file.slice(at, at + chunk).arrayBuffer());
+    for (let i = 0; i < b.length; i++) {
+      const c = b[i];
       if (inStr) {
-        if (esc) { esc = false; continue; }
-        quoteOrSlash.lastIndex = i;
-        const m = quoteOrSlash.exec(c); // jump over the string's body (base64: megabytes)
-        if (!m) break;
-        i = m.index;
-        if (c[i] === '\\') esc = true; else inStr = false;
+        if (esc) esc = false;
+        else if (c === 0x5c) esc = true; // \
+        else if (c === 0x22) { inStr = false; if (depth === 1) lastKey = str; continue; } // "
+        else if (depth > 1) { // jump over the string's body (base64: megabytes) to its next " or \
+          const q = b.indexOf(0x22, i + 1), s = b.indexOf(0x5c, i + 1);
+          i = (q < 0 ? s < 0 ? b.length : s : s < 0 ? q : Math.min(q, s)) - 1;
+          continue;
+        }
+        if (depth === 1 && str.length <= key.length) str += String.fromCharCode(c);
         continue;
       }
-      const ch = c[i];
-      if (ch === '"') inStr = true;
-      else if (ch === '{' || ch === '[') { if (depth++ === 0) start = i; }
-      else if (ch === '}' || ch === ']') {
-        if (depth === 0) return; // the array's own ']'
-        if (--depth === 0) { parts.push(c.slice(start, i + 1)); yield parts.join(''); parts = []; }
-      } else if (depth === 0 && ch !== ',' && ch.trim()) throw new SyntaxError('Expected an object');
+      if (!started) {
+        if (c === 0x20 || c === 0x0a || c === 0x0d || c === 0x09 || c === 0xef || c === 0xbb || c === 0xbf) continue; // whitespace, BOM
+        if (c !== 0x7b) throw new SyntaxError('not a JSON object');
+        started = true;
+      }
+      if (c === 0x22) { inStr = true; str = ''; } else if (c === 0x7b || c === 0x5b) { // { [
+        if (depth === 1 && c === 0x5b && lastKey === key && !parts.length) { inList = true; parts.push(file.slice(headAt, at + i + 1)); }
+        else if (inList && depth === 2) itemAt = at + i;
+        depth++;
+      } else if (c === 0x7d || c === 0x5d) { // } ]
+        depth--;
+        if (inList && depth === 2 && itemAt >= 0) { items.push([itemAt, at + i + 1]); itemAt = -1; }
+        else if (inList && depth === 1) { inList = false; headAt = at + i; }
+      }
     }
-    if (depth > 0) parts.push(c.slice(start));
   }
-  throw new SyntaxError('Unexpected end of JSON');
-}
-
-/**
- * Read a file written by jsonBlob(head, key, items) without holding it whole (a string can't pass ~512 MB):
- * the head is parsed and decoded; each call of items() parses the items again, one at a time (left encoded: decode() them).
- * `headKey`: a key only the head has. null: not that layout (an older file with `key` before the others): read it whole.
- */
-export async function readStreamed(blob: Blob, key: string, headKey: string): Promise<{ head: Record<string, unknown>; items: () => AsyncGenerator<unknown> } | null> {
-  const marker = `,${JSON.stringify(key)}:[`;
-  const find = async () => {
-    const it = textChunks(blob);
-    let acc = '';
-    for (let r = await it.next(); !r.done; r = await it.next()) {
-      const from = Math.max(0, acc.length - marker.length);
-      acc += r.value;
-      const at = acc.indexOf(marker, from);
-      if (at >= 0) return { before: acc.slice(0, at), after: acc.slice(at + marker.length), rest: it };
-    }
-    return null;
-  };
-  const found = await find();
-  if (!found) return null;
-  let head: unknown;
-  try { head = JSON.parse(`${found.before}}`); } catch { return null; }
-  if (!head || typeof head !== 'object' || !(headKey in head)) return null;
-  const items = async function* () {
-    const f = await find();
-    if (!f) return;
-    for await (const text of arrayItems((async function* () { yield f.after; yield* f.rest; })())) yield JSON.parse(text);
-  };
-  return { head: decode(head) as Record<string, unknown>, items };
+  if (depth || inStr) throw new SyntaxError('Unexpected end of JSON'); // cut short: never parse the whole file as the head
+  parts.push(file.slice(headAt));
+  return { head: JSON.parse(await new Blob(parts).text()), items };
 }
