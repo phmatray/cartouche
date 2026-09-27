@@ -20,6 +20,7 @@ export default {
   loadingLibrary: 'Cargando tu biblioteca…',
   language: 'Idioma',
   crash: 'Algo salió mal al mostrar esta página. Tus juegos y partidas guardadas están intactos.',
+  offlineNet: 'Estás sin conexión: el juego en línea y la sincronización necesitan conexión. Se reanudan solos en cuanto vuelva.',
   notFound: {
     docTitle: 'No encontrado',
     title: 'Nada en esta ranura.',

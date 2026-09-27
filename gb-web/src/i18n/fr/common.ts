@@ -20,6 +20,7 @@ export default {
   loadingLibrary: 'Chargement de la bibliothèque…',
   language: 'Langue',
   crash: 'Un problème est survenu à l’affichage de cette page. Les jeux et les sauvegardes sont intacts.',
+  offlineNet: 'Vous êtes hors ligne : le jeu en ligne et la synchro ont besoin d’une connexion. Ils reprennent d’eux-mêmes dès son retour.',
   notFound: {
     docTitle: 'Introuvable',
     title: 'Rien dans cet emplacement.',

@@ -9,6 +9,7 @@
  *
  * Trystero is loaded on first use, so the library never pays for it.
  */
+import { useSyncExternalStore } from 'react';
 import type { DataPayload, JsonValue, Room } from 'trystero';
 
 export type { DataPayload, JsonValue };
@@ -40,6 +41,14 @@ const ALONE_MS = 16000;
 
 /** turn:/turns: URLs, comma or space separated. */
 export const validTurn = (urls: string) => urls.split(/[\s,]+/).filter(Boolean).every((u) => /^turns?:[^\s]+$/.test(u));
+
+const onNet = (cb: () => void) => {
+  addEventListener('online', cb);
+  addEventListener('offline', cb);
+  return () => { removeEventListener('online', cb); removeEventListener('offline', cb); };
+};
+/** False while the device has no network: a room then can't reach the relays, nor anyone (rooms rejoin on 'online'). */
+export const useOnline = () => useSyncExternalStore(onNet, () => navigator.onLine);
 
 export interface P2PRoom<M extends DataPayload> {
   readonly code: string;

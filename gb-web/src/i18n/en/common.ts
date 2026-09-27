@@ -19,6 +19,7 @@ export default {
   loadingLibrary: 'Loading your library…',
   language: 'Language',
   crash: 'Something went wrong while showing this page. Your games and saves are untouched.',
+  offlineNet: 'You’re offline: online play and sync need a connection. They pick up by themselves once it’s back.',
   notFound: {
     docTitle: 'Not found',
     title: 'Nothing in this slot.',
