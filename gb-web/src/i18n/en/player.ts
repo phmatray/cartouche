@@ -48,6 +48,7 @@ export default {
     soundOff: 'Sound off',
     belongs: 'This save belongs to “{name}”: saving there now',
     newSave: 'This save’s game was deleted: saving to a new one, “{name}”',
+    changedElsewhere: 'This save changed elsewhere (another tab or device): saving to a new one, “{name}”, so both are kept',
   },
   error: {
     init: 'Emulator not initialized',

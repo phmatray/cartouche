@@ -159,7 +159,7 @@ function Player({ game }: { game: GameEntry }) {
   // Rewinding stops quietly at a restart onto another console.
   const rewindLoad = useCallback((data: Uint8Array, frame?: Uint8ClampedArray) => stateConsole(data) === consoleNow() && loadAndShow(data, frame), [stateConsole, consoleNow, loadAndShow]);
   const { isRewinding, startRewind, stopRewind, wrapRunFrame, bufferFill } = useRewind({ saveState, loadState: rewindLoad });
-  useSaveData({ saveTo, romLoaded, hasBatteryRam, exportSram });
+  const saveWriter = useSaveData({ saveTo, romLoaded, hasBatteryRam, exportSram });
   // Online link cable (?online=<room>): real time only, so no speed change, rewind or state loading while plugged in.
   const online = useOnlineLink(emu.coreRef, romLoaded, q.get('online'), isRunning);
   const linkPump = online.pump;
@@ -218,6 +218,7 @@ function Player({ game }: { game: GameEntry }) {
       const sram = await getSram(id).catch(() => undefined);
       if (sram) importSram(sram.sram);
       saveTo.current = id;
+      saveWriter.adopt(id, sram);
     }
     if (from !== null) {
       const before = consoleNow();
@@ -230,7 +231,7 @@ function Player({ game }: { game: GameEntry }) {
       else if (!refused.current) toast(ok ? (from === 'auto' ? tNow('player.toast.resumed') : tNow('player.toast.loadedSlot', { n: String(+from + 1) })) : tNow('player.toast.gone'), ok ? 'c' : 'm');
     }
     setIsRunning(q.get('edit') !== 'controls');
-  }, [powerOn, hasBatteryRam, importSram, game.id, q, setQ, saves, setIsRunning, consoleNow, skipBoot]);
+  }, [powerOn, hasBatteryRam, importSram, game.id, q, setQ, saves, setIsRunning, consoleNow, skipBoot, saveWriter]);
 
   const booted = useRef(false);
   useEffect(() => {
@@ -326,9 +327,11 @@ function Player({ game }: { game: GameEntry }) {
     const onPageHide = () => leaveRef.current();
     document.addEventListener('visibilitychange', onHide);
     window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('beforeunload', onPageHide); // WebKit drops a write from pagehide on reload or close
     return () => {
       document.removeEventListener('visibilitychange', onHide);
       window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('beforeunload', onPageHide);
       const wasDirty = dirty.current && useSettingsStore.getState().resumePoints;
       leaveRef.current();
       if (wasDirty) toast(tNow('player.toast.resumeSaved', { title: game.title }), 'm');
