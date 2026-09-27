@@ -268,8 +268,10 @@ redistributed.
 ### npm packages compiled into the web app
 
 The production bundle includes React, React DOM, React Router, Zustand and
-Scheduler (all MIT), Vite's small module-preload helper (MIT) and the Archivo
-font files (OFL-1.1, see above). Everything else is build tooling (Vite and its
+Scheduler (all MIT); Trystero with `@trystero-p2p/core`, `@trystero-p2p/nostr`
+and `@noble/secp256k1` (all MIT; online link cable and device sync); `uqr`
+(MIT) and `qr` (MIT OR Apache-2.0) for QR codes; the small runtime helpers of
+Vite and Rolldown (MIT); and the Archivo font files (OFL-1.1, see above). Everything else is build tooling (Vite and its
 plugins, Tailwind CSS, TypeScript, ESLint, SWC, Lightning CSS and their
 dependencies), used at build time only and not redistributed in the published
 app, even where `package.json` lists it under `dependencies`. Licenses in
@@ -385,6 +387,21 @@ not part of the published build.
   address, browser details, username and web API key. ROMs and their hashes
   are never sent.
 - RetroAchievements does not endorse Cartouche.
+
+### Nostr relays and STUN servers (online link cable and device sync)
+
+- Public Nostr relays run by third parties, not by Cartouche:
+  `relay02.lnfi.network`, `staging.yabu.me`, `top.testrelay.top`, `yabu.me`
+  and `relay.mostro.network` (list in `gb-web/src/lib/p2p/room.ts`), and the
+  public STUN servers of Google and Cloudflare (Trystero's defaults).
+- Contacted only after the player opens or joins a room (Link Cable > Play
+  online) or pairs a device (Settings > Sync); nothing is contacted before.
+- The relays carry only the WebRTC handshake, encrypted, but they see the IP
+  addresses of both browsers, and each peer learns the other's. Game and sync
+  data then go directly between the two browsers. A TURN server the player
+  adds (Connection settings) relays the connection when a direct one fails.
+  See `docs/ONLINE_LINK.md` and `docs/SYNC.md`.
+- None of these operators endorses Cartouche.
 
 ## 3. Downloaded for testing only, never distributed
 

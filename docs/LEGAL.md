@@ -57,6 +57,15 @@ load into it are ones you have the right to use.
     Its author states no license. It is included because it is widely
     redistributed by the emulator community for testing, and it will be
     removed immediately on the author's request.
+- Four games made with GB Studio, hosted unmodified because their authors'
+  licenses allow redistribution of the whole ROM: *Dawn Will Come* (code MIT,
+  art and music CC BY 4.0), *Poltersprite* (game CC BY-NC-SA 4.0, code
+  GPL-3.0), *Millennium Gun* (code 0BSD, graphics and audio CC0 1.0, plugin
+  MIT) and *Dusky Dungeon* (MIT, graphics CC BY 4.0, fonts CC BY 4.0 and CC BY
+  3.0). Each one is downloaded only when you ask for it. Their authors, sources
+  and full license terms are in `roms/gbstudio/LICENSES.txt`, linked from the
+  in-app Legal page. The other games of the GB Studio collection are not
+  hosted: they link to their authors' pages.
 - A database of known Game Boy and Game Boy Color dumps (SHA-1 fingerprints,
   titles, No-Intro names), used only to identify files you add. The library
   lists free homebrew, freely available test cartridges and your own ROMs,
@@ -116,8 +125,9 @@ PigSaint nor libretro endorses Cartouche.
   cookies.
 - Your ROMs, saves, save states, settings, favorites and play time are stored
   only in your browser (IndexedDB and localStorage) and never leave your
-  device.
-- Only GitHub receives requests, unless you connect RetroAchievements (below).
+  device, unless you turn on device sync (below).
+- Only GitHub receives requests, unless you connect RetroAchievements, play
+  online or turn on device sync (below).
   GitHub Pages serves the app and its fonts.
   Box art is off by default and needs your yes in the first-launch dialog
   (or in Settings > Storage); only then does the browser also load covers of
@@ -136,6 +146,19 @@ PigSaint nor libretro endorses Cartouche.
   MD5 with those lists in the browser: the ROM and its hash are never sent.
   RetroAchievements receives your IP address and browser details.
   "Disconnect" forgets the key and stops every request.
+- Play online (Link Cable) and device sync (Settings > Sync) make no request
+  until you open or join a room, or pair a device. Then your browser contacts
+  five public Nostr relays that Cartouche does not run
+  (`relay02.lnfi.network`, `staging.yabu.me`, `top.testrelay.top`, `yabu.me`
+  and `relay.mostro.network`) to find the other browser, and public STUN
+  servers run by Google and Cloudflare to learn its own network address. The
+  relays carry only an encrypted handshake, but they see the IP addresses of
+  both browsers, and the other player or device learns yours: that is how a
+  direct (WebRTC) connection works. Game and sync data then go directly from
+  one browser to the other, encrypted, through no Cartouche server. If you add
+  your own TURN server (Play online > Connection settings), a connection that
+  cannot go direct goes through it. See [ONLINE_LINK.md](ONLINE_LINK.md) and
+  [SYNC.md](SYNC.md).
 - To delete all Cartouche data, clear the site data for Cartouche in your
   browser settings.
 

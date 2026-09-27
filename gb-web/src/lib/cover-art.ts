@@ -51,7 +51,7 @@ async function isPng(blob: Blob): Promise<boolean> {
 
 /**
  * libretro-thumbnails stores many variants as git symlinks. Served raw, a symlink's body is the
- * target file name as plain text (e.g. "Dr. Mario (World).png"), not a PNG: follow it.
+ * target file name as plain text (e.g. "Some Game (World).png"), not a PNG: follow it.
  */
 async function fetchBoxart(base: string, filename: string, hops = 0): Promise<Blob | null> {
   const res = await cachedFetch(`${base}/${encodeURIComponent(filename)}`);

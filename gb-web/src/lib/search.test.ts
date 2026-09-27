@@ -7,15 +7,15 @@ import { buildIndex, facetCounts, formatQuery, normValue, parseQuery, search, su
 
 const game = (id: string, o: Partial<GameEntry>): GameEntry => ({ id, title: id, description: '', genre: 'Unknown', category: 'My Collection', coverArt: '', screenshots: [], isLocal: true, ...o });
 const GAMES = [
-  game('Zelda', { genre: 'Action RPG', developer: 'Nintendo', year: '1993', region: 'USA', players: 1, platform: 'gb', libretroName: 'Zelda (USA)', isFavorite: true }),
-  game('Pokemon Gold', { genre: 'Rpg', developer: 'Game Freak/Creatures', publisher: 'Nintendo', year: '2000', region: 'Japan', players: 2, platform: 'gbc', compatibility: 'dual', saveType: 'battery' }),
-  game('Kirby', { genre: 'Action', developer: 'HAL Laboratory, Inc.', year: '1992', region: 'Europe', players: 1, platform: 'gb' }),
-  game('Tetris', { genre: 'Puzzle', developer: 'Nintendo', year: '1989', region: 'World', players: 2, platform: 'gb', lastPlayed: 1000 }),
+  game('Zephyr Keep', { genre: 'Action RPG', developer: 'Nintendo', year: '1993', region: 'USA', players: 1, platform: 'gb', libretroName: 'Zephyr Keep (USA)', isFavorite: true }),
+  game('Pixel Garden', { genre: 'Rpg', developer: 'Game Freak/Creatures', publisher: 'Nintendo', year: '2000', region: 'Japan', players: 2, platform: 'gbc', compatibility: 'dual', saveType: 'battery' }),
+  game('Kobo Quest', { genre: 'Action', developer: 'HAL Laboratory, Inc.', year: '1992', region: 'Europe', players: 1, platform: 'gb' }),
+  game('Tile Tumble', { genre: 'Puzzle', developer: 'Nintendo', year: '1989', region: 'World', players: 2, platform: 'gb', lastPlayed: 1000 }),
   game('Homebrew', { genre: 'Platformer', category: 'Homebrew Highlights', license: 'MIT', year: '2017', isLocal: false, romUrl: 'roms/x.gb' }),
   game('Unknown dump', { isLocal: false }),
 ];
 await loadLang('fr'); // French values typed in the search count too
-const index = buildIndex(GAMES, { saved: new Set(['Pokemon Gold']), art: false, now: 2000 });
+const index = buildIndex(GAMES, { saved: new Set(['Pixel Garden']), art: false, now: 2000 });
 const titles = (q: string) => search(index, parseQuery(q)).map((g) => g.title);
 
 test('normalizes synonyms, accents and case', () => {
@@ -43,41 +43,41 @@ test('normalizes synonyms, accents and case', () => {
 });
 
 test('parses the syntax; bad tokens stay free text, never throw', () => {
-  const q = parseQuery('genre:rpg players:2 region:jp year:1998..2001 dev:"hal laboratory" is:favorite -genre:puzzle zelda');
+  const q = parseQuery('genre:rpg players:2 region:jp year:1998..2001 dev:"hal laboratory" is:favorite -genre:puzzle zephyr');
   assert.deepEqual(q.filters, [
     { key: 'genre', value: 'rpg' }, { key: 'players', value: '2' }, { key: 'region', value: 'jp' }, { key: 'year', value: '1998..2001' },
     { key: 'developer', value: 'hal laboratory' }, { key: 'is', value: 'favorite' }, { key: 'genre', value: 'puzzle', neg: true },
   ]);
-  assert.equal(q.text, 'zelda');
+  assert.equal(q.text, 'zephyr');
   assert.deepEqual(parseQuery('foo:bar region:mars'), { text: 'foo:bar region:mars', filters: [] });
-  assert.deepEqual(parseQuery('genre: tetris'), { text: 'tetris', filters: [] }); // value still being typed
+  assert.deepEqual(parseQuery('genre: tile'), { text: 'tile', filters: [] }); // value still being typed
   assert.deepEqual(parseQuery('g:rpg,puzzle').filters, [{ key: 'genre', value: 'rpg' }, { key: 'genre', value: 'puzzle' }]);
   for (const s of ['"', '-', ':', '-:', 'year:abc', 'dev:"', '"unclosed', '::::']) assert.doesNotThrow(() => parseQuery(s));
-  const round = 'genre:rpg -region:jp developer:"hal laboratory" year:..1995 mario';
+  const round = 'genre:rpg -region:jp developer:"hal laboratory" year:..1995 hopper';
   assert.equal(formatQuery(parseQuery(round)), round);
 });
 
 test('AND across facets, OR within a facet, negation', () => {
-  assert.deepEqual(titles('genre:rpg'), ['Pokemon Gold', 'Zelda']); // "Action RPG" is an RPG
-  assert.deepEqual(titles('genre:role-playing players:1'), ['Zelda']);
-  assert.deepEqual(titles('genre:rpg genre:puzzle'), ['Pokemon Gold', 'Tetris', 'Zelda']);
-  assert.deepEqual(titles('-genre:rpg is:mine'), ['Kirby', 'Tetris']);
-  assert.deepEqual(titles('region:jp'), ['Pokemon Gold', 'Tetris']); // World counts everywhere
-  assert.deepEqual(titles('region:eu'), ['Kirby', 'Tetris']);
-  assert.deepEqual(titles('players:2+'), ['Pokemon Gold', 'Tetris']);
-  assert.deepEqual(titles('year:1990..1995'), ['Kirby', 'Zelda']);
-  assert.deepEqual(titles('decade:80s'), ['Tetris']);
-  assert.deepEqual(titles('dev:hal'), ['Kirby']);
-  assert.deepEqual(titles('publisher:nintendo'), ['Pokemon Gold']);
-  assert.deepEqual(titles('platform:dual'), ['Pokemon Gold']);
-  assert.deepEqual(titles('save:battery'), ['Pokemon Gold']);
-  assert.deepEqual(titles('lang:ja'), ['Pokemon Gold']);
-  assert.deepEqual(titles('is:saved'), ['Pokemon Gold']);
+  assert.deepEqual(titles('genre:rpg'), ['Pixel Garden', 'Zephyr Keep']); // "Action RPG" is an RPG
+  assert.deepEqual(titles('genre:role-playing players:1'), ['Zephyr Keep']);
+  assert.deepEqual(titles('genre:rpg genre:puzzle'), ['Pixel Garden', 'Tile Tumble', 'Zephyr Keep']);
+  assert.deepEqual(titles('-genre:rpg is:mine'), ['Kobo Quest', 'Tile Tumble']);
+  assert.deepEqual(titles('region:jp'), ['Pixel Garden', 'Tile Tumble']); // World counts everywhere
+  assert.deepEqual(titles('region:eu'), ['Kobo Quest', 'Tile Tumble']);
+  assert.deepEqual(titles('players:2+'), ['Pixel Garden', 'Tile Tumble']);
+  assert.deepEqual(titles('year:1990..1995'), ['Kobo Quest', 'Zephyr Keep']);
+  assert.deepEqual(titles('decade:80s'), ['Tile Tumble']);
+  assert.deepEqual(titles('dev:hal'), ['Kobo Quest']);
+  assert.deepEqual(titles('publisher:nintendo'), ['Pixel Garden']);
+  assert.deepEqual(titles('platform:dual'), ['Pixel Garden']);
+  assert.deepEqual(titles('save:battery'), ['Pixel Garden']);
+  assert.deepEqual(titles('lang:ja'), ['Pixel Garden']);
+  assert.deepEqual(titles('is:saved'), ['Pixel Garden']);
   assert.deepEqual(titles('is:need'), ['Unknown dump']);
-  assert.deepEqual(titles('is:recent'), ['Tetris']);
+  assert.deepEqual(titles('is:recent'), ['Tile Tumble']);
   assert.deepEqual(titles('is:homebrew'), ['Homebrew']);
-  assert.deepEqual(titles('is:fav'), ['Zelda']);
-  assert.deepEqual(titles('nintendo -genre:puzzle'), ['Pokemon Gold', 'Zelda']); // free text: developer and publisher
+  assert.deepEqual(titles('is:fav'), ['Zephyr Keep']);
+  assert.deepEqual(titles('nintendo -genre:puzzle'), ['Pixel Garden', 'Zephyr Keep']); // free text: developer and publisher
 });
 
 test('faceted counts ignore the facet’s own filters', () => {
@@ -94,12 +94,12 @@ test('a value’s count is what picking it gives; shared credits split', () => {
   for (const key of ['developer', 'publisher', 'genre', 'region', 'players', 'is'] as const) {
     for (const v of facetCounts(index, parseQuery(''), key)) assert.equal(search(index, { text: '', filters: [{ key, value: v.value }] }).length, v.count, `${key}:${v.value}`);
   }
-  assert.deepEqual(titles('dev:creatures'), ['Pokemon Gold']);
-  assert.deepEqual(titles('dev:nintendo'), ['Tetris', 'Zelda']);
+  assert.deepEqual(titles('dev:creatures'), ['Pixel Garden']);
+  assert.deepEqual(titles('dev:nintendo'), ['Tile Tumble', 'Zephyr Keep']);
 });
 
 test('invalid values stay text; ranges swap; the later of include/exclude wins', () => {
-  assert.deepEqual(parseQuery('genre:xyz zelda', index), { text: 'genre:xyz zelda', filters: [] });
+  assert.deepEqual(parseQuery('genre:xyz zephyr', index), { text: 'genre:xyz zephyr', filters: [] });
   assert.deepEqual(parseQuery('genre:rpg', index).filters, [{ key: 'genre', value: 'rpg' }]);
   assert.deepEqual(parseQuery('year:2001..1998').filters, [{ key: 'year', value: '1998..2001' }]);
   assert.deepEqual(parseQuery('genre:rpg -genre:rpg').filters, [{ key: 'genre', value: 'rpg', neg: true }]);
@@ -122,7 +122,7 @@ test('indexes 3,000 games and answers a query well within a frame', () => {
   const t0 = performance.now();
   const big = buildIndex(many, { saved: new Set(), art: true });
   const t1 = performance.now();
-  for (const s of ['z', 'ze', 'zel', 'zeld', 'zelda']) { search(big, parseQuery(`genre:rpg ${s}`)); facetCounts(big, parseQuery(`genre:rpg ${s}`), 'players'); }
+  for (const s of ['z', 'ze', 'zep', 'zeph', 'zephyr']) { search(big, parseQuery(`genre:rpg ${s}`)); facetCounts(big, parseQuery(`genre:rpg ${s}`), 'players'); }
   const t2 = performance.now();
   assert.ok(t1 - t0 < 1000, `index ${t1 - t0} ms`);
   assert.ok((t2 - t1) / 5 < 16, `per keystroke ${(t2 - t1) / 5} ms`);
