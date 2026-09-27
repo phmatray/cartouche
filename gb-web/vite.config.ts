@@ -18,8 +18,9 @@ const spaFallback = (): Plugin => ({
     const files = (fs.readdirSync(out, { recursive: true }) as string[])
       .map((f) => f.split(path.sep).join('/'))
       // splash/ and app-screens/ (manifest screenshots) are read once, when the app is installed: not worth keeping offline.
-      // roms/gbstudio/ (the GB Studio collection's hosted ROMs, several MB) is fetched only when the player downloads a game.
-      .filter((f) => fs.statSync(path.join(out, f)).isFile() && !/^(404\.html|sw\.js|og\.png|splash\/.*|app-screens\/.*|roms\/gbstudio\/.*)$/.test(f) && !f.endsWith('.map'))
+      // roms/gbstudio/*.gb(c) (the GB Studio collection's hosted ROMs, several MB) is fetched only when the player downloads a game;
+      // its LICENSES.txt stays, since the downloaded games play offline.
+      .filter((f) => fs.statSync(path.join(out, f)).isFile() && !/^(404\.html|sw\.js|og\.png|splash\/.*|app-screens\/.*|roms\/gbstudio\/.*\.gbc?)$/.test(f) && !f.endsWith('.map'))
       .sort()
     const hash = crypto.createHash('sha1')
     for (const f of files) hash.update(f).update(fs.readFileSync(path.join(out, f)))
