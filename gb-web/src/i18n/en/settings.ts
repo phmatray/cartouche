@@ -215,7 +215,7 @@ export default {
     wipe: 'Erase everything',
     wipeTitle: 'Erase everything?',
     wipeSub: 'Removes every ROM, save, screenshot and setting from this browser',
-    wipeBody: 'Every ROM, save slot, resume point, screenshot and setting will be deleted from this browser. Export a backup first if you might want them back.',
+    wipeBody: 'Every ROM, save slot, resume point, screenshot and setting will be deleted from this browser, along with your RetroAchievements key and your own TURN server; paired devices are unpaired. Export a backup first if you might want them back.',
   },
   pergame: {
     more: { one: '{count} more', other: '{count} more' },
