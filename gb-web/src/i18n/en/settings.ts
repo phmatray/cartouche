@@ -220,6 +220,7 @@ export default {
     battery: 'Battery save',
     shotsOf: '{title} screenshots',
     deleteShot: 'Delete screenshot from {date}',
+    deletePrint: 'Delete print from {date}',
     gamePage: 'Game page',
     removeHere: 'Remove from this browser',
     eraseIts: 'Erase its saves',

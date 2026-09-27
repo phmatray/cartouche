@@ -236,6 +236,7 @@ impl MemoryBus {
         if self.serial.tick(4) {
             self.interrupts.request(SERIAL_BIT);
         }
+        self.cartridge.tick();
         self.apu.cgb_mode = self.cgb_mode;
         self.apu.step(ppu_step);
         self.cycle_count += ppu_step;

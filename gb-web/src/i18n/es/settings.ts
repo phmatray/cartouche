@@ -221,6 +221,7 @@ export default {
     battery: 'Guardado del cartucho',
     shotsOf: 'Capturas de {title}',
     deleteShot: 'Eliminar la captura del {date}',
+    deletePrint: 'Eliminar la copia del {date}',
     gamePage: 'Página del juego',
     removeHere: 'Quitar de este navegador',
     eraseIts: 'Borrar sus partidas',

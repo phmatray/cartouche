@@ -36,6 +36,7 @@ export default {
   },
   album: 'Album',
   shot: 'Capture d’écran, {ago}',
+  print: 'Tirage, {ago}',
   noShots: 'Aucune capture pour l’instant. Appuyez sur <b>F12</b> en jeu, ou sur le bouton appareil photo, pour en ajouter une.',
   playIt: 'Y jouer',
   dl: {

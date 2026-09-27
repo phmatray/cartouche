@@ -138,7 +138,7 @@ function GameDetails({ game }: { game: GameEntry }) {
           <h3>{t('game.album')}</h3>
           {shots.length ? (
             <div className="album">
-              {shots.map((s) => <figure key={s.id}><Shot png={s.png} label={t('game.shot', { ago: ago(s.timestamp) })} /><figcaption>{ago(s.timestamp)}</figcaption></figure>)}
+              {shots.map((s) => <figure key={s.id}><Shot png={s.png} label={t(s.kind === 'print' ? 'game.print' : 'game.shot', { ago: ago(s.timestamp) })} /><figcaption>{ago(s.timestamp)}</figcaption></figure>)}
             </div>
           ) : (
             <div className="empty-inline">{I.cam}<span>{rich(t('game.noShots'), { b: (s) => <b>{s}</b> })}</span></div>

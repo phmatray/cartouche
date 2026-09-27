@@ -1,5 +1,6 @@
 pub mod apu;
 pub mod boot_rom;
+pub mod camera;
 pub mod cartridge;
 pub mod cpu;
 pub mod error;
@@ -8,6 +9,7 @@ pub mod interrupts;
 pub mod joypad;
 pub mod memory;
 pub mod ppu;
+pub mod printer;
 pub mod registers;
 pub mod serial;
 pub mod timer;
@@ -266,6 +268,48 @@ impl Emulator {
         if let Some(gb) = &mut self.gb {
             gb.bus.serial.receive_byte(byte);
         }
+    }
+
+    // Peripherals: pocket camera, printer, rumble.
+
+    /// True when the cartridge is a pocket camera (type 0xFC): feed it with `camera_set_frame`.
+    pub fn has_camera(&self) -> bool {
+        self.gb.as_ref().map_or(false, |gb| gb.bus.cartridge.camera.is_some())
+    }
+
+    /// The camera sensor's view: 128 x 112 grayscale bytes (0 = black), row by row.
+    pub fn camera_set_frame(&mut self, frame: &[u8]) {
+        if let Some(cam) = self.gb.as_mut().and_then(|gb| gb.bus.cartridge.camera.as_mut()) {
+            cam.set_input(frame);
+        }
+    }
+
+    /// Plug a Game Boy Printer into the serial port (solo play; never on a linked console).
+    pub fn set_printer_connected(&mut self, on: bool) {
+        if let Some(gb) = &mut self.gb {
+            if on != gb.bus.serial.printer.is_some() {
+                gb.bus.serial.printer = on.then(crate::printer::Printer::new);
+            }
+        }
+    }
+
+    /// The oldest finished print, or an empty array: `[margins, exposure, shades...]`, 160 shades
+    /// (0 white to 3 black) per row. Margins: high nibble feeds before, low nibble after.
+    pub fn printer_take_job(&mut self) -> Vec<u8> {
+        self.gb.as_mut()
+            .and_then(|gb| gb.bus.serial.printer.as_mut())
+            .and_then(|p| p.jobs.pop_front())
+            .unwrap_or_default()
+    }
+
+    /// True when the cartridge has a rumble motor (MBC5 types 0x1C-0x1E).
+    pub fn has_rumble(&self) -> bool {
+        self.gb.as_ref().map_or(false, |gb| gb.bus.cartridge.has_rumble())
+    }
+
+    /// Share of the emulated time the motor ran since the last call, 0 to 1.
+    pub fn take_rumble(&mut self) -> f32 {
+        self.gb.as_mut().map_or(0.0, |gb| gb.bus.cartridge.take_rumble())
     }
 
     pub fn vram_ptr(&self) -> *const u8 {

@@ -4,6 +4,7 @@ import { keyLabel } from '../../lib/ui';
 import { toast } from '../shell/actions';
 import { Row, Seg, SwitchRow } from './parts';
 import { t as tNow, useT, type Key } from '../../i18n';
+import { RumbleRows } from '../../peripherals/RumbleRows';
 
 const BUTTONS: GameBoyButton[] = ['Up', 'Down', 'Left', 'Right', 'A', 'B', 'Start', 'Select'];
 /** Keys the player already uses for its own shortcuts. */
@@ -84,6 +85,8 @@ export function ControlsTab() {
         <Seg<TouchSize> label={t('settings.controls.size')} value={touchSize} options={[['S', 'S'], ['M', 'M'], ['L', 'L']]} set={(v) => set({ touchSize: v })} />
       </Row>
       <SwitchRow label={t('settings.controls.vibrate')} sub={t('settings.controls.vibrateSub')} on={haptics} set={(v) => set({ haptics: v })} />
+
+      <RumbleRows />
     </>
   );
 }

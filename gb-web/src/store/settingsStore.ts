@@ -52,6 +52,10 @@ export interface SettingsState {
   haptics: boolean;
   /** The interface language; null: the browser's (see i18n). */
   language: Lang | null;
+  /** Rumble cartridges: drive gamepad / phone motors, at `rumbleIntensity` %, and shake the screen if `rumbleShake`. */
+  rumble: boolean;
+  rumbleIntensity: number;
+  rumbleShake: boolean;
 
   // Library
   /** Fetch box art from libretro-thumbnails (only for recognized ROMs the user added). When off, no request is ever made. */
@@ -115,6 +119,9 @@ const DEFAULT_STATE = {
   touchSize: 'M' as TouchSize,
   haptics: true,
   language: null as Lang | null,
+  rumble: true,
+  rumbleIntensity: 80,
+  rumbleShake: true,
 };
 export type SettingsValues = typeof DEFAULT_STATE;
 /** Keys saved in a backup and in localStorage. */

@@ -36,6 +36,7 @@ export default {
   },
   album: 'Álbum',
   shot: 'Captura, {ago}',
+  print: 'Copia, {ago}',
   noShots: 'Aún no hay capturas. Pulsa <b>F12</b> mientras juegas, o el botón de la cámara, para añadir una.',
   playIt: 'Juégalo',
   dl: {

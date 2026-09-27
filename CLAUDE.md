@@ -12,6 +12,7 @@ cartouche/
 │   │   ├── memory.rs         # Bus: region routing, DMA/HDMA, OAM-bug hooks
 │   │   ├── cartridge.rs      # ROM + MBC1/MBC2/MBC3(RTC)/MBC5
 │   │   ├── ppu.rs / apu.rs / timer.rs / interrupts.rs / joypad.rs / serial.rs
+│   │   ├── camera.rs / printer.rs  # Pocket camera sensor + capture unit; Game Boy Printer on the serial port
 │   │   ├── trace.rs          # Opt-in per-frame layer trace (BG/window/OBJ planes, per-line registers) + exact motion vectors
 │   │   └── boot_rom.rs       # Original 9-byte stub; no Nintendo boot ROM or logo, ever
 │   ├── examples/             # render.rs (PNG of a frame), harvest.rs (trace records; refuses to write inside a git repo)
@@ -20,6 +21,7 @@ cartouche/
 │   └── src/
 │       ├── components/       # shell/, library/, game/, player/, add/, settings/, LinkCablePage
 │       ├── hooks/ lib/ store/ shaders/ workers/ audio/
+│       ├── peripherals/      # Camera lens (getUserMedia → sensor), printer tray + album prints, rumble (gamepad / vibrate / iPhone switch-tick overlay on the touch buttons)
 │       ├── neural/           # Neural 4× (tile-aware network + learned table) and Smooth motion, WebGL2; weights/*.bin are the only model data allowed (docs/NEURAL.md)
 │       ├── content/legal.ts  # Legal page text
 │       └── data/             # catalog.json (only verified, licensed entries), GameDB

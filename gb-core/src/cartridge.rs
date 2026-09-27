@@ -136,6 +136,12 @@ pub enum MbcType {
         rom_bank: u16,
         ram_bank: u8,
     },
+    /// Pocket camera (MAC-GBD): RAM banks 0-15, or the capture unit's registers when bit 4 is set.
+    Camera {
+        ram_enabled: bool,
+        rom_bank: u8,
+        ram_bank: u8,
+    },
 }
 
 pub struct Cartridge {
@@ -145,6 +151,12 @@ pub struct Cartridge {
     rom_bank_count: usize,
     rtc: Option<Rtc>,
     rumble: bool,
+    /// Rumble motor (RAM bank register bit 3 on rumble carts), and M-cycles it ran / elapsed since
+    /// the host last asked (`take_rumble`).
+    motor: bool,
+    motor_on: u32,
+    motor_total: u32,
+    pub camera: Option<Box<crate::camera::Camera>>,
 }
 
 impl Cartridge {
@@ -194,6 +206,11 @@ impl Cartridge {
                 rom_bank: 1,
                 ram_bank: 0,
             },
+            0xFC => MbcType::Camera {
+                ram_enabled: false,
+                rom_bank: 1,
+                ram_bank: 0,
+            },
             _ => return Err(CartridgeError::UnsupportedType { cart_type }),
         };
 
@@ -225,6 +242,10 @@ impl Cartridge {
             rom_bank_count,
             rtc,
             rumble: matches!(cart_type, 0x1C..=0x1E),
+            motor: false,
+            motor_on: 0,
+            motor_total: 0,
+            camera: (cart_type == 0xFC).then(|| Box::new(crate::camera::Camera::new())),
         })
     }
 
@@ -264,6 +285,16 @@ impl Cartridge {
             },
 
             MbcType::Mbc3 { rom_bank, .. } => match addr {
+                0x0000..=0x3FFF => self.rom.get(addr as usize).copied().unwrap_or(0xFF),
+                0x4000..=0x7FFF => {
+                    let bank = (*rom_bank as usize) % self.rom_bank_count.max(1);
+                    let offset = bank * 0x4000 + (addr as usize - 0x4000);
+                    self.rom.get(offset).copied().unwrap_or(0xFF)
+                }
+                _ => 0xFF,
+            },
+
+            MbcType::Camera { rom_bank, .. } => match addr {
                 0x0000..=0x3FFF => self.rom.get(addr as usize).copied().unwrap_or(0xFF),
                 0x4000..=0x7FFF => {
                     let bank = (*rom_bank as usize) % self.rom_bank_count.max(1);
@@ -371,10 +402,44 @@ impl Cartridge {
                 0x4000..=0x5FFF => {
                     // On rumble carts (0x1C-0x1E) bit 3 drives the motor, not the RAM bank.
                     *ram_bank = value & if self.rumble { 0x07 } else { 0x0F };
+                    if self.rumble { self.motor = value & 0x08 != 0; }
                 }
                 _ => {}
             },
+
+            MbcType::Camera { ram_enabled, rom_bank, ram_bank } => match addr {
+                0x0000..=0x1FFF => *ram_enabled = (value & 0x0F) == 0x0A,
+                0x2000..=0x3FFF => *rom_bank = value & 0x3F,
+                0x4000..=0x5FFF => *ram_bank = value & 0x1F,
+                _ => {}
+            },
         }
+    }
+
+    /// Advances cartridge hardware by one CPU M-cycle: the camera's capture, the rumble duty meter.
+    pub fn tick(&mut self) {
+        if self.rumble {
+            self.motor_total = self.motor_total.saturating_add(1);
+            if self.motor { self.motor_on = self.motor_on.saturating_add(1); }
+        }
+        if let Some(cam) = &mut self.camera {
+            if let Some(picture) = cam.tick(1) {
+                let at = crate::camera::PICTURE_AT;
+                if let Some(dst) = self.ram.get_mut(at..at + picture.len()) { dst.copy_from_slice(&picture); }
+            }
+        }
+    }
+
+    /// Whether the cartridge has a rumble motor (types 0x1C-0x1E).
+    pub fn has_rumble(&self) -> bool {
+        self.rumble
+    }
+
+    /// Share of the time the motor ran since the last call (0-1): games pulse it to vary the strength.
+    pub fn take_rumble(&mut self) -> f32 {
+        let level = if self.motor_total == 0 { self.motor as u8 as f32 } else { self.motor_on as f32 / self.motor_total as f32 };
+        (self.motor_on, self.motor_total) = (0, 0);
+        level
     }
 
     pub fn read_ram(&self, offset: u16) -> u8 {
@@ -432,6 +497,17 @@ impl Cartridge {
                 let addr = self.ram_index(*ram_bank as usize, offset);
                 self.ram.get(addr).copied().unwrap_or(0xFF)
             }
+
+            // RAM reads work without the enable (it only guards writes); mid-capture they read 0.
+            MbcType::Camera { ram_bank, .. } => {
+                let cam = self.camera.as_deref();
+                if ram_bank & 0x10 != 0 {
+                    return cam.map_or(0, |c| c.read((offset & 0x7F) as usize));
+                }
+                if cam.is_some_and(|c| c.busy()) { return 0x00; }
+                let addr = self.ram_index((*ram_bank & 0x0F) as usize, offset);
+                self.ram.get(addr).copied().unwrap_or(0xFF)
+            }
         }
     }
 
@@ -473,6 +549,7 @@ impl Cartridge {
             MbcType::Mbc2 { ram_enabled, rom_bank } => (rom_bank as u16, 0, ram_enabled, false),
             MbcType::Mbc3 { ram_enabled, rom_bank, ram_bank } => (rom_bank as u16, ram_bank, ram_enabled, false),
             MbcType::Mbc5 { ram_enabled, rom_bank, ram_bank } => (rom_bank, ram_bank, ram_enabled, false),
+            MbcType::Camera { ram_enabled, rom_bank, ram_bank } => (rom_bank as u16, ram_bank, ram_enabled, false),
         };
         let (sel, latch) = self.rtc.as_ref().map_or((0, false), |r| (r.selected_register.unwrap_or(0), r.latch_ready));
         let [lo, hi] = rom_bank.to_le_bytes();
@@ -490,6 +567,7 @@ impl Cartridge {
             MbcType::Mbc2 { ram_enabled, rom_bank } => (*ram_enabled, *rom_bank) = (en, rb as u8),
             MbcType::Mbc3 { ram_enabled, rom_bank, ram_bank } => (*ram_enabled, *rom_bank, *ram_bank) = (en, rb as u8, rab),
             MbcType::Mbc5 { ram_enabled, rom_bank, ram_bank } => (*ram_enabled, *rom_bank, *ram_bank) = (en, rb, rab),
+            MbcType::Camera { ram_enabled, rom_bank, ram_bank } => (*ram_enabled, *rom_bank, *ram_bank) = (en, rb as u8, rab),
         }
         if let Some(rtc) = &mut self.rtc {
             rtc.selected_register = (s[5] != 0).then_some(s[5]);
@@ -584,6 +662,81 @@ impl Cartridge {
                     *byte = value;
                 }
             }
+            &MbcType::Camera { ram_enabled, ram_bank, .. } => {
+                if ram_bank & 0x10 != 0 {
+                    if let Some(cam) = &mut self.camera { cam.write((offset & 0x7F) as usize, value); }
+                    return;
+                }
+                if !ram_enabled || self.camera.as_ref().is_some_and(|c| c.busy()) { return; }
+                let addr = self.ram_index((ram_bank & 0x0F) as usize, offset);
+                if let Some(byte) = self.ram.get_mut(addr) {
+                    *byte = value;
+                }
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A blank ROM with a valid header of the given cartridge type and RAM size code.
+    fn cart(cart_type: u8, ram_size: u8) -> Cartridge {
+        let mut rom = vec![0u8; 0x8000 * 4];
+        rom[0x147] = cart_type;
+        rom[0x148] = 0x02; // 128 KB
+        rom[0x149] = ram_size;
+        let sum = (0x134..=0x14C).fold(0u8, |c, a| c.wrapping_sub(rom[a]).wrapping_sub(1));
+        rom[0x14D] = sum;
+        Cartridge::from_rom(rom).expect("valid header")
+    }
+
+    #[test]
+    fn rumble_bit_drives_the_motor_not_the_ram_bank() {
+        let mut c = cart(0x1E, 0x03);
+        assert!(c.has_rumble());
+        c.write_rom(0x0000, 0x0A);
+        c.write_rom(0x4000, 0x01);
+        c.write_ram(0, 0x11);
+        c.write_rom(0x4000, 0x09); // bank 1 + motor
+        assert_eq!(c.read_ram(0), 0x11, "bit 3 does not change the bank");
+        for _ in 0..30 { c.tick(); }
+        c.write_rom(0x4000, 0x01);
+        for _ in 0..10 { c.tick(); }
+        assert!((c.take_rumble() - 0.75).abs() < 1e-6, "on 30 of 40 cycles");
+        assert_eq!(c.take_rumble(), 0.0, "off, and the meter restarted");
+        // Plain MBC5: bit 3 is a bank bit and there is no motor.
+        let mut plain = cart(0x1B, 0x04);
+        plain.write_rom(0x4000, 0x08);
+        plain.tick();
+        assert!(!plain.has_rumble());
+        assert_eq!(plain.take_rumble(), 0.0);
+    }
+
+    #[test]
+    fn camera_maps_registers_on_bank_bit_4_and_writes_the_picture() {
+        let mut c = cart(0xFC, 0x04);
+        assert!(c.camera.is_some());
+        c.write_rom(0x0000, 0x0A);
+        c.write_rom(0x4000, 0x00);
+        c.write_ram(0x0100, 0x5A);
+        assert_eq!(c.read_ram(0x0100), 0x5A);
+        c.write_rom(0x4000, 0x10);
+        c.write_ram(0x0001, 0x80); // N = 1
+        c.write_ram(0x0083, 0x00); // $A003 through the mirror at +$80
+        c.write_ram(0x0000, 0x03); // start
+        assert_eq!(c.read_ram(0x0000), 0x03);
+        c.write_rom(0x4000, 0x00);
+        assert_eq!(c.read_ram(0x0100), 0x00, "RAM reads 0 mid-capture");
+        for _ in 0..32446 { c.tick(); }
+        assert_ne!(c.read_ram(0x0100), 0x5A, "picture written over bank 0 at $0100");
+        c.write_rom(0x4000, 0x10);
+        assert_eq!(c.read_ram(0x0000) & 1, 0, "not busy any more");
+        // Bank 15 is reachable and distinct from bank 0.
+        c.write_rom(0x4000, 0x0F);
+        c.write_ram(0, 0x77);
+        c.write_rom(0x4000, 0x00);
+        assert_ne!(c.read_ram(0), 0x77);
     }
 }

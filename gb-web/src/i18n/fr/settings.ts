@@ -221,6 +221,7 @@ export default {
     battery: 'Sauvegarde de cartouche',
     shotsOf: 'Captures de {title}',
     deleteShot: 'Supprimer la capture du {date}',
+    deletePrint: 'Supprimer le tirage du {date}',
     gamePage: 'Page du jeu',
     removeHere: 'Retirer de ce navigateur',
     eraseIts: 'Effacer ses sauvegardes',

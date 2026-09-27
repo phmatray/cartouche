@@ -1,0 +1,162 @@
+/* Cartridge peripherals, in the Box & Manual world: hardware is the screen frame's black,
+   paper is thermal paper, the flood ink stays behind them. Loaded with the components that use it.
+   They never sit on the game screen: on a computer they live in the stage's side margins (the screen
+   gives up the room they need), on a phone in a strip under the screen, with the lens's choices in a
+   sheet over the touch controls and the paper feeding out downwards, over the controls. */
+
+:root{--thermal:#f7f6ef;
+  --torn:polygon(0% 5px,5% 0,10% 5px,15% 0,20% 5px,25% 0,30% 5px,35% 0,40% 5px,45% 0,50% 5px,55% 0,60% 5px,65% 0,70% 5px,75% 0,80% 5px,85% 0,90% 5px,95% 0,100% 5px,100% 100%,0 100%);
+  --torn-b:polygon(0 0,100% 0,100% calc(100% - 5px),95% 100%,90% calc(100% - 5px),85% 100%,80% calc(100% - 5px),75% 100%,70% calc(100% - 5px),65% 100%,60% calc(100% - 5px),55% 100%,50% calc(100% - 5px),45% 100%,40% calc(100% - 5px),35% 100%,30% calc(100% - 5px),25% 100%,20% calc(100% - 5px),15% 100%,10% calc(100% - 5px),5% 100%,0 calc(100% - 5px))}
+
+.periph{display:contents}
+/* The screen makes room for the lens (left) and the tray (right), keeping itself centred. Only bites
+   where the stage is narrow for its height; the room is: panel + its 24 px inset + 12 px air - the
+   stage's own 32 px padding, on both sides. */
+.stage .screen,.stage .cap{transition:max-width .45s var(--ease)}
+.stage:has(.cdock) :is(.screen,.cap){max-width:calc(100% - 2 * (96px + 4px))}
+.stage:has(.ptray) :is(.screen,.cap){max-width:calc(100% - 2 * (184px + 4px))}
+.stage:has(.cdock.open) :is(.screen,.cap){max-width:calc(100% - 2 * (212px + 4px))}
+
+/* ---------- camera: the lens ---------- */
+.cdock{position:absolute;left:24px;bottom:24px;z-index:3;width:96px;background:#0b0b0b;color:var(--paper);box-shadow:0 22px 44px rgba(0,0,0,.35),0 3px 8px rgba(0,0,0,.28)}
+.cdock.open{width:212px}
+.cd-video{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.cd-head{display:grid;grid-template-columns:1fr 8px;grid-template-areas:"lens lens" "t led";align-items:center;gap:8px;width:100%;border:0;background:transparent;color:inherit;padding:8px;text-align:left;cursor:pointer}
+.cdock.open .cd-head{padding:10px 12px;row-gap:10px}
+.cd-lens{grid-area:lens;display:block;background:#1d1d1d;box-shadow:inset 0 0 0 1px #2a2a2a}
+.cd-t{grid-area:t;min-width:0}
+.cd-led{grid-area:led}
+.cd-lens canvas{display:block;width:100%;height:auto;aspect-ratio:8/7;image-rendering:pixelated;opacity:.18;transition:opacity .4s var(--ease)}
+.cdock.lit .cd-lens canvas{opacity:1}
+.cd-t b{display:block;font:900 18px/1 var(--font);font-stretch:62%;text-transform:uppercase}
+.cd-t small{display:block;margin-top:4px;font:700 10px/1 var(--font);letter-spacing:.1em;text-transform:uppercase;color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cd-led{width:8px;height:8px;background:var(--dim);align-self:start}
+.cdock.lit .cd-led{background:var(--m)}
+.cd-body{padding:0 12px 12px}
+.cd-body p{margin:0 0 12px;font:500 13px/1.45 var(--font);color:#d9d9d3}
+.cd-acts{display:flex;flex-wrap:wrap;gap:6px}
+.cd-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 12px;border:2px solid var(--paper);background:transparent;color:var(--paper);font:800 12px/1 var(--font);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;cursor:pointer}
+.cd-btn:hover{background:rgba(244,244,240,.12)}
+.cd-btn.y{background:var(--y);border-color:var(--y);color:#000}
+.cd-btn.y:hover{background:#ffe04d}
+.cd-btn.icon{width:36px;padding:0}
+.cd-btn[aria-pressed=true]{background:var(--paper);color:#000}
+.cd-btn[disabled]{opacity:.55;cursor:default}
+.cd-sel{flex:1 1 100px;min-width:0;height:36px;border:2px solid var(--paper);background:#0b0b0b;color:var(--paper);font:700 12px var(--font);padding:0 6px}
+
+/* ---------- printer: the output tray ---------- */
+.ptray{--px:1;--lead:10px;position:absolute;right:24px;top:24px;bottom:24px;z-index:3;display:flex;flex-direction:column;justify-content:flex-end;pointer-events:none;width:calc(160px * var(--px) + 24px)}
+.ptray>*{pointer-events:auto}
+.pt-out{min-height:0;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;padding:0 12px;filter:drop-shadow(0 8px 12px rgba(0,0,0,.3))}
+/* The paper rises out of the slot one print band at a time, as the head works through it. */
+.pt-paper{flex:none;width:calc(160px * var(--px));height:calc(var(--rows) * var(--px) * 1px + var(--lead));padding-top:var(--lead);overflow:hidden;background:var(--thermal);animation:pt-feed var(--ms) steps(var(--bands),end) both}
+.pt-paper canvas{display:block;width:100%;image-rendering:pixelated}
+.pt-paper.torn{clip-path:var(--torn);cursor:pointer}
+@keyframes pt-feed{from{height:calc(var(--from) * var(--px) * 1px + var(--lead))}}
+.pt-body{position:relative;background:#0b0b0b;color:var(--paper);padding:0 12px 10px;box-shadow:0 22px 44px rgba(0,0,0,.35),0 3px 8px rgba(0,0,0,.28)}
+.pt-slot{display:block;height:6px;margin:0 -12px 8px;background:#000;box-shadow:inset 0 2px 3px rgba(0,0,0,.9),0 1px 0 #2a2a2a}
+.pt-row{display:flex;align-items:center;gap:10px;min-height:36px}
+.pt-led{width:8px;height:8px;flex:none;background:var(--c)}
+.pt-led.busy{background:var(--y);animation:pt-blink .9s steps(2,jump-none) infinite}
+@keyframes pt-blink{50%{background:var(--dim)}}
+.pt-state{font:700 11px/1.2 var(--font);letter-spacing:.08em;text-transform:uppercase;color:var(--mute);font-variant-numeric:tabular-nums;min-width:0}
+.pt-x{margin-left:auto;margin-right:-8px;width:36px;height:36px;flex:none;border:0;background:transparent;color:var(--mute);display:flex;align-items:center;justify-content:center}
+.pt-x:hover{color:var(--paper)}
+.pt-acts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:4px}
+.pt-btn:not(:first-child) span{display:none}
+.pt-btn{height:40px;border:0;background:var(--band-3);color:var(--paper);display:flex;align-items:center;justify-content:center;gap:6px;font:800 11px/1 var(--font);letter-spacing:.06em;text-transform:uppercase;padding:0 6px}
+.pt-btn:hover{background:#333}
+.pt-btn:first-child{background:var(--y);color:#000}
+.pt-btn:first-child:hover{background:#ffe04d}
+.pt-btn .icon{width:16px;height:16px}
+.pt-btn span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+
+/* Fingers (phones, tablets, touch laptops): 44 px targets, whatever the width. */
+@media (pointer:coarse){
+  .cd-btn,.cd-sel,.pt-btn{height:44px}
+  .cd-btn.icon{width:44px}
+  .pt-x{width:44px;height:44px}
+}
+
+/* ---------- phones: the lens is a chip in a strip under the screen ---------- */
+@media (max-width:900px),(orientation:landscape) and (max-height:500px){
+  .stage:has(.periph){overflow:visible}
+  .stage :is(.screen,.cap){max-width:none!important}
+  .periph{display:flex;gap:8px;position:relative;z-index:4;width:min(var(--sw,100%),100%);margin-top:8px}
+  .periph:not(:has(.cdock,.ptray)){display:none}
+  .cdock{position:static;flex:1 1 0;min-width:0;width:auto!important;box-shadow:none}
+  .cd-head,.cdock.open .cd-head{grid-template-columns:44px minmax(0,1fr) 8px;grid-template-areas:"lens t led";padding:0 12px 0 0;height:44px;row-gap:0}
+  .cd-lens canvas{height:44px;width:auto}
+  .cd-lens{overflow:hidden;width:44px;height:44px}
+  .cd-led{align-self:center}
+  .cd-t b{font-size:16px}
+  .cdock.open .cd-head{background:#1d1d1d}
+  /* the lens's choices: a sheet over the touch controls, never over the game */
+  .cd-body{position:fixed;left:0;right:0;bottom:0;z-index:60;background:#0b0b0b;padding:18px max(16px,var(--sar)) calc(18px + var(--sab)) max(16px,var(--sal));box-shadow:0 -20px 40px rgba(0,0,0,.5);animation:cd-up .3s var(--ease)}
+  .cd-body p{font-size:14px;max-width:52ch}
+  @keyframes cd-up{from{transform:translateY(100%)}}
+}
+/* Upright phones: the printer is a bar beside the lens chip, and its paper comes out of the slot downwards,
+   over the controls, the torn edge last. The strip (44 px + 8 px) takes the stage's bottom padding and some
+   of the air around the touch controls; the LCD gives up the rest (24 px of height). Same sums as index.css. */
+@media (max-width:900px) and (min-height:501px){
+  .periph:has(.ptray) .cdock{flex:none}
+  .periph:has(.ptray) .cd-t{display:none}
+  .periph:has(.ptray) .cd-head{grid-template-columns:44px 8px;grid-template-areas:"lens led";gap:10px}
+  .ptray{--px:2;position:static;flex:1 1 0;min-width:0;width:auto;display:block;pointer-events:auto}
+  .pt-body{display:grid;grid-template-columns:8px minmax(0,1fr) auto 44px;align-items:center;column-gap:10px;height:44px;padding:0 0 0 12px;box-shadow:none}
+  .pt-row{display:contents}
+  .pt-x{grid-column:4;grid-row:1;margin:0}
+  .pt-acts{grid-column:3;grid-row:1;display:flex;gap:4px;margin:0}
+  .pt-btn{width:44px;height:44px;padding:0}
+  .pt-btn span,.pt-long{display:none}
+  .pt-slot{position:absolute;left:0;right:0;bottom:-3px;height:6px;margin:0}
+  .ptray.fed .pt-state{visibility:hidden}
+  .pt-out{position:absolute;left:0;right:0;top:100%;align-items:center;justify-content:flex-start;padding:0;overflow:visible}
+  .pt-paper{padding-top:0;padding-bottom:var(--lead)}
+  .pt-paper.torn{clip-path:var(--torn-b)}
+
+  .pl:has(.periph){--touch-h:calc(214px + max(24px,calc(8px + var(--sab))))}
+  .pl:has(.periph) .stage{padding-bottom:0}
+  .pl:has(.periph) .touch{gap:12px;padding-top:8px}
+  .pl:has(.periph) .screen{width:min(var(--sw,100%),100%,calc((100dvh - 56px - var(--sat) - 61px - var(--touch-h) - 24px - 24px - 40px) * 160 / 144 + 24px))}
+  .pl.imm:has(.periph) .screen{width:min(100%,calc((100dvh - 24px - var(--sat) - 52px - var(--touch-h) - 24px - 40px) * 160 / 144 + 24px))}
+}
+@media (max-width:360px) and (min-height:501px){.ptray{--px:1.75}}
+/* Phones held sideways: the side columns are the free room (each at least 180 px, see index.css). The lens
+   opens over the D-pad's column, the printer stands in the A/B column, as on a computer. */
+@media (orientation:landscape) and (max-height:500px){
+  .cd-body{top:calc(52px + var(--sat));right:auto;width:calc(180px + var(--sal));overflow:auto;padding:14px 12px 14px max(12px,var(--sal));box-shadow:20px 0 40px rgba(0,0,0,.5);animation-name:cd-in}
+  .cd-body p{font-size:13px}
+  @keyframes cd-in{from{transform:translateX(-100%)}}
+  .ptray{position:fixed;top:calc(52px + var(--sat));right:0;bottom:0;width:calc(184px + var(--sar));padding:0 var(--sar) var(--sab) 0}
+  .pt-btn span{display:none}
+  .pl:has(.cdock) .screen{width:min(var(--sw,100vw),calc((100dvh - 52px - var(--sat) - var(--sab) - 16px - 24px - 52px) * 160 / 144 + 24px),calc(100vw - 360px - var(--sal) - var(--sar)))}
+  .pl.imm:has(.cdock) .screen{width:min(calc((100dvh - 16px - var(--sat) - var(--sab) - 24px - 52px) * 160 / 144 + 24px),calc(100vw - 360px - var(--sal) - var(--sar)))}
+}
+
+/* ---------- the iPhone rumble tick: a real tap on a switch (see rumble.ts) ---------- */
+.rtick{position:absolute;inset:0;z-index:1;border-radius:inherit;-webkit-tap-highlight-color:transparent}
+.rtick input{position:absolute;visibility:hidden;pointer-events:none}
+.ss button:has(.rtick){position:relative}
+
+/* ---------- album: prints ---------- */
+.pr-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:18px 14px;align-items:start}
+.pr-strip{margin:0}
+.pr-strip img{display:block;width:100%;height:auto;image-rendering:pixelated;background:var(--thermal);padding-top:6px;clip-path:var(--torn)}
+.pr-strip figcaption{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 8px;margin-top:8px;font:600 12px var(--font);color:var(--ink-3)}
+.pr-strip figcaption>span:first-child{white-space:nowrap}
+.pr-acts{display:flex;gap:4px}
+.pr-acts .sbtn{padding:0 8px;display:inline-flex;align-items:center}
+.pr-acts .sbtn .icon{width:16px;height:16px}
+
+/* ---------- a print on real paper ---------- */
+#pt-sheet{display:none}
+@media print{
+  @page{margin:14mm}
+  body>*:not(#pt-sheet){display:none!important}
+  body{background:#fff!important}
+  #pt-sheet{display:block;text-align:center;color:#000}
+  #pt-sheet img{display:block;width:76mm;margin:0 auto;image-rendering:pixelated}
+  #pt-sheet p{margin:6mm 0 0;font:600 9pt var(--font)}
+}
