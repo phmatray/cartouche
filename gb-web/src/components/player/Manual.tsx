@@ -48,7 +48,7 @@ export function Manual(p: ManualProps) {
   };
   return (
     <aside className="sheet" id="sheet" aria-label="Manual">
-      <div className="tabs" role="tablist" style={{ gridTemplateColumns: 'repeat(5,minmax(64px,1fr))' }}>
+      <div className="tabs" role="tablist">
         {TABS.map(([k, t, pg]) => (
           <button key={k} role="tab" aria-selected={tab === k} onClick={() => p.onTab(k)}>{t}<small>{pg}</small></button>
         ))}
