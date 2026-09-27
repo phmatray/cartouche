@@ -1020,6 +1020,8 @@ body{font-family:var(--font)}
 .filters .filters-h h3{margin:0;border:0;padding:0}
 .row.col{display:grid;justify-content:stretch;gap:10px}
 .row.col .seg{grid-auto-columns:minmax(0,1fr);max-width:440px}
+/* phones: a choice in an ordinary row wraps under its label; it then takes the same equal columns as those above */
+@media (max-width:760px){.row>.seg{grid-auto-columns:minmax(0,1fr);width:100%;max-width:440px}}
 .row.col .seg button{padding:0 4px;white-space:normal;line-height:1.1}
 /* Five or more options: one row where there is room, else three columns (keyed on the row's width: the manual's
    side sheet is as narrow as a phone). Not `.wrap`, the page container class. */
