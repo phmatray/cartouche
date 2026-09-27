@@ -1,7 +1,7 @@
 // node --test: the three dictionaries stay in step, and the plural and format helpers follow the language.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ago, detectLang, DICTS, dur, isPlural, LANGS, langName, loadLang, num, setLang, size, translate } from './core.ts';
+import { ago, detectLang, DICTS, dur, headerSize, isPlural, LANGS, langName, loadLang, num, setLang, size, translate } from './core.ts';
 import { LEGAL_SECTIONS } from '../content/legal.ts';
 import { LEGAL_FR } from '../content/legal.fr.ts';
 import { LEGAL_ES } from '../content/legal.es.ts';
@@ -33,6 +33,11 @@ test('French and Spanish have exactly the English keys, placeholders and markup'
     for (const [k, v] of en) assert.deepEqual(marks(other.get(k)!), marks(v), `${lang}: ${k}`);
     for (const [k, v] of other) assert.ok(v.trim(), `${lang}: ${k} is empty`);
   }
+});
+
+test('French puts a no-break space before : ; ? ! (never a lone sign at the start of a line)', () => {
+  const bad = [...flat(DICTS.fr!)].filter(([, v]) => / [:;?!](\s|$)/.test(v)).map(([k]) => k);
+  assert.deepEqual(bad, []);
 });
 
 test('every plural has each form its language uses (“many” falls back to “other”)', () => {
@@ -68,6 +73,7 @@ test('sizes, times and names use the active language', () => {
   assert.equal(num(12345), '12,345');
   setLang('fr');
   assert.match(size(1536 * 1024), /^1,5\sMo$/); // \s: Intl puts a (narrow) no-break space before the unit
+  assert.match(headerSize('1 MB'), /^1\sMo$/);
   assert.equal(ago(now - 26 * 3600e3, now), 'hier');
   assert.match(ago(now - 5 * 60e3, now), /^il y a 5\smin$/);
   assert.equal(ago(Date.UTC(2026, 7, 18), now), 'le 18 août'); // after a month: a date that reads inside a sentence
@@ -75,6 +81,8 @@ test('sizes, times and names use the active language', () => {
   assert.equal(langName('ja'), 'Japonais');
   setLang('es');
   assert.match(size(32 * 1024), /^32\skB$/);
+  assert.match(headerSize('512 KB'), /^512\skB$/); // a ROM header's size, as on the game page and in the Manual
+  assert.equal(headerSize('None'), 'Ninguna');
   assert.equal(ago(now - 3 * 86400e3, now), 'hace 3 días');
   assert.equal(ago(Date.UTC(2026, 7, 18), now), 'el 18 de agosto');
   assert.equal(langName('en'), 'Inglés');
@@ -100,11 +108,12 @@ test('the legal translations keep every section, link and URL of the English tex
   }
 });
 
-test('every catalog description and hint is translated', () => {
-  for (const g of [...catalog, ...gbstudio] as { id: string; hint?: string; descriptions?: Record<string, string>; hints?: Record<string, string> }[]) {
+test('every catalog description, hint and credit line is translated', () => {
+  for (const g of [...catalog, ...gbstudio] as { id: string; hint?: string; license?: string; changes?: string; coverCredit?: string; descriptions?: Record<string, string>; hints?: Record<string, string>; credits?: Record<string, Record<string, string>> }[]) {
     for (const l of ['fr', 'es']) {
       assert.ok(g.descriptions?.[l], `${g.id}: description ${l}`);
       if (g.hint) assert.ok(g.hints?.[l], `${g.id}: hint ${l}`);
+      for (const f of ['license', 'changes', 'coverCredit'] as const) if (g[f]) assert.ok(g.credits?.[l]?.[f], `${g.id}: ${f} ${l}`);
     }
   }
 });

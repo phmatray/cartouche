@@ -107,7 +107,7 @@
   .sy-doors section{padding:20px 18px 22px}
   .sy-doors section+section{border-left:0;border-top:2px dashed var(--paper-3)}
   .sy-doors h4{font-size:38px}
-  .sy-doors .btn.lg{width:100%}
+  .sy-doors .btn.lg{width:100%;padding-inline:16px}
   .sy-pair{padding:18px 16px 20px}
   .sy-cable-row{grid-template-columns:minmax(0,1fr) 64px minmax(0,1fr)}
   .sy-cable span{display:none}
@@ -120,6 +120,12 @@
   .sy-code span{font-size:clamp(15px,4.6vw,24px);padding:5px 0;text-align:center;letter-spacing:.02em}
   .sy-name{width:150px;flex:none}
   .sy-what{grid-template-columns:minmax(0,1fr)}
+}
+/* 320-400 px: a shorter cable leaves the two screens room for a whole device name and "this device". */
+@media (max-width:400px){
+  .sy-cable-row{grid-template-columns:minmax(0,1fr) 28px minmax(0,1fr)}
+  .sy-cable-row .sy-lcd{padding:8px 4px}
+  .sy-lcd small{letter-spacing:.02em}
 }
 @media (prefers-reduced-motion:reduce){
   .sy-dots i,.sy-pair.found .sy-cable i,.sy-view.live .sy-reticle,.sy-pair.paired .sy-cable-row .sy-lcd:last-child{animation:none}

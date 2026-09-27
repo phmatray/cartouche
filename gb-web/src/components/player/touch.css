@@ -117,7 +117,7 @@
 .ced-more .btn{color:var(--ink)}
 .ced-warn{font:600 13px/1.4 var(--font);color:var(--err)}
 @keyframes ced-in{from{opacity:0;transform:translateY(-8px)}}
-@media (max-width:520px){.ced-name{display:none}.ced-op span{display:none}}
+@media (max-width:520px){.ced-name{display:none}.ced-op span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}
 @media (orientation:landscape) and (max-height:500px){.ced-bar{min-height:calc(52px + var(--sat))}.ced-more{top:calc(52px + var(--sat))}}
 /* the deck waits while the layout is edited */
 .pl:has(.ced) .deck{pointer-events:none;opacity:.35}

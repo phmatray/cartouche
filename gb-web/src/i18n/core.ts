@@ -87,6 +87,11 @@ export function size(n: number): string {
   return intl(`u${lang}${unit}`, () => new Intl.NumberFormat(locale(), { style: 'unit', unit, unitDisplay: unit === 'byte' ? 'long' : 'short', maximumFractionDigits: d })).format(v);
 }
 
+/** A ROM header size ("32 KB", "None") in the active language's units. */
+export function headerSize(s: string): string {
+  return s === 'None' ? t('common.none') : s.replace(/(\d+) (KB|MB)/, (_, n: string, u: string) => size(Number(n) * (u === 'KB' ? 1024 : 1048576)));
+}
+
 /** How long ago: "just now", "5 min ago", "yesterday", "3 weeks ago", then "on" the date (with its year when not this one). */
 export function ago(ts: number, now = Date.now()): string {
   const s = Math.max(1, Math.round((now - ts) / 1000));
