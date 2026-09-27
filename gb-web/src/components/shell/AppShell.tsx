@@ -135,16 +135,23 @@ export function AppShell() {
       <div className="route" key={pathname.startsWith('/settings') ? '/settings' : pathname}><Outlet /></div>
 
       <footer className="foot">
+        {/* Three groups: what Cartouche promises, where to go next, then the small print (language, version, credits). */}
         <div className="wrap">
-          <span>{rich(t('shell.foot.stays'), { b: (s) => <b>{s}</b> })}</span>
-          <Link to="/settings/storage">{t('shell.foot.backup')}</Link>
-          {canInstall && <a href="#install" onClick={(e) => { e.preventDefault(); startInstall(); }}>{t('common.install')}</a>}
-          <a href="#shortcuts" onClick={(e) => { e.preventDefault(); setShortcuts(true); }}>{t('shell.shortcuts')}</a>
-          <Link to="/legal">{t('shell.legal')}</Link>
-          <a href={REPO_URL} target="_blank" rel="noopener">{t('shell.source')}</a>
-          <a href={`${REPO_URL}/releases/tag/v${version}`} target="_blank" rel="noopener" aria-label={t('shell.foot.version', { v: version })}>v{version}</a>
-          <LangSwitch />
-          <span className="sp">{t('shell.foot.art')}</span>
+          <p className="f-note">{rich(t('shell.foot.stays'), { b: (s) => <b>{s}</b> })}</p>
+          <div className="f-links">
+            <Link to="/settings/storage">{t('shell.foot.backup')}</Link>
+            {canInstall && <a href="#install" onClick={(e) => { e.preventDefault(); startInstall(); }}>{t('common.install')}</a>}
+            <a href="#shortcuts" onClick={(e) => { e.preventDefault(); setShortcuts(true); }}>{t('shell.shortcuts')}</a>
+            <Link to="/legal">{t('shell.legal')}</Link>
+            <a href={REPO_URL} target="_blank" rel="noopener">{t('shell.source')}</a>
+          </div>
+          <div className="f-meta">
+            <LangSwitch />
+            <p className="f-small">
+              <a href={`${REPO_URL}/releases/tag/v${version}`} target="_blank" rel="noopener" aria-label={t('shell.foot.version', { v: version })}>v{version}</a>
+              <span>{t('shell.foot.art')}</span>
+            </p>
+          </div>
         </div>
       </footer>
 
