@@ -67,6 +67,7 @@ export default {
   resume: 'Reanudar',
   slot: 'Ranura {n}',
   slots: {
+    note: 'El punto de reanudación se guarda cada vez que sales del juego. Una ranura guarda el momento que eliges, desde la página Partidas del Manual.',
     deleteOf: 'Eliminar la ranura {n}',
     deleteTitle: '¿Eliminar la ranura {n}?',
     deleteBody: 'La partida guardada {ago} en la ranura {n} se elimina de este navegador. El guardado del cartucho y las demás ranuras no cambian. No se puede deshacer.',
@@ -94,6 +95,7 @@ export default {
   },
   saves: {
     title: 'Partidas guardadas',
+    heading: 'Guardados del cartucho',
     none: 'Todavía no hay partida guardada. Aparece aquí cuando juegues; añade más para otros jugadores o importa un archivo .sav.',
     renamedTo: 'Otra partida ya se llama «{name}»: renombrada a «{unique}»',
     copyName: '{name} (copia)',

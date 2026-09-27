@@ -157,6 +157,7 @@ export default {
   saves: {
     battery: 'La sauvegarde de la cartouche est conservée automatiquement.',
     resume: 'Le point de reprise est mis à jour à chaque sortie du jeu.',
+    slots: 'Un emplacement garde l’instant de votre choix, jusqu’à ce que vous l’écrasiez.',
     noResume: 'Pas de point de reprise',
     onLeave: 'Enregistré à la sortie du jeu',
     emptySlot: 'Emplacement vide',

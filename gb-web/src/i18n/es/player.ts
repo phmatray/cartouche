@@ -157,6 +157,7 @@ export default {
   saves: {
     battery: 'El guardado del propio cartucho se conserva automáticamente.',
     resume: 'El punto de reanudación se actualiza cada vez que sales.',
+    slots: 'Una ranura guarda el momento que eliges, hasta que guardes encima.',
     noResume: 'Sin punto de reanudación',
     onLeave: 'Se guarda al salir',
     emptySlot: 'Ranura vacía',

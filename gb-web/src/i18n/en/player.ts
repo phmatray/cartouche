@@ -156,6 +156,7 @@ export default {
   saves: {
     battery: 'The cartridge’s own save is kept automatically.',
     resume: 'The resume point is updated every time you leave.',
+    slots: 'A slot keeps the moment you choose, until you save over it.',
     noResume: 'No resume point',
     onLeave: 'Saved when you leave',
     emptySlot: 'Empty slot',
