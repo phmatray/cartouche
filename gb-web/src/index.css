@@ -72,7 +72,10 @@ kbd{border:1px solid #3a3a3a;padding:3px 7px;font:700 11px var(--font);color:var
   .search span,.search kbd{display:none}
   .top .btn .lbl{display:none}
   .top .btn{width:44px;padding:0}
+  .top .btn,.top .menu{flex:none}
 }
+/* Under 390 px four buttons and the wordmark don't fit: GitHub moves to the menu (and the footer). */
+@media (max-width:389px){.top .gh{display:none}.mark{gap:10px}}
 .gh{display:flex;width:44px;height:44px;flex:none;align-items:center;justify-content:center;border:1px solid #3a3a3a;color:var(--mute)}
 .gh:hover{color:var(--paper);border-color:#5a5a5a}
 @media (min-width:641px){.top .gh{margin-left:-16px}}
@@ -88,6 +91,7 @@ kbd{border:1px solid #3a3a3a;padding:3px 7px;font:700 11px var(--font);color:var
 .mnav a,.mnav button{display:flex;align-items:center;justify-content:space-between;text-decoration:none;font:900 40px/1 var(--font);font-stretch:62%;text-transform:uppercase;padding:18px 0;border-bottom:1px solid var(--rule)}
 .mnav button{width:100%;border-width:0 0 1px;border-style:solid;border-color:var(--rule);background:none;color:inherit;text-align:left}
 .mnav a[aria-current]{color:var(--y)}
+@media (max-height:700px){.mnav a,.mnav button{font-size:32px;padding:14px 0}} /* short phones: room left to tap outside it */
 
 /* ---------- buttons ---------- */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;border:0;height:44px;padding:0 20px;font:800 15px/1 var(--font);font-stretch:80%;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;text-decoration:none;transition:transform .2s var(--ease),background-color .2s,color .2s}
@@ -987,8 +991,11 @@ body{font-family:var(--font)}
 .wrap{padding-left:max(32px,var(--sal));padding-right:max(32px,var(--sar))}
 @media (max-width:640px){.wrap{padding-left:max(16px,var(--sal));padding-right:max(16px,var(--sar))}}
 .top{padding-top:var(--sat)}
-.mnav.open{inset:calc(60px + var(--sat)) 0 0;padding:16px max(16px,var(--sar)) calc(16px + var(--sab)) max(16px,var(--sal));overflow:auto}
-@media (min-width:641px){.mnav.open{top:calc(72px + var(--sat))}}
+/* The menu drops down under the header over a dimmed page; a tap on the page closes it. */
+.mnav.open{inset:calc(60px + var(--sat)) 0 auto;max-height:calc(100dvh - 60px - var(--sat));padding:4px max(16px,var(--sar)) 4px max(16px,var(--sal));overflow:auto;overscroll-behavior:contain;border-bottom:1px solid var(--rule);box-shadow:0 22px 44px rgba(0,0,0,.42)}
+.mnav>:last-child{border-bottom:0}
+.mscrim{position:fixed;inset:0;z-index:45;background:rgba(0,0,0,.6);animation:vt-in .2s linear}
+@media (min-width:641px){.mnav.open{top:calc(72px + var(--sat));max-height:calc(100dvh - 72px - var(--sat))}}
 .foot .wrap{padding-bottom:calc(40px + var(--sab))}
 .sdlg .wrap{padding-top:calc(28px + var(--sat))}
 .mdlg{max-height:calc(100dvh - 32px - var(--sat) - var(--sab))}

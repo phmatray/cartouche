@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useGameLibrary } from '../../hooks/useGameLibrary';
 import { useBoxArtProgress } from '../../lib/cover-art';
@@ -33,6 +33,7 @@ export function AppShell() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [menu, setMenu] = useState(false);
+  const menuBtn = useRef<HTMLButtonElement>(null);
   const [shortcuts, setShortcuts] = useState(false);
   const [dropping, setDropping] = useState(false);
   const canInstall = useInstall((s) => s.can) !== null;
@@ -41,8 +42,20 @@ export function AppShell() {
   const [lastPath, setLastPath] = useState(pathname);
   if (lastPath !== pathname) { setLastPath(pathname); setMenu(false); }
 
+  // The mobile menu also closes on Escape, a tap outside it, a scroll or swipe of the page, and any choice in it;
+  // focus goes back to its button (a new page takes focus itself).
+  const closeMenu = useCallback((refocus = true) => { setMenu(false); if (refocus) menuBtn.current?.focus(); }, []);
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); closeMenu(); } };
+    const onScroll = () => closeMenu(!!document.activeElement?.closest('#mnav'));
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => { document.removeEventListener('keydown', onKey); window.removeEventListener('scroll', onScroll); };
+  }, [menu, closeMenu]);
+
   // The overlay is open while the URL has ?q= (over whatever page is showing).
-  const openSearch = () => navigate(paths.search('').slice(1), { state: searchState() });
+  const openSearch = () => { setMenu(false); navigate(paths.search('').slice(1), { state: searchState() }); };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -93,14 +106,18 @@ export function AppShell() {
           </button>
           <Link className="btn y" aria-label="Add ROMs" to="/add">{I.plus}<span className="lbl">Add ROMs</span></Link>
           <a className="gh" href={REPO_URL} target="_blank" rel="noopener" aria-label="Cartouche on GitHub" title="Cartouche on GitHub">{I.github}</a>
-          <button className="menu" aria-label="Menu" aria-expanded={menu} aria-controls="mnav" onClick={() => setMenu(!menu)}>{menu ? I.close : I.menu}</button>
+          <button ref={menuBtn} className="menu" aria-label={menu ? 'Close menu' : 'Menu'} aria-expanded={menu} aria-controls="mnav" onClick={() => (menu ? closeMenu() : setMenu(true))}>{menu ? I.close : I.menu}</button>
         </div>
         <ArtProgress />
       </header>
-      <nav className={`mnav${menu ? ' open' : ''}`} id="mnav" aria-label="Main">
+      {menu && <div className="mscrim" aria-hidden="true" onClick={() => closeMenu()} />}
+      {/* A choice closes it, the current page included (no route change then: focus returns to the button). */}
+      <nav className={`mnav${menu ? ' open' : ''}`} id="mnav" aria-label="Main"
+        onClick={(e) => { const a = (e.target as Element).closest('a'); if (a) closeMenu(!!a.getAttribute('aria-current')); }}>
         {NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === '/'}>{label}{I.next}</NavLink>)}
         <NavLink to="/add">Add ROMs{I.next}</NavLink>
-        {canInstall && <button type="button" onClick={() => { setMenu(false); startInstall(); }}>Install the app{I.load}</button>}
+        {canInstall && <button type="button" onClick={() => { closeMenu(); startInstall(); }}>Install the app{I.load}</button>}
+        <a href={REPO_URL} target="_blank" rel="noopener">Source on GitHub{I.github}</a>
       </nav>
 
       {/* A new page remounts (fresh state); a settings section is the same page, so focus stays in its table of contents. */}
