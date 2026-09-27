@@ -12,7 +12,7 @@ export default {
   tests: 'Cartuchos de prueba',
   testsSub: 'Pruebas de hardware incluidas en la app: comprueba si el emulador las supera',
   all: 'Todos los juegos',
-  allSub: '{games} · homebrew libre, cartuchos de prueba y tus propias ROM',
+  allSub: '{games} · homebrew libre y tus propias ROM',
   filterLabel: 'Filtro',
   filter: { all: 'Todos', mine: 'En mi biblioteca', fav: 'Favoritos' },
   moreFilters: 'Más filtros',

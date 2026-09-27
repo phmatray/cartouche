@@ -42,7 +42,7 @@ export function patchRow(key: string, p: Partial<ImportRow>, now = false) {
 
 const asRow = (o: ImportOutcome): Partial<ImportRow> => ({ st: o.status, id: o.id, title: o.title, sha1: o.sha1 });
 /** Folders, macOS metadata (__MACOSX/, ._ files, .DS_Store) and other hidden files: not listed, just counted. */
-const HIDDEN = /(^|\/)(__MACOSX\/|\.)/;
+export const HIDDEN = /(^|\/)(__MACOSX\/|\.)/;
 let seq = 0;
 
 async function expand(files: File[]): Promise<{ rows: ImportRow[]; ignored: number }> {

@@ -51,6 +51,8 @@ export default {
     otherTabs: 'Cierra las demás pestañas de Cartouche para terminar de actualizar',
     notStored: 'ya no está en el almacenamiento de este navegador',
     download: 'falló la descarga, comprueba la conexión',
+    notFound: 'el archivo no está en el servidor (error {status})',
+    server: 'el servidor no pudo enviarlo (error {status})',
   },
   deck: {
     label: 'Reproducción',
@@ -109,6 +111,7 @@ export default {
     intro: 'Las capturas se guardan como PNG de 160 × 144 a la resolución original.',
     take: 'Hacer captura',
     savePng: 'Guardar PNG',
+    share: 'Compartir',
     empty: 'Aún no hay nada. Pulsa F12 mientras juegas.',
   },
   game: {

@@ -51,7 +51,7 @@ export default {
     free: 'Gratis',
     pwyw: 'Paga lo que quieras',
     paid: 'De pago',
-    steps: 'Su autor lo distribuye en su propia página (se abre en una pestaña nueva). Descarga allí el archivo .gb o .gbc (descomprímelo antes si es un .zip), vuelve y toca Carga tu ROM: el archivo se une a este juego y se queda en este navegador.',
+    steps: 'Su autor lo distribuye en su propia página (se abre en una pestaña nueva). Descarga allí el juego (su archivo .gb, .gbc o .zip), vuelve y toca Carga tu ROM: el archivo se une a este juego y se queda en este navegador.',
   },
   hostedErase: 'Alojado aquí según la licencia de su autor. Sus partidas guardadas se pueden borrar.',
   dump: 'Vuelca tu propio cartucho y luego carga el archivo .gb aquí o suéltalo en cualquier parte de la página. Nada sale de este navegador.',
@@ -109,6 +109,7 @@ export default {
   },
   link: {
     bad: '{file} está dañado o no es una ROM de Game Boy',
+    fromZip: '{file} contiene varias ROM: se carga {rom}',
     unknown: 'Vinculado a {title}. Este archivo no está entre los volcados conocidos, así que podría ser un hack o un volcado defectuoso.',
     other: 'Vinculado, pero su huella indica {title}',
     ok: '{title} reconocido: tu ROM está vinculada',

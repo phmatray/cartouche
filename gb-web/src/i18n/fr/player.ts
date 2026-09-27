@@ -51,6 +51,8 @@ export default {
     otherTabs: 'Fermez les autres onglets Cartouche pour terminer la mise à jour',
     notStored: 'elle n’est plus dans le stockage de ce navigateur',
     download: 'le téléchargement a échoué, vérifiez la connexion',
+    notFound: 'le fichier est introuvable sur le serveur (erreur {status})',
+    server: 'le serveur n’a pas pu l’envoyer (erreur {status})',
   },
   deck: {
     label: 'Lecture',
@@ -109,6 +111,7 @@ export default {
     intro: 'Les captures sont enregistrées en PNG de 160 × 144, à la résolution d’origine.',
     take: 'Prendre une capture',
     savePng: 'Enregistrer le PNG',
+    share: 'Partager',
     empty: 'Rien pour l’instant. Appuyez sur F12 en jeu.',
   },
   game: {

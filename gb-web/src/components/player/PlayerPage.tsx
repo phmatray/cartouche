@@ -35,6 +35,17 @@ const typing = () => {
   return !!el && (/INPUT|SELECT|TEXTAREA/.test(el.tagName) || el.isContentEditable);
 };
 
+/**
+ * iOS starts a selection, the magnifier or a double-tap zoom from a touch unless its touchstart is cancelled, which
+ * React's (passive) touch listeners can't do. The pads run on pointer events, which still arrive.
+ */
+function holdTouches(el: HTMLElement | null) {
+  if (!el) return;
+  const stop = (e: TouchEvent) => e.preventDefault();
+  el.addEventListener('touchstart', stop, { passive: false });
+  return () => el.removeEventListener('touchstart', stop);
+}
+
 export function PlayerPage() {
   const { id = '' } = useParams<{ id: string }>();
   const { getGameById, loading } = useGameLibrary();
@@ -221,6 +232,18 @@ function Player({ game }: { game: GameEntry }) {
     const t = setInterval(() => leaveRef.current(), 30_000);
     return () => clearInterval(t);
   }, [isRunning]);
+  // The screen stays awake while a game runs. The browser drops the lock when the page is hidden: taken again on return.
+  useEffect(() => {
+    if (!isRunning || !('wakeLock' in navigator)) return;
+    let lock: WakeLockSentinel | undefined, gone = false;
+    const take = () => {
+      if (document.visibilityState !== 'visible' || (lock && !lock.released)) return;
+      navigator.wakeLock.request('screen').then((l) => { if (gone) l.release(); else lock = l; }).catch(() => {});
+    };
+    take();
+    document.addEventListener('visibilitychange', take);
+    return () => { gone = true; document.removeEventListener('visibilitychange', take); lock?.release().catch(() => {}); };
+  }, [isRunning]);
   useEffect(() => {
     const onHide = () => { if (document.visibilityState === 'hidden') leaveRef.current(); };
     const onPageHide = () => leaveRef.current();
@@ -340,7 +363,7 @@ function Player({ game }: { game: GameEntry }) {
                   <p>{t('player.insert.body', { title: game.title })}</p>
                   <label className="btn y" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
                     {I.cart}{t('game.loadRom')}
-                    <input type="file" accept={fileAccept('.gb,.gbc')} className="sr" tabIndex={-1}
+                    <input type="file" accept={fileAccept('.gb,.gbc,.zip')} className="sr" tabIndex={-1}
                       onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; const data = f && await linkRom(f); if (data) boot(data); }} />
                   </label>
                 </div>
@@ -389,7 +412,7 @@ function Player({ game }: { game: GameEntry }) {
           : <button className="dk fs" onClick={toggleFullscreen} aria-pressed={immersive} aria-label={immersive ? t('player.deck.leaveImmF') : t('player.deck.immF')}>{immersive ? I.close : I.full}</button>}
       </nav>
 
-      <div className="touch" data-size={touchSize} aria-label={t('player.touch.label')}>
+      <div className="touch" ref={holdTouches} data-size={touchSize} aria-label={t('player.touch.label')}>
         <div className="dpad">
           <span className="c" />
           <button className="u" aria-label={t('player.touch.up')} {...pad('Up')}>{I.up}</button>

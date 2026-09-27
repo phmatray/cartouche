@@ -12,7 +12,7 @@ export default {
   tests: 'Cartouches de test',
   testsSub: 'Des tests matériels fournis avec l’app : l’émulateur les réussit-il ?',
   all: 'Tous les jeux',
-  allSub: '{games} · homebrews libres, cartouches de test et ROM personnelles',
+  allSub: '{games} · homebrews libres et ROM personnelles',
   filterLabel: 'Filtre',
   filter: { all: 'Tous', mine: 'Dans ma bibliothèque', fav: 'Favoris' },
   moreFilters: 'Plus de filtres',

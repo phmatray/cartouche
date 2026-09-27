@@ -1052,7 +1052,10 @@ body:has(.mnav.open) .ihint{display:none}
 .sheet{padding-right:var(--sar);padding-bottom:var(--sab)}
 body:has(.pl) .toasts{top:calc(80px + var(--sat))}
 /* game controls: no double-tap zoom, text selection, long-press callout, tap flash or rubber-band scrolling */
-.pl{touch-action:manipulation}
+.pl{touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+/* no selection anywhere on the page (iOS extends one started on a button into any text), except the manual
+   and its fields: iOS won't focus or type in an input under user-select:none */
+.pl .sheet,.pl input,.pl select,.pl textarea{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
 .pl .stage,.pl .deck,.pl .touch,.pl .touch *{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 html:has(.pl),body:has(.pl){overscroll-behavior:none}
 

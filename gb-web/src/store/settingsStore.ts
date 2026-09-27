@@ -107,7 +107,7 @@ const DEFAULT_STATE = {
   autoSaveEnabled: true,
   autoSaveIntervalSeconds: 60,
   bootRomEnabled: false,
-  showTests: true,
+  showTests: false,
   showBoxArt: false, // opt-in: box art is third-party content fetched from GitHub
   boxArtAnswer: null as BoxArtAnswer | null,
   resumePoints: true,

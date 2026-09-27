@@ -5,7 +5,9 @@ import { computeSha1, isGameBoyRom, parseRomHeader, savSizeError, type RomMetada
 import { lookupByHash } from '../lib/gamedb';
 import { owned } from '../lib/ui';
 import { toast } from '../components/shell/actions';
-import { fetchRom, titleKey, useGameLibrary } from './useGameLibrary';
+import { fetchRom, isRomFile, titleKey, useGameLibrary } from './useGameLibrary';
+import { listZip, readEntry } from '../lib/zip';
+import { HIDDEN } from '../lib/import-queue';
 import { t } from '../i18n';
 
 /** A game's album, newest first, and a way to add to it. */
@@ -57,6 +59,18 @@ export async function importSav(game: GameEntry, file: File): Promise<StoredSave
 export const hardwareOf = (m: RomMetadata) => (m.cgbFlag === 'CGB Only' ? 'Game Boy Color' : m.cgbFlag === 'CGB Compatible' ? 'Game Boy + Color' : 'Game Boy'); // names: not translated
 
 /**
+ * A picked file's ROM bytes. A .zip gives the Game Boy ROM inside (the first when there are several, and a toast
+ * says which). Throws when the archive is unreadable or holds no ROM.
+ */
+export async function readRomFile(file: File): Promise<Uint8Array> {
+  if (!/\.zip$/i.test(file.name)) return new Uint8Array(await file.arrayBuffer());
+  const roms = (await listZip(file)).filter((e) => isRomFile(e.name) && !HIDDEN.test(e.name));
+  if (!roms.length) throw new Error(t('game.link.bad', { file: file.name }));
+  if (roms.length > 1) toast(t('game.link.fromZip', { file: file.name, rom: roms[0].name.split('/').pop()! }), 'm');
+  return readEntry(file, roms[0]);
+}
+
+/**
  * Link the user's own file to a catalog entry. The file's SHA-1 is looked up among known dumps:
  * a match confirms it, another title is reported, an unknown file is linked as asked.
  * Resolves to the ROM bytes (to start playing right away), or null on failure.
@@ -65,8 +79,8 @@ export function useLinkRom(game: GameEntry | undefined) {
   const { linkRomToGame } = useGameLibrary();
   return useCallback(async (file: File): Promise<Uint8Array | null> => {
     if (!game) return null;
-    const data = new Uint8Array(await file.arrayBuffer());
-    if (!isGameBoyRom(data)) { toast(t('game.link.bad', { file: file.name }), 'm'); return null; }
+    const data = await readRomFile(file).catch(() => null);
+    if (!data || !isGameBoyRom(data)) { toast(t('game.link.bad', { file: file.name }), 'm'); return null; }
     const sha1 = await computeSha1(data);
     const known = await lookupByHash(sha1);
     await linkRomToGame(game, data, sha1);
