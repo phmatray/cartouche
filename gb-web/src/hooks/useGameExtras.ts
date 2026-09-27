@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 import type { GameEntry } from '../types/game';
 import { addScreenshot, createProfile, getScreenshots, listProfiles, uniqueName, type StoredSave, type StoredScreenshot } from '../lib/db';
 import { computeSha1, isGameBoyRom, parseRomHeader, savSizeError, withoutCopierHeader, type RomMetadata } from '../lib/rom-utils';
 import { lookupByHash } from '../lib/gamedb';
-import { owned } from '../lib/ui';
+import { owned, paths } from '../lib/ui';
 import { toast } from '../components/shell/actions';
-import { fetchRom, isRomFile, titleKey, useGameLibrary } from './useGameLibrary';
+import { fetchRom, importRom, isRomFile, titleKey, useGameLibrary } from './useGameLibrary';
 import { listZip, readEntry } from '../lib/zip';
 import { HIDDEN } from '../lib/import-queue';
 import { t } from '../i18n';
@@ -72,21 +73,27 @@ export async function readRomFile(file: File): Promise<Uint8Array> {
 
 /**
  * Link the user's own file to a catalog entry. The file's SHA-1 is looked up among known dumps:
- * a match confirms it, another title is reported, an unknown file is linked as asked.
- * Resolves to the ROM bytes (to start playing right away), or null on failure.
+ * a match confirms it, an unknown file is linked as asked. A known dump of another game isn't this entry's: it's
+ * added as its own game (it would otherwise take over this page, with this author's credits and license).
+ * Resolves to the ROM bytes (to start playing right away), or null when nothing was linked.
  */
 export function useLinkRom(game: GameEntry | undefined) {
   const { linkRomToGame } = useGameLibrary();
+  const navigate = useNavigate();
   return useCallback(async (file: File): Promise<Uint8Array | null> => {
     if (!game) return null;
     const data = await readRomFile(file).catch(() => null);
     if (!data || !isGameBoyRom(data)) { toast(t('game.link.bad', { file: file.name }), 'm'); return null; }
     const sha1 = await computeSha1(data);
     const known = await lookupByHash(sha1);
+    if (known && titleKey(known.title) !== titleKey(game.title)) {
+      const out = await importRom('rom.gb', data); // named by the GameDB
+      if (out.id) toast(t('game.link.other', { title: known.title }), 'm', { label: t('common.open'), run: () => navigate(paths.game(out.id!)) });
+      return null;
+    }
     await linkRomToGame(game, data, sha1);
     if (!known) toast(t(game.madeWith ? 'game.link.ok' : 'game.link.unknown', { title: game.title }), game.madeWith ? 'c' : 'm'); // GB Studio games aren't in the GameDB
-    else if (titleKey(known.title) !== titleKey(game.title)) toast(t('game.link.other', { title: known.title }), 'm');
     else toast(t('game.link.ok', { title: game.title }), 'c');
     return data;
-  }, [game, linkRomToGame]);
+  }, [game, linkRomToGame, navigate]);
 }
