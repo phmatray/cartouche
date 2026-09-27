@@ -52,7 +52,7 @@ export default {
     allWith: 'Aucun jeu ne réunit tous ces critères avec « {text} ».',
     filters: 'Aucun jeu ne correspond à ces filtres.',
     filtersWith: 'Aucun jeu ne correspond à « {text} » avec ces filtres.',
-    none: 'Aucun jeu nommé « {text} ». Ajoutez-le depuis vos fichiers avec Ajouter des ROM.',
+    none: 'Aucun jeu nommé « {text} ». Ajoutez-le depuis vos fichiers avec <a>Ajouter des ROM</a>.',
     recent: 'Les jeux lancés apparaissent ici.',
   },
   find: 'Chercher : {facet}',

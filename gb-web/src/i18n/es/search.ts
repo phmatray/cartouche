@@ -52,7 +52,7 @@ export default {
     allWith: 'Ningún juego cumple todos estos filtros con «{text}».',
     filters: 'Ningún juego coincide con estos filtros.',
     filtersWith: 'Ningún juego coincide con «{text}» con estos filtros.',
-    none: 'Ningún juego se llama «{text}». Añádelo desde tus propios archivos con Añadir ROM.',
+    none: 'Ningún juego se llama «{text}». Añádelo desde tus propios archivos con <a>Añadir ROM</a>.',
     recent: 'Aquí aparecen los juegos a los que juegues.',
   },
   find: 'Buscar: {facet}',

@@ -284,7 +284,7 @@ export function SearchDialog() {
                   </>
                 ) : query.filters.length ? (
                   <>{q ? t('search.empty.filtersWith', { text: query.text }) : t('search.empty.filters')} <button className="linkbtn" onClick={() => apply([])}>{t('search.clear')}</button></>
-                ) : q ? t('search.empty.none', { text: query.text }) : t('search.empty.recent')}
+                ) : q ? rich(t('search.empty.none', { text: '{text}' }), { text: query.text, a: (s) => <Link to="/add">{s}</Link> }) : t('search.empty.recent')}
               </li>
             )}
           </ul>
