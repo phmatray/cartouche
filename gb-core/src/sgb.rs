@@ -1,7 +1,8 @@
 //! Super Game Boy: the command packets a cartridge sends over the joypad register (P1), and the
 //! picture the SNES side makes of the Game Boy's: four palettes picked per 8x8 cell, a mask, and a
 //! 256x224 border. Data transfers (`*_TRN`) are read, like on the real thing, from the picture
-//! shown a few frames after the command. Sound (SOUND, SOU_TRN), SNES code (DATA_SND, DATA_TRN,
+//! shown a few frames after the command. Sound (SOUND, SOU_TRN; `snes_music` tells the host when a game
+//! plays its own music on the SNES side, silent here), SNES code (DATA_SND, DATA_TRN,
 //! JUMP) and the rest (ATRC_EN, TEST_EN, ICON_EN, OBJ_TRN) are ignored: their packets are read
 //! and dropped. References: Pan Docs "Super Game Boy", SameBoy's `sgb.c` (behaviour only).
 
@@ -57,7 +58,15 @@ pub struct Sgb {
     pub border: Vec<u8>,
     pub border_version: u32,
     backdrop: u16,
+    /// The game sent SOU_TRN (its own program or music for the SNES sound chip, not emulated), then
+    /// frames counted since (up to `SNES_WINDOW`) and those with a Game Boy sound channel on.
+    pub snes_sound: bool,
+    snes_frames: u16,
+    gb_sound_frames: u16,
 }
+
+/// Frames (10 s) watched after SOU_TRN before telling whether the game's music is on the SNES.
+const SNES_WINDOW: u16 = 600;
 
 impl Default for Sgb {
     fn default() -> Self { Self::new() }
@@ -91,6 +100,9 @@ impl Sgb {
             border: vec![0; BORDER_SIZE],
             border_version: 0,
             backdrop: grey[0],
+            snes_sound: false,
+            snes_frames: 0,
+            gb_sound_frames: 0,
         }
     }
 
@@ -218,6 +230,7 @@ impl Sgb {
                 if c[1] & 0x40 != 0 { self.mask = 0; }
             }
             0x17 => self.mask = c[1] & 3,
+            0x09 => self.snes_sound = true,
             _ => {} // sound, SNES code and the rest: not emulated
         }
         self.refresh_border();
@@ -323,7 +336,12 @@ impl Sgb {
     /// pending transfer, then paints the picture with the SGB palettes (or the mask).
     // ponytail: shades recovered from the DMG colours rather than kept by the PPU (a line the PPU did
     // not draw keeps the last one's); keep a shade buffer in the PPU if that ever shows.
-    pub fn vblank(&mut self, fb: &[u8]) {
+    /// `gb_sound`: a Game Boy sound channel is on (NR52 bits 0-3).
+    pub fn vblank(&mut self, fb: &[u8], gb_sound: bool) {
+        if self.snes_sound && self.snes_frames < SNES_WINDOW {
+            self.snes_frames += 1;
+            self.gb_sound_frames += gb_sound as u16;
+        }
         for (s, px) in self.shades.iter_mut().zip(fb.chunks(4)) {
             *s = PALETTE_COLORS.iter().position(|c| c[..3] == px[..3]).unwrap_or(0) as u8;
         }
@@ -387,11 +405,21 @@ impl Sgb {
             s.has_border = take(1)[0] != 0;
         }
         s.pads = self.pads;
+        (s.snes_sound, s.snes_frames, s.gb_sound_frames) = (self.snes_sound, self.snes_frames, self.gb_sound_frames);
         s.border_version = self.border_version.wrapping_add(1);
         s.backdrop = u16::MAX;
         s.refresh_border();
         *self = s;
         true
+    }
+}
+
+impl Sgb {
+    /// The game plays its music on the SNES sound chip, which isn't emulated: it sent SOU_TRN,
+    /// then kept the Game Boy's own channels off most of the next 10 s (a game that only adds
+    /// SNES sound on top of its Game Boy music is not one).
+    pub fn snes_music(&self) -> bool {
+        self.snes_frames >= SNES_WINDOW && self.gb_sound_frames < SNES_WINDOW / 2
     }
 }
 

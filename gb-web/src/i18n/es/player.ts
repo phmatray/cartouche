@@ -35,6 +35,7 @@ export default {
     saveNewer: 'Tu guardado es más reciente que el punto de reanudación. Empezando desde tu guardado.',
     madeOnDmg: 'Ese guardado se hizo en Game Boy. Elige la consola Game Boy para cargarlo.',
     madeOnGbc: 'Ese guardado se hizo en Game Boy Color. Elige la consola Game Boy Color para cargarlo.',
+    snesMusic: 'Este juego toca su música de Super Game Boy en el chip de sonido de la Super Nintendo, que Cartouche no emula. Ahora se inicia en Game Boy, con sonido.',
     madeOnSgb: 'Ese guardado se hizo en Super Game Boy. Activa los marcos y colores de Super Game Boy en la página Pantalla para cargarlo.',
     resumedOnDmg: 'Reanudado en Game Boy, donde se hizo este guardado. Reinicia desde la página Pantalla para cambiar.',
     resumedOnGbc: 'Reanudado en Game Boy Color, donde se hizo este guardado. Reinicia desde la página Pantalla para cambiar.',

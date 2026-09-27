@@ -34,6 +34,7 @@ export default {
     saveNewer: 'Your save is newer than the resume point. Starting from your save.',
     madeOnDmg: 'That save was made on the Game Boy. Set Console to Game Boy to load it.',
     madeOnGbc: 'That save was made on the Game Boy Color. Set Console to Game Boy Color to load it.',
+    snesMusic: 'This game plays its Super Game Boy music on the SNES sound chip, which Cartouche doesn’t emulate. It now starts on the Game Boy, with its sound.',
     madeOnSgb: 'That save was made on the Super Game Boy. Turn on Super Game Boy borders and colors on the Screen page to load it.',
     resumedOnDmg: 'Resumed on the Game Boy, where this save was made. Restart from the Screen page to switch.',
     resumedOnGbc: 'Resumed on the Game Boy Color, where this save was made. Restart from the Screen page to switch.',

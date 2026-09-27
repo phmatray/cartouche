@@ -160,7 +160,11 @@ pub struct Cartridge {
 }
 
 impl Cartridge {
-    pub fn from_rom(data: Vec<u8>) -> Result<Self, CartridgeError> {
+    pub fn from_rom(mut data: Vec<u8>) -> Result<Self, CartridgeError> {
+        // A dump with a 512-byte copier header in front (16 KB banks + 0x200): drop it.
+        if data.len() % 0x4000 == 0x200 {
+            data.drain(..0x200);
+        }
         if data.len() < 0x150 {
             return Err(CartridgeError::RomTooSmall {
                 expected: 0x150,
@@ -709,6 +713,20 @@ mod tests {
         let sum = (0x134..=0x14C).fold(0u8, |c, a| c.wrapping_sub(rom[a]).wrapping_sub(1));
         rom[0x14D] = sum;
         Cartridge::from_rom(rom).expect("valid header")
+    }
+
+    #[test]
+    fn copier_header_is_dropped() {
+        let mut rom = vec![0u8; 0x8000 * 4];
+        rom[0x134] = b'T';
+        rom[0x148] = 0x02;
+        rom[0x14D] = (0x134..=0x14C).fold(0u8, |c, a| c.wrapping_sub(rom[a]).wrapping_sub(1));
+        rom[0x4000] = 0x42;
+        let mut dump = vec![0u8; 0x200];
+        dump.extend_from_slice(&rom);
+        let c = Cartridge::from_rom(dump).expect("header found past the 512-byte copier header");
+        assert_eq!(c.read_rom(0x134), b'T');
+        assert_eq!(c.read_rom(0x4000), 0x42, "banks line up");
     }
 
     #[test]
