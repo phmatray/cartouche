@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fails if the tracked tree (index included) contains game data or training material:
+# Fails if the index (what the next commit holds; on a CI checkout, the commit) contains game data or training material:
 # ROMs other than the six bundled homebrew ones and the allowlisted GB Studio ones, saves and save states,
 # datasets, model checkpoints, boot ROM / BIOS images other than Cartouche's hash-pinned ones (built from gb-core/boot-src), any file
 # over 2 MB, a copy of the Nintendo logo outside the bundled ROMs, or anything referring to a local training directory.
@@ -29,26 +29,30 @@ c88c90cd3a70e8b6083a9f7ed05365e229858a66c3ac43d465cb6c6ddba05d3c  gb-core/boot/s
 boot_like='(boot|bios).*\.(bin|rom|gb|gbc)$|(^|/)[^/]*(rom|dmg0|cgb0)[^/]*\.(bin|rom)$|^gb-core/boot/'
 fail=0
 
-# Listed with its SHA-1, and the file has exactly that content.
-listed() { [[ -f $1 ]] && grep -qxF "$(shasum -a 1 "$1" | cut -d' ' -f1)  $1" "$allowlist"; }
+# Every check reads the staged blob, never the working-tree file: an unstaged edit must not hide what gets committed.
+# Listed with its SHA-1, and the staged blob ($2) has exactly that content.
+listed() { grep -qxF "$(git cat-file blob "$2" | shasum -a 1 | cut -d' ' -f1)  $1" "$allowlist"; }
 
-while IFS= read -r -d '' f; do
+while IFS= read -r -d '' rec; do
+  f=${rec#*$'\t'}
+  read -r mode oid _ <<< "${rec%%$'\t'*}"
+  [[ $mode == 160000 ]] && continue  # a submodule: no blob here
   lower=$(printf '%s' "$f" | tr '[:upper:]' '[:lower:]')
   ok_rom=0
-  if [[ $lower =~ $banned_ext ]] && listed "$f"; then ok_rom=1; fi
+  if [[ $lower =~ $banned_ext ]] && listed "$f" "$oid"; then ok_rom=1; fi
   if [[ $lower =~ $banned_ext && ! $f =~ $allowed_roms ]] && (( ! ok_rom )); then
     echo "game data / model file not allowed: $f"; fail=1
   fi
-  if [[ $lower =~ $boot_like ]] && ! { [[ -f $f ]] && grep -qxF "$(shasum -a 256 "$f" | cut -d' ' -f1)  $f" <<< "$boot_roms"; }; then
+  if [[ $lower =~ $boot_like ]] && ! grep -qxF "$(git cat-file blob "$oid" | shasum -a 256 | cut -d' ' -f1)  $f" <<< "$boot_roms"; then
     echo "boot ROM / BIOS file not allowed: $f"; fail=1
   fi
   if [[ $lower == *cartouche-training* ]]; then
     echo "training path not allowed: $f"; fail=1
   fi
-  if [[ -f $f ]] && (( ! ok_rom )) && (( $(wc -c < "$f") > max_bytes )); then
+  if (( ! ok_rom )) && (( $(git cat-file -s "$oid") > max_bytes )); then
     echo "file over 2 MB: $f"; fail=1
   fi
-done < <(git ls-files -z)
+done < <(git ls-files -s -z)
 
 # Every allowlisted ROM is tracked (a stale line would allow a file nobody reviewed).
 while read -r _ path; do
@@ -67,13 +71,13 @@ done <<< "$boot_roms"
 # Matched by the SHA-1 of its 48 bytes, so neither script holds any of them. It also fails any archive by its magic
 # bytes (zip, gzip, 7z, xz, zstd, bzip2, rar, zlib, lzma), whatever the file is named: the extension check above is only by name.
 python3 scripts/logo_scan.py --self-test >/dev/null
-logo_hits=$(git ls-files --eol -z | python3 scripts/logo_scan.py)
+logo_hits=$(git ls-files -s --eol -z | python3 scripts/logo_scan.py)
 if [[ -n $logo_hits ]]; then
   echo "Nintendo logo bytes or archives not allowed in:"; echo "$logo_hits"; fail=1
 fi
 
 # Content: no reference to the local training directory (its files name the games).
-if git grep -I -l -i 'cartouche-training' -- ':!scripts/check-no-game-data.sh'; then
+if git grep --cached -I -l -i 'cartouche-training' -- ':!scripts/check-no-game-data.sh'; then
   echo "^ these tracked files mention the local training directory"; fail=1
 fi
 

@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 """Finds a 48-byte pattern (the Nintendo logo, known here only by its SHA-1) in files, raw or disguised.
 
-Usage: git ls-files --eol -z | logo_scan.py
-                                     prints each path (but *.gb/*.gbc) that holds the logo, or is an archive (by its
-                                     magic bytes, whatever its name: a ROM can hide in one)
+Usage: git ls-files -s --eol -z | logo_scan.py
+                                     reads each staged blob (not the working-tree file) and prints each path (but
+                                     *.gb/*.gbc) that holds the logo, or is an archive (by its magic bytes, whatever
+                                     its name: a ROM can hide in one)
        logo_scan.py --self-test      checks the decoders on a synthetic pattern (no logo bytes involved)
 
 A binary file is scanned as raw bytes. A text file is also scanned for byte arrays written out in source
 (0xCE, 0xED, ... / 0xce_u8 ... / $CE $ED ... / CE ED ... / CEED... / 206, 237, ... / \\xCE\\xED..., with // and /* */
-comments between items), for hex dumps (xxd, xxd -p, hexdump -C, od, Intel HEX), for uuencode and for base64 runs,
+comments between items), for hex dumps (xxd, xxd -p, hexdump -C, od, Intel HEX), for uuencode and for base64 runs
+(standard or URL-safe),
 wrapped over several lines or not (a ROM inside a backup, a data: URL, PEM/MIME output), each decoded to bytes first.
 What decodes is checked like a file of its own (an archive, say a gzipped ROM in base64, fails too), and scanned as
-text once more. A zlib or LZMA stream counts as an archive.
+text once more. A zlib or LZMA stream counts as an archive. Any file is also read as a raw deflate stream (no header
+to spot it by, as CompressionStream("deflate-raw") writes it): what inflates is scanned for the logo.
 """
 import base64
 import binascii
@@ -20,6 +23,7 @@ import hashlib
 import lzma
 import os
 import re
+import subprocess
 import sys
 import zlib
 
@@ -33,7 +37,8 @@ HEX_STR = re.compile(rb"[0-9a-fA-F]{96,}")
 DEC_RUN = re.compile(rb"(?:\b\d{1,3}\b\s*,\s*){47,}\b\d{1,3}\b")
 ESC_RUN = re.compile(rb"(?:\\x[0-9a-fA-F]{2}[\s\"'`+]*){48,}")
 # One line of 40+ characters, then the lines it wraps onto (base64 -b 60, openssl, MIME: any wrap width).
-B64_RUN = re.compile(rb"[A-Za-z0-9+/]{40,}(?:[ \t]*\r?\n[ \t]*[A-Za-z0-9+/]{4,})*={0,2}")
+# URL-safe base64 ("-" and "_" for "+" and "/") too.
+B64_RUN = re.compile(rb"[A-Za-z0-9+/_-]{40,}(?:[ \t]*\r?\n[ \t]*[A-Za-z0-9+/_-]{4,})*={0,2}")
 # Full uuencoded lines ("M" = 45 bytes, then 60 characters).
 UU_RUN = re.compile(rb"(?:^M[\x20-\x60]{60}\r?\n)+", re.M)
 # A dump line's leading address (xxd "00000100:", hexdump -C "00000100"): 6+ hex digits, then a blank.
@@ -45,6 +50,9 @@ COMMENT = re.compile(rb"(?<!:)//[^\n]*|/\*.*?\*/", re.S)
 # zip, gzip, 7z, xz, zstd, bzip2, rar. zlib and LZMA streams, whose first bytes are not unique, are decoded in archive();
 # brotli has no header at all (check-no-game-data.sh bans .br by name).
 ARCHIVE = re.compile(rb"PK\x03\x04|PK\x05\x06|\x1f\x8b\x08|7z\xbc\xaf\x27\x1c|\xfd7zXZ\x00|\x28\xb5\x2f\xfd|BZh[1-9]1AY&SY|Rar!\x1a\x07")
+
+
+URLSAFE = bytes.maketrans(b"-_", b"+/")
 
 
 def dump(text):
@@ -73,7 +81,7 @@ def has(d, digest):
 def decoded(text):
     """Byte strings a text file could be hiding: written-out byte arrays and base64 runs."""
     for m in B64_RUN.finditer(text):
-        run = re.sub(rb"\s", b"", m.group()).rstrip(b"=")
+        run = re.sub(rb"\s", b"", m.group()).rstrip(b"=").translate(URLSAFE)
         try:
             yield base64.b64decode(run[: len(run) // 4 * 4], validate=True)
         except binascii.Error:
@@ -111,9 +119,22 @@ def archive(d):
             or (d[:3] == b"\x5d\x00\x00" and inflates(d, lzma.FORMAT_ALONE)))
 
 
+def inflated(d):
+    """What d inflates to as a raw deflate stream (up to 16 MB), or nothing: most data fails in its first bytes."""
+    try:
+        return zlib.decompressobj(-15).decompress(d, 16 << 20)
+    except zlib.error:
+        return b""
+
+
 def holds(d, text, digest=LOGO_SHA1, depth=2):
-    """The logo is in d, raw or (text) written out; what a text decodes to also fails for being an archive."""
-    return has(d, digest) or (text and depth > 0 and any(archive(b) or holds(b, True, digest, depth - 1) for b in decoded(d)))
+    """The logo is in d, raw, raw-deflated or (text) written out; what a text decodes to also fails for being an archive."""
+    return has(d, digest) or has(inflated(d), digest) or (text and depth > 0 and any(archive(b) or holds(b, True, digest, depth - 1) for b in decoded(d)))
+
+
+def _deflate_raw(d):
+    z = zlib.compressobj(9, zlib.DEFLATED, -15)
+    return z.compress(d) + z.flush()
 
 
 def self_test():
@@ -150,6 +171,10 @@ def self_test():
                                for i in range(0, len(rom), 16)) + b":00000001FF\n", True),
         "uuencode": (b"begin 644 x\n" + b"".join(binascii.b2a_uu(rom[i:i + 45]) for i in range(0, len(rom), 45))
                      + b"`\nend\n", True),
+        "raw deflate": (_deflate_raw(rom), False),
+        "raw deflate in base64url": (b'"' + base64.urlsafe_b64encode(_deflate_raw(rom)) + b'"', True),
+        "base64url": (b'export const L = "' + base64.urlsafe_b64encode(bytes(i * 7 % 256 for i in range(300)) + rom) + b'";', True),
+        "base64url +1": (base64.urlsafe_b64encode(b"\0" + bytes(range(256)) + rom), True),
         "base64 60": (b"\n".join(base64.b64encode(rom)[i:i + 60] for i in range(0, 700, 60)), True),
         "hex dump, comments": (b"\n".join(b" ".join(b"%02x" % v for v in pat[i:i + 8]) + b" /* 10 */" for i in range(0, N, 8)), True),
     }
@@ -169,15 +194,21 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["--self-test"]:
         self_test()
         sys.exit(0)
-    # NUL-separated "i/<eol> w/<eol> attr/<attr>\t<path>" records: a path is never quoted, whatever its characters.
+    # NUL-separated "<mode> <blob> <stage>\ti/<eol> w/<eol> attr/<attr>\t<path>" records: a path is never quoted.
+    # The blob is read from the index: an unstaged edit to the working-tree file must not hide what gets committed.
+    cat = subprocess.Popen(["git", "cat-file", "--batch"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     for rec in sys.stdin.buffer.read().split(b"\0"):
         if not rec:
             continue
-        info, path = rec.split(b"\t", 1)
-        if path.endswith((b".gb", b".gbc")):
-            continue  # the bundled ROMs (a banned name anywhere else), whose headers need the logo
+        stage, info, path = rec.split(b"\t", 2)
+        mode, oid = stage.split()[:2]
+        if path.endswith((b".gb", b".gbc")) or mode == b"160000":
+            continue  # the bundled ROMs (a banned name anywhere else), whose headers need the logo; a submodule
         text, path = not info.startswith(b"i/-text"), os.fsdecode(path)
-        d = open(path, "rb").read()
+        cat.stdin.write(oid + b"\n")
+        cat.stdin.flush()
+        size = int(cat.stdout.readline().split()[2])
+        d = cat.stdout.read(size + 1)[:size]
         if archive(d):
             print(path + " (an archive)")
         elif holds(d, text):
