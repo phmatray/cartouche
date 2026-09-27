@@ -63,8 +63,13 @@ a{color:inherit}
 .search:hover{border-color:#5a5a5a;color:var(--paper)}
 kbd{border:1px solid #3a3a3a;padding:3px 7px;font:700 11px var(--font);color:var(--mute)}
 .search kbd{margin-left:auto}
+/* one line, however narrow ("Rechercher parmi 106 jeux" wrapped in two on tablets); no "/" hint without a keyboard */
+.search{min-width:0}.search span{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+@media (pointer:coarse) and (hover:none){.search kbd{display:none}}
 /* The menu button stands in for the nav wherever it is hidden (tablets and phones in landscape included). */
 @media (max-width:1100px){.nav{display:none}.search{width:auto;flex:1;max-width:360px}.top .menu{display:flex}}
+/* 641-760 px (small tablets, phones in landscape): the search shrinks to its icon so the labelled Add button still fits */
+@media (min-width:641px) and (max-width:760px){.top .wrap{gap:12px}.top .wrap .gh{margin-left:0}.search{flex:0 0 44px;padding:0;justify-content:center}.search span,.search kbd{display:none}}
 @media (max-width:640px){
   .top .wrap{height:60px;gap:8px}
   .mark b{font-size:22px}
@@ -85,7 +90,7 @@ kbd{border:1px solid #3a3a3a;padding:3px 7px;font:700 11px var(--font);color:var
 .artbar .wrap{display:flex;justify-content:flex-end;padding-top:8px}
 @media (max-width:640px){.artbar .wrap{display:none}} /* narrow: the meter alone (Storage shows the count) */
 .artbar .cnt{background:var(--y);color:#000;font:800 11px/1 var(--font);letter-spacing:.06em;text-transform:uppercase;padding:5px 7px;font-variant-numeric:tabular-nums}
-.menu{display:none;width:44px;height:44px;border:1px solid #3a3a3a;background:transparent;align-items:center;justify-content:center}
+.menu{display:none;flex:none;width:44px;height:44px;border:1px solid #3a3a3a;background:transparent;align-items:center;justify-content:center}
 .mnav{display:none}
 .mnav.open{display:block;position:fixed;inset:60px 0 0;background:var(--band);z-index:60;padding:16px}
 .mnav a,.mnav button{display:flex;align-items:center;justify-content:space-between;text-decoration:none;font:900 40px/1 var(--font);font-stretch:62%;text-transform:uppercase;padding:18px 0;border-bottom:1px solid var(--rule)}
