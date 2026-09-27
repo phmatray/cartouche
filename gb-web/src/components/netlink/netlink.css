@@ -116,6 +116,10 @@
   .nl-doors section{padding:24px 20px 26px}
   .nl-doors section+section{border-left:0;border-top:2px dashed var(--paper-3)}
   .nl-doors h2{font-size:48px}
+  .nl-doors section>.btn{align-self:stretch}
+  .nl-join{flex-wrap:wrap}
+  .nl-join .nl-code-in{flex:1 1 100%}
+  .nl-join .btn{flex:1 1 auto} /* under the field: side by side left room for five of the seven characters */
   .nl-ticket{grid-template-columns:minmax(0,1fr);gap:18px;padding:20px}
   .nl-ticket .nl-qr{order:2;width:132px;height:132px}
   .nl-ticket.compact{grid-template-columns:auto minmax(0,1fr)}
