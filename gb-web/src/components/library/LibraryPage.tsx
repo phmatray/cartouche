@@ -135,7 +135,7 @@ export function LibraryPage() {
     setTimeout(() => (el.matches('a') ? el : el.querySelector<HTMLElement>('a.t'))?.focus({ preventScroll: true }), 400);
   };
 
-  if (loading) return <main className="wrap loading" aria-busy="true">{t('common.loadingLibrary')}</main>;
+  if (loading && !games.length) return <main className="wrap loading" aria-busy="true">{t('common.loadingLibrary')}</main>;
 
   return (
     <main>

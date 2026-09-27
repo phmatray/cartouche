@@ -9,7 +9,7 @@ export type ToLinkWorkerMsg =
   // sram: the player's battery save to start from; state: a save state to start from instead.
   | { type: 'loadRom'; player: LinkPlayerIndex; data: ArrayBuffer; sram?: ArrayBuffer; state?: ArrayBuffer }
   | { type: 'exportSram' }
-  | { type: 'runFrame' }
+  | { type: 'runFrame'; count?: number } // count: the frames due (paced to real time by the page), 1 by default
   | { type: 'setInput'; player: LinkPlayerIndex; buttons: number };
 
 export type FromLinkWorkerMsg =
@@ -95,13 +95,16 @@ function copyFramebuffer(emu: Emulator): ArrayBuffer {
     case 'runFrame': {
       let ok = true;
       let failed: Emulator = emu1;
-      if (loaded[0] && loaded[1]) {
-        ok = emu1.run_frame_linked(emu2);
-      } else {
-        for (const i of [0, 1]) {
-          if (loaded[i] && ok && !emus[i]!.run_frame()) {
-            ok = false;
-            failed = emus[i]!;
+      const count = msg.count ?? 1;
+      for (let k = 0; k < count && ok; k++) {
+        if (loaded[0] && loaded[1]) {
+          ok = emu1.run_frame_linked(emu2);
+        } else {
+          for (const i of [0, 1]) {
+            if (loaded[i] && ok && !emus[i]!.run_frame()) {
+              ok = false;
+              failed = emus[i]!;
+            }
           }
         }
       }
@@ -113,7 +116,9 @@ function copyFramebuffer(emu: Emulator): ArrayBuffer {
         loaded[0] ? copyFramebuffer(emu1) : null,
         loaded[1] ? copyFramebuffer(emu2) : null,
       ];
-      const sram = ++frames % SRAM_EVERY === 0 ? exportBoth() : undefined;
+      const before = frames;
+      frames += count;
+      const sram = Math.floor(frames / SRAM_EVERY) > Math.floor(before / SRAM_EVERY) ? exportBoth() : undefined;
       post({ type: 'frame', framebuffers, sram }, buffers([...framebuffers, ...(sram ?? [])]));
       break;
     }

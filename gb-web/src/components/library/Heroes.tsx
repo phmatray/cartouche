@@ -13,6 +13,7 @@ import { Cover, Title } from './Cover';
 import { useT } from '../../i18n';
 import { machineFor, paletteOf, useSettingsStore } from '../../store/settingsStore';
 import { parseRomHeader, sgbCartOf } from '../../lib/rom-utils';
+import { pacer } from '../../lib/pace';
 
 /** Latest resume point / save slot of a game, undefined while loading, null when there is none. */
 function useLatestSave(gameId: string) {
@@ -62,6 +63,7 @@ function Attract({ game, label }: { game?: GameEntry; label: string }) {
       // Fast-forward past the boot sequence before the first frame is shown; a still waits ~5 s for the title screen.
       const warmup = still ? 300 : 150;
       let frames = 0;
+      const due = pacer();
       const step = () => { const ok = emu!.run_frame(); emu!.clear_audio_buffer(); frames++; return ok; }; // silent: audio is dropped
       const draw = () => { img.data.set(emu!.framebuffer_snapshot()); ctx.putImageData(img, 0, 0); };
       const tick = () => {
@@ -70,9 +72,9 @@ function Attract({ game, label }: { game?: GameEntry; label: string }) {
           for (let i = 0; i < 30; i++) if (!step()) return;
           if (still && frames >= warmup) { draw(); return; }
         } else if (onScreen) {
-          if (!step()) return;
-          draw();
-        }
+          let n = due(performance.now()); // real time, not one frame per display refresh
+          if (n) { while (n--) if (!step()) return; draw(); }
+        } else due(performance.now());
         raf = requestAnimationFrame(tick);
       };
       raf = requestAnimationFrame(tick);

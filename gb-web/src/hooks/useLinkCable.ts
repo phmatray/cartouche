@@ -1,4 +1,5 @@
 import { t } from '../i18n';
+import { pacer } from '../lib/pace';
 import { useRef, useState, useCallback, useEffect } from 'react';
 import type { FromLinkWorkerMsg, ToLinkWorkerMsg } from '../workers/link-worker';
 
@@ -41,6 +42,7 @@ export function useLinkCable(onSram?: (saves: [Uint8Array | null, Uint8Array | n
   const rafRef = useRef<number>(0);
   const isRunningRef = useRef(false);
   const waitingFrame = useRef(false);
+  const due = useRef(pacer());
   const latest = useRef<[Uint8Array | null, Uint8Array | null] | null>(null); // the running session's last battery saves
   const toSaves = (d: [ArrayBuffer | null, ArrayBuffer | null]) => d.map((b) => (b ? new Uint8Array(b) : null)) as [Uint8Array | null, Uint8Array | null];
 
@@ -126,8 +128,11 @@ export function useLinkCable(onSram?: (saves: [Uint8Array | null, Uint8Array | n
   const frameLoop = useCallback(function loop() {
     if (!isRunningRef.current) return;
     if (!waitingFrame.current) {
-      waitingFrame.current = true;
-      send({ type: 'runFrame' });
+      const count = due.current(performance.now()); // real time, not one frame per display refresh
+      if (count) {
+        waitingFrame.current = true;
+        send({ type: 'runFrame', count });
+      }
     }
     rafRef.current = requestAnimationFrame(loop);
   }, [send]);
@@ -136,6 +141,7 @@ export function useLinkCable(onSram?: (saves: [Uint8Array | null, Uint8Array | n
     isRunningRef.current = true;
     setState(s => ({ ...s, isRunning: true }));
     waitingFrame.current = false;
+    due.current = pacer();
     rafRef.current = requestAnimationFrame(frameLoop);
   }, [frameLoop]);
 

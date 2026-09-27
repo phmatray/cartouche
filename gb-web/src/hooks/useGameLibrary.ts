@@ -105,12 +105,12 @@ let loadPromise: Promise<void> | null = null;
 let catalogList: GameEntry[] = CATALOG;
 async function loadLibrary() {
   let stored;
-  const catalog = catalogList = await fullCatalog().catch(() => CATALOG); // its chunk failed: the bundled games still show
+  const full = fullCatalog().catch(() => CATALOG); // its chunk failed: the bundled games still show
   try {
     stored = await Promise.all([getRomIds(), getAllGameMeta(), getSavedGameIds()]);
   } catch {
     // Storage blocked (private mode, site data off, some webviews): the bundled games still play.
-    useLibraryStore.setState({ games: catalog, savedIds: new Set(), loading: false, storageError: true });
+    useLibraryStore.setState({ games: catalogList = await full, savedIds: new Set(), loading: false, storageError: true });
     return;
   }
   const [romIds, allMeta, savedIds] = stored;
@@ -127,13 +127,24 @@ async function loadLibrary() {
     return localEntry(id, dbEntry?.title || rom.title, genre, rom.head, rom.sha1, dbEntry);
   }));
 
-  const all = userEntries.reduce(withLocal, catalog).map((g) => {
+  const withMeta = (g: GameEntry): GameEntry => {
     const meta = metaMap.get(g.id);
     if (!meta) return g;
     return { ...g, isFavorite: meta.isFavorite, lastPlayed: meta.lastPlayed, totalPlayTime: meta.totalPlayTime, sessions: meta.sessions, importedAt: meta.importedAt };
-  });
+  };
+  // First load: the shelf shows now, the GB Studio collection joins it when its chunk lands (a cold visit on a slow
+  // network). `loading` stays on until then: game pages, search and imports wait for the whole catalog.
+  const early = useLibraryStore.getState().loading;
+  if (early) useLibraryStore.setState({ games: userEntries.reduce(withLocal, CATALOG).map(withMeta), savedIds, storageError: false });
+  const catalog = catalogList = await full;
+  if (early) setGames((prev) => withCatalog(prev, catalog.slice(CATALOG.length).map(withMeta))); // keeps what changed meanwhile
+  else setGames(() => userEntries.reduce(withLocal, catalog).map(withMeta));
+  useLibraryStore.setState({ savedIds, loading: false, storageError: false });
+}
 
-  useLibraryStore.setState({ games: all, savedIds, loading: false, storageError: false });
+/** The shelf with more catalog entries: the user ROMs already on it are matched against them again. */
+export function withCatalog(shelf: GameEntry[], more: GameEntry[]): GameEntry[] {
+  return shelf.filter((g) => g.isLocal).reduce(withLocal, [...shelf.filter((g) => !g.isLocal), ...more]);
 }
 
 const summarize = async (title: string, genre: string, data: Uint8Array): Promise<RomSummary> =>
