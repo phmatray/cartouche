@@ -86,12 +86,17 @@ export function useLinkRom(game: GameEntry | undefined) {
     if (!data || !isGameBoyRom(data)) { toast(t('game.link.bad', { file: file.name }), 'm'); return null; }
     const sha1 = await computeSha1(data);
     const known = await lookupByHash(sha1);
-    if (known && titleKey(known.title) !== titleKey(game.title)) {
-      const out = await importRom('rom.gb', data); // named by the GameDB
-      if (out.id) toast(t('game.link.other', { title: known.title }), 'm', { label: t('common.open'), run: () => navigate(paths.game(out.id!)) });
+    try {
+      if (known && titleKey(known.title) !== titleKey(game.title)) {
+        const out = await importRom('rom.gb', data); // named by the GameDB
+        if (out.id) toast(t('game.link.other', { title: known.title }), 'm', { label: t('common.open'), run: () => navigate(paths.game(out.id!)) });
+        return null;
+      }
+      await linkRomToGame(game, data, sha1);
+    } catch { // storing it failed (a full disk), like the Download button says
+      toast(t('game.dl.full'), 'm');
       return null;
     }
-    await linkRomToGame(game, data, sha1);
     // GB Studio games aren't in the GameDB and most have no SHA-1: their header title is all there is to check.
     const fits = !known && !!game.madeWith && headerNames(game.title, parseRomTitle(data));
     if (!known) toast(t(fits ? 'game.link.ok' : 'game.link.unknown', { title: game.title }), fits ? 'c' : 'm');
