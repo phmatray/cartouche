@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { useLinkCable, type LinkPlayer } from '../hooks/useLinkCable';
 import { fetchRom, refreshSavedIds, useGameLibrary } from '../hooks/useGameLibrary';
 import { importSav, readRomFile, useRomHeader } from '../hooks/useGameExtras';
@@ -305,6 +305,7 @@ export function LinkCablePage() {
       <div className="pagehead">
         <h1>{t('link.title')}</h1>
         <p>{t('link.intro')}</p>
+        <div className="acts" style={{ marginTop: 20 }}><Link className="btn y" to="/link-cable/online">{I.link}{t('online.entry')}</Link></div>
       </div>
       <div className="lc">
         {panel(1)}

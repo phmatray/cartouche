@@ -38,6 +38,8 @@ interface ManualProps {
   onSave: (slot: number) => void;
   onLoad: (k: SlotKey) => void;
   onScreenshot: () => void;
+  /** Online link cable plugged in: rewind and state loading are off. */
+  online?: boolean;
 }
 
 /** The paper manual beside the screen (a bottom sheet on phones). */
@@ -45,7 +47,7 @@ export function Manual(p: ManualProps) {
   const t = useT();
   const tab = TABS.some(([k]) => k === p.tab) ? p.tab : 'controls';
   const page: Record<Tab, () => ReactNode> = {
-    controls: () => <ControlsPage />,
+    controls: () => <ControlsPage online={p.online} />,
     saves: () => <SavesPage {...p} />,
     screen: () => <ScreenPage snapshot={p.emu.framebufferSnapshot} romLoaded={p.romLoaded} inColor={!!p.inColor} gameId={p.game.id} />,
     album: () => <AlbumPage {...p} />,
@@ -70,7 +72,7 @@ const Cap = ({ k }: { k: string }) => (
 const Wide = ({ children }: { children: ReactNode }) => <span className="key wide">{children}</span>;
 const Round = ({ children }: { children: ReactNode }) => <span className="key round">{children}</span>;
 
-function ControlsPage() {
+function ControlsPage({ online }: { online?: boolean }) {
   const k = useSettingsStore((s) => s.keybindings);
   const t = useT();
   const [input, setInput] = useState<'keyboard' | 'gamepad' | 'touch'>('keyboard');
@@ -79,7 +81,9 @@ function ControlsPage() {
     keyboard: [
       [<><Cap k={k.Up} /><Cap k={k.Down} /><Cap k={k.Left} /><Cap k={k.Right} /></>, dpad],
       [<Cap k={k.A} />, 'A'], [<Cap k={k.B} />, 'B'], [<Cap k={k.Start} />, 'Start'], [<Cap k={k.Select} />, 'Select'],
-      [<Cap k="R" />, t('player.deck.rewind'), t('player.controls.hold')], [<><Cap k="F5" /><Cap k="F8" /></>, t('player.controls.saveLoad'), t('player.controls.slot1')], [<Cap k="F12" />, t('shell.keys.screenshot')],
+      ...(online ? [[<Cap k="F5" />, t('common.save'), t('player.controls.slot1')] satisfies [ReactNode, string, string]]
+        : [[<Cap k="R" />, t('player.deck.rewind'), t('player.controls.hold')], [<><Cap k="F5" /><Cap k="F8" /></>, t('player.controls.saveLoad'), t('player.controls.slot1')]] satisfies [ReactNode, string, string][]),
+      [<Cap k="F12" />, t('shell.keys.screenshot')],
       [<Cap k="P" />, t('shell.keys.pause')], [<Cap k="M" />, t('shell.keys.mute')], [<Cap k="F" />, t('shell.keys.fullscreen')],
     ],
     gamepad: [

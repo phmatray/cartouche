@@ -77,7 +77,8 @@ impl Serial {
                     // Blargg's test ROMs print through the serial port.
                     self.output.push(self.data);
                     self.remaining = if value & 0x02 != 0 { 8 * 16 } else { 8 * 512 };
-                    self.incoming = self.printer.as_mut().map_or(0xFF, |p| p.exchange(self.data));
+                    // A remote partner replaces the printer: its byte arrives through remote_reply.
+                    self.incoming = if self.remote { 0xFF } else { self.printer.as_mut().map_or(0xFF, |p| p.exchange(self.data)) };
                     self.started = true;
                     if self.remote {
                         // Both consoles clocking at once: the partner's held clock gets nothing.

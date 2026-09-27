@@ -81,6 +81,7 @@ export function useEmulator() {
       setIsRunning(false);
       return null;
     }
+    if (emu.link_stalled()) return null; // online link cable: the frame goes on once the other player's byte arrives
 
     const ptr = emu.framebuffer_ptr();
     const len = emu.framebuffer_len();
@@ -272,6 +273,7 @@ export function useEmulator() {
 
   return {
     core,
+    coreRef: emulatorRef,
     isReady,
     isRunning,
     setIsRunning,
