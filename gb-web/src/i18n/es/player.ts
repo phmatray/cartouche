@@ -49,6 +49,7 @@ export default {
     soundOff: 'Sonido desactivado',
     belongs: 'Este guardado pertenece a «{name}»: ahora se guarda ahí',
     newSave: 'Se eliminó la partida guardada de origen: ahora se guarda en una nueva, «{name}»',
+    changedElsewhere: 'Este guardado cambió en otro lugar (otra pestaña o dispositivo): ahora se guarda en uno nuevo, «{name}», y se conservan los dos',
   },
   error: {
     init: 'Emulador no inicializado',
