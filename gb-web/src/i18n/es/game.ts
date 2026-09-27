@@ -59,7 +59,7 @@ export default {
     steps: 'Su autor lo distribuye en su propia página (se abre en una pestaña nueva). Descarga allí el juego (su archivo .gb, .gbc o .zip), vuelve y toca Carga tu ROM: el archivo se une a este juego y se queda en este navegador.',
   },
   hostedErase: 'Alojado aquí según la licencia de su autor. Sus partidas guardadas se pueden borrar.',
-  dump: 'Vuelca tu propio cartucho y luego carga el archivo .gb aquí o suéltalo en cualquier parte de la página. Nada sale de este navegador.',
+  dump: 'Vuelca tu propio cartucho y luego carga el archivo .gb aquí o suéltalo en cualquier parte de la página. Nada se sube a un servidor.',
   yourPlay: 'Tus partidas',
   sessions: 'Sesiones',
   auto: 'Auto',

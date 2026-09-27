@@ -1,7 +1,7 @@
 import type { Messages } from '../core.ts';
 
 export default {
-  intro: 'Déposez des fichiers .gb et .gbc, ou un .zip qui les contient. Chacun est identifié par son empreinte SHA-1 parmi les copies connues et arrive avec ses informations. Les fichiers ne quittent jamais ce navigateur.',
+  intro: 'Déposez des fichiers .gb et .gbc, ou un .zip qui les contient. Chacun est identifié par son empreinte SHA-1 parmi les copies connues et arrive avec ses informations. Les fichiers ne sont jamais envoyés à un serveur ; seule la synchro entre appareils, si vous y activez les ROM, les copie vers vos propres appareils.',
   drop: 'Déposer les fichiers ici',
   dropSub: 'Plusieurs à la fois, ou un .zip entier. Les doublons sont repérés avant d’être stockés.',
   choose: 'Choisir des fichiers',

@@ -19,7 +19,7 @@ export default {
     art: 'Carátulas: libretro-thumbnails · Arte de Tobu Tobu Girl: Tangram Games (CC BY 4.0)',
   },
   drop: 'Suelta para añadir',
-  dropSub: 'Tus archivos se leen en este navegador y nunca se suben.',
+  dropSub: 'Tus archivos se leen en este navegador y nunca se suben a un servidor.',
   importing: 'Importando ROM',
   fetchingArt: 'Descargando carátulas',
   progress: '{label} · {n} de {of}',

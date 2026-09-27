@@ -58,7 +58,7 @@ export default {
     steps: 'Its author distributes it on their own page (it opens in a new tab). Download the game there (its .gb, .gbc or .zip file), then come back and tap Load your ROM: the file joins this game and stays in this browser.',
   },
   hostedErase: 'Hosted here under its author’s license. Its saves can be erased.',
-  dump: 'Dump your own cartridge, then load the .gb file here or drop it anywhere on the page. Nothing leaves this browser.',
+  dump: 'Dump your own cartridge, then load the .gb file here or drop it anywhere on the page. Nothing is uploaded to a server.',
   yourPlay: 'Your play',
   sessions: 'Sessions',
   auto: 'Auto',

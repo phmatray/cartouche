@@ -1,6 +1,6 @@
 // Add ROMs: the drop zone, the import queue and its rows, a full disk, renaming an unknown ROM.
 export default {
-  intro: 'Drop your .gb and .gbc files, or a .zip of them. Each one is identified by its SHA-1 fingerprint against the known dumps, so it arrives with its details. Files never leave this browser.',
+  intro: 'Drop your .gb and .gbc files, or a .zip of them. Each one is identified by its SHA-1 fingerprint against the known dumps, so it arrives with its details. Files are never uploaded to a server; only device sync, if you turn on its ROM option, copies them to your own devices.',
   drop: 'Drop files here',
   dropSub: 'Several at once, or a whole .zip. Duplicates are caught before they’re stored.',
   choose: 'Choose files',
