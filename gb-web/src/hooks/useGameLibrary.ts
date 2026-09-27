@@ -5,7 +5,7 @@ import { addRom, getRomIds, saveRom, deleteRom, getRom, getAllGameMeta, getGameM
 import { parseRomTitle, parseRomHeader, computeSha1, isGameBoyRom } from '../lib/rom-utils';
 import { lookupByHash, type GameDbEntry } from '../lib/gamedb';
 import { parseRegion } from '../lib/catalog-utils';
-import { assetUrl } from '../lib/ui';
+import { assetUrl, TEST_CATEGORY } from '../lib/ui';
 import { boxArtAllowed, getCoverArtUrl, needsDownload } from '../lib/cover-art';
 import { indexFor } from '../lib/search';
 import { useSettingsStore } from '../store/settingsStore';
@@ -318,6 +318,8 @@ export function useSearchIndex() {
   const games = useLibraryStore((s) => s.games);
   const savedIds = useLibraryStore((s) => s.savedIds);
   const art = useSettingsStore(boxArtAllowed);
+  const tests = useSettingsStore((s) => s.showTests);
   useEffect(() => { loadPromise ??= loadLibrary(); }, []);
-  return useMemo(() => indexFor(games, savedIds, art), [games, savedIds, art]);
+  const shown = useMemo(() => (tests ? games : games.filter((g) => g.category !== TEST_CATEGORY)), [games, tests]);
+  return useMemo(() => indexFor(shown, savedIds, art), [shown, savedIds, art]);
 }
