@@ -410,7 +410,12 @@ function Player({ game }: { game: GameEntry }) {
   const play = useCallback(() => { ensureStarted(true).catch(() => {}); setIsRunning(true); }, [ensureStarted, setIsRunning]);
   // The game waits while its controls are edited, and plays again when they're done.
   const editControls = useCallback(() => { setManual(false); setIsRunning(false); setEditing(true); }, [setIsRunning]);
-  const togglePlay = useCallback(() => (isRunning ? setIsRunning(false) : play()), [isRunning, setIsRunning, play]);
+  // Playing from under the phone sheet closes it first (the sheet effect below would pause the game straight away).
+  const togglePlay = useCallback(() => {
+    if (isRunning) return setIsRunning(false);
+    if (sheetCovers()) setManual(false);
+    play();
+  }, [isRunning, setIsRunning, play]);
   // Phones: nobody plays a game under the Manual (the sheet hides the controls), and it must not run on its own there
   // and write over the resume point. It pauses while the sheet is open, and plays on when it closes if it was running.
   useEffect(() => {
@@ -452,7 +457,7 @@ function Player({ game }: { game: GameEntry }) {
   // The pad's menu button (Home, or Select + Start): pause and open the Manual, or play on.
   useEffect(() => {
     padNav.game = romLoaded && isRunning;
-    padNav.menu = romLoaded ? () => { if (isRunning) setManual(true); else if (sheetCovers()) setManual(false); actions.current.togglePlay(); } : undefined;
+    padNav.menu = romLoaded ? () => { if (isRunning) setManual(true); actions.current.togglePlay(); } : undefined;
     return () => { padNav.game = false; padNav.menu = undefined; };
   }, [romLoaded, isRunning]);
   useEffect(() => {
