@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type CSSProperties, type Dispatch, type SetStateAction } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState, type CSSProperties, type Dispatch, type SetStateAction } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import type { GameEntry } from '../../types/game';
 import { downloadGame, FetchError, refreshSavedIds, useGameLibrary } from '../../hooks/useGameLibrary';
@@ -19,6 +19,9 @@ import { genreLabel } from '../../lib/search';
 import { fileAccept } from '../../lib/pwa';
 import { descOf } from '../../lib/catalog-utils';
 import { rich, size, t as tNow, useT } from '../../i18n';
+import { raShown } from '../../lib/retroachievements';
+
+const Achievements = lazy(() => import('./Achievements'));
 
 export function GamePage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -143,6 +146,7 @@ function GameDetails({ game }: { game: GameEntry }) {
           ) : (
             <div className="empty-inline">{I.cam}<span>{rich(t('game.noShots'), { b: (s) => <b>{s}</b> })}</span></div>
           )}
+          {raShown(game) && <Suspense><Achievements game={game} /></Suspense>}
         </article>
 
         <aside className="side">

@@ -24,7 +24,7 @@ export function AboutTab() {
 
       <h3>{t('settings.about.data')}</h3>
       <p className="intro" style={{ margin: '8px 0 0' }}>
-        {rich(t('settings.about.dataBody'), { a: (s) => <Link to="/settings/storage" style={{ color: 'var(--ink)' }}>{s}</Link> })}
+        {rich(t('settings.about.dataBody'), { a: (s) => <Link to="/settings/storage" style={{ color: 'var(--ink)' }}>{s}</Link>, ra: (s) => <Link to="/settings/achievements" style={{ color: 'var(--ink)' }}>{s}</Link> })}
       </p>
 
       <h3>{t('settings.about.install')}</h3>
@@ -75,5 +75,6 @@ const CREDIT_LINKS = {
   sameboy: ext('https://github.com/LIJI32/SameBoy'),
   notices: (s: string) => <a href={base + 'THIRD_PARTY_NOTICES.txt'} style={ink}>{s}</a>,
   licenses: (s: string) => <a href={base + 'THIRD_PARTY_LICENSES.txt'} style={ink}>{s}</a>,
+  ra: ext('https://retroachievements.org'),
   legal: (s: string) => <Link to="/legal" style={ink}>{s}</Link>,
 };

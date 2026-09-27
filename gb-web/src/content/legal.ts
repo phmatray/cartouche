@@ -92,14 +92,20 @@ export const LEGAL_SECTIONS: LegalSection[] = [
       'Your ROMs, saves, save states, settings, favorites and play time are stored only in this ' +
       'browser (IndexedDB and localStorage) and never leave your device. Clear this site\'s data in ' +
       'your browser settings to delete everything.\n\n' +
-      'Only GitHub receives requests. GitHub Pages serves the app and its fonts. Box art is off by ' +
+      'Only GitHub receives requests, unless you connect RetroAchievements (see below). GitHub Pages serves the app and its fonts. Box art is off by ' +
       'default and needs your yes (first-launch dialog or Settings > Storage); only then does the ' +
       'browser also load covers of recognized ROMs you added from raw.githubusercontent.com. Like any ' +
       'web server, GitHub receives ' +
       'your IP address and browser details; see the GitHub General Privacy Statement ' +
       '(https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).\n\n' +
       'Downloaded box art is kept in this browser (Cache Storage) and never sent anywhere. Delete it anytime with ' +
-      '"Delete downloaded box art" in Settings > Storage, or by clearing the site data.',
+      '"Delete downloaded box art" in Settings > Storage, or by clearing the site data.\n\n' +
+      'RetroAchievements is off until you connect in Settings > Achievements with your username and web API key (never your ' +
+      'password). Both stay in this browser (localStorage). While connected, the browser asks retroachievements.org (' + 
+      'https://retroachievements.org) for the game lists of both consoles and, for a game you open, its achievements and ' +
+      'which ones you earned; the key and username go in those requests, as its Web API requires. It identifies a ROM by ' +
+      'comparing its MD5 fingerprint with those lists in the browser: the ROM and its fingerprint are never sent. ' +
+      'RetroAchievements receives your IP address and browser details. "Disconnect" forgets the key and stops every request.',
   },
   {
     title: 'Takedown requests',

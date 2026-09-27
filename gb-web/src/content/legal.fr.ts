@@ -89,14 +89,20 @@ export const LEGAL_FR: LegalSection[] = [
       'Les ROM, sauvegardes, sauvegardes instantanées, réglages, favoris et temps de jeu sont stockés uniquement dans ce ' +
       'navigateur (IndexedDB et localStorage) et ne quittent jamais l’appareil. Effacer les données de ce site dans ' +
       'les réglages du navigateur supprime tout.\n\n' +
-      'Seul GitHub reçoit des requêtes. GitHub Pages sert l’app et ses polices. Les jaquettes sont désactivées par ' +
+      'Seul GitHub reçoit des requêtes, sauf si RetroAchievements est connecté (voir plus bas). GitHub Pages sert l’app et ses polices. Les jaquettes sont désactivées par ' +
       'défaut et nécessitent un accord (boîte de dialogue du premier lancement ou Réglages > Stockage) ; seulement alors le ' +
       'navigateur charge aussi les jaquettes des ROM reconnues ajoutées depuis raw.githubusercontent.com. Comme tout ' +
       'serveur web, GitHub reçoit ' +
       'l’adresse IP et les informations du navigateur ; voir la déclaration générale de confidentialité de GitHub ' +
       '(https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).\n\n' +
       'Les jaquettes téléchargées sont conservées dans ce navigateur (Cache Storage) et ne sont jamais envoyées nulle part. Elles peuvent être supprimées à tout moment avec ' +
-      '« Supprimer les jaquettes téléchargées » dans Réglages > Stockage, ou en effaçant les données du site.',
+      '« Supprimer les jaquettes téléchargées » dans Réglages > Stockage, ou en effaçant les données du site.\n\n' +
+      'RetroAchievements reste désactivé tant qu’aucun compte n’est connecté dans Réglages > Succès, avec un nom d’utilisateur et une ' +
+      'clé d’API web (jamais le mot de passe). Les deux restent dans ce navigateur (localStorage). Une fois connecté, le navigateur ' +
+      'demande à retroachievements.org (https://retroachievements.org) la liste des jeux des deux consoles et, pour un jeu ouvert, ' +
+      'ses succès et ceux déjà obtenus ; la clé et le nom d’utilisateur figurent dans ces requêtes, comme l’exige son API web. ' +
+      'Une ROM est reconnue en comparant son empreinte MD5 à ces listes dans le navigateur : ni la ROM ni son empreinte ne sont ' +
+      'envoyées. RetroAchievements reçoit l’adresse IP et les informations du navigateur. « Déconnecter » oublie la clé et arrête toute requête.',
   },
   {
     title: 'Demandes de retrait',

@@ -89,14 +89,20 @@ export const LEGAL_ES: LegalSection[] = [
       'Tus ROM, partidas guardadas, estados guardados, ajustes, favoritos y tiempo de juego se guardan solo en este ' +
       'navegador (IndexedDB y localStorage) y nunca salen de tu dispositivo. Borra los datos de este sitio en ' +
       'los ajustes de tu navegador para eliminarlo todo.\n\n' +
-      'Solo GitHub recibe peticiones. GitHub Pages sirve la app y sus fuentes. Las carátulas están desactivadas de forma ' +
+      'Solo GitHub recibe peticiones, salvo si conectas RetroAchievements (ver más abajo). GitHub Pages sirve la app y sus fuentes. Las carátulas están desactivadas de forma ' +
       'predeterminada y necesitan tu aceptación (cuadro de diálogo del primer inicio o Ajustes > Almacenamiento); solo entonces el ' +
       'navegador carga también las portadas de las ROM reconocidas que añadiste desde raw.githubusercontent.com. Como cualquier ' +
       'servidor web, GitHub recibe ' +
       'tu dirección IP y los datos de tu navegador; consulta la declaración general de privacidad de GitHub ' +
       '(https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).\n\n' +
       'Las carátulas descargadas se guardan en este navegador (Cache Storage) y nunca se envían a ninguna parte. Elimínalas cuando quieras con ' +
-      '«Eliminar las carátulas descargadas» en Ajustes > Almacenamiento, o borrando los datos del sitio.',
+      '«Eliminar las carátulas descargadas» en Ajustes > Almacenamiento, o borrando los datos del sitio.\n\n' +
+      'RetroAchievements está desactivado hasta que conectas tu cuenta en Ajustes > Logros con tu nombre de usuario y tu clave ' +
+      'de la API web (nunca tu contraseña). Ambos se quedan en este navegador (localStorage). Mientras estás conectado, el navegador ' +
+      'pide a retroachievements.org (https://retroachievements.org) la lista de juegos de las dos consolas y, para un juego que ' +
+      'abres, sus logros y cuáles has conseguido; la clave y el usuario van en esas peticiones, como exige su API web. Una ROM se ' +
+      'reconoce comparando su huella MD5 con esas listas en el navegador: nunca se envían ni la ROM ni su huella. ' +
+      'RetroAchievements recibe tu dirección IP y los datos de tu navegador. «Desconectar» olvida la clave y detiene toda petición.',
   },
   {
     title: 'Solicitudes de retirada',

@@ -320,6 +320,27 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .profiles .pn small{flex-basis:100%;font:500 13px var(--font);color:var(--mute)}
 .pn-in{flex:1;min-width:0;background:var(--band-3);border:0;border-bottom:2px solid var(--y);padding:6px 8px;font:800 16px var(--font)}
 .profiles .pa{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+/* RetroAchievements (read-only): a checklist printed in the manual, points set like slot numbers */
+.ra-sum{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;font:600 14px var(--font);color:var(--ink-3);margin:0 0 6px;padding-bottom:8px;border-bottom:3px solid var(--ink)}
+.ra-sum b{font:900 20px/1 var(--font);font-stretch:62%;text-transform:uppercase;color:var(--ink)}
+.ra-list{list-style:none;margin:0;padding:0}
+.ra-list li{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--paper-3)}
+.ra-list img{display:block;width:48px;height:48px;background:var(--paper-2);box-shadow:0 0 0 2px var(--ink)}
+.ra-list li:not(.got) img{box-shadow:0 0 0 2px var(--paper-3)}
+.ra-list .w b{display:block;font:800 15px/1.25 var(--font);overflow-wrap:anywhere}
+.ra-list .w small{display:block;font:500 13px/1.4 var(--font);color:var(--ink-2);margin-top:2px}
+.ra-list .w .when{display:flex;flex-wrap:wrap;align-items:center;gap:8px;color:var(--ink-3);font-size:12px}
+.ra-list .when .tag{margin:0;padding:3px 5px;font-size:10px}
+.ra-list .pt{font:900 30px/1 var(--font);font-stretch:62%;font-variant-numeric:tabular-nums;min-width:2ch;text-align:right}
+.ra-list li:not(.got) .pt,.ra-list li:not(.got) .w b{color:var(--ink-3)}
+.ra-foot{margin:12px 0 0;color:var(--ink-3)}
+.ra-foot a{color:var(--ink)}
+.ra-form{display:grid;gap:14px;max-width:440px;margin-top:8px}
+.ra-form label{display:grid;gap:6px;font:700 14px var(--font)}
+.ra-form small{font:500 13px/1.45 var(--font);color:var(--ink-3)}
+.ra-form small a{color:var(--ink)}
+.ra-form .btn{justify-self:start}
+.ra-form .field{font-size:16px} /* iOS zooms into smaller text fields */
 /* link cable: which battery save each player plays and writes to */
 .svp{margin-top:16px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
 .svp .sel{min-width:0}

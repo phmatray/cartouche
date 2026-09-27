@@ -141,12 +141,17 @@ cd gb-core && cargo test --release --no-fail-fast
 - No account, no server, no analytics, no cookies, no tracking.
 - Your ROMs, saves, screenshots and settings stay in your browser (IndexedDB).
   Nothing is uploaded.
-- Only GitHub is contacted. GitHub Pages serves the app. Box art is off until
+- Only GitHub is contacted (unless you connect RetroAchievements, below). GitHub Pages serves the app. Box art is off until
   you agree in the "Show box art?" dialog; after that, covers of recognized
   games come from `raw.githubusercontent.com`. Like any web server, GitHub sees
   your IP address
   ([GitHub privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)).
 - Settings › Storage shows what is stored and deletes it, box art included.
+- RetroAchievements is off until you connect in Settings › Achievements with your
+  username and web API key (never your password; both stay in the browser). Then
+  `retroachievements.org` is asked for your earned achievements, read-only
+  ([why nothing is unlocked](docs/RETROACHIEVEMENTS.md)). ROMs are matched by MD5
+  in the browser and never sent.
 
 ## Your own cartridges
 

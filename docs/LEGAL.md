@@ -117,7 +117,8 @@ PigSaint nor libretro endorses Cartouche.
 - Your ROMs, saves, save states, settings, favorites and play time are stored
   only in your browser (IndexedDB and localStorage) and never leave your
   device.
-- Only GitHub receives requests. GitHub Pages serves the app and its fonts.
+- Only GitHub receives requests, unless you connect RetroAchievements (below).
+  GitHub Pages serves the app and its fonts.
   Box art is off by default and needs your yes in the first-launch dialog
   (or in Settings > Storage); only then does the browser also load covers of
   recognized ROMs you added from `raw.githubusercontent.com`. Like any web
@@ -126,6 +127,15 @@ PigSaint nor libretro endorses Cartouche.
 - Downloaded box art is kept in this browser (Cache Storage) and never sent
   anywhere. Delete it anytime with "Delete downloaded box art" in Settings >
   Storage, or by clearing the site data.
+- RetroAchievements is off until you connect in Settings > Achievements with
+  your username and web API key (never your password). Both stay in this
+  browser (localStorage). While connected, the browser asks
+  `retroachievements.org` for the game lists of both consoles and, for a game
+  you open, its achievements and which ones you earned; the key and username go
+  in those requests, as its Web API requires. A ROM is matched by comparing its
+  MD5 with those lists in the browser: the ROM and its hash are never sent.
+  RetroAchievements receives your IP address and browser details.
+  "Disconnect" forgets the key and stops every request.
 - To delete all Cartouche data, clear the site data for Cartouche in your
   browser settings.
 

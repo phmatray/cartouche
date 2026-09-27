@@ -12,5 +12,6 @@ import settings from './settings.ts';
 import legal from './legal.ts';
 import periph from './periph.ts';
 import sync from './sync.ts';
+import ra from './ra.ts';
 
-export default { common, shell, library, search, game, player, add, link, online, settings, legal, periph, sync };
+export default { common, shell, library, search, game, player, add, link, online, settings, legal, periph, sync, ra };

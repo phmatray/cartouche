@@ -7,6 +7,7 @@ import { EmulationTab } from './EmulationTab';
 import { StorageTab } from './StorageTab';
 import { AboutTab } from './AboutTab';
 import { LanguageTab } from './LanguageTab';
+import { AchievementsTab } from './AchievementsTab';
 import { useT, type Key } from '../../i18n';
 
 // Sync brings the pairing QR code with it: loaded when opened.
@@ -15,7 +16,7 @@ const SyncTab = lazy(() => import('../sync/SyncTab').then((m) => ({ default: m.S
 const SECTIONS: [string, Key, number, ComponentType][] = [
   ['controls', 'settings.tabs.controls', 2, ControlsTab], ['display', 'settings.tabs.display', 4, DisplayTab], ['audio', 'settings.tabs.audio', 6, AudioTab],
   ['emulation', 'settings.tabs.emulation', 8, EmulationTab], ['storage', 'settings.tabs.storage', 10, StorageTab], ['sync', 'settings.tabs.sync', 12, SyncTab],
-  ['language', 'common.language', 14, LanguageTab], ['about', 'settings.tabs.about', 16, AboutTab],
+  ['language', 'common.language', 14, LanguageTab], ['achievements', 'ra.tab', 16, AchievementsTab], ['about', 'settings.tabs.about', 18, AboutTab],
 ];
 
 /** Settings laid out as a printed manual: table of contents on the left, one paper page per section. */
