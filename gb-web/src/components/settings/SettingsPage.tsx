@@ -1,4 +1,4 @@
-import { useEffect, type ComponentType } from 'react';
+import { lazy, Suspense, useEffect, type ComponentType } from 'react';
 import { Link, Navigate, useParams } from 'react-router';
 import { ControlsTab } from './ControlsTab';
 import { DisplayTab } from './DisplayTab';
@@ -9,10 +9,13 @@ import { AboutTab } from './AboutTab';
 import { LanguageTab } from './LanguageTab';
 import { useT, type Key } from '../../i18n';
 
+// Sync brings the pairing QR code with it: loaded when opened.
+const SyncTab = lazy(() => import('../sync/SyncTab').then((m) => ({ default: m.SyncTab })));
+
 const SECTIONS: [string, Key, number, ComponentType][] = [
   ['controls', 'settings.tabs.controls', 2, ControlsTab], ['display', 'settings.tabs.display', 4, DisplayTab], ['audio', 'settings.tabs.audio', 6, AudioTab],
-  ['emulation', 'settings.tabs.emulation', 8, EmulationTab], ['storage', 'settings.tabs.storage', 10, StorageTab], ['language', 'common.language', 12, LanguageTab],
-  ['about', 'settings.tabs.about', 14, AboutTab],
+  ['emulation', 'settings.tabs.emulation', 8, EmulationTab], ['storage', 'settings.tabs.storage', 10, StorageTab], ['sync', 'settings.tabs.sync', 12, SyncTab],
+  ['language', 'common.language', 14, LanguageTab], ['about', 'settings.tabs.about', 16, AboutTab],
 ];
 
 /** Settings laid out as a printed manual: table of contents on the left, one paper page per section. */
@@ -32,7 +35,7 @@ export function SettingsPage() {
         </nav>
         <section className="paper" aria-label={t(label)}>
           <span className="pgno">{t('player.page', { n: String(page) })}</span>
-          <Body />
+          <Suspense fallback={null}><Body /></Suspense>
         </section>
       </div>
     </main>

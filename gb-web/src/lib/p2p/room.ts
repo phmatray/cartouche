@@ -9,9 +9,9 @@
  *
  * Trystero is loaded on first use, so the library never pays for it.
  */
-import type { JsonValue, Room } from 'trystero';
+import type { DataPayload, JsonValue, Room } from 'trystero';
 
-export type { JsonValue };
+export type { DataPayload, JsonValue };
 
 export interface TurnServer { urls: string; username: string; credential: string }
 const TURN_KEY = 'cartouche.p2p.turn';
@@ -41,13 +41,16 @@ const ALONE_MS = 16000;
 /** turn:/turns: URLs, comma or space separated. */
 export const validTurn = (urls: string) => urls.split(/[\s,]+/).filter(Boolean).every((u) => /^turns?:[^\s]+$/.test(u));
 
-export interface P2PRoom<M extends JsonValue> {
+export interface P2PRoom<M extends DataPayload> {
   readonly code: string;
   readonly selfId: string;
   /** The peers connected right now, in the order they arrived. */
   readonly peers: string[];
-  /** To every peer, or to one. Dropped while nobody is connected (callers resend what matters on join). */
-  send(msg: M, to?: string): void;
+  /**
+   * To every peer, or to one. Dropped while nobody is connected (callers resend what matters on join).
+   * Resolves once handed to the data channel, which waits while its buffer is full: awaiting it paces a big transfer.
+   */
+  send(msg: M, to?: string): Promise<void>;
   onMessage: ((msg: M, from: string) => void) | null;
   onJoin: ((peer: string) => void) | null;
   onLeave: ((peer: string) => void) | null;
@@ -69,11 +72,11 @@ export interface P2PRoom<M extends JsonValue> {
  * would drop their handshake halfway. Only after a while alone is the room joined again from scratch (relays
  * drop idle subscriptions, networks change), and whenever the browser comes back online or to the foreground.
  */
-export async function joinRoom<M extends JsonValue>(app: string, code: string): Promise<P2PRoom<M>> {
+export async function joinRoom<M extends DataPayload>(app: string, code: string): Promise<P2PRoom<M>> {
   const trystero = await import('trystero');
   const turn = loadTurn();
   let room: Room | null = null;
-  let send: ((m: M, to?: string) => void) | null = null;
+  let send: ((m: M, to?: string) => Promise<void>) | null = null;
   let left = false;
   let retry = 0;
   const peers: string[] = [];
@@ -82,7 +85,7 @@ export async function joinRoom<M extends JsonValue>(app: string, code: string): 
     code,
     selfId: trystero.selfId,
     peers,
-    send: (m, to) => { if (peers.length && send) send(m, to); },
+    send: (m, to) => (peers.length && send ? send(m, to) : Promise.resolve()),
     onMessage: null, onJoin: null, onLeave: null, onError: null,
     ping: (peer) => (room ? Promise.race([room.ping(peer), new Promise<null>((r) => setTimeout(() => r(null), 4000))]).catch(() => null) : Promise.resolve(null)),
     rejoin: () => { peers.length = 0; schedule(0); },
@@ -111,9 +114,9 @@ export async function joinRoom<M extends JsonValue>(app: string, code: string): 
     }, code, {
       onJoinError: (e) => api.onError?.(/password/i.test(e.error) ? 'password' : 'connect'),
     });
-    const action = r.makeAction<JsonValue>('m');
+    const action = r.makeAction<DataPayload>('m');
     action.onMessage = (m, { peerId }) => api.onMessage?.(m as M, peerId);
-    send = (m, to) => { action.send(m, to ? { target: to } : undefined).catch(() => {}); };
+    send = (m, to) => action.send(m, to ? { target: to } : undefined).then(() => {}, () => {});
     r.onPeerJoin = (id) => {
       clearTimeout(retry);
       if (!peers.includes(id)) peers.push(id);

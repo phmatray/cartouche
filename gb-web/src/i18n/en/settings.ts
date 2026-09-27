@@ -2,7 +2,7 @@
 export default {
   intro: 'Saved in this browser and applied to every game.',
   sections: 'Settings sections',
-  tabs: { controls: 'Controls', display: 'Display', audio: 'Audio', emulation: 'Emulation', storage: 'Storage', about: 'About' },
+  tabs: { controls: 'Controls', display: 'Display', audio: 'Audio', emulation: 'Emulation', storage: 'Storage', sync: 'Sync', about: 'About' },
   language: {
     intro: 'The language of the whole interface. Game titles and the metadata of your ROMs stay as they are.',
     sub: 'Automatic follows your browser’s languages',

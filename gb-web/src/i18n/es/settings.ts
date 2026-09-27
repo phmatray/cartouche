@@ -3,7 +3,7 @@ import type { Messages } from '../core.ts';
 export default {
   intro: 'Se guardan en este navegador y se aplican a todos los juegos.',
   sections: 'Secciones de ajustes',
-  tabs: { controls: 'Controles', display: 'Pantalla', audio: 'Audio', emulation: 'Emulación', storage: 'Almacenamiento', about: 'Acerca de' },
+  tabs: { controls: 'Controles', display: 'Pantalla', audio: 'Audio', emulation: 'Emulación', storage: 'Almacenamiento', sync: 'Sincronizar', about: 'Acerca de' },
   language: {
     intro: 'El idioma de toda la interfaz. Los títulos de los juegos y los datos de tus ROM se quedan como están.',
     sub: 'Automático sigue los idiomas de tu navegador',
