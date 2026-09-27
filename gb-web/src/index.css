@@ -589,8 +589,9 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .page:has(>.slots){container-type:inline-size}
 @container (max-width:420px){
   .slots li{grid-template-columns:30px 64px minmax(0,1fr);row-gap:8px}
-  .slots .n,.slots .th{grid-row:span 2}
-  .slots .act{flex-direction:row;flex-wrap:wrap}
+  .slots .n{grid-row:span 2}
+  /* under the picture too: SAVE and LOAD side by side, not one above the other */
+  .slots .act{grid-column:2/-1;flex-direction:row;flex-wrap:wrap}
 }
 
 /* ---------- settings (manual layout) ---------- */
