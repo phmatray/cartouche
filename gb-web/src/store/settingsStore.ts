@@ -78,6 +78,8 @@ export interface SettingsState {
   gameConsole: Record<string, ConsoleChoice>;
   /** A game's "Super Game Boy borders and colours" switch (by game id; unset: see `sgbOn`). */
   gameSgb: Record<string, boolean>;
+  /** Games switched to the Game Boy because their music plays on the SNES chip (by game id; see skipSilentResume). */
+  snesMusic: Record<string, boolean>;
   /** Keep a resume point every time the player is left. */
   resumePoints: boolean;
   touchSize: TouchSize;
@@ -149,6 +151,7 @@ const DEFAULT_STATE = {
   console: 'dmg' as ConsoleChoice,
   gameConsole: {} as Record<string, ConsoleChoice>,
   gameSgb: {} as Record<string, boolean>,
+  snesMusic: {} as Record<string, boolean>,
   showTests: false,
   showBoxArt: false, // opt-in: box art is third-party content fetched from GitHub
   boxArtAnswer: null as BoxArtAnswer | null,

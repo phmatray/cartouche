@@ -12,3 +12,11 @@ export function bootFrom(q: URLSearchParams, resumePoints: boolean, hasResume: b
   if (q.has('online') || q.has('save')) return null;
   return resumePoints && hasResume ? 'auto' : null;
 }
+
+/**
+ * A game moved to the Game Boy because it plays its music on the SNES chip (not emulated) starts again there rather than
+ * resume on the Super Game Boy, silent: a game picks its sound path when it boots, so only a fresh start has the sound.
+ */
+export function skipSilentResume(from: 'auto' | number | null, madeOn: string | undefined, chosen: string, snesMusic: boolean): boolean {
+  return from === 'auto' && snesMusic && madeOn === 'sgb' && chosen !== 'sgb';
+}

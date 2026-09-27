@@ -32,6 +32,12 @@ export default {
     title: 'Inserta tu ROM',
     body: '{title} no está incluido. Carga tu propio archivo .gb para jugar; se queda en este navegador.',
   },
+  restart: {
+    label: 'Reiniciar el juego',
+    title: '¿Reiniciar el juego?',
+    body: 'La consola se apaga y se vuelve a encender. El guardado del cartucho se conserva; el progreso hecho desde entonces, no, y el punto de reanudación se reemplaza al salir.',
+    ok: 'Reiniciar',
+  },
   overwrite: {
     title: '¿Sobrescribir la ranura {n}?',
     body: 'El guardado hecho {ago} se sustituye por la partida actual.',
@@ -46,6 +52,8 @@ export default {
     madeOnDmg: 'Ese guardado se hizo en Game Boy. Elige la consola Game Boy para cargarlo.',
     madeOnGbc: 'Ese guardado se hizo en Game Boy Color. Elige la consola Game Boy Color para cargarlo.',
     snesMusic: 'Este juego toca su música de Super Game Boy en el chip de sonido de la Super Nintendo, que Cartouche no emula. Ahora se inicia en Game Boy, con sonido.',
+    snesFresh: 'El punto de reanudación de este juego se hizo en Super Game Boy, donde su música no suena: se ha reiniciado en Game Boy, con sonido.',
+    resumeThere: 'Reanudar allí',
     madeOnSgb: 'Ese guardado se hizo en Super Game Boy. Activa los marcos y colores de Super Game Boy en la página Pantalla para cargarlo.',
     resumedOnDmg: 'Reanudado en Game Boy, donde se hizo este guardado. Reinicia desde la página Pantalla para cambiar.',
     resumedOnGbc: 'Reanudado en Game Boy Color, donde se hizo este guardado. Reinicia desde la página Pantalla para cambiar.',

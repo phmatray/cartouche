@@ -32,6 +32,12 @@ export default {
     title: 'Insérez votre ROM',
     body: '{title} n’est pas inclus. Chargez votre propre fichier .gb pour jouer ; il reste dans ce navigateur.',
   },
+  restart: {
+    label: 'Relancer le jeu',
+    title: 'Relancer le jeu ?',
+    body: 'La console est éteinte puis rallumée. La sauvegarde de la cartouche est conservée, pas la progression faite depuis, et le point de reprise est remplacé quand vous quittez.',
+    ok: 'Relancer',
+  },
   overwrite: {
     title: 'Écraser l’emplacement {n} ?',
     body: 'La sauvegarde faite {ago} est remplacée par la partie en cours.',
@@ -46,6 +52,8 @@ export default {
     madeOnDmg: 'Cette sauvegarde a été faite sur Game Boy. Choisissez la console Game Boy pour la charger.',
     madeOnGbc: 'Cette sauvegarde a été faite sur Game Boy Color. Choisissez la console Game Boy Color pour la charger.',
     snesMusic: 'Ce jeu joue sa musique Super Game Boy sur la puce son de la Super Nintendo, que Cartouche n’émule pas. Il démarre désormais sur Game Boy, avec le son.',
+    snesFresh: 'Le point de reprise de ce jeu a été fait sur Super Game Boy, où sa musique est muette : il a redémarré sur Game Boy, avec le son.',
+    resumeThere: 'Reprendre là',
     madeOnSgb: 'Cette sauvegarde a été faite sur Super Game Boy. Activez les cadres et couleurs Super Game Boy dans la page Écran pour la charger.',
     resumedOnDmg: 'Reprise sur Game Boy, là où cette sauvegarde a été faite. Redémarrez depuis la page Écran pour changer.',
     resumedOnGbc: 'Reprise sur Game Boy Color, là où cette sauvegarde a été faite. Redémarrez depuis la page Écran pour changer.',

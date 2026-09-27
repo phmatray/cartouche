@@ -31,6 +31,12 @@ export default {
     title: 'Insert your ROM',
     body: '{title} isn’t included. Load your own .gb file to play; it stays in this browser.',
   },
+  restart: {
+    label: 'Restart the game',
+    title: 'Restart the game?',
+    body: 'The console is switched off and on again. The cartridge’s own save carries over; progress made since doesn’t, and the resume point is replaced when you leave.',
+    ok: 'Restart',
+  },
   overwrite: {
     title: 'Overwrite slot {n}?',
     body: 'The save from {ago} is replaced by the game as it is now.',
@@ -45,6 +51,8 @@ export default {
     madeOnDmg: 'That save was made on the Game Boy. Set Console to Game Boy to load it.',
     madeOnGbc: 'That save was made on the Game Boy Color. Set Console to Game Boy Color to load it.',
     snesMusic: 'This game plays its Super Game Boy music on the SNES sound chip, which Cartouche doesn’t emulate. It now starts on the Game Boy, with its sound.',
+    snesFresh: 'This game’s resume point was made on the Super Game Boy, where its music is silent: it started again on the Game Boy, with its sound.',
+    resumeThere: 'Resume there',
     madeOnSgb: 'That save was made on the Super Game Boy. Turn on Super Game Boy borders and colors on the Screen page to load it.',
     resumedOnDmg: 'Resumed on the Game Boy, where this save was made. Restart from the Screen page to switch.',
     resumedOnGbc: 'Resumed on the Game Boy Color, where this save was made. Restart from the Screen page to switch.',

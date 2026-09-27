@@ -47,6 +47,8 @@ interface ManualProps {
   /** The console the game was switched on with (null: not yet). */
   running: Machine | null;
   onRestart: () => void;
+  /** Restart the game on its console (asks first): the way back to a power-on once there is a resume point. */
+  onStartOver: () => void;
   /** Open the touch controls' layout editor. */
   onEditControls: () => void;
 }
@@ -144,7 +146,7 @@ function Thumb({ s, label }: { s?: StoredSaveState; label: string }) {
   return s?.thumbnail.length ? <Frame rgba={s.thumbnail} label={label} /> : <>{t('common.empty')}</>;
 }
 
-function SavesPage({ header, states, romLoaded, onSave, onLoad }: ManualProps) {
+function SavesPage({ header, states, romLoaded, onSave, onLoad, online, onStartOver }: ManualProps) {
   const t = useT();
   const auto = states[0];
   const battery = !!header && /BATTERY/i.test(header.cartridgeType);
@@ -174,6 +176,7 @@ function SavesPage({ header, states, romLoaded, onSave, onLoad }: ManualProps) {
           );
         })}
       </ul>
+      {!online && <p><button className="sbtn" disabled={!romLoaded} onClick={onStartOver}>{t('player.restart.label')}</button></p>}
     </>
   );
 }
