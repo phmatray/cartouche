@@ -53,7 +53,11 @@ const SYN: Partial<Record<Key, Record<string, string>>> = {
     race: 'racing', sport: 'sports', fighter: 'fighting', fight: 'fighting', puzzles: 'puzzle', strategy: 'strategy',
   },
   players: { single: '1', solo: '1', '1p': '1', one: '1', '2p': '2', two: '2', link: '2+', multi: '2+', multiplayer: '2+', '4p': '4' },
-  region: { usa: 'us', america: 'us', na: 'us', ntsc: 'us', europe: 'eu', eur: 'eu', pal: 'eu', japan: 'jp', jpn: 'jp', ja: 'jp' },
+  region: {
+    usa: 'us', america: 'us', na: 'us', ntsc: 'us', europe: 'eu', eur: 'eu', pal: 'eu', japan: 'jp', jpn: 'jp', ja: 'jp',
+    // French and Spanish names (typed with or without accents)
+    'etats unis': 'us', amerique: 'us', 'estados unidos': 'us', eeuu: 'us', 'ee uu': 'us', europa: 'eu', japon: 'jp',
+  },
   platform: { dmg: 'gb', gameboy: 'gb', 'game boy': 'gb', mono: 'gb', cgb: 'gbc', color: 'gbc', colour: 'gbc', 'game boy color': 'gbc', both: 'dual' },
   save: { yes: 'battery', sram: 'battery', sav: 'battery', no: 'none' },
   made: { 'gb studio': 'gbstudio', gbs: 'gbstudio' },
