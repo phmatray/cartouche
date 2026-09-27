@@ -310,8 +310,20 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .stats div{display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--rule);font:600 15px var(--font)}
 .stats dt{color:var(--mute)}
 .stats dd{margin:0;font-weight:800;font-variant-numeric:tabular-nums}
+/* the game page's small buttons (saves, slots) */
+.gp .btn.sm{height:36px;padding:0 12px;font-size:13px}
+.gp .btn.sm.ic{width:36px;padding:0}
+.gp .btn.sm.ic .icon{width:16px;height:16px}
+.side section:has(>.minislots){container-type:inline-size}
 .minislots{list-style:none;margin:0;padding:0}
-.minislots li{display:grid;grid-template-columns:28px 72px 1fr auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--rule)}
+.minislots li{display:grid;grid-template-columns:28px 72px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid var(--rule)}
+.minislots .ma{display:flex;gap:6px}
+/* a phone's column: the buttons go under the time */
+@container (max-width:420px){
+  .minislots li{grid-template-columns:28px 72px minmax(0,1fr);row-gap:8px}
+  .minislots li:has(>.ma) :is(.n,.th){grid-row:span 2}
+  .minislots .ma{grid-column:3}
+}
 .minislots .n{font:900 34px/1 var(--font);font-stretch:62%}
 .minislots .th{aspect-ratio:10/9;background:var(--band-3)}
 .minislots .w{font:800 14px/1.25 var(--font)}
