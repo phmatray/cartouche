@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useState, type CSSProperties, t
 import { Link, useNavigate, useParams } from 'react-router';
 import type { GameEntry } from '../../types/game';
 import { downloadGame, FetchError, refreshSavedIds, useGameLibrary } from '../../hooks/useGameLibrary';
-import { createProfile, deleteSave, getActiveProfileId, getGameSaveStates, getSram, listProfiles, saveSram, setActiveProfile, uniqueName, type StoredSave, type StoredSaveState } from '../../lib/db';
+import { createProfile, deleteSave, deleteSaveState, getActiveProfileId, getGameSaveStates, getSram, listProfiles, saveSram, setActiveProfile, uniqueName, type StoredSave, type StoredSaveState } from '../../lib/db';
 import { mapperSupported, type RomMetadata } from '../../lib/rom-utils';
 import { ago, assetUrl, bytes, download, dur, owned, paths, tagOf, touchOnly } from '../../lib/ui';
 import { I } from '../icons';
@@ -32,7 +32,6 @@ export function GamePage() {
   return <GameDetails key={game.id} game={game} />;
 }
 
-const btnSm: CSSProperties = { height: 36, padding: '0 12px', fontSize: 13 };
 
 function GameDetails({ game }: { game: GameEntry }) {
   const { savedIds, toggleFavorite, deleteGame, eraseSaves } = useGameLibrary();
@@ -68,6 +67,23 @@ function GameDetails({ game }: { game: GameEntry }) {
     title: t('player.restart.title'), ok: t('player.restart.ok'), body: t('player.restart.body'),
     run: () => navigate(paths.play(game.id, '?new=1')),
   });
+  /** Delete the resume point (null) or a slot, after asking. */
+  const dropState = (i: number | null) => {
+    const s = i === null ? auto : slots[i];
+    if (!s) return;
+    const n = String((i ?? 0) + 1);
+    setConfirm({
+      danger: true, ok: t('common.delete'),
+      title: i === null ? t('game.slots.resumeTitle') : t('game.slots.deleteTitle', { n }),
+      body: i === null ? t('game.slots.resumeBody', { ago: ago(s.timestamp) }) : t('game.slots.deleteBody', { n, ago: ago(s.timestamp) }),
+      run: async () => {
+        await deleteSaveState(s.id);
+        setStates(await getGameSaveStates(game.id));
+        refreshSavedIds();
+        toast(i === null ? tNow('game.slots.resumeDeleted') : tNow('game.slots.deleted', { n }), 'm');
+      },
+    });
+  };
   const remove = () => setConfirm(game.isLocal ? {
     title: t('game.remove.title'), danger: true, ok: t('game.remove.ok'),
     body: t('game.remove.body', { title: game.title }),
@@ -191,7 +207,10 @@ function GameDetails({ game }: { game: GameEntry }) {
                       <span className="n" style={{ fontSize: 14 }}>{t('game.auto')}</span>
                       <span className="th">{auto.thumbnail.length ? <Frame rgba={auto.thumbnail} label={t('game.resumePoint')} /> : null}</span>
                       <span className="w">{t('game.resumePoint')}<small>{[ago(auto.timestamp), profileName(auto.profile)].filter(Boolean).join(' · ')}</small></span>
-                      <Link className="btn line" style={btnSm} to={paths.play(game.id, '?resume=1')}>{t('game.resume')}</Link>
+                      <span className="ma">
+                        <Link className="btn line sm" to={paths.play(game.id, '?resume=1')}>{t('game.resume')}</Link>
+                        <button className="btn line sm ic" aria-label={t('game.slots.deleteResume')} title={t('common.delete')} onClick={() => dropState(null)}>{I.close}</button>
+                      </span>
                     </li>
                   )}
                   {slots.map((s, i) => (
@@ -199,7 +218,12 @@ function GameDetails({ game }: { game: GameEntry }) {
                       <span className="n">{i + 1}</span>
                       <span className="th">{s?.thumbnail.length ? <Frame rgba={s.thumbnail} label={t('game.slot', { n: String(i + 1) })} /> : null}</span>
                       <span className="w">{s ? ago(s.timestamp) : t('common.empty')}{s && profileName(s.profile) && <small>{profileName(s.profile)}</small>}</span>
-                      {s ? <Link className="btn line" style={btnSm} to={paths.play(game.id, `?slot=${i}`)}>{t('common.load')}</Link> : <span />}
+                      {s ? (
+                        <span className="ma">
+                          <Link className="btn line sm" to={paths.play(game.id, `?slot=${i}`)}>{t('common.load')}</Link>
+                          <button className="btn line sm ic" aria-label={t('game.slots.deleteOf', { n: String(i + 1) })} title={t('common.delete')} onClick={() => dropState(i)}>{I.close}</button>
+                        </span>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
@@ -325,16 +349,16 @@ function Saves({ game, header, setConfirm }: { game: GameEntry; header: RomMetad
               <small>{t('game.saves.meta', { size: bytes(p.sram.length), ago: ago(p.timestamp) })}</small>
             </div>
             <div className="pa">
-              {p.id !== active && <button className="btn line" style={btnSm} aria-label={t('game.saves.soloOf', { name: p.name })} onClick={async () => { await setActiveProfile(game.id, p.id); await reload(); toast(tNow('game.saves.soloNow', { name: p.name }), 'c'); }}>{t('game.saves.useSolo')}</button>}
-              <button className="btn line" style={btnSm} aria-label={t('game.saves.renameOf', { name: p.name })} onClick={() => setEditing(p.id)}>{t('common.rename')}</button>
-              <button className="btn line" style={btnSm} aria-label={t('game.saves.duplicateOf', { name: p.name })} onClick={() => duplicate(p)}>{t('game.saves.duplicate')}</button>
-              <button className="btn line" style={btnSm} aria-label={t('game.saves.exportOf', { name: p.name })} onClick={() => download(new Blob([p.sram as BlobPart]), `${game.title} - ${p.name}.sav`)}>{t('game.saves.export')}</button>
-              <button className="btn danger" style={btnSm} aria-label={t('game.saves.deleteOf', { name: p.name })} onClick={() => remove(p)}>{t('common.delete')}</button>
+              {p.id !== active && <button className="btn line sm" aria-label={t('game.saves.soloOf', { name: p.name })} onClick={async () => { await setActiveProfile(game.id, p.id); await reload(); toast(tNow('game.saves.soloNow', { name: p.name }), 'c'); }}>{t('game.saves.useSolo')}</button>}
+              <button className="btn line sm" aria-label={t('game.saves.renameOf', { name: p.name })} onClick={() => setEditing(p.id)}>{t('common.rename')}</button>
+              <button className="btn line sm" aria-label={t('game.saves.duplicateOf', { name: p.name })} onClick={() => duplicate(p)}>{t('game.saves.duplicate')}</button>
+              <button className="btn line sm" aria-label={t('game.saves.exportOf', { name: p.name })} onClick={() => download(new Blob([p.sram as BlobPart]), `${game.title} - ${p.name}.sav`)}>{t('game.saves.export')}</button>
+              <button className="btn danger sm" aria-label={t('game.saves.deleteOf', { name: p.name })} onClick={() => remove(p)}>{t('common.delete')}</button>
             </div>
           </li>
         ))}
       </ul>
-      <label className="btn line" style={{ ...btnSm, marginTop: 14 }} tabIndex={0}
+      <label className="btn line sm" style={{ marginTop: 14 }} tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
         {I.load}{t('game.saves.import')}
         <input type="file" accept={fileAccept('.sav,.srm')} className="sr" tabIndex={-1} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onImport(f); }} />
