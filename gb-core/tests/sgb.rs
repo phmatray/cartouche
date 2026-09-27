@@ -386,3 +386,22 @@ fn a_state_saved_between_the_packets_of_a_command_keeps_them() {
     assert_eq!(px(&loaded, 3 * 8, 3 * 8), rgb(GREEN), "the command completes after the load");
     assert_eq!(px(&loaded, 8 * 8, 8 * 8), rgb(RED));
 }
+
+/// After a state load the thumbnail is put back as DMG shades too, so the SGB colours the rows the
+/// next frame drew before the save point as the thumbnail showed them (not blank).
+#[test]
+fn the_first_frame_after_a_load_continues_the_thumbnail() {
+    let mut gb = sgb();
+    dark_cell(&mut gb, 0, 0);
+    pal01(&mut gb, RED, GREEN);
+    frame(&mut gb);
+    while gb.bus.ppu.ly != 60 { gb.step_instruction().unwrap(); }
+    let (state, thumb) = (gb.save_state(), gb.screen().to_vec());
+
+    let mut fresh = sgb();
+    assert!(fresh.load_state(&state));
+    fresh.set_screen(&thumb);
+    while fresh.bus.ppu.ly != 144 { fresh.step_instruction().unwrap(); }
+    assert_eq!(px(&fresh, 0, 0), rgb(RED), "drawn before the save point");
+    assert_eq!(px(&fresh, 0, 100), rgb(WHITE), "drawn after the load");
+}

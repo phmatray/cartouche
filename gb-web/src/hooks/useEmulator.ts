@@ -225,13 +225,13 @@ export function useEmulator() {
     return emu.save_state();
   }, []);
 
-  /** `frame` (the picture on screen when the state was taken) replaces the core's framebuffer, which
-   *  states do not hold: without it, a game that has the LCD off keeps showing the pre-load picture. */
+  /** `frame` (the picture on screen when the state was taken) replaces the core's pictures, which
+   *  states do not hold: without it, a game that has the LCD off keeps showing the pre-load picture,
+   *  and the next frame's rows drawn before the save point come from a blank or older one. */
   const loadState = useCallback((data: Uint8Array, frame?: Uint8Array | Uint8ClampedArray): boolean => {
     const emu = emulatorRef.current;
     if (!emu || !emu.load_state(data)) return false;
-    const ptr = emu.framebuffer_ptr();
-    if (frame && ptr && wasmMemory && frame.length === emu.framebuffer_len()) new Uint8Array(wasmMemory.buffer, ptr, frame.length).set(frame);
+    if (frame) emu.set_screen(frame instanceof Uint8Array ? frame : new Uint8Array(frame.buffer, frame.byteOffset, frame.length));
     return true;
   }, []);
 

@@ -128,3 +128,27 @@ fn a_damaged_state_never_panics() {
     }
     assert!(bad.is_empty(), "panicking (offset, value): {bad:?}");
 }
+
+fn run_to_line(gb: &mut GameBoy, ly: u8) {
+    while gb.bus.ppu.ly != ly { gb.step_instruction().unwrap(); }
+}
+
+/// States are taken mid-frame and do not hold the picture being drawn: after a load, the rows the
+/// next frame drew before the save point show the thumbnail the player puts back, not blank ones.
+#[test]
+fn the_first_frame_after_a_load_continues_the_thumbnail() {
+    let mut gb = boot(&[0x18, 0xFE], &[]);
+    gb.run_frame().unwrap();
+    run_to_line(&mut gb, 60);
+    let state = gb.save_state();
+
+    let mut fresh = boot(&[0x18, 0xFE], &[]);
+    assert!(fresh.load_state(&state));
+    let thumb: Vec<u8> = [9, 9, 9, 0xFF].repeat(160 * 144);
+    fresh.set_screen(&thumb);
+    assert_eq!(fresh.screen(), &thumb[..], "shown at once");
+    run_to_line(&mut fresh, 144);
+    let row = |y: usize| &fresh.screen()[y * 640..y * 640 + 4];
+    assert_eq!(row(0), [9, 9, 9, 0xFF], "drawn before the save point");
+    assert_ne!(row(100), [9, 9, 9, 0xFF], "drawn after the load");
+}
