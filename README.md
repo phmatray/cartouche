@@ -188,12 +188,27 @@ cd gb-core && cargo test --release --no-fail-fast
 
 ## Privacy
 
-- No account, no analytics, no cookies, no tracking.
-- Your ROMs, saves, screenshots and settings stay in your browser (IndexedDB). Nothing is uploaded.
-- GitHub Pages serves the app. Box art is off until you agree in the "Show box art?" dialog; covers then come from `raw.githubusercontent.com`. Like any web server, GitHub sees your IP address ([GitHub privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)).
-- Online link play and device sync go browser to browser. Public Nostr relays only introduce the two browsers (they see an encrypted handshake and both IP addresses), and public STUN servers help them find each other. No TURN relay is used unless you add your own, so some strict networks can't connect.
-- RetroAchievements is off until you connect with your username and web API key (never your password; both stay in the browser). ROMs are matched by MD5 in the browser and never sent.
+- No account, no server, no analytics, no cookies, no tracking.
+- Your ROMs, saves, screenshots and settings stay in your browser (IndexedDB).
+  Nothing is uploaded to a server.
+- Only GitHub is contacted (unless you connect RetroAchievements, play online or turn on device sync, below). GitHub Pages serves the app. Box art is off until
+  you agree in the "Show box art?" dialog; after that, covers of recognized
+  games come from `raw.githubusercontent.com`. Like any web server, GitHub sees
+  your IP address
+  ([GitHub privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)).
 - Settings › Storage shows what is stored and deletes it, box art included.
+- RetroAchievements is off until you connect in Settings › Achievements with your
+  username and web API key (never your password; both stay in the browser). Then
+  `retroachievements.org` is asked for your earned achievements, read-only
+  ([why nothing is unlocked](docs/RETROACHIEVEMENTS.md)). ROMs are matched by MD5
+  in the browser and never sent.
+- Play online and device sync reach five public Nostr relays and Google and
+  Cloudflare STUN servers to connect the two browsers: they see your IP address,
+  and so does the other player or device. Game and sync data (saves, states,
+  screenshots, ROMs if you turn that on) then go end-to-end encrypted, browser
+  to browser ([details](docs/LEGAL.md)).
+  No TURN relay is used unless you add your own, so some strict networks
+  can't connect.
 
 ## Your own cartridges
 

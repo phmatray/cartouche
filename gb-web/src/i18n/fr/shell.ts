@@ -19,7 +19,7 @@ export default {
     art: 'Jaquettes : libretro-thumbnails · Illustrations de Tobu Tobu Girl : Tangram Games (CC BY 4.0)',
   },
   drop: 'Déposer pour ajouter',
-  dropSub: 'Les fichiers sont lus dans ce navigateur et ne sont jamais envoyés.',
+  dropSub: 'Les fichiers sont lus dans ce navigateur et ne sont jamais envoyés à un serveur.',
   importing: 'Import des ROM',
   fetchingArt: 'Téléchargement des jaquettes',
   progress: '{label} · {n} sur {of}',

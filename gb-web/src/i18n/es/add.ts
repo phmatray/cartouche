@@ -1,7 +1,7 @@
 import type { Messages } from '../core.ts';
 
 export default {
-  intro: 'Suelta tus archivos .gb y .gbc, o un .zip con ellos. Cada uno se identifica por su huella SHA-1 entre los volcados conocidos, así que llega con sus datos. Los archivos nunca salen de este navegador.',
+  intro: 'Suelta tus archivos .gb y .gbc, o un .zip con ellos. Cada uno se identifica por su huella SHA-1 entre los volcados conocidos, así que llega con sus datos. Los archivos nunca se suben a un servidor; solo la sincronización entre dispositivos, si activas en ella las ROM, los copia a tus propios dispositivos.',
   drop: 'Suelta los archivos aquí',
   dropSub: 'Varios a la vez, o un .zip completo. Los duplicados se detectan antes de guardarse.',
   choose: 'Elegir archivos',

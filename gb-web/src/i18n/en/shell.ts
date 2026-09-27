@@ -18,7 +18,7 @@ export default {
     art: 'Box art: libretro-thumbnails · Tobu Tobu Girl art: Tangram Games (CC BY 4.0)',
   },
   drop: 'Drop to add',
-  dropSub: 'Your files are read in this browser and never uploaded.',
+  dropSub: 'Your files are read in this browser and never uploaded to a server.',
   importing: 'Importing ROMs',
   fetchingArt: 'Fetching box art',
   progress: '{label} · {n} of {of}',
