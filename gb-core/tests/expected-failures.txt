@@ -157,12 +157,12 @@ mealybug-tearoom-tests/ppu/m3_lcdc_obj_en_change_variant.gb@cgb  # ppu-mode3: th
 mealybug-tearoom-tests/ppu/m3_lcdc_obj_en_change_variant.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_lcdc_obj_size_change.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_lcdc_obj_size_change_scx.gb@dmg  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_change.gb@cgb  # ppu-mode3: a CGB's LCDC.4 switch in the middle of a tile fetch is not modelled
+mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_change.gb@cgb  # ppu-mode3: the pixels @dmg fails on (left-edge OBJs use the boot ROM's ® tile, which Cartouche's boot ROM does not have)
 mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_change.gb@dmg  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_change2.gb@cgb  # ppu-mode3: CGB C reference only, and the LCDC.4 switch as in m3_lcdc_tile_sel_change
-mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change.gb@cgb  # ppu-mode3: a CGB's LCDC.4 switch in the middle of a tile fetch is not modelled
+mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_change2.gb@cgb  # ppu-mode3: CGB C reference only, and the ® tile as in m3_lcdc_tile_sel_change
+mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change.gb@cgb  # ppu-mode3: the pixels @dmg fails on (left-edge OBJs use the boot ROM's ® tile, which Cartouche's boot ROM does not have)
 mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change.gb@dmg  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change2.gb@cgb  # ppu-mode3: CGB C reference only, and the LCDC.4 switch as in m3_lcdc_tile_sel_change
+mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change2.gb@cgb  # ppu-mode3: CGB C reference only, and the ® tile as in m3_lcdc_tile_sel_change
 mealybug-tearoom-tests/ppu/m3_lcdc_win_en_change_multiple_wx.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_lcdc_win_map_change.gb@cgb  # ppu-mode3: the pixels @dmg fails on (left-edge OBJs use the boot ROM's ® tile, which Cartouche's boot ROM does not have)
 mealybug-tearoom-tests/ppu/m3_lcdc_win_map_change.gb@dmg  # ppu-mode3
@@ -178,8 +178,6 @@ mealybug-tearoom-tests/ppu/m3_wx_5_change.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_wx_6_change.gb@dmg  # ppu-mode3
 age-test-roms/m3-bg-bgp/m3-bg-bgp.gb@dmgC  # ppu-mode3
 age-test-roms/m3-bg-bgp/m3-bg-bgp.gb@ncmBC  # ppu-mode3
-age-test-roms/m3-bg-lcdc/m3-bg-lcdc-nocgb.gb@ncmBCE  # ppu-mode3
-age-test-roms/m3-bg-lcdc/m3-bg-lcdc.gb@cgbBCE  # ppu-mode3
 age-test-roms/m3-bg-scx/m3-bg-scx-ds.gb@cgbBCE  # double-speed
 age-test-roms/m3-bg-scx/m3-bg-scx-nocgb.gb@ncmBCE  # ppu-mode3
 age-test-roms/m3-bg-scx/m3-bg-scx.gb@cgbBCE  # ppu-mode3

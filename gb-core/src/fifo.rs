@@ -325,6 +325,7 @@ impl Ppu {
             }
             FetchStep::DataHi => {
                 self.line.fetcher.hi = self.vram[self.fetch_addr() + 1];
+                self.line.fetcher.half = true; // at Push: the high byte was read on the last dot
                 if self.line.first_fetch {
                     // The fine scroll is latched as the first fetch ends (Mealybug `m3_window_timing_wx_0`
                     // takes a SCX write 2 dots before it, `m3_scx_low_3_bits` leaves one 2 dots after it).
@@ -363,6 +364,23 @@ impl Ppu {
                     for _ in 0..self.line.win_skip.min(early) { self.fetcher_dot(); }
                 }
             }
+        }
+    }
+
+    /// CGB (both modes): an LCDC.4 write on the dot right after a tile data read lands inside
+    /// that read on hardware, which then gives the tile number ANDed with the byte at the new
+    /// address. Fitted to Mealybug `m3_lcdc_tile_sel_change` (CGB D) and Age `m3-bg-lcdc`
+    /// (CGB B-E), both directions; a write one dot later or earlier reads plainly, and so does
+    /// every write in double speed (Age `m3-bg-lcdc-ds`), which lands elsewhere in the dot.
+    pub(crate) fn tile_sel_switch(&mut self) {
+        if !(self.cgb_mode || self.compat) || self.m_cycle_dots != 4 || !self.line.active || self.mode != crate::ppu::PpuMode::Drawing {
+            return;
+        }
+        let f = self.line.fetcher;
+        match (f.step, f.half) {
+            (FetchStep::DataHi, false) => self.line.fetcher.lo = f.tile & self.vram[self.fetch_addr()],
+            (FetchStep::Push, true) => self.line.fetcher.hi = f.tile & self.vram[self.fetch_addr() + 1],
+            _ => {}
         }
     }
 
@@ -461,6 +479,7 @@ impl Ppu {
         }
         if self.line.obj_dots > 0 {
             self.line.obj_dots -= 1;
+            self.line.fetcher.half = false; // the fetcher waits at Push: its last read is past
             // The OBJ row's low byte, then its high byte, each read with the OBJ size of its dot.
             if let Some((i, lo)) = self.line.obj_fetch {
                 let a = self.obj_row(i as usize);

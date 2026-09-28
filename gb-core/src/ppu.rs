@@ -235,7 +235,9 @@ impl Ppu {
         match addr {
             0xFF40 => {
                 let was_enabled = self.lcdc & 0x80 != 0;
+                let tile_sel = (self.lcdc ^ value) & 0x10 != 0;
                 self.lcdc = value;
+                if tile_sel { self.tile_sel_switch(); }
                 let is_enabled = self.lcdc & 0x80 != 0;
                 if was_enabled && !is_enabled {
                     let lyc_flag = if self.ly_compare(false) == Some(self.lyc) { 0x04 } else { 0 };
@@ -1082,6 +1084,35 @@ mod tests {
         let x = switch_at(60);
         assert!((20..60).contains(&x), "switch at {x}");
         assert_eq!(switch_at(64), x + 4, "4 dots later, 4 pixels later");
+    }
+
+    /// CGB: an LCDC.4 write landing inside a tile data read gives the tile number ANDed with the
+    /// byte at the new address. Tile $55 is colour 0 at $8000 and colour 3 at $8800, so a switch
+    /// to $8800 caught in the low byte read shows 2,3,2,3... ($55 & $FF, then $FF); a DMG never does.
+    #[test]
+    fn cgb_tile_sel_switch_mid_fetch() {
+        let patterns = |cgb: bool| -> Vec<Vec<u8>> {
+            (16..80).map(|dot| {
+                let p = run_line10(|p| {
+                    p.cgb_mode = cgb;
+                    p.vram[0x1800..0x1C00].fill(0x55);
+                    p.vram[0x1550..0x1560].fill(0xFF); // tile $55 at $8800 ($9550); at $8000 all 0
+                    for (c, rgb) in [0x7FFFu16, 0x001F, 0x03E0, 0x7C00].iter().enumerate() {
+                        p.bg_cram[c * 2..c * 2 + 2].copy_from_slice(&rgb.to_le_bytes());
+                    }
+                }, |p, d| if d == dot { p.write_register(0xFF40, 0x81) });
+                let ids: Vec<u8> = if cgb {
+                    let row = &p.framebuffer[10 * SCREEN_WIDTH * 4..11 * SCREEN_WIDTH * 4];
+                    row.chunks(4).map(|c| [[255, 255, 255], [255, 0, 0], [0, 255, 0], [0, 0, 255]].iter().position(|k| k[..] == c[..3]).unwrap() as u8).collect()
+                } else {
+                    shades(&p, 10)
+                };
+                ids.chunks(8).find(|t| t.iter().any(|&c| c != 0) && t.iter().any(|&c| c != 3)).map_or(vec![], |t| t.to_vec())
+            }).collect()
+        };
+        let glitch = vec![2, 3, 2, 3, 2, 3, 2, 3];
+        assert!(patterns(true).contains(&glitch), "{:?}", patterns(true));
+        assert!(!patterns(false).contains(&glitch));
     }
 
     /// CGB tile attributes: map entry 0 uses bank 1 and flips X and Y; its tile has one dark
