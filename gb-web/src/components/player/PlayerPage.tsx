@@ -38,6 +38,7 @@ import { TouchControls } from './TouchControls';
 import { useMedia } from './touch-dom';
 import { fileAccept } from '../../lib/pwa';
 import { holdGame } from '../../lib/play-lock';
+import { useRaSession } from '../../hooks/useRaSession';
 import { t as tNow, useT } from '../../i18n';
 import { usePeripherals } from '../../peripherals/usePeripherals';
 
@@ -167,6 +168,10 @@ function Player({ game }: { game: GameEntry }) {
     syncBorder();
     return true;
   }, [loadRom, syncBorder]);
+  const { coreRef } = emu;
+  const peekRa = useCallback((a: number) => coreRef.current?.read_memory_ra(a) ?? 0, [coreRef]);
+  const ra = useRaSession(power, () => romData.current, peekRa, game.title);
+  const raJumped = ra.jumped, raFrame = ra.frame;
 
   // Every state load (slot, resume point, rewind step) draws its picture at once, paused or not, with no ghosting from before the jump.
   const loadAndShow = useCallback((data: Uint8Array, frame?: Uint8Array | Uint8ClampedArray) => {
@@ -182,13 +187,14 @@ function Player({ game }: { game: GameEntry }) {
       }
     }
     if (!loadState(data, frame)) return false;
+    raJumped();
     // A colourised state brings back its own palette: the Screen page then offers a restart if the game's choice differs.
     if (consoleNow() === CONSOLE_COMPAT) { const p = paletteNow(); setRunning(p ? `gbc${p}` : 'gbc'); }
     syncBorder();
     const fb = framebufferSnapshot();
     if (fb) { renderFrame(new Uint8ClampedArray(fb.buffer, fb.byteOffset, fb.length), true); setLit(true); }
     return true;
-  }, [loadState, framebufferSnapshot, renderFrame, stateConsole, consoleNow, powerOn, paletteNow, syncBorder]);
+  }, [loadState, framebufferSnapshot, renderFrame, stateConsole, consoleNow, powerOn, paletteNow, syncBorder, raJumped]);
   // A WebGL context given back after a loss (iOS, backgrounded app) starts blank: redraw the frame, even paused.
   useEffect(() => {
     const fb = restores && framebufferSnapshot();
@@ -357,11 +363,12 @@ function Player({ game }: { game: GameEntry }) {
   const { tick: periphTick, stop: periphStop } = periph;
   const runOne = useCallback(() => {
     const fb = runFrame();
+    if (fb) raFrame();
     linkPump();
     const samples = getAudioSamples(); // always drained; only played at ≤ 1× (stretched to fill the device at ½×)
     if (samples && speedRef.current <= 1) feedSamples(stretch(samples, speedRef.current));
     return fb;
-  }, [runFrame, getAudioSamples, feedSamples, linkPump]);
+  }, [runFrame, getAudioSamples, feedSamples, linkPump, raFrame]);
   // Display refresh rate, from the time between animation frames (median of the last 31).
   const refresh = useRef<number[]>([]);
   const onFrame = useCallback(() => {
