@@ -182,7 +182,9 @@ impl MemoryBus {
                 if let Some(s) = self.sgb.as_deref_mut() { s.write_p1(value); }
             }
             0xFF01 | 0xFF02 => self.serial.write(addr, value),
-            0xFF04..=0xFF07 => self.timer.write(addr, value),
+            0xFF04..=0xFF07 => {
+                if self.timer.write(addr, value) { self.interrupts.request(TIMER_BIT); }
+            }
             0xFF0F => self.interrupts.interrupt_flag = value & 0x1F,
             0xFF10..=0xFF3F => self.apu.write_register(addr, value),
             0xFF40..=0xFF4B => {
