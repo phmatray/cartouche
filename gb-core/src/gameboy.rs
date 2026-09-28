@@ -774,4 +774,76 @@ mod tests {
         assert_eq!(word, 0x5AC3);
         assert_eq!((c.read_ram(0x020), c.read_ram(0x030)), (0x98, 0x81), "the latch survives too");
     }
+
+    /// Writes a valid header of `cart_type` at `at`.
+    fn header(rom: &mut [u8], at: usize, cart_type: u8, ram_size: u8) {
+        (rom[at + 0x147], rom[at + 0x149]) = (cart_type, ram_size);
+        rom[at + 0x14D] = (0x134..=0x14C).fold(0u8, |c, a| c.wrapping_sub(rom[at + a]).wrapping_sub(1));
+    }
+
+    /// Saves `gb`, loads the state into a fresh machine on `rom`, and returns it; also checks a
+    /// state cut right after KEY0 (before the mapper block existed) still loads.
+    fn reload(gb: &GameBoy, rom: &[u8]) -> GameBoy {
+        let state = gb.save_state();
+        let cut = state.len() - 2 - gb.bus.cartridge.export_extra().len();
+        let mut old = GameBoy::new(rom.to_vec()).unwrap();
+        assert!(old.load_state(&state[..cut]), "a state without the mapper block");
+        let mut g = GameBoy::new(rom.to_vec()).unwrap();
+        assert!(g.load_state(&state));
+        g
+    }
+
+    /// MMM01 locked to its game, MBC6 half-way through a flash program sequence, TAMA5 with a
+    /// register selected: each goes on from the same place after a load.
+    #[test]
+    fn every_new_mapper_resumes_from_a_state() {
+        // MMM01: 256 KiB, marker 0xC0 + n per 16 KiB bank, the menu header in the last 32 KiB.
+        let mut rom = vec![0u8; 0x40000];
+        for n in 0..16 { rom[n * 0x4000] = 0xC0 + n as u8; }
+        header(&mut rom, 0, 0x01, 0x00);
+        header(&mut rom, 0x38000, 0x0D, 0x03);
+        let mut gb = GameBoy::new(rom.clone()).unwrap();
+        let c = &mut gb.bus.cartridge;
+        for (a, v) in [(0x2000, 0x04), (0x6000, 0x38), (0x4000, 0x01), (0x0000, 0x70), (0x0000, 0x7A), (0x2000, 0x02)] {
+            c.write_rom(a, v);
+        }
+        c.write_ram(0, 0x42);
+        let mut g = reload(&gb, &rom);
+        let c = &mut g.bus.cartridge;
+        assert_eq!((c.read_rom(0x0000), c.read_rom(0x4000), c.read_ram(0)), (0xC4, 0xC6, 0x42));
+        c.write_rom(0x2000, 0x08);
+        assert_eq!(c.read_rom(0x0000), 0xC4, "still locked");
+
+        // MBC6: the unlock cycles and the program command sent, the byte not yet.
+        let mut rom = vec![0u8; 0x20000];
+        for n in 0..16 { rom[n * 0x2000] = 0xD0 + n as u8; }
+        header(&mut rom, 0, 0x20, 0x03);
+        let mut gb = GameBoy::new(rom.clone()).unwrap();
+        let c = &mut gb.bus.cartridge;
+        for (a, v) in [(0x0C00, 1), (0x1000, 1), (0x2800, 0x08), (0x3000, 7)] { c.write_rom(a, v); }
+        for (bank, a, v) in [(2, 0x5555, 0xAA), (1, 0x4AAA, 0x55), (2, 0x5555, 0xA0)] {
+            (c.write_rom(0x2000, bank), c.write_rom(a, v));
+        }
+        c.write_rom(0x2000, 3);
+        let mut g = reload(&gb, &rom);
+        let c = &mut g.bus.cartridge;
+        assert_eq!(c.read_rom(0x6000), 0xD7, "window B's bank");
+        c.write_rom(0x4000, 0x5A);
+        c.write_rom(0x4000, 0xF0);
+        assert_eq!(c.read_rom(0x4000), 0x5A, "the program sequence completes");
+
+        // TAMA5: ROM bank 6, register D selected after a RAM read of 0x9C.
+        let mut rom = vec![0u8; 0x80000];
+        for n in 0..32 { rom[n * 0x4000] = n as u8; }
+        header(&mut rom, 0, 0xFD, 0x00);
+        let mut gb = GameBoy::new(rom.clone()).unwrap();
+        let c = &mut gb.bus.cartridge;
+        for (r, v) in [(0, 6), (4, 0xC), (5, 0x9), (6, 0), (7, 3), (6, 2), (7, 3)] {
+            (c.write_ram(1, r), c.write_ram(0, v));
+        }
+        c.write_ram(1, 0xD);
+        let mut g = reload(&gb, &rom);
+        let c = &mut g.bus.cartridge;
+        assert_eq!((c.read_rom(0x4000), c.read_ram(0)), (6, 0xF9));
+    }
 }

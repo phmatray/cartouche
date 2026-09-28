@@ -1,5 +1,6 @@
 import { t } from '../i18n/core.ts';
 import { markGone } from './sync/gone.ts';
+import type { GameEntry } from '../types/game.ts';
 
 const DB_NAME = 'gb-emulator';
 const DB_VERSION = 6;
@@ -198,7 +199,7 @@ export function deleteSaveState(id: string): Promise<void> { return txOp(SAVESTA
  */
 export interface RomSummary { title: string; genre: string; sha1: string; head: Uint8Array; size?: number }
 /** `removed`: the SHA-1 of the ROM last removed from this id (see addedMeta). */
-export interface StoredGameMeta { id: string; isFavorite?: boolean; totalPlayTime?: number; lastPlayed?: number; importedAt?: number; sessions?: number; activeSave?: string; rom?: RomSummary; removed?: string }
+export interface StoredGameMeta { id: string; isFavorite?: boolean; totalPlayTime?: number; lastPlayed?: number; importedAt?: number; sessions?: number; activeSave?: string; rom?: RomSummary; removed?: string; patchedFrom?: GameEntry['patchedFrom'] }
 export type GameMeta = StoredGameMeta;
 export function getGameMeta(id: string): Promise<StoredGameMeta | undefined> { return txOp(GAME_META_STORE, 'readonly', (s) => s.get(id)); }
 export function setGameMeta(meta: StoredGameMeta): Promise<void> { return txOp(GAME_META_STORE, 'readwrite', (s) => s.put(meta)).then(() => {}); }

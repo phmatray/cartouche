@@ -1,7 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { renameGame, useGameLibrary } from '../../hooks/useGameLibrary';
-import { cancelImport, importAnyway, patchRow, queueImport, useImports, type Full, type ImportRow, type RowState } from '../../lib/import-queue';
+import { applyToBase, cancelImport, importAnyway, patchRow, queueImport, useImports, type Full, type ImportRow, type RowState } from '../../lib/import-queue';
 import { isGbsFile } from '../../lib/gbs';
 import { fileAccept, useInstall } from '../../lib/pwa';
 import { paths, touchOnly } from '../../lib/ui';
@@ -13,7 +13,7 @@ import { startInstall, toast } from '../shell/actions';
 import { FileButton } from '../shell/FileButton';
 import { rich, size, t as tNow, useT, type Key } from '../../i18n';
 
-const LABEL: Record<RowState, Key> = { work: 'add.st.work', ok: 'add.st.ok', dup: 'add.st.dup', unk: 'add.st.unk', bad: 'add.st.bad', stop: 'add.st.stop' };
+const LABEL: Record<RowState, Key> = { work: 'add.st.work', ok: 'add.st.ok', dup: 'add.st.dup', unk: 'add.st.unk', bad: 'add.st.bad', stop: 'add.st.stop', base: 'add.st.base' };
 
 export function AddRomsPage() {
   const { games, storageError } = useGameLibrary();
@@ -21,6 +21,7 @@ export function AddRomsPage() {
   const byId = useMemo(() => new Map(games.map((g) => [g.id, g])), [games]);
   const [over, setOver] = useState(false);
   const [renaming, setRenaming] = useState<ImportRow | null>(null);
+  const [picking, setPicking] = useState<ImportRow | null>(null);
   const t = useT();
 
   useEffect(() => { document.title = t('common.docTitle', { page: t('shell.addRoms') }); }, [t]);
@@ -51,7 +52,7 @@ export function AddRomsPage() {
         <div className="ic">{I.cart}</div>
         <div><h2>{t('add.drop')}</h2><p>{t('add.dropSub')}</p></div>
         <div className="acts">
-          <FileButton className="btn y" multiple accept={fileAccept('.gb,.gbc,.rom,.bin,.gbs,.zip')} onFiles={queueImport}>{I.plus}{t('add.choose')}</FileButton>
+          <FileButton className="btn y" multiple accept={fileAccept('.gb,.gbc,.rom,.bin,.gbs,.zip,.ips,.bps,.ups')} onFiles={queueImport}>{I.plus}{t('add.choose')}</FileButton>
         </div>
       </div>
       {/* How to get files onto a phone: only on one (a desktop has a file manager and drag and drop). */}
@@ -72,7 +73,7 @@ export function AddRomsPage() {
             <i style={{ transform: `scaleX(${done / rows.length})` }} />
           </div>
           <div>
-            {rows.map((r) => <Row key={r.key} r={r} g={r.id ? byId.get(r.id) : undefined} onRename={setRenaming} />)}
+            {rows.map((r) => <Row key={r.key} r={r} g={r.id ? byId.get(r.id) : undefined} onRename={setRenaming} onPick={setPicking} />)}
           </div>
           {left === 0 && (
             <div className="sumline">
@@ -85,24 +86,26 @@ export function AddRomsPage() {
         </section>
       )}
       <RenameDialog row={renaming} onClose={() => setRenaming(null)} onSubmit={rename} />
+      <BaseDialog row={picking} games={games} onClose={() => setPicking(null)} />
     </main>
   );
 }
 
 /** One file of the import. Memoized: a big import re-renders only the rows that changed. */
-const Row = memo(function Row({ r, g, onRename }: { r: ImportRow; g?: GameEntry; onRename: (r: ImportRow) => void }) {
+const Row = memo(function Row({ r, g, onRename, onPick }: { r: ImportRow; g?: GameEntry; onRename: (r: ImportRow) => void; onPick: (r: ImportRow) => void }) {
   const t = useT();
   return (
     <div className="rrow">
       {g ? <Cover game={g} /> : <div className="noart"><b>?</b></div>}
       <div className="t">{r.title || g?.title || r.name}
-        <small>{r.from && <span className="from">{r.from} › </span>}{r.name} · {size(r.size)}{r.sha1 ? ` · SHA-1 ${r.sha1.slice(0, 8)}…` : ''}{r.st === 'bad' ? ` · ${r.note ?? t('add.notRom')}` : ''}</small>
+        <small>{r.from && <span className="from">{r.from} › </span>}{r.name} · {size(r.size)}{r.sha1 ? ` · SHA-1 ${r.sha1.slice(0, 8)}…` : ''}{r.st === 'bad' ? ` · ${r.note ?? t('add.notRom')}` : r.note ? ` · ${r.note}` : ''}</small>
       </div>
       <span className={`st ${r.st}`}><i />{t(LABEL[r.st])}</span>
       <span className="act">
         {(r.st === 'ok' || r.st === 'unk') && r.id && <Link className="btn line" style={{ height: 38 }} to={isGbsFile(r.name) ? paths.music(r.id) : paths.game(r.id)}>{t('common.open')}</Link>}
         {r.st === 'dup' && !isGbsFile(r.name) && <button className="btn line" style={{ height: 38 }} onClick={() => importAnyway(r)}>{t('add.anyway')}</button>}
         {r.st === 'unk' && <button className="btn line" style={{ height: 38 }} onClick={() => onRename(r)}>{t('common.rename')}</button>}
+        {r.st === 'base' && <button className="btn line" style={{ height: 38 }} onClick={() => onPick(r)}>{t('add.patch.chooseBase')}</button>}
       </span>
     </div>
   );
@@ -154,6 +157,37 @@ function RenameDialog({ row, onClose, onSubmit }: { row: ImportRow | null; onClo
             <button className="btn k">{t('common.save')}</button>
           </div>
         </form>
+      )}
+    </dialog>
+  );
+}
+
+/** A patch waiting for its base: the games stored in this browser, by title. */
+function BaseDialog({ row, games, onClose }: { row: ImportRow | null; games: GameEntry[]; onClose: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  const t = useT();
+  const local = useMemo(() => games.filter((g) => g.isLocal).sort((a, b) => a.title.localeCompare(b.title)), [games]);
+  useEffect(() => {
+    const d = ref.current;
+    if (row && d && !d.open) d.showModal();
+    if (!row && d?.open) d.close();
+  }, [row]);
+  return (
+    <dialog ref={ref} className="mdlg" aria-labelledby="h-base" onClose={onClose} onClick={(e) => { if (e.target === ref.current) onClose(); }}>
+      {row && (
+        <div className="in">
+          <h2 id="h-base">{t('add.patch.chooseBase')}</h2>
+          <p>{local.length ? t('add.patch.pickBody') : t('add.patch.none')}</p>
+          <div style={{ maxHeight: '50vh', overflowY: 'auto', marginBottom: 18 }}>
+            {local.map((g) => (
+              <button key={g.id} type="button" className="btn line" style={{ width: '100%', justifyContent: 'flex-start', marginBottom: 6 }}
+                onClick={() => { onClose(); applyToBase(row, g.id); }}>{g.title}</button>
+            ))}
+          </div>
+          <div className="acts">
+            <button type="button" className="btn line" onClick={onClose}>{t('common.cancel')}</button>
+          </div>
+        </div>
       )}
     </dialog>
   );
