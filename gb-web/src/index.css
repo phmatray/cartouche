@@ -35,6 +35,8 @@ a{color:inherit}
 .cv>img.in{opacity:1}
 .cv.wait>.noart .bar{animation:ink 1.6s ease-in-out infinite}
 @keyframes ink{0%,100%{opacity:1}50%{opacity:.35}}
+/* Absolute: every scrolling box holding one is position:relative (.sheet, .vlist, .sres, .pk-list), or a long list of
+   them lays out below the page and makes the whole page scroll (the Manual's achievements, under the player). */
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 .skip{position:fixed;left:16px;top:-80px;z-index:400;padding:14px 18px;background:var(--y);color:#111;font:800 15px/1 var(--font);text-decoration:none}.skip:focus{top:12px}
 .wrap{max-width:1360px;margin:0 auto;padding:0 32px}
@@ -460,7 +462,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .rw.on{display:flex}
 .rw .meter{width:80px;height:6px;background:rgba(0,0,0,.2)}
 .rw .meter i{display:block;height:100%;background:#000}
-.sheet{background:var(--paper);color:var(--ink);overflow:auto;border-left:1px solid #000;min-width:0;scrollbar-color:var(--paper-3) var(--paper)}
+.sheet{position:relative;background:var(--paper);color:var(--ink);overflow:auto;border-left:1px solid #000;min-width:0;scrollbar-color:var(--paper-3) var(--paper)}
 .pl.closed .sheet{visibility:hidden}
 /* Each tab as wide as its label plus an equal share of the rest: five equal columns squeezed COMMANDES against PARTIES. */
 .tabs{display:grid;grid-template-columns:repeat(5,auto);position:sticky;top:0;background:var(--paper);z-index:2;border-bottom:3px solid var(--ink)}
@@ -666,7 +668,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .vhead,.vline{display:grid;grid-template-columns:44px minmax(0,1fr) 84px 110px 110px 84px 84px;gap:10px;align-items:center}
 .vhead{font:800 11px var(--font);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);padding:10px 0 6px;border-bottom:1px solid var(--paper-3)}
 .vhead span:nth-child(n+3),.vline .n{text-align:right}
-.vlist{max-height:min(540px,62vh);overflow:auto;overscroll-behavior:contain;scrollbar-color:var(--paper-3) var(--paper)}
+.vlist{position:relative;max-height:min(540px,62vh);overflow:auto;overscroll-behavior:contain;scrollbar-color:var(--paper-3) var(--paper)}
 .vrow{position:absolute;left:0;right:0;border-bottom:1px solid var(--paper-2)}
 .vrow.open{background:#fff}
 .vline{height:59px}
@@ -800,7 +802,7 @@ dialog::backdrop{background:rgba(0,0,0,.72)}
 .sbar input:focus{outline:none}
 .sbar .close{width:48px;height:48px;border:1.5px solid #4a4a47;background:transparent;display:flex;align-items:center;justify-content:center;flex:none}
 .shint{display:flex;flex-wrap:wrap;gap:8px 20px;font:600 13px var(--font);color:var(--mute);margin:14px 0 20px}
-.sres{list-style:none;margin:0;padding:0;max-height:calc(100vh - 220px);overflow:auto}
+.sres{position:relative;list-style:none;margin:0;padding:0;max-height:calc(100vh - 220px);overflow:auto}
 .sres a{display:grid;grid-template-columns:56px minmax(0,1fr) auto;gap:16px;align-items:center;padding:10px 12px;text-decoration:none;border-bottom:1px solid var(--rule)}
 .sres a[aria-selected=true],.sres a:hover{background:var(--band-2);box-shadow:inset 6px 0 0 var(--y)}
 .sres .noart small,.sres .noart .bar{display:none}
@@ -1095,7 +1097,7 @@ body{font-family:var(--font)}
 .pk-s{display:none}
 .pk-hint{margin:0;padding:0 24px 10px;color:var(--ink-3);font-size:12px}
 .pk-hint kbd{border-color:var(--paper-3);color:var(--ink-3)}
-.pk-list{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;border-top:1px solid var(--paper-3);scrollbar-color:var(--paper-3) var(--paper)}
+.pk-list{position:relative;flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;border-top:1px solid var(--paper-3);scrollbar-color:var(--paper-3) var(--paper)}
 .pk-h{position:absolute;left:0;right:0;height:36px;display:flex;align-items:flex-end;padding:0 24px 6px;font:800 11px var(--font);text-transform:uppercase;letter-spacing:.09em;color:var(--ink-3)}
 .pk-row{position:absolute;left:0;right:0;height:64px;display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:14px;align-items:center;padding:0 24px;border-bottom:1px solid var(--paper-2);cursor:pointer}
 .pk-row[aria-selected=true]{background:#fff;box-shadow:inset 6px 0 0 var(--m)}
