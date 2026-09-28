@@ -20,6 +20,7 @@ pub mod registers;
 pub mod sdsp;
 pub mod serial;
 pub mod sgb;
+pub mod sgb_fx;
 pub mod spc700;
 pub mod tama5;
 pub mod timer;
@@ -183,10 +184,42 @@ impl Emulator {
         }
     }
 
-    /// Drops every breakpoint and the debugger itself: `run_frame` is back to full speed.
+    /// `run_frame` stops after the instruction that reads (`kind` 1), writes (2) or accesses (3)
+    /// `addr` (see `debug_break_reason`); any other `kind` sets `get_error()`.
+    pub fn debug_add_watchpoint(&mut self, addr: u16, kind: u8) {
+        if !(1..=3).contains(&kind) {
+            self.last_error = Some(format!("invalid watchpoint kind {kind} (1 read, 2 write, 3 access)"));
+            return;
+        }
+        if let Some(gb) = &mut self.gb {
+            gb.watch_add(addr, kind);
+        }
+    }
+
+    pub fn debug_remove_watchpoint(&mut self, addr: u16, kind: u8) {
+        if let Some(gb) = &mut self.gb {
+            gb.watch_remove(addr, kind);
+        }
+    }
+
+    /// Runs until LY reaches `ly` (reason "scanline 72"), bounded by the next frame ("frame").
+    pub fn debug_run_to_scanline(&mut self, ly: u8) -> bool {
+        let Some(gb) = &mut self.gb else { return false };
+        match gb.run_to_scanline(ly) {
+            Ok(()) => true,
+            Err(e) => {
+                self.last_error = Some(e.to_string());
+                false
+            }
+        }
+    }
+
+    /// Drops every breakpoint and watchpoint and the debugger itself: `run_frame` is back to
+    /// full speed.
     pub fn debug_clear(&mut self) {
         if let Some(gb) = &mut self.gb {
             gb.debugger = None;
+            gb.bus.watch = None;
         }
     }
 
@@ -275,6 +308,11 @@ impl Emulator {
     // Debug accessors
     pub fn get_pc(&self) -> u16 {
         self.gb.as_ref().map_or(0, |gb| gb.cpu.regs.pc)
+    }
+
+    /// The ROM bank mapped at $4000-$7FFF now (1 with no ROM), so banked symbols resolve.
+    pub fn rom_bank(&self) -> u16 {
+        self.gb.as_ref().map_or(1, |gb| gb.bus.cartridge.current_rom_bank())
     }
 
     pub fn get_sp(&self) -> u16 {

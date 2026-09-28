@@ -3,6 +3,11 @@ import type { useEmulator } from '../../hooks/useEmulator';
 import { useT } from '../../i18n';
 import { Disassembly } from './debug/Disassembly';
 import { PpuViews } from './debug/PpuViews';
+import { FileButton } from '../shell/FileButton';
+import { fileAccept } from '../../lib/pwa';
+import { parseSym, resolve, type SymTable } from '../../lib/sym';
+
+const NO_SYMS = parseSym('');
 
 function hex8(v: number): string {
   return v.toString(16).toUpperCase().padStart(2, '0');
@@ -15,8 +20,15 @@ function hex16(v: number): string {
 /** Development aid in the manual's Game page: CPU registers, memory, serial output, and the PPU's tiles, maps, OAM and palettes. */
 export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmulator>; isRunning: boolean }) {
   const { registers, readMemory, updateRegisters, getSerialOutput, clearSerialOutput,
-    setIsRunning, stepInstruction, stepFrame, stepOver, breakReason, breakpoints, addBreakpoint, removeBreakpoint } = emu;
+    setIsRunning, stepInstruction, stepFrame, stepOver, breakReason, breakpoints, addBreakpoint, removeBreakpoint, romBank,
+    watchpoints, addWatchpoint, removeWatchpoint, runToScanline } = emu;
   const [bpInput, setBpInput] = useState('');
+  const [bpNote, setBpNote] = useState('');
+  // Session-only: the symbols of the game being debugged, never stored.
+  const [syms, setSyms] = useState<SymTable | null>(null);
+  const [wpInput, setWpInput] = useState('');
+  const [wpKind, setWpKind] = useState(2);
+  const [lineInput, setLineInput] = useState('');
   const [tab, setTab] = useState<'cpu' | 'disasm' | 'serial' | 'tiles' | 'maps' | 'oam' | 'palettes'>('cpu');
   const [memAddr, setMemAddr] = useState(0x0000);
   const [memView, setMemView] = useState<number[]>([]);
@@ -37,10 +49,30 @@ export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmula
     return () => { cancelAnimationFrame(first); window.clearInterval(t); };
   }, [isRunning, refresh, tab]);
 
+  // A label or a hex address. The core breakpoint is PC-only, so a banked label also stops in other banks: say so.
   const addBp = () => {
-    const v = parseInt(bpInput, 16);
-    if (/^[0-9a-f]{1,4}$/i.test(bpInput) && v <= 0xffff) { addBreakpoint(v); setBpInput(''); }
+    if (!bpInput) return;
+    const v = resolve(syms ?? NO_SYMS, bpInput);
+    if (v === undefined) { setBpNote(t('player.debug.unknownLabel', { name: bpInput })); return; }
+    const sym = syms?.byName.get(bpInput);
+    addBreakpoint(v);
+    setBpInput('');
+    setBpNote(sym && v >= 0x4000 && v < 0x8000 && sym.bank !== romBank()
+      ? t('player.debug.otherBank', { name: sym.name, bank: sym.bank, addr: hex16(v) }) : '');
   };
+  const loadSyms = (file: File) => file.text().then((text) => setSyms(parseSym(text)));
+
+  const addWp = () => {
+    const v = parseInt(wpInput, 16);
+    if (/^[0-9a-f]{1,4}$/i.test(wpInput) && v <= 0xffff) { addWatchpoint(v, wpKind); setWpInput(''); }
+  };
+
+  const runToLine = () => {
+    const ly = Number(lineInput);
+    if (/^\d{1,3}$/.test(lineInput) && ly <= 153) { runToScanline(ly); refresh(); }
+  };
+
+  const kindName = (k: number) => t(k === 1 ? 'player.debug.watchRead' : k === 2 ? 'player.debug.watchWrite' : 'player.debug.watchAccess');
 
   const controls = (
     <>
@@ -79,11 +111,12 @@ export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmula
           ) : <p>{t('player.debug.noRom')}</p>}
           {controls}
           <form style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }} onSubmit={(e) => { e.preventDefault(); addBp(); }}>
-            <label htmlFor="debug-bp">{t('player.debug.breakpoints')} 0x</label>
-            <input id="debug-bp" className="field" style={{ width: 90, height: 34 }} value={bpInput} maxLength={4}
+            <label htmlFor="debug-bp">{t('player.debug.breakpoints')}</label>
+            <input id="debug-bp" className="field" style={{ width: 140, height: 34 }} value={bpInput} spellCheck={false}
               onChange={(e) => setBpInput(e.target.value.trim())} />
             <button className="sbtn" type="submit">{t('player.debug.addBreakpoint')}</button>
           </form>
+          {bpNote && <p role="status" style={{ margin: '0 0 8px' }}>{bpNote}</p>}
           {breakpoints.length > 0 && (
             <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 12px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {breakpoints.map((a) => (
@@ -93,6 +126,30 @@ export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmula
               ))}
             </ul>
           )}
+          <form style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 8 }} onSubmit={(e) => { e.preventDefault(); addWp(); }}>
+            <label htmlFor="debug-wp">{t('player.debug.watchpoints')} 0x</label>
+            <input id="debug-wp" className="field" style={{ width: 90, height: 34 }} value={wpInput} maxLength={4}
+              onChange={(e) => setWpInput(e.target.value.trim())} />
+            <div className="seg" role="group" aria-label={t('player.debug.watchKind')}>
+              {[1, 2, 3].map((k) => <button key={k} type="button" aria-pressed={wpKind === k} onClick={() => setWpKind(k)}>{kindName(k)}</button>)}
+            </div>
+            <button className="sbtn" type="submit">{t('player.debug.addBreakpoint')}</button>
+          </form>
+          {watchpoints.length > 0 && (
+            <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 12px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {watchpoints.map((w) => (
+                <li key={`${w.addr}-${w.kind}`}>
+                  <button className="sbtn" aria-label={t('player.debug.removeWatchpoint', { addr: hex16(w.addr), kind: kindName(w.kind) })}
+                    onClick={() => removeWatchpoint(w.addr, w.kind)}>{hex16(w.addr)} {kindName(w.kind)} ×</button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <form style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }} onSubmit={(e) => { e.preventDefault(); runToLine(); }}>
+            <input aria-label={t('player.debug.runToLine')} className="field" style={{ width: 70, height: 34 }} value={lineInput} maxLength={3} inputMode="numeric"
+              onChange={(e) => setLineInput(e.target.value.trim())} />
+            <button className="sbtn" type="submit" disabled={isRunning}>{t('player.debug.runToLine')}</button>
+          </form>
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
             {t('player.debug.address')} 0x
             <input className="field" style={{ width: 90, height: 34 }} defaultValue={hex16(memAddr)} maxLength={4}
@@ -106,7 +163,11 @@ export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmula
       {tab === 'disasm' && (
         <>
           {controls}
-          {registers ? <Disassembly emu={emu} pc={registers.pc} /> : <p>{t('player.debug.noRom')}</p>}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+            <FileButton className="sbtn" accept={fileAccept('.sym')} onFiles={([f]) => loadSyms(f)}>{t('player.debug.loadSymbols')}</FileButton>
+            {syms && <span role="status">{t('player.debug.symbolsLoaded', { count: syms.byName.size, skipped: syms.skipped })}</span>}
+          </div>
+          {registers ? <Disassembly emu={emu} pc={registers.pc} syms={syms} /> : <p>{t('player.debug.noRom')}</p>}
         </>
       )}
       {tab === 'serial' && (

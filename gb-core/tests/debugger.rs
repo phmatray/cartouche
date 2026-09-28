@@ -142,3 +142,152 @@ fn emulator_disassembles_and_steps_over_without_side_effects() {
     assert!(emu.debug_step_over());
     assert_eq!(emu.get_pc(), 0x0103);
 }
+
+/// A 64 KB (4-bank) cartridge of `mbc` type whose program selects ROM bank 3 through $2000.
+fn banked(mbc: u8) -> GameBoy {
+    // LD A, $03; LD [$2000], A; JR -2 (spin).
+    let mut data = rom(&[0x3E, 0x03, 0xEA, 0x00, 0x20, 0x18, 0xFE]);
+    data.resize(0x10000, 0);
+    data[0x0147] = mbc;
+    data[0x0148] = 0x01;
+    let mut checksum: u8 = 0;
+    for addr in 0x0134..=0x014C {
+        checksum = checksum.wrapping_sub(data[addr]).wrapping_sub(1);
+    }
+    data[0x014D] = checksum;
+    let mut gb = GameBoy::new(data).unwrap();
+    gb.skip_boot_rom();
+    gb
+}
+
+#[test]
+fn current_rom_bank_is_the_bank_last_written_to_2000() {
+    for mbc in [0x01, 0x11, 0x19] {
+        let mut gb = banked(mbc);
+        assert_eq!(gb.bus.cartridge.current_rom_bank(), 1, "MBC ${mbc:02X} starts on bank 1");
+        gb.run_frame().unwrap();
+        assert_eq!(gb.bus.cartridge.current_rom_bank(), 3, "MBC ${mbc:02X}");
+    }
+    assert_eq!(gameboy().bus.cartridge.current_rom_bank(), 1, "no MBC: bank 1 is fixed");
+}
+
+fn booted(program: &[u8]) -> GameBoy {
+    let mut gb = GameBoy::new(rom(program)).unwrap();
+    gb.skip_boot_rom();
+    gb
+}
+
+const READ: u8 = 1;
+const WRITE: u8 = 2;
+const ACCESS: u8 = 3;
+
+#[test]
+fn write_watchpoint_stops_after_the_writing_instruction() {
+    // $0100: LD A, $3F; $0102: LD [$C000], A; $0105: JR -2.
+    let mut gb = booted(&[0x3E, 0x3F, 0xEA, 0x00, 0xC0, 0x18, 0xFE]);
+    gb.watch_add(0xC000, WRITE);
+    gb.run_frame().unwrap();
+    assert_eq!(gb.cpu.regs.pc, 0x0105);
+    assert_eq!(gb.take_break().unwrap().describe(), "write $C000 = $3F at $0102");
+}
+
+/// $0100: LD HL, $C000; $0103: LD [HL], $3F; $0105: LD A, [HL]; $0106: JR -2.
+const WRITE_THEN_READ: [u8; 8] = [0x21, 0x00, 0xC0, 0x36, 0x3F, 0x7E, 0x18, 0xFE];
+
+#[test]
+fn read_watchpoint_fires_on_a_read_and_not_on_a_write() {
+    let mut gb = booted(&WRITE_THEN_READ);
+    gb.watch_add(0xC000, READ);
+    gb.run_frame().unwrap();
+    assert_eq!(gb.cpu.regs.pc, 0x0106);
+    assert_eq!(gb.take_break().unwrap().describe(), "read $C000 = $3F at $0105");
+}
+
+#[test]
+fn access_watchpoint_fires_on_both() {
+    let mut gb = booted(&WRITE_THEN_READ);
+    gb.watch_add(0xC000, ACCESS);
+    gb.run_frame().unwrap();
+    assert_eq!(gb.take_break().unwrap().describe(), "write $C000 = $3F at $0103");
+    gb.run_frame().unwrap();
+    assert_eq!(gb.take_break().unwrap().describe(), "read $C000 = $3F at $0105");
+}
+
+#[test]
+fn write_watchpoint_ignores_reads_and_removal_stops_it() {
+    // $0100: LD HL, $C000; $0103: LD A, [HL]; $0104: JR -2.
+    let mut gb = booted(&[0x21, 0x00, 0xC0, 0x7E, 0x18, 0xFE]);
+    gb.watch_add(0xC000, WRITE);
+    gb.run_frame().unwrap();
+    assert!(gb.take_break().is_none());
+
+    let mut gb = booted(&WRITE_THEN_READ);
+    gb.watch_add(0xC000, ACCESS);
+    gb.watch_remove(0xC000, ACCESS);
+    gb.run_frame().unwrap();
+    assert!(gb.take_break().is_none());
+}
+
+#[test]
+fn a_watched_access_made_by_a_step_is_not_reported_later() {
+    let mut gb = booted(&[0x3E, 0x3F, 0xEA, 0x00, 0xC0, 0x18, 0xFE]);
+    gb.watch_add(0xC000, WRITE);
+    gb.step_instruction().unwrap();
+    gb.step_instruction().unwrap(); // the write, stepped over by hand
+    gb.run_frame().unwrap(); // JR -2 forever: nothing else touches $C000
+    assert_eq!(gb.take_break(), None);
+}
+
+#[test]
+fn oam_dma_over_a_watched_address_does_not_fire() {
+    // $0100: LD SP, $DFF0; LD A, $C1; LDH [$46], A; JR -2. During the DMA the CPU fetches $FF
+    // (RST $38) from ROM: the stack is moved off OAM so only the DMA writes there.
+    let mut gb = booted(&[0x31, 0xF0, 0xDF, 0x3E, 0xC1, 0xE0, 0x46, 0x18, 0xFE]);
+    gb.watch_add(0xFE00, WRITE);
+    gb.run_frame().unwrap();
+    assert_eq!(gb.take_break(), None);
+}
+
+#[test]
+fn run_to_scanline_stops_when_ly_reaches_it() {
+    // $0100: LD A, $91; $0102: LDH [$40], A (LCD on); $0104: JR -2.
+    let mut gb = booted(&[0x3E, 0x91, 0xE0, 0x40, 0x18, 0xFE]);
+    gb.run_to_scanline(72).unwrap();
+    assert_eq!(gb.bus.read_byte(0xFF44), 72);
+    assert_eq!(gb.take_break().unwrap().describe(), "scanline 72");
+}
+
+#[test]
+fn run_to_scanline_with_the_lcd_off_stops_at_the_frame() {
+    // $0100: XOR A; $0101: LDH [$40], A (LCD off); $0103: JR -2.
+    let mut gb = booted(&[0xAF, 0xE0, 0x40, 0x18, 0xFE]);
+    gb.run_to_scanline(72).unwrap();
+    assert_eq!(gb.take_break(), Some(gb_core::debug::Break::Frame));
+}
+
+#[test]
+fn emulator_watchpoints_and_run_to_scanline() {
+    let mut emu = gb_core::Emulator::new();
+    assert!(emu.load_rom(&rom(&WRITE_THEN_READ)));
+    emu.debug_add_watchpoint(0xC000, 9);
+    assert!(emu.get_error().is_some(), "an unknown kind is refused");
+    emu.debug_add_watchpoint(0xC000, READ);
+    assert!(emu.run_frame());
+    assert_eq!(emu.debug_break_reason().as_deref(), Some("read $C000 = $3F at $0105"));
+    emu.debug_remove_watchpoint(0xC000, READ);
+    assert!(emu.debug_run_to_scanline(100));
+    assert_eq!(emu.debug_break_reason().as_deref(), Some("scanline 100"));
+}
+
+#[test]
+fn breakpoint_on_an_interrupt_vector_fires_on_dispatch() {
+    // $0100: LD A, 1; $0102: LDH [$FF], A; $0104: EI; $0105: JR -2. VBlank jumps to $0040.
+    let mut gb = booted(&[0x3E, 0x01, 0xE0, 0xFF, 0xFB, 0x18, 0xFE]);
+    gb.debugger_mut().breakpoints.insert(0x0040);
+    gb.run_frame().unwrap();
+    assert_eq!(gb.cpu.regs.pc, 0x0040);
+    assert_eq!(gb.take_break().unwrap().describe(), "breakpoint $0040");
+    gb.debugger_mut().breakpoints.insert(0x0041);
+    gb.run_frame().unwrap(); // continuing runs the handler's first instruction (a NOP) once
+    assert_eq!(gb.take_break().unwrap().describe(), "breakpoint $0041");
+}

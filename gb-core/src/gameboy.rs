@@ -238,13 +238,81 @@ impl GameBoy {
                 }
             }
             self.bus.cycle_count = 0;
+            let before = self.cpu.regs.pc;
             self.cpu.handle_interrupts(&mut self.bus);
+            let pc = self.cpu.regs.pc;
+            if let Some(d) = &mut self.debugger {
+                // An interrupt dispatch lands on its vector: check the breakpoint there too.
+                if pc != before && d.should_stop(pc) {
+                    self.frame_cycles += self.bus.cycle_count;
+                    return Ok(());
+                }
+            }
+            let ly = self.bus.ppu.ly;
             self.cpu.step(&mut self.bus)?;
             self.frame_cycles += self.bus.cycle_count;
             self.double_speed = self.bus.double_speed;
+            if self.debugger.is_some() && self.stopped_after(pc, ly) {
+                return Ok(());
+            }
         }
         self.frame_cycles = 0;
         Ok(())
+    }
+
+    /// After the instruction that started at `pc` with LY at `ly`: a watchpoint hit, or LY
+    /// arriving at the run-to-scanline line, becomes the break.
+    fn stopped_after(&mut self, pc: u16, ly: u8) -> bool {
+        let watched = self.bus.watch.as_mut().and_then(|w| w.hit.take());
+        let now = self.bus.ppu.ly;
+        let d = self.debugger_mut();
+        if let Some((addr, value, write)) = watched {
+            d.hit = Some(Break::Watch { addr, value, write, pc });
+            return true;
+        }
+        if d.stop_ly == Some(now) && ly != now {
+            d.stop_ly = None;
+            d.hit = Some(Break::Scanline(now));
+            return true;
+        }
+        false
+    }
+
+    /// Runs until LY reaches `ly` (or a breakpoint or watchpoint stops it first). Bounded by the
+    /// rest of this frame and the next one, reported as `Break::Frame` (LCD off).
+    pub fn run_to_scanline(&mut self, ly: u8) -> Result<(), EmulatorError> {
+        let pc = self.cpu.regs.pc;
+        let d = self.debugger_mut();
+        d.hit = None;
+        d.resume_pc = Some(pc);
+        d.stop_ly = Some(ly);
+        for _ in 0..2 {
+            self.run_frame()?;
+            if self.debugger_mut().hit.is_some() || self.bus.serial.stalled() {
+                break;
+            }
+        }
+        let d = self.debugger_mut();
+        if d.stop_ly.take().is_some() && d.hit.is_none() {
+            d.hit = Some(Break::Frame);
+        }
+        Ok(())
+    }
+
+    /// Stops `run_frame` after any CPU access of `kind` (`debug::WATCH_READ` / `WATCH_WRITE` bits)
+    /// to `addr`.
+    pub fn watch_add(&mut self, addr: u16, kind: u8) {
+        self.debugger_mut();
+        self.bus.watch.get_or_insert_with(Box::default).add(addr, kind);
+    }
+
+    pub fn watch_remove(&mut self, addr: u16, kind: u8) {
+        if let Some(w) = &mut self.bus.watch {
+            w.remove(addr, kind);
+            if w.entries.is_empty() {
+                self.bus.watch = None;
+            }
+        }
     }
 
     /// GameShark writes, once per frame like the real device at VBlank.
@@ -333,6 +401,9 @@ impl GameBoy {
         self.cpu.handle_interrupts(&mut self.bus);
         self.cpu.step(&mut self.bus)?;
         self.double_speed = self.bus.double_speed;
+        if let Some(w) = &mut self.bus.watch {
+            w.hit = None; // a step stops anyway: no break left over for the next run_frame
+        }
         Ok(self.bus.cycle_count)
     }
 
@@ -431,6 +502,7 @@ impl GameBoy {
         if let Some(s) = &self.bus.sgb {
             s.export_state(&mut data);
             s.audio.export_state(&mut data); // v6
+            s.audio.fx.export_state(&mut data); // v7
         }
         // Optional tail (absent from older states): stop mode, KEY0 (DMG compatibility set by the boot ROM).
         data.extend_from_slice(&[self.cpu.stopped as u8, self.bus.key0]);
@@ -467,6 +539,9 @@ impl GameBoy {
             if let Some(d) = &mut self.debugger {
                 d.hit = None;
                 d.resume_pc = None;
+            }
+            if let Some(w) = &mut self.bus.watch {
+                w.hit = None;
             }
             return true;
         }
@@ -629,6 +704,8 @@ impl GameBoy {
             if !s.import_state(data, &mut p) { return false; }
             // Older states have no SNES sound: it stays idle (as `import_state` left it).
             if saved == Console::Sgb && version >= 6 && !s.audio.import_state(data, &mut p) { return false; }
+            // Nor built-in effects before v7: none plays.
+            if saved == Console::Sgb && version >= 7 && !s.audio.fx.import_state(data, &mut p) { return false; }
             if saved == Console::Sgb { pos = p; }
         }
         if let Some(&[stopped, ..]) = data.get(pos..) {
@@ -696,7 +773,8 @@ const TIMING_TAIL_LEN: usize = 4;
 // v4 adds the console and palette bytes after the version (v3 states still load: see `state_console`).
 // v5 adds the start-up animation after them, so a state saved while it plays goes on with its own boot ROM.
 // v6 adds the Super Game Boy's SNES sound side after the SGB block (v5 states load with it idle).
-const SAVE_VERSION: u32 = 6;
+// v7 adds the built-in SGB sound effects playing, after the SNES sound side (v6 states load with none).
+const SAVE_VERSION: u32 = 7;
 
 #[cfg(test)]
 mod tests {
@@ -793,9 +871,9 @@ mod tests {
 
         // The pre-change layout ends right after KEY0 (then the mapper block, the timing tail and RP).
         let end = state.len() - TIMING_TAIL_LEN - 1;
-        let extra = u16::from_le_bytes([state[end - 134], state[end - 133]]);
-        assert_eq!(extra, 132, "mode, address, result, opcode, 128 bytes of nibbles");
-        let old = &state[..end - 134];
+        let extra = u16::from_le_bytes([state[end - 135], state[end - 134]]);
+        assert_eq!(extra, 133, "mode, address, result, opcode, 128 bytes of nibbles, IR LED");
+        let old = &state[..end - 135];
         let mut g = GameBoy::new(rom).unwrap();
         assert!(g.load_state(old));
     }
