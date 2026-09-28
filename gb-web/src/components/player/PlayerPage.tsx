@@ -632,7 +632,7 @@ function Player({ game }: { game: GameEntry }) {
       </header>
 
       <div className="pl-body">
-        <div className="stage" style={screenStyle}>
+        <main className="stage" style={screenStyle}>
           <div className={`rw${isRewinding ? ' on' : ''}`}>{I.rew}{t('player.rewinding')}<span className="meter"><i style={{ width: `${bufferFill * 100}%` }} /></span></div>
           <div className="screen">
             <div className="frame">
@@ -690,7 +690,7 @@ function Player({ game }: { game: GameEntry }) {
           <div className="cap">
             <span>{display.custom ? t('settings.screen.custom') : t(`settings.screen.presets.${presetOf(display.cfg.preset)!.name}.label`)}</span><i /><span>{t('player.speed', { x: speed === 0.5 ? '½' : String(speed) })}</span><i />{online.on ? <LinkCap link={online} /> : <span>{t('player.rewindReady', { s: String(Math.round(bufferFill * rewindSeconds)) })}</span>}
           </div>
-        </div>
+        </main>
 
         <Manual
           game={game} header={header} inColor={inColor} tab={tab} onTab={setTab} romLoaded={romLoaded && !storageError} isRunning={isRunning}
