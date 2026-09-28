@@ -83,7 +83,9 @@ impl Rtc {
         let mut secs = (total_secs % 60) as u64;
         let mut mins = ((total_secs / 60) % 60) as u64;
         let mut hours = ((total_secs / 3600) % 24) as u64;
-        let mut days = total_secs / 86400;
+        // The 9-bit day counter, and its carry (DH bit 7): sticky, only a DH write sets or clears it.
+        let mut days = (total_secs / 86400) % 512;
+        let mut carry = total_secs / 86400 >= 512;
 
         match reg {
             0x08 => secs = (value % 60) as u64,
@@ -92,6 +94,7 @@ impl Rtc {
             0x0B => days = (days & 0x100) | value as u64,
             0x0C => {
                 days = (days & 0xFF) | (((value & 0x01) as u64) << 8);
+                carry = value & 0x80 != 0;
                 let new_halt = value & 0x40 != 0;
                 if new_halt && !self.halted {
                     self.halted_elapsed = self.elapsed_seconds();
@@ -103,7 +106,7 @@ impl Rtc {
             _ => return,
         }
 
-        let new_total = secs + mins * 60 + hours * 3600 + days * 86400;
+        let new_total = secs + mins * 60 + hours * 3600 + (days + if carry { 512 } else { 0 }) * 86400;
         if self.halted {
             self.halted_elapsed = new_total as f64;
         } else {
@@ -835,6 +838,21 @@ mod tests {
         let mut d = cart(0x10, 0x03);
         d.import_sram(&sav);
         assert_eq!(read_clock(&mut d), [7, 8, 9, 10, 0x41]);
+    }
+
+    #[test]
+    fn rtc_day_carry_is_set_and_cleared_by_dh_writes_only() {
+        let mut c = cart(0x10, 0x03);
+        c.write_rom(0x0000, 0x0A);
+        let mut set = |reg: u8, v: u8| { c.write_rom(0x4000, reg); c.write_ram(0, v); };
+        set(0x0C, 0x40); // halt
+        set(0x0C, 0xC1); // carry, day 256
+        set(0x0B, 0x05); // day low: the carry stays
+        set(0x08, 0x10);
+        assert_eq!(read_clock(&mut c), [0x10, 0, 0, 0x05, 0xC1]);
+        c.write_rom(0x4000, 0x0C);
+        c.write_ram(0, 0x41); // carry cleared
+        assert_eq!(read_clock(&mut c), [0x10, 0, 0, 0x05, 0x41]);
     }
 
     #[test]
