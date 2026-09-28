@@ -125,7 +125,7 @@ gbmicrotest/audio_testbench.gb  # no-verdict
 gbmicrotest/cpu_bus_1.gb  # no-verdict
 gbmicrotest/dma_basic.gb  # no-verdict
 gbmicrotest/flood_vram.gb  # no-verdict
-gbmicrotest/halt_op_dupe_delay.gb  # interrupt
+gbmicrotest/halt_op_dupe_delay.gb  # other: ROM defect, expects DIV $55 ~60 M-cycles after a DIV reset; the HALT bug gives $01, as SameBoy (#215)
 gbmicrotest/hblank_int_if_a.gb  # stat
 gbmicrotest/hblank_int_l0.gb  # stat
 gbmicrotest/hblank_int_scx0_if_b.gb  # ppu-mode3

@@ -54,7 +54,8 @@ pub struct Ppu {
     /// First line after the LCD is switched on: no OAM scan (STAT reads mode 0)
     /// and the line is 4 dots short.
     pub(crate) lcd_on_line0: bool,
-    /// Dots mode 3 lasts on the current line (`mode3_length`, set as it starts); HBlank gets the rest.
+    /// Dots mode 3 lasts on the current line (`mode3_length`, set as it starts; on a DMG, the pixel
+    /// FIFO's length after a mid-line LCDC/WY/WX write); HBlank gets the rest.
     pub mode3_len: u32,
     /// Dots per CPU M-cycle: 4, or 2 in CGB double speed (set by the bus when the speed changes).
     pub m_cycle_dots: u32,
@@ -197,6 +198,11 @@ impl Ppu {
     }
 
     pub fn write_register(&mut self, addr: u16, value: u8) {
+        if self.line.active && self.mode == PpuMode::Drawing && matches!(addr, 0xFF40 | 0xFF4A | 0xFF4B)
+            && self.read_register(addr) != value
+        {
+            self.line.relength = true; // DMG: see `step`
+        }
         match addr {
             0xFF40 => {
                 let was_enabled = self.lcdc & 0x80 != 0;
@@ -286,6 +292,10 @@ impl Ppu {
                 if !self.cgb_mode {
                     if !self.line.active { self.start_line(); } // a state loaded in mode 3: redraw the line
                     self.run_line(self.mode_clock + MODE0_EARLY);
+                    if self.line.relength {
+                        self.line.relength = false;
+                        self.mode3_len = self.predict_len();
+                    }
                 }
                 if self.mode_clock >= self.mode3_len - MODE0_EARLY {
                     self.mode_clock -= self.mode3_len - MODE0_EARLY;
@@ -1036,6 +1046,39 @@ mod tests {
                 assert_eq!(p.line.len, p.mode3_length(10), "OBJs at {xs:?}, SCX {scx}");
             }
         }
+    }
+
+    /// OBJs turned off (or on) partway through mode 3 move HBlank: mode 3 ends where the FIFO does.
+    #[test]
+    fn mid_line_obj_disable_shortens_mode3() {
+        let xs = [8, 24, 40, 56, 72, 88, 104, 120, 136, 152];
+        let full = line_timing(|p| objs_at(p, &xs)).0;
+        assert_eq!(full, 80 + 172 + 10 * 11);
+        // mode 3's dot at which HBlank starts, and the FIFO's own length, with LCDC written at `at`.
+        let hblank = |lcdc: u8, at: u32, start_objs: bool| {
+            let mut p = Ppu::new();
+            (p.lcdc, p.ly) = (if start_objs { 0x83 } else { 0x81 }, 10);
+            objs_at(&mut p, &xs);
+            let mut dot = 0;
+            while p.mode != PpuMode::Drawing { p.step(1); }
+            loop {
+                if dot == at { p.write_register(0xFF40, lcdc); }
+                dot += 1;
+                if p.step(1).2 { break; }
+            }
+            // Mode 3 as the STAT register sees it, from its first dot.
+            let stat_len = dot + MODE0_EARLY;
+            while p.line.active { p.step(1); }
+            (stat_len, p.line.len)
+        };
+        let (off, len) = hblank(0x81, 40, true);
+        assert!(off < 172 + 10 * 11, "OBJs off at dot 40: mode 3 is {off} dots");
+        assert_eq!(off, len, "STAT's mode 3 is the FIFO's");
+        let (on, len) = hblank(0x83, 40, false);
+        assert!(on > 172, "OBJs on at dot 40: mode 3 is {on} dots");
+        assert_eq!(on, len);
+        let (same, _) = hblank(0x83, 40, true);
+        assert_eq!(same, 172 + 10 * 11, "a write that changes nothing");
     }
 
     #[test]
