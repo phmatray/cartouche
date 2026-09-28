@@ -169,3 +169,32 @@ fn a_huc1_led_and_a_cgb_rp_see_each_other() {
     assert_eq!(linked(huc_sender(HUC1, &PATTERN), receiver(0xC0, 8)), [0, 2, 0, 0, 2, 2, 0, 2], "RP sees the cartridge");
     assert_eq!(linked(sender(&PATTERN), huc_receiver(HUC1, 8)), huc_seen(), "the cartridge sees RP");
 }
+
+#[test]
+fn a_save_state_keeps_the_huc_led_and_an_older_state_still_loads() {
+    for kind in [HUC1, HUC3] {
+        // LED on, then back to RAM mode: leaving IR mode keeps the LED lit.
+        let mut gb = cart(&[], false, kind);
+        gb.bus.write_byte(0x0000, 0x0E);
+        gb.bus.write_byte(0xA000, 0x01);
+        gb.bus.write_byte(0x0000, 0x00);
+        assert!(gb.bus.ir_led(), "{kind:02X}: LED on in RAM mode");
+        let state = gb.save_state();
+
+        let mut fresh = cart(&[], false, kind);
+        assert!(fresh.load_state(&state));
+        assert!(fresh.bus.ir_led(), "{kind:02X}: LED on after a load");
+
+        // A state from before the LED byte: its mapper block one byte shorter.
+        let extra = gb.bus.cartridge.export_extra().len();
+        let tail = 4 + 1; // after the mapper block: the timing tail, then RP
+        let at = state.len() - tail - extra - 2;
+        let mut old = state[..at].to_vec();
+        old.extend(((extra - 1) as u16).to_le_bytes());
+        old.extend(&state[at + 2..state.len() - tail - 1]);
+        old.extend(&state[state.len() - tail..]);
+        let mut older = cart(&[], false, kind);
+        assert!(older.load_state(&old));
+        assert!(!older.bus.ir_led(), "{kind:02X}: LED off from an older state");
+    }
+}

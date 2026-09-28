@@ -1,6 +1,6 @@
 use crate::error::CartridgeError;
 
-/// Wall-clock milliseconds since the epoch: `Date.now()` in the browser, the system clock natively
+/// Wall-clock milliseconds since the epoch:`Date.now()` in the browser, the system clock natively
 /// (js_sys::Date panics outside wasm, which crashed MBC3+TIMER carts in native tests/tools).
 pub(crate) fn now_ms() -> f64 {
     #[cfg(target_arch = "wasm32")]
@@ -960,8 +960,8 @@ impl Cartridge {
     /// MBC6: RAM enable, RAM banks A/B, ROM banks A/B, flash selects A/B, flash enable and write
     /// enable, then the flash's command state (the flash itself goes with the RAM). TAMA5: its
     /// registers (`Tama5::export_state`; the clock goes with the RAM).
-    /// Empty for every other mapper but HuC3: mode, address, last result, last opcode, then
-    /// its 256 memory nibbles packed two per byte (low nibble first).
+    /// HuC1: its infrared LED. HuC3: mode, address, last result, last opcode, its 256 memory
+    /// nibbles packed two per byte (low nibble first), then its infrared LED. Empty for the rest.
     pub fn export_extra(&self) -> Vec<u8> {
         if let Some(m) = &self.mbc7 { return m.export(); }
         if let MbcType::Mmm01 { regs } = &self.mbc { return regs.to_vec(); }
@@ -972,14 +972,17 @@ impl Cartridge {
             out.extend(f.export_state());
             return out;
         }
+        if let MbcType::Huc1 { .. } = self.mbc { return vec![self.ir_led as u8]; }
         let (MbcType::Huc3 { mode, .. }, Some(h)) = (&self.mbc, &self.huc3) else { return Vec::new() };
         let mut out = vec![*mode, h.address, h.result, h.last_opcode];
         out.extend(h.memory.chunks(2).map(|p| p[0] & 0xF | p[1] << 4));
+        out.push(self.ir_led as u8);
         out
     }
 
     /// Restores `export_extra`. Anything shorter (a state saved before the block existed) puts the
     /// registers back to power-on; the HuC3 memory is left as the battery save restored it.
+    /// A HuC block without its trailing LED byte leaves the LED off.
     pub fn import_extra(&mut self, data: &[u8]) {
         if let Some(m) = &mut self.mbc7 { return m.import(data); }
         if let MbcType::Mmm01 { regs } = &mut self.mbc {
@@ -997,6 +1000,11 @@ impl Cartridge {
             f.import_state(&d[9..]);
             return;
         }
+        if let MbcType::Huc1 { .. } = self.mbc {
+            self.ir_led = data.first().is_some_and(|b| b & 1 != 0);
+            return;
+        }
+        self.ir_led = data.get(132).is_some_and(|b| b & 1 != 0);
         let (MbcType::Huc3 { mode, .. }, Some(h)) = (&mut self.mbc, &mut self.huc3) else { return };
         let Some((regs, packed)) = data.split_first_chunk::<4>().filter(|(_, p)| p.len() >= 128) else {
             (*mode, h.address, h.result, h.last_opcode) = (0, 0, 0, 0);
