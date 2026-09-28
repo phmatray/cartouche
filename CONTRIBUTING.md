@@ -43,6 +43,12 @@ Screenshots from `cargo run --example render` go in `screenshots/`
 Do not skip, ignore or special-case a test to make it pass, and never detect
 test ROMs by title or checksum. Fix the emulator.
 
+`gb-core/tests/expected-failures.txt` is a record, not a skip. Every conformance
+ROM it lists still runs on every CI run, and the test asserts that it fails: CI
+turns red when a listed ROM starts passing, and tells you which line to remove.
+Remove a line only in the change that makes its ROM pass. Add lines only when a
+new suite is added, never to hide a regression.
+
 ## Commits and pull requests
 
 - Use [Conventional Commits](https://www.conventionalcommits.org/)
