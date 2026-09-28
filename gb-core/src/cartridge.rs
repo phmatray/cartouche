@@ -346,8 +346,8 @@ impl Cartridge {
                 // Only 0x0000-0x3FFF is used for control writes
                 if addr <= 0x3FFF {
                     if addr & 0x0100 == 0 {
-                        // A8=0: RAM enable (value 0x0A enables, anything else disables)
-                        *ram_enabled = value == 0x0A;
+                        // A8=0: RAM enable (low nibble 0xA enables, as on MBC1/3/5: $FA or $1A too)
+                        *ram_enabled = value & 0x0F == 0x0A;
                     } else {
                         // A8=1: ROM bank select (lower 4 bits, bank 0 maps to bank 1)
                         let bank = value & 0x0F;
@@ -848,6 +848,16 @@ mod tests {
         sav.extend_from_slice(&[0; 26]);
         c.import_sram(&sav);
         assert_eq!(read_clock(&mut c), [2, 1, 0, 3, 0x40]);
+    }
+
+    #[test]
+    fn mbc2_ram_enable_looks_at_the_low_nibble_only() {
+        let mut c = cart(0x06, 0x00);
+        c.write_rom(0x0000, 0x1A);
+        c.write_ram(0, 0x05);
+        assert_eq!(c.read_ram(0), 0xF5, "$1A enables");
+        c.write_rom(0x0000, 0x0B);
+        assert_eq!(c.read_ram(0), 0xFF, "$0B disables");
     }
 
     #[test]
