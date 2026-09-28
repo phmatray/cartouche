@@ -36,6 +36,7 @@ a{color:inherit}
 .cv.wait>.noart .bar{animation:ink 1.6s ease-in-out infinite}
 @keyframes ink{0%,100%{opacity:1}50%{opacity:.35}}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.skip{position:fixed;left:16px;top:-80px;z-index:400;padding:14px 18px;background:var(--y);color:#111;font:800 15px/1 var(--font);text-decoration:none}.skip:focus{top:12px}
 .wrap{max-width:1360px;margin:0 auto;padding:0 32px}
 @media (min-width:1800px){.wrap{max-width:1680px}html{font-size:18px}}
 @media (max-width:640px){.wrap{padding:0 16px}}
