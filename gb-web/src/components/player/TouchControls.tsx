@@ -1,7 +1,7 @@
-import { lazy, Suspense, useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent } from 'react';
+import { lazy, Suspense, useCallback, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 import { useSettingsStore } from '../../store/settingsStore';
 import { cleanLayout, deviceClass, layoutKey, type Layout, type Orient, type Part, type Place } from '../../lib/touch-layout';
-import { holdTouches, misfit, useSkin } from './touch-dom';
+import { holdTouches, misfit, useMedia, useSkin } from './touch-dom';
 import { toast } from '../shell/actions';
 import './touch.css';
 import { I } from '../icons';
@@ -12,13 +12,6 @@ const ControlsEditor = lazy(() => import('./ControlsEditor'));
 
 /** The phone-sideways layout of the player (index.css): D-pad left of the screen, buttons right. */
 const LANDSCAPE = '(orientation: landscape) and (max-height: 500px)';
-function useMedia(q: string) {
-  return useSyncExternalStore((cb) => {
-    const m = matchMedia(q);
-    m.addEventListener('change', cb);
-    return () => m.removeEventListener('change', cb);
-  }, () => matchMedia(q).matches);
-}
 
 type PadProps = (b: string) => object;
 interface Props {
