@@ -2,6 +2,7 @@ pub mod apu;
 pub mod boot_rom;
 pub mod camera;
 pub mod cartridge;
+pub mod cheats;
 pub mod cpu;
 pub mod debug;
 pub mod error;
