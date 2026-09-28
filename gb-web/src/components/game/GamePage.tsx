@@ -205,17 +205,20 @@ function GameDetails({ game }: { game: GameEntry }) {
             </section>
           ) : (
             <>
-              <section>
-                <h3>{t('game.yourPlay')}</h3>
-                <dl className="stats">
-                  <div><dt>{t('library.col.played')}</dt><dd>{dur(game.totalPlayTime)}</dd></div>
-                  <div><dt>{t('game.sessions')}</dt><dd>{game.sessions ?? 0}</dd></div>
-                  <div><dt>{t('library.col.last')}</dt><dd>{game.lastPlayed ? ago(game.lastPlayed) : t('common.never')}</dd></div>
-                  <div><dt>{t('library.col.status')}</dt><dd><span className={`tag ${kind}`} style={{ margin: 0 }}>{label}</span></dd></div>
-                </dl>
-              </section>
+              {/* After the first session: before it, "0", "Never" and the Play button's own state say nothing. */}
+              {!!game.lastPlayed && (
+                <section>
+                  <h3>{t('game.yourPlay')}</h3>
+                  <dl className="stats">
+                    <div><dt>{t('library.col.played')}</dt><dd>{dur(game.totalPlayTime)}</dd></div>
+                    <div><dt>{t('game.sessions')}</dt><dd>{game.sessions ?? 0}</dd></div>
+                    <div><dt>{t('library.col.last')}</dt><dd>{ago(game.lastPlayed)}</dd></div>
+                  </dl>
+                </section>
+              )}
               <Saves game={game} header={header} setConfirm={setConfirm} />
-              <section>
+              {/* The states kept, not five empty rows: saving is done from the Manual's Saves page while playing. */}
+              {(auto || slots.some(Boolean)) && <section>
                 <h3>{t('library.hero.slots')}</h3>
                 <p className="note" style={{ margin: '0 0 6px' }}>{t('game.slots.note')}</p>
                 <ul className="minislots">
@@ -230,21 +233,19 @@ function GameDetails({ game }: { game: GameEntry }) {
                       </span>
                     </li>
                   )}
-                  {slots.map((s, i) => (
+                  {slots.map((s, i) => s && (
                     <li key={i}>
                       <span className="n">{i + 1}</span>
-                      <span className="th">{s?.thumbnail.length ? <Frame rgba={s.thumbnail} label={t('game.slot', { n: String(i + 1) })} /> : null}</span>
-                      <span className="w">{s ? ago(s.timestamp) : t('common.empty')}{s && <small>{[stamp(s.timestamp), profileName(s.profile)].filter(Boolean).join(' · ')}</small>}</span>
-                      {s ? (
-                        <span className="ma">
-                          <Link className="btn line sm" to={paths.play(game.id, `?slot=${i}`)}>{t('common.load')}</Link>
-                          <button className="btn line sm ic" aria-label={t('game.slots.deleteOf', { n: String(i + 1) })} title={t('common.delete')} onClick={() => dropState(i)}>{I.close}</button>
-                        </span>
-                      ) : null}
+                      <span className="th">{s.thumbnail.length ? <Frame rgba={s.thumbnail} label={t('game.slot', { n: String(i + 1) })} /> : null}</span>
+                      <span className="w">{ago(s.timestamp)}<small>{[stamp(s.timestamp), profileName(s.profile)].filter(Boolean).join(' · ')}</small></span>
+                      <span className="ma">
+                        <Link className="btn line sm" to={paths.play(game.id, `?slot=${i}`)}>{t('common.load')}</Link>
+                        <button className="btn line sm ic" aria-label={t('game.slots.deleteOf', { n: String(i + 1) })} title={t('common.delete')} onClick={() => dropState(i)}>{I.close}</button>
+                      </span>
                     </li>
                   ))}
                 </ul>
-              </section>
+              </section>}
               <section>
                 <h3>{t('game.manage')}</h3>
                 <div className="danger-zone">
