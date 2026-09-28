@@ -129,6 +129,20 @@ fn a_damaged_state_never_panics() {
     assert!(bad.is_empty(), "panicking (offset, value): {bad:?}");
 }
 
+/// A held button whose group gets selected pulls its P1 line low: the joypad interrupt fires, as
+/// for a press (Pan Docs, "Joypad interrupt"). A group with nothing held does not.
+#[test]
+fn selecting_a_group_with_a_held_button_requests_the_joypad_interrupt() {
+    let mut gb = boot(&[0x18, 0xFE], &[]);
+    gb.bus.write_byte(0xFF00, 0x30); // nothing selected
+    gb.bus.joypad.set_button(JoypadButton::Start, true);
+    gb.bus.interrupts.interrupt_flag = 0;
+    gb.bus.write_byte(0xFF00, 0x20); // d-pad: nothing held there
+    assert_eq!(gb.bus.interrupts.interrupt_flag & 0x10, 0);
+    gb.bus.write_byte(0xFF00, 0x10); // buttons: Start is held
+    assert_eq!(gb.bus.interrupts.interrupt_flag & 0x10, 0x10);
+}
+
 fn run_to_line(gb: &mut GameBoy, ly: u8) {
     while gb.bus.ppu.ly != ly { gb.step_instruction().unwrap(); }
 }
