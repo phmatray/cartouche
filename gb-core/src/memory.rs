@@ -429,6 +429,14 @@ impl MemoryBus {
         self.dma_index += 1;
     }
 
+    /// IF bits whose line rises only at the end of this M-cycle. A halted CPU samples IF
+    /// mid-cycle, so these wake it one M-cycle later. The timer raises IF.2 with the TIMA reload,
+    /// at the next M-cycle boundary; the bus requests it one M-cycle ahead (see `Timer::step`),
+    /// which a running CPU's fetch-time sample needs but a halted one must not see yet.
+    pub fn late_interrupts(&self) -> u8 {
+        if self.timer.reload_pending { TIMER_BIT } else { 0 }
+    }
+
     pub fn cycle_tick(&mut self) {
         self.tick_components();
     }

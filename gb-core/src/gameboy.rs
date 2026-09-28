@@ -195,7 +195,7 @@ impl GameBoy {
         self.cpu.regs.pc = 0x0100;
 
         self.bus.boot_rom_active = false;
-        self.bus.timer.div_counter = 0xABCC;
+        self.bus.timer.div_counter = 0xABC8;
         self.bus.interrupts.interrupt_flag = 0xE1;
         self.bus.ppu.lcdc = 0x91;
         self.bus.ppu.bgp = 0xFC;

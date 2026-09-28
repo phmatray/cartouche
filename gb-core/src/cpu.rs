@@ -23,31 +23,52 @@ impl Cpu {
         }
     }
 
-    /// Handle pending interrupts. Returns true if an interrupt was serviced.
+    /// Handle pending interrupts: wake HALT, dispatch when IME is on.
     pub fn handle_interrupts(&mut self, bus: &mut MemoryBus) {
-        if self.stopped {
+        let pending = bus.interrupts.pending();
+        if pending == 0 || self.stopped {
             return; // only a button wakes stop mode (see `step`)
         }
-        if bus.interrupts.pending() != 0 {
+        if self.halted {
+            if pending & !bus.late_interrupts() == 0 {
+                return;
+            }
             self.halted = false;
         }
-
-        if !self.ime {
-            return;
+        if self.ime {
+            self.dispatch(bus);
         }
+    }
 
-        if let Some(vector) = bus.interrupts.acknowledge() {
-            self.ime = false;
-            self.ime_pending = false; // the handler starts with interrupts off
-            bus.cycle_tick(); // M1: internal
-            self.push_u16(bus, self.regs.pc); // M2: SP-- ; M3+M4: push PC
-            self.regs.pc = vector;
-            bus.cycle_tick(); // M5: jump to vector
+    /// The 5 M-cycle interrupt dispatch.
+    #[inline(never)]
+    fn dispatch(&mut self, bus: &mut MemoryBus) {
+        self.ime = false;
+        self.ime_pending = false; // the handler starts with interrupts off
+        // After a HALT bug (EI; HALT with an interrupt pending) PC was never advanced past the
+        // HALT's next byte: the dispatch returns to the HALT itself.
+        if self.halt_bug {
+            self.halt_bug = false;
+            self.regs.pc = self.regs.pc.wrapping_sub(1);
         }
+        let pc = self.regs.pc;
+        bus.cycle_tick(); // M1: internal
+        bus.cycle_idu(self.regs.sp); // M2: SP--
+        self.regs.sp = self.regs.sp.wrapping_sub(1);
+        bus.cycle_write(self.regs.sp, (pc >> 8) as u8); // M3: push PC high
+        // The vector is picked from IE & IF only now: a push that wrote IE ($FFFF) can
+        // redirect the dispatch, or cancel it to $0000 (Mooneye ie_push).
+        let vector = bus.interrupts.acknowledge().unwrap_or(0x0000);
+        self.regs.sp = self.regs.sp.wrapping_sub(1);
+        bus.cycle_write(self.regs.sp, pc as u8); // M4: push PC low
+        self.regs.pc = vector;
+        bus.cycle_tick(); // M5: jump to vector
     }
 
     /// Execute one instruction. Returns the number of T-cycles consumed.
     pub fn step(&mut self, bus: &mut MemoryBus) -> Result<u32, CpuError> {
+        // IME as this instruction sees it: an EI just before takes effect only after it.
+        let ime = self.ime;
         if self.ime_pending {
             self.ime = true;
             self.ime_pending = false;
@@ -292,7 +313,7 @@ impl Cpu {
 
             // === HALT ===
             0x76 => {
-                if self.ime || bus.interrupts.pending() == 0 {
+                if ime || bus.interrupts.pending() == 0 {
                     self.halted = true;
                 } else {
                     // HALT bug: IME=0 but interrupt pending — don't halt,
