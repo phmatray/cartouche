@@ -132,7 +132,7 @@ emulator prove itself; hide them in Settings if you'd rather not see them.
 
 **Play together**
 - Link cable on one screen: two consoles side by side, real serial data between them, and infrared between two Color consoles (Mystery Gift and the like) or HuC1 and HuC3 cartridges, which carry their own.
-- Link cable online: two browsers joined by a room code, invite link or QR code, peer to peer over WebRTC ([how it works](docs/ONLINE_LINK.md)). When both players have both games, each browser runs both consoles in lockstep and only the buttons cross: real-time link games play at full speed (with a short input delay), infrared included. Otherwise only the cable's bytes cross: fine for turn-based exchanges, while real-time link games stutter once the round trip passes a few tens of milliseconds.
+- Link cable online: two browsers joined by a room code, invite link or QR code, peer to peer over WebRTC ([how it works](docs/ONLINE_LINK.md)). When both players have both games, each browser runs both consoles in lockstep and only the buttons cross: real-time link games play at full speed with about two frames of input delay (rollback hides the rest of the round trip), infrared included. Otherwise only the cable's bytes cross: fine for turn-based exchanges, while real-time link games stutter once the round trip passes a few tens of milliseconds.
 - Super Game Boy multiplayer: up to four players with several gamepads.
 
 **Your data**

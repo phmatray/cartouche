@@ -961,8 +961,13 @@ impl Cartridge {
     /// enable, then the flash's command state (the flash itself goes with the RAM). TAMA5: its
     /// registers (`Tama5::export_state`; the clock goes with the RAM).
     /// HuC1: its infrared LED. HuC3: mode, address, last result, last opcode, its 256 memory
-    /// nibbles packed two per byte (low nibble first), then its infrared LED. Empty for the rest.
+    /// nibbles packed two per byte (low nibble first), then its infrared LED. MBC3 with a clock: the
+    /// clock's position (`clock_dots`, u64 LE) and the dots into its current second (u64 LE), so a
+    /// deterministic session re-runs from a state with the clock it had (rollback). Empty for the rest.
     pub fn export_extra(&self) -> Vec<u8> {
+        if let (MbcType::Mbc3 { .. }, Some(rtc)) = (&self.mbc, &self.rtc) {
+            return [self.clock_dots.to_le_bytes(), rtc.sub.to_le_bytes()].concat();
+        }
         if let Some(m) = &self.mbc7 { return m.export(); }
         if let MbcType::Mmm01 { regs } = &self.mbc { return regs.to_vec(); }
         if let Some(t) = &self.tama5 { return t.export_state(); }
@@ -984,6 +989,14 @@ impl Cartridge {
     /// registers back to power-on; the HuC3 memory is left as the battery save restored it.
     /// A HuC block without its trailing LED byte leaves the LED off.
     pub fn import_extra(&mut self, data: &[u8]) {
+        if let (Some(rtc), Some((dots, sub))) = (&mut self.rtc, data.first_chunk::<16>().map(|d| d.split_at(8))) {
+            // Only in a deterministic session: solo play keeps catching up the wall clock.
+            if self.emulated_clock && matches!(self.mbc, MbcType::Mbc3 { .. }) {
+                self.clock_dots = u64::from_le_bytes(dots.try_into().unwrap());
+                rtc.sub = u64::from_le_bytes(sub.try_into().unwrap()).min(DOTS_PER_SECOND - 1);
+            }
+            return;
+        }
         if let Some(m) = &mut self.mbc7 { return m.import(data); }
         if let MbcType::Mmm01 { regs } = &mut self.mbc {
             *regs = data.first_chunk::<4>().map_or([0; 4], |r| r.map(|b| b & 0x7F));
@@ -1014,6 +1027,11 @@ impl Cartridge {
         for (i, b) in packed[..128].iter().enumerate() {
             (h.memory[2 * i], h.memory[2 * i + 1]) = (b & 0xF, b >> 4);
         }
+    }
+
+    /// Whether `import_extra(extra)` put this cartridge's clock back (MBC3, deterministic session).
+    pub fn rewinds_clock(&self, extra: &[u8]) -> bool {
+        self.emulated_clock && self.rtc.is_some() && matches!(self.mbc, MbcType::Mbc3 { .. }) && extra.len() >= 16
     }
 
     /// The wall instant the cartridge clock stands at: in step with the wall when the game runs at
