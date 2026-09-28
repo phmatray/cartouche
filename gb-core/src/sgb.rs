@@ -1,9 +1,10 @@
 //! Super Game Boy: the command packets a cartridge sends over the joypad register (P1), and the
 //! picture the SNES side makes of the Game Boy's: four palettes picked per 8x8 cell, a mask, and a
 //! 256x224 border. Data transfers (`*_TRN`) are read, like on the real thing, from the picture
-//! shown a few frames after the command. Sound (SOUND, SOU_TRN; `snes_music` tells the host when a game
-//! plays its own music on the SNES side, silent here), SNES code (DATA_SND, DATA_TRN,
-//! JUMP) and the rest (ATRC_EN, TEST_EN, ICON_EN, OBJ_TRN) are ignored: their packets are read
+//! shown a few frames after the command. Sound: a program a game uploads with SOU_TRN runs on the
+//! SPC700 and S-DSP (`SnesAudio`), mixed with the Game Boy's; SOUND's parameters reach it through the
+//! APU ports; `snes_music` tells the host when a game relies on the SGB's built-in sound driver
+//! instead (not included, silent here). SNES code (DATA_SND, DATA_TRN, JUMP) and the rest (ATRC_EN, TEST_EN, ICON_EN, OBJ_TRN) are ignored: their packets are read
 //! and dropped. References: Pan Docs "Super Game Boy", SameBoy's `sgb.c` (behaviour only).
 
 use crate::ppu::{Ppu, PALETTE_COLORS, SCREEN_HEIGHT, SCREEN_WIDTH};
@@ -60,8 +61,7 @@ pub struct Sgb {
     pub border: Vec<u8>,
     pub border_version: u32,
     backdrop: u16,
-    /// The game sent SOU_TRN (its own program or music for the SNES sound chip, not emulated), then
-    /// frames counted since (up to `SNES_WINDOW`) and those with a Game Boy sound channel on.
+    /// The game sent SOU_TRN (a program or music for the SNES sound chip), then frames counted since (up to `SNES_WINDOW`) and those with a Game Boy sound channel on.
     pub snes_sound: bool,
     snes_frames: u16,
     gb_sound_frames: u16,
@@ -540,6 +540,48 @@ impl SnesAudio {
         self.spc.pc = start;
         self.spc.halted = false;
         self.running = true;
+        true
+    }
+
+    /// A single 0 while nothing was ever uploaded (most SGB states), else 1 and the whole side.
+    pub fn export_state(&self, out: &mut Vec<u8>) {
+        if !self.running && self.uploaded.iter().all(|&w| w == 0) {
+            out.push(0);
+            return;
+        }
+        out.extend_from_slice(&[1, self.running as u8]);
+        self.spc.export_state(out);
+        self.dsp.export_state(out);
+        for w in &self.uploaded { out.extend_from_slice(&w.to_le_bytes()); }
+        out.extend_from_slice(&self.acc.to_le_bytes());
+        out.extend_from_slice(&self.div.to_le_bytes());
+        for s in [self.prev.0, self.prev.1, self.cur.0, self.cur.1] { out.extend_from_slice(&s.to_le_bytes()); }
+    }
+
+    /// Reads what `export_state` wrote at `*pos`; truncated data is rejected.
+    pub fn import_state(&mut self, data: &[u8], pos: &mut usize) -> bool {
+        let mut s = SnesAudio::new();
+        match data.get(*pos) {
+            Some(0) => *pos += 1,
+            Some(_) => {
+                let Some(&running) = data.get(*pos + 1) else { return false };
+                *pos += 2;
+                if !s.spc.import_state(data, pos) || !s.dsp.import_state(data, pos) { return false; }
+                let tail = s.uploaded.len() * 8 + 8 + 4 + 8;
+                let Some(d) = data.get(*pos..*pos + tail) else { return false };
+                *pos += tail;
+                let (bits, d) = d.split_at(s.uploaded.len() * 8);
+                for (w, b) in s.uploaded.iter_mut().zip(bits.chunks(8)) { *w = u64::from_le_bytes(b.try_into().unwrap()); }
+                s.running = running != 0;
+                // Clamped: a damaged state must not run the SPC700 for minutes in one call.
+                s.acc = i64::from_le_bytes(d[..8].try_into().unwrap()).clamp(-16 * SGB_HZ, 0);
+                s.div = u32::from_le_bytes(d[8..12].try_into().unwrap()) % SPC_PER_SAMPLE;
+                let w = |i: usize| i16::from_le_bytes([d[12 + i * 2], d[13 + i * 2]]);
+                (s.prev, s.cur) = ((w(0), w(1)), (w(2), w(3)));
+            }
+            None => return false,
+        }
+        *self = s;
         true
     }
 

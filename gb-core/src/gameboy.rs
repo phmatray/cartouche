@@ -415,7 +415,10 @@ impl GameBoy {
         data.extend_from_slice(&[sr.data, sr.control, sr.incoming]);
         data.extend_from_slice(&sr.remaining.to_le_bytes());
         self.bus.apu.export_state(&mut data);
-        if let Some(s) = &self.bus.sgb { s.export_state(&mut data); }
+        if let Some(s) = &self.bus.sgb {
+            s.export_state(&mut data);
+            s.audio.export_state(&mut data); // v6
+        }
         // Optional tail (absent from older states): stop mode, KEY0 (DMG compatibility set by the boot ROM).
         data.extend_from_slice(&[self.cpu.stopped as u8, self.bus.key0]);
         // Then the mapper block: u16 LE length + `Cartridge::export_extra`.
@@ -432,7 +435,7 @@ impl GameBoy {
         if data.len() < 9 || &data[0..4] != SAVE_MAGIC { return None; }
         match u32::from_le_bytes([data[4], data[5], data[6], data[7]]) {
             3 => Some(if self.bus.cartridge.cgb_mode() { Console::Cgb } else { Console::Dmg }),
-            4 | SAVE_VERSION => [Console::Dmg, Console::Cgb, Console::Compat, Console::Sgb].get(data[8] as usize).copied(),
+            4..=SAVE_VERSION => [Console::Dmg, Console::Cgb, Console::Compat, Console::Sgb].get(data[8] as usize).copied(),
             _ => None,
         }
     }
@@ -463,9 +466,9 @@ impl GameBoy {
         };
         let version = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
 
-        let mut pos = [8, 10, 11][version as usize - 3];
+        let mut pos = match version { 3 => 8, 4 => 10, _ => 11 };
         self.palette = if version == 3 { 0 } else { *data.get(9).unwrap_or(&0) };
-        let boot = if version == SAVE_VERSION { *data.get(10).unwrap_or(&0) } else { 0 };
+        let boot = if version >= 5 { *data.get(10).unwrap_or(&0) } else { 0 };
 
         macro_rules! read_u8 {
             () => {{
@@ -607,6 +610,8 @@ impl GameBoy {
             // A Game Boy state has no SGB side (but may have the tail): that side starts fresh.
             let mut p = if saved == Console::Sgb { pos } else { data.len() };
             if !s.import_state(data, &mut p) { return false; }
+            // Older states have no SNES sound: it stays idle (as `import_state` left it).
+            if saved == Console::Sgb && version >= 6 && !s.audio.import_state(data, &mut p) { return false; }
             if saved == Console::Sgb { pos = p; }
         }
         if let Some(&[stopped, ..]) = data.get(pos..) {
@@ -661,7 +666,8 @@ const SAVE_MAGIC: &[u8; 4] = b"GBSS";
 // rejected because loading them into a freshly booted ROM maps the wrong banks.
 // v4 adds the console and palette bytes after the version (v3 states still load: see `state_console`).
 // v5 adds the start-up animation after them, so a state saved while it plays goes on with its own boot ROM.
-const SAVE_VERSION: u32 = 5;
+// v6 adds the Super Game Boy's SNES sound side after the SGB block (v5 states load with it idle).
+const SAVE_VERSION: u32 = 6;
 
 #[cfg(test)]
 mod tests {

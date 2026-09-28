@@ -515,3 +515,29 @@ fn sound_parameters_reach_the_program() {
     gb.run_frame().unwrap();
     assert_eq!(snes(&gb).ports_out()[1], 0x42, "$F4 echoed to $F5");
 }
+
+#[test]
+fn a_state_keeps_the_snes_sound_playing() {
+    let mut gb = sgb();
+    transfer(&mut gb, 0x09, 0, &tone(0x0200));
+    for _ in 0..30 { gb.run_frame().unwrap(); }
+    let state = gb.save_state();
+
+    let mut fresh = sgb();
+    assert!(fresh.load_state(&state));
+    let rms = frame_rms(&mut fresh);
+    assert!(rms > 0.1, "the tone goes on: RMS {rms}");
+    assert!(snes(&fresh).covered());
+
+    // The previous version (5): the same layout without the SNES block, which an idle SNES side
+    // saves as a single 0 just before the tail (stop mode, KEY0, an empty mapper block).
+    let mut v5 = sgb().save_state();
+    assert_eq!(v5[4], 6, "this layout is version 6");
+    let n = v5.len();
+    assert_eq!(v5[n - 5], 0, "an idle SNES side");
+    v5.remove(n - 5);
+    v5[4] = 5;
+    assert!(gb.load_state(&v5), "a version 5 state loads");
+    let rms = frame_rms(&mut gb);
+    assert!(rms < 0.01 && !snes(&gb).covered(), "with the SNES side idle: RMS {rms}");
+}

@@ -276,7 +276,7 @@ export function useEmulator() {
     return { version: v, rgba: v && ptr && wasmMemory ? new Uint8ClampedArray(wasmMemory.buffer, ptr, 256 * 224 * 4) : null };
   }, []);
 
-  /** The game plays its music on the Super Game Boy's SNES sound chip (not emulated: silent there), known ~10 s in. */
+  /** The game plays its music with the Super Game Boy's built-in sound program (not included: silent there), known ~10 s in. */
   const sgbSnesMusic = useCallback(() => emulatorRef.current?.sgb_snes_music() ?? false, []);
   /** The console the core runs (0 Game Boy, 1 Game Boy Color, 2 Game Boy cartridge on a Game Boy Color, 3 Super Game Boy), and a state's. */
   const consoleNow = useCallback((): number => emulatorRef.current?.console() ?? 255, []);
