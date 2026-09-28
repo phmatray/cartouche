@@ -17,7 +17,6 @@ export default {
   },
   speed: '{x}× speed',
   rewindReady: 'Rewind {s} s ready',
-  page: 'p. {n}',
   bad: {
     title: 'This file can’t be played',
     body: 'It’s damaged or isn’t a Game Boy ROM.',

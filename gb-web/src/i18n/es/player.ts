@@ -18,7 +18,6 @@ export default {
   },
   speed: 'Velocidad {x}×',
   rewindReady: 'Rebobinado listo: {s} s',
-  page: 'p. {n}',
   bad: {
     title: 'Este archivo no se puede jugar',
     body: 'Está dañado o no es una ROM de Game Boy.',

@@ -37,11 +37,11 @@
 .touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .dpad .r{border-radius:0 7px 7px 0}
 .touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .dpad .c::after{content:"";position:absolute;inset:13px;border-radius:50%;background:radial-gradient(circle at 50% 40%,rgb(0 0 0 / .35),rgb(255 255 255 / .06))}
 .touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) :is(.ab button,.tx){border-radius:50%;box-shadow:inset 0 -5px 8px rgb(0 0 0 / .3),inset 0 3px 5px rgb(255 255 255 / .12),0 3px 6px rgb(0 0 0 / .28)}
-.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .ab button::after{content:attr(data-l);position:absolute;left:0;right:0;top:calc(100% + 3px);font:italic 800 16px/1 var(--font);font-stretch:80%;letter-spacing:.08em;color:var(--tc-print)}
+.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .ab button::after{content:attr(data-l);position:absolute;left:0;right:0;top:calc(100% + 3px);font:italic 800 var(--fs-body)/1 var(--font);font-stretch:80%;letter-spacing:var(--tr-caps);color:var(--tc-print)}
 .touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .ss{gap:12px}
 .touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .ss button{position:relative;width:68px;height:44px;padding:0;border:0;background:none;color:transparent}
 .touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .ss button::before{content:"";position:absolute;left:10px;right:10px;top:8px;height:13px;border-radius:7px;background:var(--tc-ss);box-shadow:inset 0 -3px 4px rgb(0 0 0 / .3),0 2px 3px rgb(0 0 0 / .2)}
-.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .ss button::after{content:attr(data-l);position:absolute;left:-6px;right:-6px;top:26px;font:800 10px/1 var(--font);letter-spacing:.12em;text-transform:uppercase;color:var(--tc-print)}
+.touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .ss button::after{content:attr(data-l);position:absolute;left:-6px;right:-6px;top:26px;font:800 var(--fs-micro)/1 var(--font);letter-spacing:var(--tr-caps);text-transform:uppercase;color:var(--tc-print)}
 .touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .ss button.down{background:none}
 .touch:is([data-skin=brick],[data-skin=pocket],[data-skin=color]) .ss button.down::before{background:var(--y)}
 .touch[data-skin=brick] .ss button{transform:rotate(-25deg)}
@@ -101,21 +101,21 @@
 .ced-bar .btn{flex:none;padding:0 14px}
 .ced-bar .btn .icon{width:18px;height:18px}
 .ced-name{display:flex;flex-direction:column;min-width:0;line-height:1.1}
-.ced-name b{font:900 18px var(--font);font-stretch:62%;text-transform:uppercase;letter-spacing:.02em;white-space:nowrap}
-.ced-name small{font:600 11px var(--font);color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ced-name b{font:900 var(--fs-lead) var(--font);font-stretch:62%;text-transform:uppercase;letter-spacing:var(--tr-tight);white-space:nowrap}
+.ced-name small{font:600 var(--fs-micro) var(--font);color:var(--mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ced-sz{display:inline-flex;flex:none;background:var(--band-2)}
 .ced-sz button,.ced-more-btn{width:44px;height:44px;border:0;background:transparent;color:var(--paper);display:flex;align-items:center;justify-content:center;flex:none}
 .ced-sz button:disabled{opacity:.3}
 .ced-sz .icon,.ced-more-btn .icon{width:18px;height:18px}
-.ced-op{display:flex;align-items:center;gap:8px;flex:1;min-width:72px;max-width:220px;font:700 11px var(--font);text-transform:uppercase;letter-spacing:.06em;color:var(--mute)}
+.ced-op{display:flex;align-items:center;gap:8px;flex:1;min-width:72px;max-width:220px;font:700 var(--fs-micro) var(--font);text-transform:uppercase;letter-spacing:var(--tr-caps);color:var(--mute)}
 .ced-op input{flex:1;min-width:0;height:44px;accent-color:var(--y)}
 .ced-more-btn{margin-left:auto}
 .ced-more-btn[aria-expanded=true]{background:var(--paper);color:#000}
-.ced-msg{margin:0;font:600 13px/1.3 var(--font);color:var(--mute)}
+.ced-msg{margin:0;font:600 var(--fs-s)/1.3 var(--font);color:var(--mute)}
 .ced-more{position:fixed;z-index:2;top:calc(56px + var(--sat));right:max(12px,var(--sar));width:min(360px,calc(100vw - 24px));max-height:calc(100dvh - 72px - var(--sat));overflow:auto;pointer-events:auto;padding:4px 18px 16px;box-shadow:0 22px 44px rgb(0 0 0 / .42),0 3px 8px rgb(0 0 0 / .28);animation:ced-in .25s var(--ease)}
 .ced-more p{margin:14px 0 0}
 .ced-more .btn{color:var(--ink)}
-.ced-warn{font:600 13px/1.4 var(--font);color:var(--err)}
+.ced-warn{font:600 var(--fs-s)/1.4 var(--font);color:var(--err)}
 @keyframes ced-in{from{opacity:0;transform:translateY(-8px)}}
 @media (max-width:520px){.ced-name{display:none}.ced-op span{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}
 /* narrow phones: Done shrinks to its check mark (the word stays for screen readers) so the More options button fits */
@@ -131,7 +131,7 @@ html[data-motion=reduced] .ced-more{animation:none}
 .skin{display:flex;flex-direction:column;align-items:stretch;gap:0;padding:0;border:2px solid var(--paper-3);background:#fff;color:var(--ink);text-align:left;min-height:44px}
 .skin[aria-pressed=true]{border-color:var(--ink);box-shadow:inset 0 -6px 0 var(--y)}
 .skin svg{display:block;width:100%;height:auto;background:var(--tc-bg)}
-.skin span{padding:8px 10px 12px;font:800 13px var(--font);font-stretch:80%;text-transform:uppercase;letter-spacing:.04em}
+.skin span{padding:8px 10px 12px;font:800 var(--fs-s) var(--font);font-stretch:80%;text-transform:uppercase;letter-spacing:var(--tr-tight)}
 .shells{display:flex;flex-wrap:wrap;gap:6px}
 .shells button{width:44px;height:44px;border:2px solid var(--paper-3);padding:6px;background:#fff}
 .shells button i{display:block;width:100%;height:100%;background:var(--shell)}

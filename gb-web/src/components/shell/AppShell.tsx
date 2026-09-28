@@ -192,7 +192,7 @@ function ArtProgress() {
     <div className="artbar" role="status" aria-live="polite">
       {of > 0 && (
         <>
-          <span className="meter" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={of} aria-valuenow={n}><i style={{ width: `${(n / of) * 100}%` }} /></span>
+          <span className="meter" role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={of} aria-valuenow={n}><i style={{ transform: `scaleX(${n / of})` }} /></span>
           <span className="wrap"><span className="cnt">{t('shell.progress', { label, n, of })}</span></span>
         </>
       )}

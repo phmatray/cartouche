@@ -18,7 +18,6 @@ export default {
   },
   speed: 'Vitesse {x}×',
   rewindReady: 'Retour arrière prêt : {s} s',
-  page: 'p. {n}',
   bad: {
     title: 'Ce fichier ne peut pas être lancé',
     body: 'Il est endommagé ou ce n’est pas une ROM Game Boy.',
