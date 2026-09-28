@@ -25,6 +25,7 @@ export function useEmulator() {
   /** Debugger steps taken while paused, so the player can redraw the picture after each. */
   const [steps, setSteps] = useState(0);
   const bpRef = useRef<number[]>([]); // the same list, for loadRom (which must not change with it)
+  const cheatsRef = useRef(''); // the cheat codes on, one per line: each load builds a new console that needs them again
   const stopped = useRef(false); // no frame runs past a break, even the rest of this animation frame's batch
   const setIsRunning = useCallback((on: boolean) => {
     if (on) { stopped.current = false; setBreakReason(null); }
@@ -93,6 +94,7 @@ export function useEmulator() {
       stopped.current = false;
       setBreakReason(null);
       bpRef.current.forEach((a) => emu.debug_add_breakpoint(a)); // each load builds a new console
+      if (cheatsRef.current) emu.set_cheats(cheatsRef.current);
       setIsCgb(emu.is_cgb());
       setErrors([]);
       return true;
@@ -208,6 +210,14 @@ export function useEmulator() {
     emulatorRef.current?.debug_add_breakpoint(addr);
     if (!bpRef.current.includes(addr)) setBreakpoints(bpRef.current = [...bpRef.current, addr].sort((a, b) => a - b));
   }, []);
+
+  /** Replaces the cheat codes on (one per line); the core's reason when it refuses them (nothing changes then), else null. */
+  const setCheats = useCallback((codes: string): string | null => {
+    const emu = emulatorRef.current;
+    if (emu && power > 0 && !emu.set_cheats(codes)) return emu.get_error() ?? '';
+    cheatsRef.current = codes;
+    return null;
+  }, [power]);
 
   const removeBreakpoint = useCallback((addr: number) => {
     const emu = emulatorRef.current;
@@ -405,6 +415,7 @@ export function useEmulator() {
     breakpoints,
     addBreakpoint,
     removeBreakpoint,
+    setCheats,
     registers,
     updateRegisters,
     readMemory,

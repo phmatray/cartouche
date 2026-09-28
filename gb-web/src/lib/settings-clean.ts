@@ -1,5 +1,6 @@
 // Object-valued settings from untrusted input (a restored backup), checked field by field like an imported controls file.
 import { normalizeDisplay } from '../shaders/filters.ts';
+import { cleanCheats, type Cheat } from './cheats.ts';
 import { cleanLayout, SHELLS, SKINS, type Layout } from './touch-layout.ts';
 
 type Obj = Record<string, unknown>;
@@ -34,6 +35,12 @@ export function cleanSetting(key: string, value: unknown, cur: unknown): unknown
       return isObj(value) ? { dmg: normalizeDisplay(value.dmg, 'dmg'), cgb: normalizeDisplay(value.cgb, 'cgb') } : undefined;
     case 'gameDisplay':
       return isObj(value) ? pick(value, isObj) : undefined; // normalized per game kind where it's read (useDisplay)
+    case 'gameCheats': {
+      if (!isObj(value)) return undefined;
+      const out: Record<string, Cheat[]> = {};
+      for (const [k, l] of Object.entries(value)) { const c = cleanCheats(l); if (c?.length) out[k] = c; }
+      return out;
+    }
     case 'gameConsole':
       return isObj(value) ? pick(value, (x): x is string => typeof x === 'string' && /^(dmg|gbc|gbc([1-9]|1[0-2]))$/.test(x)) : undefined;
     case 'gameSgb':

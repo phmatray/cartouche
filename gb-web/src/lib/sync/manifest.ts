@@ -7,7 +7,7 @@
  *   rom:<sha1>                 the ROM itself (only when both devices share ROMs)
  *   sram:<game>[~<profile>]    a battery save            } big: transferred in chunks,
  *   state:<game>#auto|#slot-N  a save state (+ picture)  } both edits kept on a conflict
- *   set:<setting>, set:gameDisplay/<game>, fav:<game>    small: value inline, last writer wins
+ *   set:<setting>, set:gameDisplay/<game>, set:gameCheats/<game>, fav:<game>    small: value inline, last writer wins
  *   play:<game>                play time, sessions, last played: merged (the larger of each)
  */
 export interface Entry {
@@ -71,7 +71,7 @@ export const isBig = (k: string) => BIG.includes(kindOf(k));
 /** The game a key belongs to ('' for global settings). */
 export function gameOfKey(k: string): string {
   const rest = k.slice(k.indexOf(':') + 1);
-  if (k.startsWith('set:')) return rest.startsWith('gameDisplay/') ? rest.slice(12) : '';
+  if (k.startsWith('set:')) return /^game(Display|Cheats)\//.test(rest) ? rest.slice(rest.indexOf('/') + 1) : '';
   return rest.replace(/[~#].*$/, '');
 }
 
