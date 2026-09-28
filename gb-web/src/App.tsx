@@ -24,6 +24,7 @@ const LinkCablePage = lazy(() => import('./components/LinkCablePage').then((m) =
 const OnlineLinkPage = lazy(() => import('./components/netlink/OnlineLinkPage').then((m) => ({ default: m.OnlineLinkPage })));
 const SettingsPage = lazy(() => import('./components/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const AddRomsPage = lazy(() => import('./components/add/AddRomsPage').then((m) => ({ default: m.AddRomsPage })));
+const MusicPage = lazy(() => import('./components/music/MusicPage').then((m) => ({ default: m.MusicPage })));
 
 /**
  * Last line of defence: a render error shows the "Nothing in this slot." page instead of a blank screen.
@@ -92,6 +93,7 @@ const router = createBrowserRouter([{
         { path: '/link-cable/online', element: <OnlineLinkPage /> },
         { path: '/settings/:section?', element: <SettingsPage /> },
         { path: '/game/:id', element: <GamePage /> },
+        { path: '/music/:id', element: <MusicPage /> },
         { path: '/legal', element: <LegalPage /> },
         { path: '*', element: <NotFound /> },
       ],

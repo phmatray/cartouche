@@ -75,4 +75,8 @@ export default {
     bundled: '{title} comes with the app',
     free: 'Free homebrew',
   },
+  music: {
+    shelf: 'Music',
+    tracks: { one: '{count} track', other: '{count} tracks' },
+  },
 };
