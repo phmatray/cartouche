@@ -420,6 +420,34 @@ impl Emulator {
         }
     }
 
+    /// Replaces the active cheat codes (Game Genie / GameShark, one per line; "" clears them).
+    /// All or nothing: on the first bad code nothing changes and `get_error()` says `"<code>: <reason>"`.
+    pub fn set_cheats(&mut self, codes: &str) -> bool {
+        let Some(gb) = &mut self.gb else {
+            self.last_error = Some("No ROM loaded".to_string());
+            return false;
+        };
+        let mut list = Vec::new();
+        for code in codes.lines().map(str::trim).filter(|c| !c.is_empty()) {
+            let parsed = crate::cheats::parse(code).and_then(|c| match c {
+                crate::cheats::Cheat::Ram { bank: Some(_), .. } if !gb.bus.cgb_mode => {
+                    Err("bank codes need a Game Boy Color game".to_string())
+                }
+                c => Ok(c),
+            });
+            match parsed {
+                Ok(c) => list.push(c),
+                Err(e) => {
+                    self.last_error = Some(format!("{code}: {e}"));
+                    return false;
+                }
+            }
+        }
+        gb.bus.cheats.set(list);
+        self.last_error = None;
+        true
+    }
+
     /// Plug a Game Boy Printer into the serial port (solo play; never on a linked console).
     pub fn set_printer_connected(&mut self, on: bool) {
         if let Some(gb) = &mut self.gb {

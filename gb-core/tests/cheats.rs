@@ -56,3 +56,21 @@ fn parse_refuses_bad_codes() {
     assert!(parse("02FF34C1").is_err(), "type 02 is unsupported");
     assert!(parse("01FF3412").is_err(), "$1234 is an MBC register, not RAM");
 }
+
+#[test]
+fn set_cheats_is_all_or_nothing() {
+    let mut emu = gb_core::Emulator::new();
+    assert!(emu.load_rom(&rom(0x01)));
+    assert!(emu.set_cheats("3E2-B4F"));
+    assert_eq!(emu.read_memory(0x02B4), 0x3E);
+
+    assert!(!emu.set_cheats("3E2-B4F\nZZZ"));
+    assert!(emu.get_error().unwrap().contains("ZZZ"));
+    assert_eq!(emu.read_memory(0x02B4), 0x3E, "the previous set still applies");
+
+    assert!(!emu.set_cheats("91FF34D1"), "bank codes on a DMG game");
+    assert!(emu.get_error().unwrap().contains("Game Boy Color"));
+
+    assert!(emu.set_cheats(""));
+    assert_eq!(emu.read_memory(0x02B4), 0x01);
+}
