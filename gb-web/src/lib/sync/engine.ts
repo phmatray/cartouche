@@ -14,7 +14,7 @@ import { joinRoom, type DataPayload, type P2PRoom } from '../p2p/room';
 import { codeToSecret, concat, deriveKeys, open, prove, randomBytes, rekey, seal, secretToCode, verify, type Keys, type Msg } from './crypto';
 import { agreed, gameOfKey, plan, total, type Conflict, type Games, type Manifest, type Plan, type Pull } from './manifest';
 import { addPart, currentHash, dropParts, dropRecord, loadRecord, localGames, moveAside, partKey, partsOf, readLocal, rememberAlias, rememberGone, storeRecord, writeSmall, type Snapshot } from './local';
-import { IDLE, linkOf, setDevice, setLink, useSync, type Device, type LinkState, type Note, type SyncReport } from './status';
+import { deviceName, IDLE, linkOf, setDevice, setLink, useSync, type Device, type LinkState, type Note, type SyncReport } from './status';
 import { refreshSavedIds, reloadLibrary } from '../../hooks/useGameLibrary';
 import { toast } from '../../components/shell/actions';
 import { t } from '../../i18n';
@@ -152,7 +152,7 @@ class Link {
     const p: Peer = { nonce: randomBytes(16) };
     this.peers.set(id, p);
     const me = useSync.getState().me;
-    this.send({ t: 'hello', v: 1, dev: me.id, name: me.name, nonce: p.nonce }, id);
+    this.send({ t: 'hello', v: 1, dev: me.id, name: deviceName(me), nonce: p.nonce }, id);
   }
 
   gone(id: string) {

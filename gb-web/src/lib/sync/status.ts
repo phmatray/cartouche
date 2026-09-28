@@ -5,6 +5,7 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { t, translate, type Key } from '../../i18n/core.ts';
 
 export interface Device {
   /** The other device's id (random, made once per browser). */
@@ -54,6 +55,7 @@ export type PairPhase = 'showing' | 'joining' | 'found' | 'paired' | 'failed';
 export interface Pairing { phase: PairPhase; code?: string; peer?: string; error?: LinkError }
 
 interface SyncState {
+  /** `name`: the one the player chose, '' for the default (guessName, in the language shown: use deviceName). */
   me: { id: string; name: string };
   devices: Device[];
   /** Sync on its own whenever a paired device is around (opt-in). */
@@ -64,18 +66,28 @@ interface SyncState {
   pairing: Pairing | null;
 }
 
-export function guessName(ua = navigator.userAgent): string {
+/** This device's default name, in the language `tr` gives (the one shown by default). */
+export function guessName(ua = navigator.userAgent, tr: (k: Key) => string = t): string {
   if (/iPhone|iPod/.test(ua)) return 'iPhone';
   if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'iPad';
-  if (/Android/.test(ua)) return /Mobile/.test(ua) ? 'Android phone' : 'Android tablet';
-  const os = /Macintosh/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows PC' : /CrOS/.test(ua) ? 'Chromebook' : /Linux/.test(ua) ? 'Linux PC' : 'Computer';
+  if (/Android/.test(ua)) return tr(/Mobile/.test(ua) ? 'sync.device.androidPhone' : 'sync.device.androidTablet');
+  const os = /Macintosh/.test(ua) ? 'Mac' : /Windows/.test(ua) ? tr('sync.device.windows') : /CrOS/.test(ua) ? 'Chromebook' : /Linux/.test(ua) ? tr('sync.device.linux') : tr('sync.device.computer');
   const browser = /Edg\//.test(ua) ? 'Edge' : /Firefox\//.test(ua) ? 'Firefox' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : '';
   return browser ? `${os} · ${browser}` : os;
 }
+/** This device's name as shown and sent: the one chosen, else the default in the language shown now. */
+export const deviceName = (me: { name: string }) => me.name || guessName();
+/** A name to store: '' when it's the default (it then follows the language). */
+export const nameToStore = (name: string) => (name === guessName() ? '' : name);
+/**
+ * Names stored before they followed the language: the default was saved in English at the first visit. That one becomes
+ * "no name chosen". ponytail: a player who typed exactly that English default gets it translated too.
+ */
+export const migrateName = (name: string, ua = navigator.userAgent) => (name === guessName(ua, (k) => translate('en', k)) ? '' : name);
 const newId = () => Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(16).padStart(2, '0')).join('');
 
 export const useSync = create<SyncState>()(persist((): SyncState => ({
-  me: { id: newId(), name: guessName() },
+  me: { id: newId(), name: '' },
   devices: [],
   auto: false,
   roms: false,
@@ -83,7 +95,11 @@ export const useSync = create<SyncState>()(persist((): SyncState => ({
   pairing: null,
 }), {
   name: 'cartouche.sync',
-  version: 1,
+  version: 2,
+  migrate: (s, v) => {
+    const old = s as SyncState;
+    return (v < 2 && old?.me ? { ...old, me: { ...old.me, name: migrateName(old.me.name) } } : old);
+  },
   partialize: ({ me, devices, auto, roms }) => ({ me, devices, auto, roms }),
 }));
 

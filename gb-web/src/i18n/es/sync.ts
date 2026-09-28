@@ -3,6 +3,7 @@ import type { Messages } from '../core.ts';
 export default {
   intro: 'Tus partidas guardadas, al día en tus propios dispositivos: tu iPhone y tu Mac, por ejemplo. Se hablan directamente, con cifrado de extremo a extremo. Sin cuenta y sin nube: nada se guarda en ningún otro sitio.',
   otherDevice: 'Otro dispositivo',
+  device: { androidPhone: 'Teléfono Android', androidTablet: 'Tablet Android', windows: 'PC con Windows', linux: 'PC con Linux', computer: 'Ordenador' },
   name: {
     label: 'Este dispositivo',
     sub: 'Cómo se llama en tus otros dispositivos',

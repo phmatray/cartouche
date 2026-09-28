@@ -3,6 +3,7 @@ import type { Messages } from '../core.ts';
 export default {
   intro: 'Vos sauvegardes, à jour sur vos propres appareils : votre iPhone et votre Mac, par exemple. Ils se parlent directement, chiffrés de bout en bout. Pas de compte ni de cloud : rien n’est stocké ailleurs.',
   otherDevice: 'Autre appareil',
+  device: { androidPhone: 'Téléphone Android', androidTablet: 'Tablette Android', windows: 'PC Windows', linux: 'PC Linux', computer: 'Ordinateur' },
   name: {
     label: 'Cet appareil',
     sub: 'Son nom sur vos autres appareils',

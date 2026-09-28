@@ -2,6 +2,8 @@
 export default {
   intro: 'Your saves, in step on your own devices: your iPhone and your Mac, say. They talk straight to each other, end-to-end encrypted. No account and no cloud: nothing is stored anywhere else.',
   otherDevice: 'Other device',
+  /** This device's default name (iPhone, iPad, Mac and Chromebook are names, never translated). */
+  device: { androidPhone: 'Android phone', androidTablet: 'Android tablet', windows: 'Windows PC', linux: 'Linux PC', computer: 'Computer' },
   name: {
     label: 'This device',
     sub: 'How it’s named on your other devices',
