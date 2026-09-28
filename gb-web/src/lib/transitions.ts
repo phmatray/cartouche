@@ -10,7 +10,7 @@ import { sampleInk } from './cover-art';
  */
 
 type Router = ReturnType<typeof createBrowserRouter>;
-type Kind = 'open' | 'close' | 'play' | 'eject' | 'fade';
+type Kind = 'open' | 'close' | 'play' | 'eject' | 'page' | 'fade';
 type Page = 'lib' | 'game' | 'player' | 'other';
 
 const supported = typeof document !== 'undefined' && typeof document.startViewTransition === 'function';
@@ -18,7 +18,9 @@ const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const pageOf = (p: string): Page => (p === '/' ? 'lib' : /^\/game\/[^/]+\/play\/?$/.test(p) ? 'player' : /^\/game\/[^/]+\/?$/.test(p) ? 'game' : 'other');
 const gameOf = (p: string) => decodeURIComponent(p.split('/')[2] ?? '');
+const inSettings = (p: string) => /^\/settings(\/|$)/.test(p);
 function kindOf(from: string, to: string): Kind {
+  if (inSettings(from) && inSettings(to)) return 'page';
   const a = pageOf(from), b = pageOf(to);
   if (a === 'lib' && b === 'game') return 'open';
   if (a === 'game' && b === 'lib') return 'close';
@@ -59,6 +61,20 @@ function slotBox(id: string) {
   const slot = s?.id === id ? all.find((b) => b.closest(`[aria-labelledby="${s.section}"]`)) : undefined;
   if (slot && !inView(slot)) slot.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   return slot ?? all.find(inView) ?? null;
+}
+
+/**
+ * Which way the move goes, read off the links on screen: to a later page of the settings manual (or back), or to a
+ * tab further right in the header (or left). Null when the two aren't neighbours in either list.
+ */
+function directionOf(kind: Kind, from: string, to: string): 'fwd' | 'back' | null {
+  const paths = [...document.querySelectorAll<HTMLAnchorElement>(kind === 'page' ? '.toc a' : '.top .nav a')]
+    .map((a) => (routed ? strip(routed, a.pathname) : a.pathname));
+  const at = (p: string) => paths.findIndex((h) => (h === '/' ? p === '/' : p === h || p.startsWith(`${h}/`)));
+  // Settings without a section is its first page.
+  const norm = (p: string) => (kind === 'page' && !/^\/settings\/./.test(p) ? paths[0] ?? p : p);
+  const a = at(norm(from)), b = at(norm(to));
+  return a < 0 || b < 0 || a === b ? null : b > a ? 'fwd' : 'back';
 }
 
 // ---- running a transition ----
@@ -125,6 +141,8 @@ function run(from: string, to: string, go: () => unknown, fade = false, overlay 
   if (src && pageOf(from) === 'lib') slots.set(idx(), { id, section: src.closest('[aria-labelledby]')?.getAttribute('aria-labelledby') ?? '' });
   const from_ = src?.getBoundingClientRect() ?? null;
   html.dataset.vt = still ? 'still' : kind;
+  const dir = still || overlay ? null : directionOf(kind, from, to);
+  if (dir && (kind === 'fade' || kind === 'page')) html.dataset.vtDir = dir;
   // The header holds still between shell pages, but not over the search overlay it would pop in front of.
   if (pageOf(from) !== 'player' && pageOf(to) !== 'player' && !still && !overlay && !src?.closest('dialog[open]')) html.dataset.vtShell = '';
 
@@ -167,6 +185,7 @@ function run(from: string, to: string, go: () => unknown, fade = false, overlay 
     activeTo = '';
     delete html.dataset.vt;
     delete html.dataset.vtShell;
+    delete html.dataset.vtDir;
     ['--vt-x', '--vt-y', '--vt-r'].forEach((p) => html.style.removeProperty(p));
   });
   return t.updateCallbackDone.catch(() => {});
