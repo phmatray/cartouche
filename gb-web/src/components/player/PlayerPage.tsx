@@ -45,6 +45,7 @@ import { usePeripherals } from '../../peripherals/usePeripherals';
 // Cartridge peripherals load only when a cartridge uses them.
 const CameraDock = lazy(() => import('../../peripherals/CameraDock'));
 const PrinterTray = lazy(() => import('../../peripherals/PrinterTray'));
+const TiltDock = lazy(() => import('../../peripherals/TiltDock'));
 import { useOnlineLink } from '../../lib/netlink/useOnlineLink';
 import { LinkCap, LinkWait } from '../netlink/LinkHud';
 
@@ -84,7 +85,7 @@ function Player({ game }: { game: GameEntry }) {
   const emu = useEmulator();
   const { isReady, isRunning, setIsRunning, romLoaded, isCgb, loadRom, runFrame, getAudioSamples, pressButton, releaseButton,
     errors, hasBatteryRam, exportSram, importSram, saveState, loadState, framebufferSnapshot, setTraceEnabled, getTrace,
-    consoleNow, stateConsole, paletteNow, skipBoot, sgbBorder, sgbSnesMusic, power } = emu;
+    consoleNow, stateConsole, paletteNow, skipBoot, sgbBorder, sgbSnesMusic, power, steps } = emu;
   // Keyboard, pad and touch each hold their own buttons: letting go on one keeps what another still holds.
   const input = useMemo(() => combine(pressButton, releaseButton), [pressButton, releaseButton]);
   const padPress = useCallback((b: number, p?: number) => input.press('pad', b, p), [input]);
@@ -200,6 +201,11 @@ function Player({ game }: { game: GameEntry }) {
     const fb = restores && framebufferSnapshot();
     if (fb) renderFrame(new Uint8ClampedArray(fb.buffer, fb.byteOffset, fb.length), true);
   }, [restores, framebufferSnapshot, renderFrame]);
+  // A debugger step runs the core while paused, outside the frame loop: show the picture it left.
+  useEffect(() => {
+    const fb = steps > 0 && framebufferSnapshot();
+    if (fb) renderFrame(new Uint8ClampedArray(fb.buffer, fb.byteOffset, fb.length), true);
+  }, [steps, framebufferSnapshot, renderFrame]);
   const saves = useSaveStates(game.id, { ...emu, loadState: loadAndShow }, saveTo);
   /**
    * New game (from the game page, or the Saves page of the Manual): a moment to change one's mind and go back to the
@@ -713,10 +719,11 @@ function Player({ game }: { game: GameEntry }) {
               ))}
             </div>
           </div>
-          {(periph.camera || periph.paper) && (
+          {(periph.camera || periph.tilt || periph.paper) && (
             <div className="periph">
               <Suspense fallback={null}>
                 {periph.camera && <CameraDock feed={periph.feedCamera} running={isRunning} />}
+                {periph.tilt && <TiltDock onMotion={periph.tiltMotion} recenter={periph.recenter} source={periph.tiltSource} />}
                 {periph.paper && <PrinterTray paper={periph.paper} gameId={game.id} title={game.title} onClose={periph.dismiss} />}
               </Suspense>
             </div>

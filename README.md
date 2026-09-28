@@ -101,7 +101,7 @@ emulator prove itself; hide them in Settings if you'd rather not see them.
 ## Features
 
 **Play**
-- Game Boy and Game Boy Color games, with MBC1, MBC2, MBC3 (with clock), MBC5, HuC1 and HuC3 (with clock) cartridges and battery saves kept automatically.
+- Game Boy and Game Boy Color games, with MBC1, MBC2, MBC3 (with clock), MBC5, HuC1, HuC3 (with clock) and MBC7 (tilt, played by tilting your phone or with a gamepad stick or the keyboard) cartridges and battery saves kept automatically.
 - A resume point every time you leave, so **Continue** puts you back where you were.
 - Five save-state slots with thumbnails, per-game save profiles, rewind (hold <kbd>R</kbd>) and speed from ½× to 4×.
 - Keyboard with remappable keys, any standard gamepad, or touch controls on phones and tablets.
@@ -110,7 +110,6 @@ emulator prove itself; hide them in Settings if you'd rather not see them.
 - The Game Boy Printer sits on the link port: prints feed out of a tray, land in your album and export as PNG.
 - Rumble cartridges drive gamepad motors or phone vibration (Android; iPhone gives websites no vibration).
 - The screen stays awake while you play.
-- Not supported: MBC7 cartridges.
 
 **Library**
 - Drop ROMs, or a `.zip` of them, anywhere in the app; duplicates are caught before they're stored.
@@ -164,7 +163,8 @@ browser's own install button.
 ## Accuracy
 
 The core is checked against the public hardware test ROMs that emulator
-authors rely on. Every suite below passes in CI on each commit.
+authors rely on. Every suite below runs in CI on each commit; known failures are
+listed, not hidden, in `gb-core/tests/expected-failures.txt`.
 
 | Suite | What it checks | Result |
 |---|---|---|
@@ -176,6 +176,13 @@ authors rely on. Every suite below passes in CI on each commit.
 | dmg-acid2, cgb-acid2 | PPU rendering, pixel for pixel against the reference | ✅ |
 | Homebrew smoke tests | Freely licensed GB and GBC games run without freezing | ✅ |
 | Link cable | Serial transfers between two consoles | ✅ |
+| Mooneye acceptance | Timers, DMA, interrupts, PPU and instruction timing | 32/75 |
+| Mooneye emulator-only MBC | MBC1, MBC2 and MBC5 banking | 27/28 |
+| Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 0/51 |
+| SameSuite | APU, HDMA and interrupt edge cases (CGB) | 5/78 |
+| Age | PPU, STAT, OAM/VRAM access and double-speed timing | 1/51 |
+| gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 263/513 |
+| rtc3test | The MBC3 real-time clock | 0/6 |
 
 ¹ Test 7 runs inside the combined `oam_bug.gb`. Run on its own, that ROM
 overruns its 8 KB text log and overwrites its own code, so it cannot finish on
@@ -229,7 +236,6 @@ your dumps.
 ## Roadmap
 
 - **RetroAchievements hardcore**: unlocks are softcore for now; hardcore needs the emulator validated by RetroAchievements (eligible after six months public, from March 2027) and the hardcore rules in the player ([what is needed](docs/RETROACHIEVEMENTS.md)).
-- **MBC7** cartridge support.
 - **Super Game Boy sound**: the SNES side's music and effects.
 - **More hosted GB Studio games**, as authors choose licenses that allow it.
 - **Live translation of in-game text**: research only for now.

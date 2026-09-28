@@ -187,13 +187,16 @@ export default {
   game: {
     open: 'Abrir la página del juego',
     debug: 'Depuración',
-    debugSub: 'Registros, memoria, salida serie y tiles, para desarrollo',
+    debugSub: 'Registros, código, memoria, salida serie y tiles, para desarrollo',
   },
   debug: {
     view: 'Vista de depuración',
     cpu: 'cpu',
     serial: 'serie',
     tiles: 'tiles',
+    disasm: 'código',
+    stepOver: 'Saltar llamada',
+    toggleBreakpoint: 'Punto de interrupción en {addr}',
     flags: 'Flags',
     noRom: 'Sin ROM',
     address: 'Dirección',

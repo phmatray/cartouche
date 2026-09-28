@@ -247,6 +247,12 @@ pub enum MbcType {
         rom_bank: u8,
         ram_bank: u8,
     },
+    /// MBC7 (tilt): A000-AFFF is the accelerometer/EEPROM window once both enables are set.
+    Mbc7 {
+        rom_bank: u8,
+        ram_enable_1: bool,
+        ram_enable_2: bool,
+    },
 }
 
 pub struct Cartridge {
@@ -263,6 +269,7 @@ pub struct Cartridge {
     motor_on: u32,
     motor_total: u32,
     pub camera: Option<Box<crate::camera::Camera>>,
+    mbc7: Option<Box<crate::mbc7::Mbc7>>,
 }
 
 impl Cartridge {
@@ -323,6 +330,7 @@ impl Cartridge {
             },
             0xFE => MbcType::Huc3 { mode: 0, rom_bank: 1, ram_bank: 0 },
             0xFF => MbcType::Huc1 { ir_mode: false, rom_bank: 1, ram_bank: 0 },
+            0x22 => MbcType::Mbc7 { rom_bank: 1, ram_enable_1: false, ram_enable_2: false },
             _ => return Err(CartridgeError::UnsupportedType { cart_type }),
         };
 
@@ -335,6 +343,8 @@ impl Cartridge {
         // MBC2 has built-in 512x4-bit RAM; ignore the ram_size header byte for it
         let ram_bytes = match cart_type {
             0x05..=0x06 => 512,
+            // MBC7: a 93LC56 EEPROM (128 16-bit words); the header says 0x00.
+            0x22 => 256,
             _ => match ram_size {
                 0x00 => 0,
                 0x01 => 2 * 1024,
@@ -363,6 +373,7 @@ impl Cartridge {
             motor_on: 0,
             motor_total: 0,
             camera: (cart_type == 0xFC).then(|| Box::new(crate::camera::Camera::new())),
+            mbc7: (cart_type == 0x22).then(|| Box::new(crate::mbc7::Mbc7::new())),
         })
     }
 
@@ -411,7 +422,10 @@ impl Cartridge {
                 _ => 0xFF,
             },
 
-            MbcType::Camera { rom_bank, .. } | MbcType::Huc1 { rom_bank, .. } | MbcType::Huc3 { rom_bank, .. } => match addr {
+            MbcType::Camera { rom_bank, .. }
+            | MbcType::Huc1 { rom_bank, .. }
+            | MbcType::Huc3 { rom_bank, .. }
+            | MbcType::Mbc7 { rom_bank, .. } => match addr {
                 0x0000..=0x3FFF => self.rom.get(addr as usize).copied().unwrap_or(0xFF),
                 0x4000..=0x7FFF => {
                     let bank = (*rom_bank as usize) % self.rom_bank_count.max(1);
@@ -546,6 +560,14 @@ impl Cartridge {
                 0x4000..=0x5FFF => *ram_bank = value & 0x03,
                 _ => {}
             },
+
+            // ponytail: bank 0 is not remapped to 1 (Pan Docs leaves it unconfirmed).
+            MbcType::Mbc7 { rom_bank, ram_enable_1, ram_enable_2 } => match addr {
+                0x0000..=0x1FFF => *ram_enable_1 = value == 0x0A,
+                0x2000..=0x3FFF => *rom_bank = value & 0x7F,
+                0x4000..=0x5FFF => *ram_enable_2 = value == 0x40,
+                _ => {}
+            },
         }
     }
 
@@ -657,6 +679,11 @@ impl Cartridge {
                 0xE => 0xC0,
                 _ => 0xFF,
             },
+
+            MbcType::Mbc7 { ram_enable_1: true, ram_enable_2: true, .. } if offset < 0x1000 => {
+                self.mbc7.as_ref().map_or(0xFF, |m| m.read_reg(offset))
+            }
+            MbcType::Mbc7 { .. } => 0xFF,
         }
     }
 
@@ -711,6 +738,7 @@ impl Cartridge {
             MbcType::Camera { ram_enabled, rom_bank, ram_bank } => (rom_bank as u16, ram_bank, ram_enabled, false),
             MbcType::Huc1 { ir_mode, rom_bank, ram_bank } => (rom_bank as u16, ram_bank, false, ir_mode),
             MbcType::Huc3 { rom_bank, ram_bank, .. } => (rom_bank as u16, ram_bank, false, false),
+            MbcType::Mbc7 { rom_bank, ram_enable_1, ram_enable_2 } => (rom_bank as u16, 0, ram_enable_1, ram_enable_2),
         };
         let (sel, latch) = self.rtc.as_ref().map_or((0, false), |r| (r.selected_register.unwrap_or(0), r.latch_ready));
         let [lo, hi] = rom_bank.to_le_bytes();
@@ -731,6 +759,7 @@ impl Cartridge {
             MbcType::Camera { ram_enabled, rom_bank, ram_bank } => (*ram_enabled, *rom_bank, *ram_bank) = (en, rb as u8, rab),
             MbcType::Huc1 { ir_mode, rom_bank, ram_bank } => (*ir_mode, *rom_bank, *ram_bank) = (md, rb as u8, rab),
             MbcType::Huc3 { rom_bank, ram_bank, .. } => (*rom_bank, *ram_bank) = (rb as u8, rab),
+            MbcType::Mbc7 { rom_bank, ram_enable_1, ram_enable_2 } => (*rom_bank, *ram_enable_1, *ram_enable_2) = (rb as u8, en, md),
         }
         if let Some(rtc) = &mut self.rtc {
             rtc.selected_register = (s[5] != 0).then_some(s[5]);
@@ -739,9 +768,11 @@ impl Cartridge {
     }
 
     /// Mapper state beyond the fixed `export_state` block, for the save state's length-prefixed
-    /// mapper block. Empty for every mapper but HuC3: mode, address, last result, last opcode, then
+    /// mapper block. MBC7: its serial and sensor state (`Mbc7::export`). Empty for every other mapper
+    /// but HuC3: mode, address, last result, last opcode, then
     /// its 256 memory nibbles packed two per byte (low nibble first).
     pub fn export_extra(&self) -> Vec<u8> {
+        if let Some(m) = &self.mbc7 { return m.export(); }
         let (MbcType::Huc3 { mode, .. }, Some(h)) = (&self.mbc, &self.huc3) else { return Vec::new() };
         let mut out = vec![*mode, h.address, h.result, h.last_opcode];
         out.extend(h.memory.chunks(2).map(|p| p[0] & 0xF | p[1] << 4));
@@ -751,6 +782,7 @@ impl Cartridge {
     /// Restores `export_extra`. Anything shorter (a state saved before the block existed) puts the
     /// registers back to power-on; the HuC3 memory is left as the battery save restored it.
     pub fn import_extra(&mut self, data: &[u8]) {
+        if let Some(m) = &mut self.mbc7 { return m.import(data); }
         let (MbcType::Huc3 { mode, .. }, Some(h)) = (&mut self.mbc, &mut self.huc3) else { return };
         let Some((regs, packed)) = data.split_first_chunk::<4>().filter(|(_, p)| p.len() >= 128) else {
             (*mode, h.address, h.result, h.last_opcode) = (0, 0, 0, 0);
@@ -905,7 +937,22 @@ impl Cartridge {
                 if let Some(huc3) = &mut self.huc3 { huc3.command(value); }
             }
             MbcType::Huc3 { .. } => {}
+            MbcType::Mbc7 { ram_enable_1: true, ram_enable_2: true, .. } if offset < 0x1000 => {
+                if let Some(m) = &mut self.mbc7 { m.write_reg(&mut self.ram, offset, value); }
+            }
+            MbcType::Mbc7 { .. } => {}
         }
+    }
+
+    /// Whether the cartridge has an MBC7 accelerometer (type 0x22).
+    pub fn has_tilt(&self) -> bool {
+        self.mbc7.is_some()
+    }
+
+    /// MBC7 tilt in g (x > 0 = right side down, y > 0 = top side down), clamped to ±2 g and held
+    /// until the next call; the game reads it at its next latch. Ignored on other cartridges.
+    pub fn set_tilt(&mut self, x: f32, y: f32) {
+        if let Some(m) = &mut self.mbc7 { m.set_tilt(x, y); }
     }
 }
 
@@ -1085,6 +1132,132 @@ mod tests {
         blank.import_sram(&vec![7; ram_len]);
         assert_eq!(blank.ram_byte(0), Some(7));
         assert_eq!(huc3_clock(&mut blank), (0, 0), "no footer: the clock starts at 0");
+    }
+
+    /// Erase then latch the accelerometer; returns (X, Y) as the game reads them.
+    fn mbc7_latch(c: &mut Cartridge) -> (u16, u16) {
+        c.write_ram(0x000, 0x55);
+        c.write_ram(0x010, 0xAA);
+        let word = |c: &Cartridge, lo: u16| u16::from_le_bytes([c.read_ram(lo), c.read_ram(lo + 0x10)]);
+        (word(c, 0x020), word(c, 0x040))
+    }
+
+    #[test]
+    fn mbc7_latches_tilt_behind_both_enables() {
+        let mut c = cart(0x22, 0x00);
+        assert_eq!(c.export_sram().len(), 256, "93LC56: 128 words");
+        assert!(c.has_battery());
+
+        c.write_rom(0x0000, 0x0A);
+        assert_eq!(c.read_ram(0x020), 0xFF, "enable 1 alone keeps the registers hidden");
+        c.write_rom(0x4000, 0x40);
+        assert_eq!(c.read_ram(0x020), 0x00, "power-on X is 0x8000");
+        assert_eq!(c.read_ram(0x030), 0x80);
+        assert_eq!((c.read_ram(0x060), c.read_ram(0x070), c.read_ram(0x090)), (0x00, 0xFF, 0xFF));
+        assert_eq!(c.read_ram(0x1020), 0xFF, "B000-BFFF reads 0xFF");
+
+        c.set_tilt(0.0, 0.0);
+        assert_eq!(mbc7_latch(&mut c), (0x81D0, 0x81D0));
+        // Right side down lowers X; top side down raises Y (Pan Docs).
+        c.set_tilt(1.0, -1.0);
+        assert_eq!(mbc7_latch(&mut c), (0x8160, 0x8160));
+        c.set_tilt(-1.0, 1.0);
+        assert_eq!(mbc7_latch(&mut c), (0x8240, 0x8240));
+        // 0xAA without a fresh 0x55 does not re-latch.
+        c.set_tilt(0.0, 0.0);
+        c.write_ram(0x010, 0xAA);
+        assert_eq!(c.read_ram(0x020), 0x40);
+
+        c.write_rom(0x4000, 0x00);
+        assert_eq!(c.read_ram(0x020), 0xFF, "enable 2 off hides the registers again");
+
+        c.write_rom(0x2000, 0x03);
+        c.rom[3 * 0x4000] = 0x77;
+        assert_eq!(c.read_rom(0x4000), 0x77);
+    }
+
+    /// Clocks bits into the MBC7 EEPROM the way games do: DI set, CLK up, CLK down, CS held high.
+    fn clock_in(c: &mut Cartridge, bits: &[u8]) {
+        for &b in bits {
+            let di = b << 1;
+            for v in [0x80 | di, 0xC0 | di, 0x80 | di] { c.write_ram(0x080, v); }
+        }
+    }
+
+    /// Start bit, 2-bit opcode, 8 address bits (the top one unused), MSB first.
+    fn eeprom_cmd(op: u8, addr: u8) -> Vec<u8> {
+        let mut v = vec![1, op >> 1 & 1, op & 1];
+        v.extend((0..8).rev().map(|i| addr >> i & 1));
+        v
+    }
+
+    fn word_bits(w: u16) -> Vec<u8> {
+        (0..16).rev().map(|i| (w >> i & 1) as u8).collect()
+    }
+
+    fn eeprom_end(c: &mut Cartridge) {
+        c.write_ram(0x080, 0x00);
+        c.write_ram(0x080, 0x80);
+    }
+
+    /// Clocks 16 bits out on DO.
+    fn clock_out(c: &mut Cartridge) -> u16 {
+        (0..16).fold(0, |w, _| {
+            c.write_ram(0x080, 0x80);
+            c.write_ram(0x080, 0xC0);
+            w << 1 | (c.read_ram(0x080) & 1) as u16
+        })
+    }
+
+    fn mbc7_enabled() -> Cartridge {
+        let mut c = cart(0x22, 0x00);
+        c.write_rom(0x0000, 0x0A);
+        c.write_rom(0x4000, 0x40);
+        c
+    }
+
+    #[test]
+    fn set_tilt_reaches_the_cartridge() {
+        let mut other = cart(0x1B, 0x03);
+        assert!(!other.has_tilt());
+        other.set_tilt(1.0, 1.0); // ignored, no panic
+        let mut c = mbc7_enabled();
+        assert!(c.has_tilt());
+        c.set_tilt(5.0, f32::NAN); // clamped to 2 g; not a number reads level
+        assert_eq!(mbc7_latch(&mut c), (0x81D0 - 0xE0, 0x81D0));
+    }
+
+    #[test]
+    fn mbc7_eeprom_writes_after_ewen_and_reads_back() {
+        let mut c = mbc7_enabled();
+        let write = [eeprom_cmd(0b01, 5), word_bits(0x1234)].concat();
+        clock_in(&mut c, &write);
+        eeprom_end(&mut c);
+        assert_eq!(c.export_sram()[10..12], [0, 0], "power-on is write-disabled");
+
+        clock_in(&mut c, &eeprom_cmd(0b00, 0xC0)); // EWEN
+        eeprom_end(&mut c);
+        clock_in(&mut c, &write);
+        eeprom_end(&mut c);
+        assert_eq!(c.read_ram(0x080) & 1, 1, "DO reads ready after the write");
+        assert_eq!(c.export_sram()[10..12], [0x34, 0x12]);
+
+        clock_in(&mut c, &eeprom_cmd(0b10, 5)); // READ
+        assert_eq!(c.read_ram(0x080) & 1, 0, "dummy 0 before the data");
+        assert_eq!(clock_out(&mut c), 0x1234);
+        eeprom_end(&mut c);
+
+        clock_in(&mut c, &eeprom_cmd(0b11, 5)); // ERASE
+        eeprom_end(&mut c);
+        assert_eq!(c.export_sram()[10..12], [0xFF, 0xFF]);
+        clock_in(&mut c, &[eeprom_cmd(0b00, 0x40), word_bits(0xBEEF)].concat()); // WRAL
+        eeprom_end(&mut c);
+        assert!(c.export_sram().chunks(2).all(|w| w == [0xEF, 0xBE]));
+        clock_in(&mut c, &eeprom_cmd(0b00, 0x00)); // EWDS
+        eeprom_end(&mut c);
+        clock_in(&mut c, &eeprom_cmd(0b00, 0x80)); // ERAL, refused
+        eeprom_end(&mut c);
+        assert_eq!(c.export_sram()[0..2], [0xEF, 0xBE]);
     }
 
     #[test]

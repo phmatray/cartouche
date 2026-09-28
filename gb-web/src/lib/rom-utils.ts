@@ -89,9 +89,9 @@ const CARTRIDGE_TYPE_MAP: Record<number, string> = {
 };
 
 /** Mappers the core emulates (gb-core cartridge.rs); anything else fails to load. */
-const SUPPORTED_TYPES = new Set([0x00, 0x01, 0x02, 0x03, 0x05, 0x06, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0xFC, 0xFE, 0xFF].map((b) => CARTRIDGE_TYPE_MAP[b]));
+const SUPPORTED_TYPES = new Set([0x00, 0x01, 0x02, 0x03, 0x05, 0x06, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x22, 0xFC, 0xFE, 0xFF].map((b) => CARTRIDGE_TYPE_MAP[b]));
 
-/** False for a cartridge whose mapper the core can't run yet (MBC7, MMM01...). */
+/** False for a cartridge whose mapper the core can't run yet (MMM01, MBC6...). */
 export const mapperSupported = (h: RomMetadata) => SUPPORTED_TYPES.has(h.cartridgeType);
 
 const ROM_SIZE_MAP: Record<number, string> = {
