@@ -644,6 +644,7 @@ impl GameBoy {
         if self.bus.ppu.mode != crate::ppu::PpuMode::VBlank { self.bus.ppu.ly = self.bus.ppu.ly.min(143); }
         // Below one line: a larger count would run a line per M-cycle until it drained.
         self.bus.ppu.mode_clock = read_u32!().min(455);
+        self.bus.ppu.line.active = false; // a DMG line in mode 3 is redrawn from its first dot
         self.bus.ppu.window_line_counter = read_u8!();
         self.bus.ppu.frame_ready = read_u8!() != 0;
 

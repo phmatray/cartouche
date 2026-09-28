@@ -7,6 +7,7 @@ pub mod cpu;
 pub mod debug;
 pub mod disasm;
 pub mod error;
+mod fifo;
 pub mod flash;
 pub mod gameboy;
 pub mod gbs;
