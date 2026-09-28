@@ -155,7 +155,7 @@ export function StorageTab() {
         run: async () => {
           const n = { roms: 0, saves: 0, screenshots: 0 };
           const what = () => ({ roms: tNow('settings.storage.nRoms', { count: n.roms }), saves: tNow('settings.storage.nSaves', { count: n.saves }), shots: tNow('settings.storage.nShots', { count: n.screenshots }) });
-          setJob({ label: 'restoring', n: 0, of: b.romCount });
+          setJob({ label: 'restoring', n: 0, of: b.romCount + b.states.length });
           try {
             await restoreBackup(b, withSettings.current, n, (i, of) => setJob({ label: 'restoring', n: i, of }));
             toast(tNow('settings.storage.restored', what()), 'c');

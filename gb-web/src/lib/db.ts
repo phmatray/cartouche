@@ -265,6 +265,14 @@ export function eraseGames(ids: string[], romIds: string[] = []): Promise<void> 
 export const STORES = { roms: ROM_STORE, saves: SAVE_STORE, states: SAVESTATE_STORE, meta: GAME_META_STORE, screenshots: SCREENSHOT_STORE } as const;
 export type StoreName = typeof STORES[keyof typeof STORES];
 export function getAllFrom<T>(store: StoreName): Promise<T[]> { return txOp(store, 'readonly', (s) => s.getAll()); }
+/** Call `fn` with each record of `store`, one at a time: thousands of save states (130 kB each) never sit in memory at once. */
+export function eachIn<T>(store: StoreName, fn: (value: T) => void): Promise<void> {
+  return openDB().then((db) => new Promise((resolve, reject) => {
+    const req = db.transaction(store, 'readonly').objectStore(store).openCursor();
+    req.onsuccess = () => { const c = req.result; if (!c) return resolve(); fn(c.value); c.continue(); };
+    req.onerror = () => reject(req.error);
+  }));
+}
 export function putInto(store: StoreName, value: unknown): Promise<void> { return txOp(store, 'readwrite', (s) => s.put(value)).then(() => {}); }
 export async function clearAll(): Promise<void> {
   const db = await openDB();
