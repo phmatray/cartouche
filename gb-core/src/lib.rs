@@ -67,6 +67,18 @@ impl Emulator {
         }
     }
 
+    /// Plays `track` (0-based) of a GBS music file, wrapped in a synthetic cartridge (`gbs::to_rom`)
+    /// on a fresh machine. Changing track = calling this again.
+    pub fn load_gbs(&mut self, data: &[u8], track: u8) -> bool {
+        match gbs::to_rom(data, track) {
+            Ok(rom) => self.load_rom_with(&rom, false, 0, 0),
+            Err(e) => {
+                self.last_error = Some(e.to_string());
+                false
+            }
+        }
+    }
+
     /// A Super Game Boy (palettes, border, multiplayer) for a cartridge with SGB support; any
     /// other cartridge starts as with `load_rom_with(rom, false, 0, animation)`.
     pub fn load_rom_sgb(&mut self, rom_data: &[u8], animation: u8) -> bool {

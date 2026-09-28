@@ -79,3 +79,47 @@ fn to_rom_builds_a_valid_cartridge_without_the_logo() {
 fn to_rom_rejects_a_track_past_the_last_song() {
     assert!(matches!(to_rom(&synthetic_gbs(0, 0), 3), Err(GbsError::TrackOutOfRange { track: 3, songs: 3 })));
 }
+
+// ─── Playback on the emulator ───
+
+use gb_core::Emulator;
+
+fn play(gbs: &[u8], track: u8, frames: usize) -> Emulator {
+    let mut emu = Emulator::new();
+    assert!(emu.load_gbs(gbs, track), "{:?}", emu.get_error());
+    for _ in 0..frames {
+        emu.run_frame();
+    }
+    emu
+}
+
+#[test]
+fn vblank_mode_calls_init_with_the_track_then_play_every_frame() {
+    let emu = play(&synthetic_gbs(0, 0), 1, 60);
+    assert_eq!(emu.read_memory(0xC000), 1);
+    let calls = emu.read_memory(0xC001);
+    assert!((59..=61).contains(&calls), "play ran {calls} times");
+}
+
+#[test]
+fn timer_mode_calls_play_at_the_tma_tac_rate() {
+    // TAC $04 = 4096 Hz, TMA $C0 = 64 ticks per overflow → 64 Hz.
+    let emu = play(&synthetic_gbs(0x04, 0xC0), 0, 60);
+    let calls = emu.read_memory(0xC001);
+    assert!((63..=65).contains(&calls), "play ran {calls} times");
+}
+
+#[test]
+fn init_starts_a_note_that_reaches_the_audio_buffer() {
+    let mut emu = play(&synthetic_gbs(0, 0), 0, 10);
+    let n = emu.drain_audio();
+    let samples = unsafe { std::slice::from_raw_parts(emu.audio_buffer_ptr(), n) };
+    assert!(samples.iter().any(|&s| s != 0.0));
+}
+
+#[test]
+fn load_gbs_rejects_a_non_gbs_file_with_an_error() {
+    let mut emu = Emulator::new();
+    assert!(!emu.load_gbs(b"nope", 0));
+    assert!(emu.get_error().is_some());
+}
