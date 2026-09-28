@@ -1209,6 +1209,8 @@ html:has(.pl),body:has(.pl){overscroll-behavior:none}
   body:has(.pl) .toasts{top:auto}
   /* a notice there lies over Select/Start (the resume notice, right when Start is wanted): taps go through it */
   body:has(.pl) .toast:not(:has(button)){pointer-events:none}
+  /* and only the newest shows: a stack (a set's progress, an unlock) would cover the whole pad */
+  body:has(.pl) .toast:not(:last-child){display:none}
   .pl:not(.closed) .overlay.hold{display:none} /* the game waits while the Manual is open: no "Paused" card over the small screen */
   .pl{grid-template-rows:calc(56px + var(--sat)) auto auto 1fr}
   .pl-top{padding:var(--sat) max(12px,var(--sar)) 0 max(12px,var(--sal))}
