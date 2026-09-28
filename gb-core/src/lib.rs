@@ -8,6 +8,7 @@ pub mod debug;
 pub mod disasm;
 pub mod error;
 pub mod gameboy;
+pub mod gbs;
 pub mod interrupts;
 pub mod joypad;
 pub mod mbc7;
