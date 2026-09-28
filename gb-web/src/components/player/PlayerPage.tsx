@@ -27,6 +27,7 @@ import { Title } from '../library/Cover';
 import { useInk } from '../../hooks/useInk';
 import { NotFound } from '../shell/AppShell';
 import { toast } from '../shell/actions';
+import { FileButton } from '../shell/FileButton';
 import { Toasts } from '../shell/Toasts';
 import { ConfirmDialog, type ConfirmRequest } from '../shell/ConfirmDialog';
 import { useAlbum, useLinkRom, useRomHeader } from '../../hooks/useGameExtras';
@@ -648,11 +649,8 @@ function Player({ game }: { game: GameEntry }) {
                 <div className="overlay">
                   <b>{t('player.insert.title')}</b>
                   <p>{t('player.insert.body', { title: game.title })}</p>
-                  <label className="btn y" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
-                    {I.cart}{t('game.loadRom')}
-                    <input type="file" accept={fileAccept('.gb,.gbc,.zip')} className="sr" tabIndex={-1}
-                      onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; const data = f && await linkRom(f); if (data) boot(data); }} />
-                  </label>
+                  <FileButton className="btn y" accept={fileAccept('.gb,.gbc,.zip')}
+                    onFiles={async ([f]) => { const data = await linkRom(f); if (data) boot(data); }}>{I.cart}{t('game.loadRom')}</FileButton>
                 </div>
               ) : online.on && online.waiting && isRunning ? <LinkWait link={online} /> : romLoaded && !isRunning && !isRewinding && !editing && (errors.at(-1)?.detail ? (
                 <div className="overlay">

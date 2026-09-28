@@ -11,6 +11,7 @@ import { Frame } from '../library/Heroes';
 import { useInk } from '../../hooks/useInk';
 import { NotFound } from '../shell/AppShell';
 import { toast } from '../shell/actions';
+import { FileButton } from '../shell/FileButton';
 import { ConfirmDialog, type ConfirmRequest } from '../shell/ConfirmDialog';
 import { hardwareOf, importSav, useAlbum, useLinkRom, useRomHeader } from '../../hooks/useGameExtras';
 import { Shot } from './Shot';
@@ -107,11 +108,8 @@ function GameDetails({ game }: { game: GameEntry }) {
             <div className="acts">
               {author && <a className="btn lg play" href={game.homepage} target="_blank" rel="noreferrer">{I.ext}{t('game.author.get')}</a>}
               {need ? (
-                <label className={`btn lg ${author ? 'line' : 'play'}`} tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
-                  {I.cart}{t('game.loadRom')}
-                  <input type="file" accept={fileAccept('.gb,.gbc,.zip')} className="sr" tabIndex={-1}
-                    onChange={async (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f && await linkRom(f)) navigate(paths.play(game.id)); }} />
-                </label>
+                <FileButton className={`btn lg ${author ? 'line' : 'play'}`} accept={fileAccept('.gb,.gbc,.zip')}
+                  onFiles={async ([f]) => { if (await linkRom(f)) navigate(paths.play(game.id)); }}>{I.cart}{t('game.loadRom')}</FileButton>
               ) : unsupported ? (
                 <button className="btn lg play" disabled>{I.play}{t('game.unsupported')}</button>
               ) : (
@@ -360,11 +358,7 @@ function Saves({ game, header, setConfirm }: { game: GameEntry; header: RomMetad
           </li>
         ))}
       </ul>
-      <label className="btn line sm" style={{ marginTop: 14 }} tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
-        {I.load}{t('game.saves.import')}
-        <input type="file" accept={fileAccept('.sav,.srm')} className="sr" tabIndex={-1} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) onImport(f); }} />
-      </label>
+      <FileButton className="btn line sm" style={{ marginTop: 14 }} accept={fileAccept('.sav,.srm')} onFiles={([f]) => onImport(f)}>{I.load}{t('game.saves.import')}</FileButton>
       {err && <p className="note" role="alert" style={{ margin: '12px 0 0', color: 'var(--warn)' }}>{err}</p>}
     </section>
   );

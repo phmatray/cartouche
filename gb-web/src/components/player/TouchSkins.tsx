@@ -2,6 +2,7 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { exportControls, importControls, SHELLS, SKINS } from '../../lib/touch-layout';
 import { useSkin } from './touch-dom';
 import { toast } from '../shell/actions';
+import { FileButton } from '../shell/FileButton';
 import { download } from '../../lib/ui';
 import { Row } from '../settings/parts';
 import { t as tNow, useT } from '../../i18n';
@@ -69,12 +70,7 @@ export function ControlsFileRows() {
         <button className="btn line" style={{ color: 'var(--ink)' }} onClick={save}>{t('settings.controls.exportBtn')}</button>
       </Row>
       <Row label={t('settings.controls.importLabel')} sub={t('settings.controls.importSub')}>
-        <label className="btn line" style={{ color: 'var(--ink)' }} tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
-          {t('settings.controls.importBtn')}
-          <input type="file" accept=".json,application/json" className="sr" tabIndex={-1}
-            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) load(f); }} />
-        </label>
+        <FileButton className="btn line" style={{ color: 'var(--ink)' }} accept=".json,application/json" onFiles={([f]) => load(f)}>{t('settings.controls.importBtn')}</FileButton>
       </Row>
     </>
   );
