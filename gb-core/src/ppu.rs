@@ -1001,4 +1001,35 @@ mod tests {
         let s = shades(&run_line10(window_setup, |p, d| if d == 20 { p.write_register(0xFF4B, 100) }), 10);
         assert_eq!(s.iter().position(|&v| v == 3), Some(93));
     }
+
+    /// The FIFO's own mode-3 length agrees with `mode3_length` (Pan Docs) for 0, 1 and 10 OBJs.
+    #[test]
+    fn obj_penalty_matches_formula() {
+        let lines: [&[u8]; 5] = [&[], &[8], &[8, 16, 24, 32, 40, 48, 56, 64, 72, 80], &[0, 3, 11, 13, 50, 50, 51, 90, 160, 167], &[1; 10]];
+        for xs in lines {
+            for scx in 0..8 {
+                let p = run_line10(|p| { p.lcdc |= 0x02; objs_at(p, xs); p.scx = scx; }, |_, _| {});
+                assert_eq!(p.line.len, p.mode3_length(10), "OBJs at {xs:?}, SCX {scx}");
+            }
+        }
+    }
+
+    #[test]
+    fn mid_line_obp0_write() {
+        // Ten dark OBJs across the line over a light BG; OBP0 turns colour 3 from shade 3 to shade 1.
+        let setup = |p: &mut Ppu| {
+            p.lcdc |= 0x02;
+            p.vram[0..16].fill(0xFF);
+            p.vram[0x1800..0x1C00].fill(1);
+            objs_at(p, &[8, 24, 40, 56, 72, 88, 104, 120, 136, 152]);
+        };
+        let first_new = |dot: u32| {
+            let s = shades(&run_line10(setup, |p, d| if d == dot { p.write_register(0xFF48, 0x40) }), 10);
+            let x = s.iter().position(|&v| v == 1).expect("the new shade shows");
+            assert!(s[..x].iter().all(|&v| v != 1) && s[x..].iter().all(|&v| v != 3), "{s:?}");
+            assert!(s[..x].contains(&3), "the old shade shows first");
+            x
+        };
+        assert!(first_new(100) < first_new(140));
+    }
 }
