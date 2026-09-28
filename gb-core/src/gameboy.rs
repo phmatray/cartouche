@@ -518,7 +518,8 @@ impl GameBoy {
         data.extend_from_slice(&self.bus.ppu.mode3_len.to_le_bytes());
         // Then the speed-switch aftermath (absent from older states: none): the DIV-APU event's
         // lag and the divider's hold.
-        data.push(self.bus.apu_event_late as u8 | (self.bus.apu_event_due as u8) << 1 | self.bus.timer.div_hold.min(3) << 2);
+        let due = self.bus.apu_event_due.map_or(0, |write| 2 | (write as u8) << 2);
+        data.push(self.bus.apu_event_late as u8 | due | self.bus.timer.div_hold.min(3) << 3);
 
         data
     }
@@ -744,8 +745,8 @@ impl GameBoy {
             .map_or(172, |b| u32::from_le_bytes(b.try_into().unwrap()).clamp(172, 295));
         let spsw = byte(TIMING_TAIL_LEN + 5).unwrap_or(0);
         self.bus.apu_event_late = spsw & 1 != 0;
-        self.bus.apu_event_due = spsw & 2 != 0;
-        self.bus.timer.div_hold = (spsw >> 2) & 3;
+        self.bus.apu_event_due = (spsw & 2 != 0).then_some(spsw & 4 != 0);
+        self.bus.timer.div_hold = (spsw >> 3) & 3;
         true
     }
 }
@@ -839,13 +840,13 @@ mod tests {
         gb.bus.write_byte(0xFF46, 0xC1);
         for _ in 0..12 { gb.bus.cycle_tick(); }
         gb.bus.timer.reload_pending = true;
-        (gb.bus.apu_event_late, gb.bus.apu_event_due, gb.bus.timer.div_hold) = (true, true, 2);
+        (gb.bus.apu_event_late, gb.bus.apu_event_due, gb.bus.timer.div_hold) = (true, Some(true), 2);
         let state = gb.save_state();
 
         let mut g = GameBoy::new(rom.clone()).unwrap();
         assert!(g.load_state(&state));
         assert!(g.bus.timer.reload_pending);
-        assert_eq!((g.bus.apu_event_late, g.bus.apu_event_due, g.bus.timer.div_hold), (true, true, 2));
+        assert_eq!((g.bus.apu_event_late, g.bus.apu_event_due, g.bus.timer.div_hold), (true, Some(true), 2));
         assert_eq!((g.bus.dma_active, g.bus.dma_delay, g.bus.dma_index, g.bus.read_byte(0xFF46)), (true, 0, 11, 0xC1));
         assert_eq!(g.save_state(), state);
 
