@@ -7,6 +7,8 @@ import { applyPatch, PatchError, patchKind, patchSource, type PatchKind } from '
 import { getAllGameMeta, getRom } from './db';
 import { computeSha1 } from './rom-utils';
 import { t } from '../i18n';
+import { isGbsFile } from './gbs';
+import { importMusic } from '../hooks/useMusicLibrary';
 
 /**
  * The import queue: files dropped anywhere in the app or chosen on the Add ROMs page, and the ROMs inside
@@ -126,16 +128,18 @@ function run(list: () => Promise<{ rows: ImportRow[]; ignored: number }>) {
       current = r.key;
       let out: Partial<ImportRow>;
       let data: Uint8Array | undefined;
+      const music = isGbsFile(r.name);
       try {
-        if ((isRomFile(r.name) || r.patch) && r.size <= MAX_ROM_SIZE * (r.patch ? 2 : 1)) data = await r.read!();
+        // A .gbs file is music: its own store, capped at 1 MB.
+        if (music ? r.size <= 1 << 20 : (isRomFile(r.name) || r.patch) && r.size <= MAX_ROM_SIZE * (r.patch ? 2 : 1)) data = await r.read!();
         out = { st: 'bad' };
       } catch (e) {
         out = { st: 'bad', note: e instanceof ZipError ? e.message.toLowerCase() : e instanceof FetchError ? e.message : t('add.unreadable') };
       }
       if (data) {
         // A file that was read but couldn't be stored: the storage is failing, so every next ROM would too.
-        try { out = r.patch ? await patched(r, data, batch) : asRow(await importRom(r.name, data)); } catch (e) { await storageFull(e); break; }
-        if (!r.patch && out.id && out.st !== 'bad') batch.push(out.id);
+        try { out = music ? asRow(await importMusic(r.name, data)) : r.patch ? await patched(r, data, batch) : asRow(await importRom(r.name, data)); } catch (e) { await storageFull(e); break; }
+        if (!music && !r.patch && out.id && out.st !== 'bad') batch.push(out.id);
       }
       if (out.st === 'ok' || out.st === 'unk') added++;
       patchRow(r.key, out, my !== gen); // stopped meanwhile: show it at once
