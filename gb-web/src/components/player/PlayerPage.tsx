@@ -330,6 +330,8 @@ function Player({ game }: { game: GameEntry }) {
   const start = useCallback(() => {
     fetchRom(game).then(boot).catch((e) => setLoadError(e instanceof Error ? e.message : String(e)));
   }, [game, boot]);
+  // The core itself failed to load: the same overlay, whose retry loads it again.
+  const failure = emu.initFailed ? t('player.error.engine') : loadError;
   const booted = useRef(false);
   useEffect(() => {
     if (!isReady || booted.current || !owned(game)) return;
@@ -647,11 +649,11 @@ function Player({ game }: { game: GameEntry }) {
                     <Link className="btn line" to={paths.game(game.id)}>{t('common.back')}</Link>
                   </div>
                 </div>
-              ) : loadError ? (
+              ) : failure ? (
                 <div className="overlay slim" role="alert">
                   <b>{t('player.failed.title')}</b>
-                  <p>{loadError.charAt(0).toLocaleUpperCase() + loadError.slice(1)}.{game.madeWith && !game.isLocal && <> {t('player.failed.hosted')}</>}</p>
-                  <button className="btn y" onClick={() => { setLoadError(null); start(); }}>{t('player.failed.retry')}</button>
+                  <p>{failure.charAt(0).toLocaleUpperCase() + failure.slice(1)}.{loadError && game.madeWith && !game.isLocal && <> {t('player.failed.hosted')}</>}</p>
+                  <button className="btn y" onClick={() => { if (emu.initFailed) { emu.retryInit(); return; } setLoadError(null); start(); }}>{t('player.failed.retry')}</button>
                 </div>
               ) : needsRom ? (
                 <div className="overlay">

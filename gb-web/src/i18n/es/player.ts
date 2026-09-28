@@ -79,6 +79,7 @@ export default {
     changedElsewhere: 'Este guardado cambió en otro lugar (otra pestaña o dispositivo): ahora se guarda en uno nuevo, «{name}», y se conservan los dos',
   },
   error: {
+    engine: 'el emulador no pudo arrancar, comprueba la conexión',
     crashed: 'El juego se ha detenido: la consola encontró una instrucción no válida.',
     init: 'Emulador no inicializado',
     unknown: 'Error desconocido al cargar la ROM',

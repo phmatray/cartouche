@@ -79,6 +79,7 @@ export default {
     changedElsewhere: 'Cette sauvegarde a changé ailleurs (autre onglet ou appareil) : sauvegarde dans une nouvelle, « {name} », les deux sont gardées',
   },
   error: {
+    engine: 'l’émulateur n’a pas pu démarrer, vérifiez la connexion',
     crashed: 'Le jeu s’est arrêté : la console a rencontré une instruction invalide.',
     init: 'Émulateur non initialisé',
     unknown: 'Erreur inconnue au chargement de la ROM',
