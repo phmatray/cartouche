@@ -171,6 +171,9 @@ const VOLUME: [u8; 4] = [0x7F, 0x50, 0x28, 0];
 
 #[derive(Clone, Copy)]
 struct Playing {
+    /// The `SOUND` effect id and its 4-bit attribute (pitch in bits 0-1, volume in 2-3).
+    id: u8,
+    attr: u8,
     r: Recipe,
     voice: usize,
     sustain: bool,
@@ -197,10 +200,16 @@ impl Playing {
     }
 }
 
+/// Effect `id` of `table` at attribute `attr`, `ms` milliseconds in; `None` if `id` has no recipe.
+fn start(table: Table, id: u8, attr: u8, ms: u32) -> Option<Playing> {
+    let r = recipe(table, id)?;
+    let (pitch, vol) = (PITCH_STEP[(attr & 3) as usize + 3 - r.rec as usize], VOLUME[(attr >> 2 & 3) as usize]);
+    let voice = match table { Table::A => VOICE_A, Table::B => VOICE_B };
+    Some(Playing { id, attr, r, voice, sustain: table == Table::B, pitch, vol, ms })
+}
+
 /// Plays the built-in effects on the S-DSP while no uploaded program owns it: `command` takes the
 /// `SOUND` bytes, `tick` (1 kHz of emulated time) writes the DSP's registers.
-// ponytail: not in save states (a state loads with no effect playing); persist `a`/`b` if a
-// sustained B effect cut by a load or a rewind is ever noticed.
 #[derive(Clone, Default)]
 pub struct FxPlayer {
     a: Option<Playing>,
@@ -215,23 +224,69 @@ impl FxPlayer {
     /// Nothing playing and nothing left to stop.
     pub fn idle(&self) -> bool { self.a.is_none() && self.b.is_none() && self.off == 0 }
 
+    /// A single 0 while no effect plays, else 1, then for effect A and B: 0 (none), or 1, the id,
+    /// the attribute and the milliseconds played (u32 LE). The DSP is not saved (see `import_state`).
+    pub fn export_state(&self, out: &mut Vec<u8>) {
+        if self.a.is_none() && self.b.is_none() {
+            out.push(0);
+            return;
+        }
+        out.push(1);
+        for slot in [&self.a, &self.b] {
+            match slot {
+                None => out.push(0),
+                Some(p) => {
+                    out.extend_from_slice(&[1, p.id, p.attr]);
+                    out.extend_from_slice(&p.ms.to_le_bytes());
+                }
+            }
+        }
+    }
+
+    /// Reads what `export_state` wrote at `*pos`; truncated data is rejected. The effects restart
+    /// from a reset DSP at their saved millisecond (a click at the load point, for approximations).
+    /// An id without a recipe is dropped; a one-shot effect's position is clamped to its length.
+    pub fn import_state(&mut self, data: &[u8], pos: &mut usize) -> bool {
+        let mut fx = FxPlayer::default();
+        match data.get(*pos) {
+            Some(0) => *pos += 1,
+            Some(_) => {
+                *pos += 1;
+                for table in [Table::A, Table::B] {
+                    let Some(&present) = data.get(*pos) else { return false };
+                    *pos += 1;
+                    if present == 0 { continue; }
+                    let Some(&[id, attr, m0, m1, m2, m3]) = data.get(*pos..*pos + 6) else { return false };
+                    *pos += 6;
+                    let ms = u32::from_le_bytes([m0, m1, m2, m3]);
+                    let ms = if table == Table::A { recipe(table, id).map_or(0, |r| ms.min(r.ms as u32)) } else { ms };
+                    let slot = match table { Table::A => &mut fx.a, Table::B => &mut fx.b };
+                    *slot = start(table, id, attr & 0xF, ms);
+                }
+            }
+            None => return false,
+        }
+        *self = fx;
+        true
+    }
+
     /// `SOUND`'s effect A, effect B and attribute bytes: `$00` changes nothing, `$80` stops the
     /// effect, an id of the table (re)starts it at the attributes' pitch and volume.
     pub fn command(&mut self, a: u8, b: u8, attrs: u8) {
         for (table, id, attr) in [(Table::A, a, attrs & 0xF), (Table::B, b, attrs >> 4)] {
-            let (slot, voice) = match table { Table::A => (&mut self.a, VOICE_A), Table::B => (&mut self.b, VOICE_B) };
+            let slot = match table { Table::A => &mut self.a, Table::B => &mut self.b };
             if id == 0x80 {
-                if slot.take().is_some() { self.off |= 1 << voice; }
-            } else if let Some(r) = recipe(table, id) {
-                let (pitch, vol) = (PITCH_STEP[(attr & 3) as usize + 3 - r.rec as usize], VOLUME[(attr >> 2) as usize]);
-                *slot = Some(Playing { r, voice, sustain: table == Table::B, pitch, vol, ms: 0 });
+                if let Some(p) = slot.take() { self.off |= 1 << p.voice; }
+            } else if let Some(p) = start(table, id, attr, 0) {
+                *slot = Some(p);
             }
         }
     }
 
     /// One millisecond: keys effects on, moves their pitch and volume, keys finished ones off.
     pub fn tick(&mut self, dsp: &mut Sdsp, aram: &mut [u8; 0x10000]) {
-        if !self.ready {
+        let fresh = !self.ready;
+        if fresh {
             // Whatever a stopped program left in the DSP must not play along.
             self.ready = true;
             *dsp = Sdsp::new();
@@ -253,7 +308,8 @@ impl FxPlayer {
             let base = (p.voice * 0x10) as u8;
             match p.at() {
                 Some((pitch, vol)) => {
-                    if p.ms == 0 {
+                    // Keyed on at the start, or again after a load reset the DSP.
+                    if p.ms == 0 || fresh {
                         // Source, ADSR off, direct GAIN at full; keyed on below.
                         for (reg, v) in [(4, p.r.wave as u8), (5, 0), (7, 0x7F)] { dsp.write_reg(base + reg, v); }
                         kon |= 1 << p.voice;

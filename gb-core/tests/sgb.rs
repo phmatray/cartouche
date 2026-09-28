@@ -529,24 +529,30 @@ fn a_state_keeps_the_snes_sound_playing() {
     assert!(rms > 0.1, "the tone goes on: RMS {rms}");
     assert!(snes(&fresh).covered());
 
-    // The previous version (5): the same layout without the SNES block, which an idle SNES side
-    // saves as a single 0 near the end (before the optional tails). Found as the one byte whose
-    // removal, read as version 5, saves back as the version 6 state does after a load.
-    let v6 = sgb().save_state();
-    assert_eq!(v6[4], 6, "this layout is version 6");
-    let mut reloaded = sgb();
-    assert!(reloaded.load_state(&v6));
-    let resaved = reloaded.save_state();
-    let v5 = (v6.len() - 64..v6.len()).rev().find_map(|i| {
-        let mut v5 = v6.clone();
-        v5.remove(i);
-        v5[4] = 5;
-        let mut probe = sgb();
-        (probe.load_state(&v5) && probe.save_state() == resaved).then_some(v5)
-    }).expect("a version 5 state round-trips to this one");
+    // Version 5 has no SNES block, which an idle SNES side saves as a single 0.
+    let v6 = previous(&sgb().save_state(), 7);
+    let v5 = previous(&v6, 6);
     assert!(gb.load_state(&v5), "a version 5 state loads");
     let rms = frame_rms(&mut gb);
     assert!(rms < 0.01 && !snes(&gb).covered(), "with the SNES side idle: RMS {rms}");
+}
+
+/// The idle SGB `state` of `version` as the version before it saved it: the same layout less one
+/// byte near the end (before the optional tails), the block that version added, which an idle side
+/// saves as a single 0. Found as the one byte whose removal, read as the older version, saves back
+/// as `state` does after a load.
+fn previous(state: &[u8], version: u8) -> Vec<u8> {
+    assert_eq!(state[4], version, "this layout is version {version}");
+    let mut reloaded = sgb();
+    assert!(reloaded.load_state(state));
+    let resaved = reloaded.save_state();
+    (state.len() - 64..state.len()).rev().find_map(|i| {
+        let mut old = state.to_vec();
+        old.remove(i);
+        old[4] = version - 1;
+        let mut probe = sgb();
+        (probe.load_state(&old) && probe.save_state() == resaved).then_some(old)
+    }).unwrap_or_else(|| panic!("a version {} state round-trips to this one", version - 1))
 }
 
 // ─── Built-in SOUND effects (clean-room approximations) ───
@@ -632,6 +638,49 @@ fn every_built_in_effect_is_heard() {
             assert!(rms > 0.02, "effect {t:?} {id:#04x}: RMS {rms}");
         }
     }
+}
+
+/// `gb`'s state, loaded on a fresh SGB console.
+fn reloaded(gb: &GameBoy) -> GameBoy {
+    let mut fresh = sgb();
+    assert!(fresh.load_state(&gb.save_state()));
+    fresh
+}
+
+#[test]
+fn a_state_keeps_a_sustained_effect_playing() {
+    let mut gb = sgb();
+    sound(&mut gb, 0x00, 0x04, 0x00); // wind
+    for _ in 0..10 { gb.run_frame().unwrap(); }
+    let rms = frame_rms(&mut reloaded(&gb));
+    assert!(rms > 0.02, "the wind goes on after a load: RMS {rms}");
+}
+
+#[test]
+fn a_state_keeps_a_one_shot_effect_until_its_end() {
+    let mut gb = sgb();
+    sound(&mut gb, 0x0E, 0x00, 0x00); // large explosion
+    let elapsed = 10;
+    for _ in 0..elapsed { gb.run_frame().unwrap(); }
+    let mut fresh = reloaded(&gb);
+    let rms = frame_rms(&mut fresh);
+    assert!(rms > 0.02, "the explosion goes on after a load: RMS {rms}");
+    let len = recipe(Table::A, 0x0E).unwrap().ms as usize;
+    // Drained frame by frame: a full sample buffer holds the audio back.
+    for _ in 0..frames_for((len - elapsed * 1000 / 60 + 100) as u32) { frame_rms(&mut fresh); }
+    let rms = frame_rms(&mut fresh);
+    assert!(rms < 0.01, "silent 100 ms after its remaining length: RMS {rms}");
+}
+
+#[test]
+fn a_state_from_before_effects_were_saved_loads_with_them_idle() {
+    let mut gb = sgb();
+    sound(&mut gb, 0x00, 0x04, 0x00);
+    // Nothing playing costs one byte: the version 6 layout is this state less one byte.
+    let v6 = previous(&sgb().save_state(), 7);
+    assert!(gb.load_state(&v6), "a version 6 state loads");
+    let rms = frame_rms(&mut gb);
+    assert!(rms < 0.01, "with the effects idle: RMS {rms}");
 }
 
 #[test]
