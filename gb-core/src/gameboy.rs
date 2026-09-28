@@ -653,6 +653,7 @@ fn connect(master: &mut GameBoy, slave: &mut GameBoy) {
 
 const SAVE_MAGIC: &[u8; 4] = b"GBSS";
 /// Bytes after the mapper block: TIMA reload, OAM DMA start-up/index/page.
+#[cfg(test)]
 const TIMING_TAIL_LEN: usize = 4;
 // v3 (1.0.0) adds the mapper, HDMA/KEY1/OAM-DMA, serial, PPU/CPU latch and APU state; v2 states are
 // rejected because loading them into a freshly booted ROM maps the wrong banks.

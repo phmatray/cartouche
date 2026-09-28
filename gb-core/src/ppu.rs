@@ -143,11 +143,21 @@ impl Ppu {
         match addr {
             0xFF40 => self.lcdc,
             0xFF41 => {
-                let mode_bits = if self.lcd_on_line0 { 0 } else { self.mode as u8 };
+                // A new mode reads one M-cycle late: its STAT interrupt is requested one M-cycle
+                // ahead of the hardware line, since the CPU samples IF before its opcode fetch.
+                let mode_bits = match self.mode {
+                    _ if self.lcdc & 0x80 == 0 => 0,
+                    PpuMode::HBlank if self.mode_clock < 4 => 3,
+                    PpuMode::Drawing if self.mode_clock < 4 => 2,
+                    PpuMode::OamScan if self.mode_clock < 4 && self.ly != 0 => 0,
+                    PpuMode::VBlank if self.mode_clock < 4 && self.ly == 144 => 0,
+                    _ if self.lcd_on_line0 => 0,
+                    mode => mode as u8,
+                };
                 // With the LCD off the coincidence bit is frozen at its LCD-off value
                 // (kept in stored bit 2). Bit 7 is unused and always reads 1.
                 let lyc_flag = if self.lcdc & 0x80 == 0 { self.stat & 0x04 }
-                    else if self.ly == self.lyc { 0x04 } else { 0 };
+                    else if self.ly_compare(false) == Some(self.lyc) { 0x04 } else { 0 };
                 0x80 | (self.stat & 0x78) | lyc_flag | mode_bits
             }
             0xFF42 => self.scy,
@@ -175,7 +185,7 @@ impl Ppu {
                 self.lcdc = value;
                 let is_enabled = self.lcdc & 0x80 != 0;
                 if was_enabled && !is_enabled {
-                    let lyc_flag = if self.ly == self.lyc { 0x04 } else { 0 };
+                    let lyc_flag = if self.ly_compare(false) == Some(self.lyc) { 0x04 } else { 0 };
                     self.stat = (self.stat & !0x04) | lyc_flag;
                     self.ly = 0;
                     self.mode = PpuMode::HBlank;
@@ -277,13 +287,16 @@ impl Ppu {
                 }
             }
             PpuMode::VBlank => {
+                // Line 153 shows LY = 153 for one M-cycle only, then 0 (compared with LYC too).
+                if self.ly == 153 && self.mode_clock >= 4 {
+                    self.ly = 0;
+                }
                 if self.mode_clock >= 456 {
                     self.mode_clock -= 456;
-                    self.ly += 1;
-
-                    if self.ly > 153 {
-                        self.ly = 0;
+                    if self.ly == 0 {
                         self.mode = PpuMode::OamScan;
+                    } else {
+                        self.ly += 1;
                     }
                 }
             }
@@ -302,9 +315,24 @@ impl Ppu {
     fn compute_stat_line(&self) -> bool {
         let hblank = (self.mode == PpuMode::HBlank || self.lcd_on_line0) && self.stat & 0x08 != 0;
         let vblank = self.mode == PpuMode::VBlank  && self.stat & 0x10 != 0;
-        let oam    = self.mode == PpuMode::OamScan && !self.lcd_on_line0 && self.stat & 0x20 != 0;
-        let lyc    = self.ly == self.lyc            && self.stat & 0x40 != 0;
+        // Line 144 starts with the mode 2 source too, for one M-cycle.
+        let oam    = (self.mode == PpuMode::OamScan && !self.lcd_on_line0 || self.mode == PpuMode::VBlank && self.ly == 144 && self.mode_clock < 4) && self.stat & 0x20 != 0;
+        // Interrupts are requested one M-cycle ahead of the line (the CPU samples IF before its fetch).
+        let lyc    = self.ly_compare(true) == Some(self.lyc) && self.stat & 0x40 != 0;
         hblank || vblank || oam || lyc
+    }
+
+    /// The line LY=LYC compares against: none for the first M-cycle of a line (the comparator
+    /// is updating), and on line 153 (whose LY reads 0 after its first M-cycle) 153 for one
+    /// M-cycle, none for one, then 0 through line 0.
+    fn ly_compare(&self, irq: bool) -> Option<u8> {
+        let c = self.mode_clock;
+        match (self.mode, self.ly) {
+            (PpuMode::VBlank, 0 | 153) => match c { 0..=3 => None, 4..=7 => Some(153), 8..=11 => None, _ => Some(0) },
+            (PpuMode::OamScan, 0) => Some(0),
+            (PpuMode::OamScan | PpuMode::VBlank, _) if c < 4 && !irq => None,
+            _ => Some(self.ly),
+        }
     }
 
     /// OAM row (1..=19) the DMG PPU is reading during the M-cycle that just
@@ -912,6 +940,7 @@ mod tests {
         p.write_register(0xFF41, 0xFF);
         assert_eq!(p.read_register(0xFF41) & 0x80, 0x80);
         p.lcdc = 0x80;
+        (p.mode, p.mode_clock) = (PpuMode::VBlank, 100);
         p.ly = 145;
         p.lyc = 145;
         p.write_register(0xFF40, 0x00); // LCD off at LY == LYC: flag latched set
@@ -921,6 +950,33 @@ mod tests {
         assert_eq!(p.read_register(0xFF41) & 0x04, 0x04);
         p.write_register(0xFF40, 0x80); // LCD on: live again (LY 0 != LYC)
         assert_eq!(p.read_register(0xFF41) & 0x04, 0);
+    }
+
+    #[test]
+    fn line_153_reports_ly_0_early_for_lyc_0() {
+        let mut p = Ppu::new();
+        p.write_register(0xFF41, 0x40); // LYC interrupt, LYC = 0
+        p.write_register(0xFF40, 0x80);
+        while !(p.ly == 153 && p.mode == PpuMode::VBlank) { p.step(4); }
+        assert_eq!(p.read_register(0xFF44), 153, "the first M-cycle of line 153");
+        let mut fired = false;
+        for _ in 0..3 { fired |= p.step(4).1; }
+        assert_eq!(p.read_register(0xFF44), 0, "LY reads 0 for the rest of line 153");
+        assert!(fired, "LY=LYC=0 interrupt on line 153");
+        assert_eq!(p.read_register(0xFF41) & 0x07, 0x05, "mode 1, coincidence");
+        while p.mode == PpuMode::VBlank { assert!(!p.step(4).1, "no second edge"); }
+        assert_eq!(p.read_register(0xFF44), 0);
+    }
+
+    #[test]
+    fn lcd_on_line_0_has_no_mode2_stat_edge() {
+        let mut p = Ppu::new();
+        p.write_register(0xFF41, 0x20); // mode 2 interrupt
+        p.write_register(0xFF40, 0x80);
+        while p.ly == 0 {
+            let fired = p.step(4).1;
+            assert_eq!(fired, p.ly == 1, "line 0 after LCD on skips the OAM scan; line 1 has one");
+        }
     }
 
     /// The shown picture is the last whole frame: stopping mid-frame (as a fixed-length
