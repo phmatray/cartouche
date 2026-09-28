@@ -20,6 +20,7 @@ pub mod registers;
 pub mod sdsp;
 pub mod serial;
 pub mod sgb;
+pub mod sgb_fx;
 pub mod spc700;
 pub mod tama5;
 pub mod timer;
