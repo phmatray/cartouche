@@ -2,6 +2,7 @@
 import { clearAll } from './db';
 import { deleteBoxArt } from './cover-art';
 import { engine, useSync } from './sync/status';
+import { inUse } from './play-lock';
 import { useSettingsStore } from '../store/settingsStore';
 
 /**
@@ -16,7 +17,13 @@ const forgetKeys = (s: () => Storage) => {
   try { const st = s(); Object.keys(st).filter(isAppKey).forEach((k) => st.removeItem(k)); } catch { /* storage blocked: nothing kept there */ }
 };
 
-export async function eraseEverything(): Promise<void> {
+/**
+ * false: nothing erased, a game (or the link cable) is open in another tab. Its player would write its battery save and
+ * resume point back right after (at its next autosave, or as it closes).
+ */
+export async function eraseEverything(): Promise<boolean> {
+  const busy = await inUse();
+  if (busy.games.length || busy.link) return false;
   // Unpair first, telling each paired device whose link is up (as Unpair does): whoever uses this browser next keeps
   // no link to them, and auto sync can't pull the erased saves back or push the reset settings over theirs.
   const sync = await engine().catch(() => null);
@@ -33,4 +40,5 @@ export async function eraseEverything(): Promise<void> {
   // Last, so nothing above writes a key back.
   forgetKeys(() => localStorage);
   forgetKeys(() => sessionStorage);
+  return true;
 }

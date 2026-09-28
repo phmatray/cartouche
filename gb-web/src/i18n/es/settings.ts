@@ -225,6 +225,7 @@ export default {
     wipe: 'Borrar todo',
     wipeTitle: '¿Borrar todo?',
     wipeSub: 'Elimina todas las ROM, partidas, capturas y ajustes de este navegador',
+    wipeBusy: 'Hay un juego o el Cable Link abierto en otra pestaña: ciérralo primero, o volvería a guardar su partida después del borrado.',
     wipeBody: 'Todas las ROM, ranuras de guardado, puntos de reanudación, capturas y ajustes se eliminarán de este navegador, junto con tu clave de RetroAchievements y tu servidor TURN; los dispositivos vinculados se desvincularán. Exporta antes una copia por si quieres recuperarlos.',
   },
   pergame: {
