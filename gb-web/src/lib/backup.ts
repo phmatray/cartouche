@@ -2,7 +2,7 @@ import { t } from '../i18n';
 import { decode, jsonBlob, splitJson } from './backup-json';
 import { backupRom, mergeMeta, mover, placeRom, versionProblem } from './backup-merge';
 import { computeSha1 } from './rom-utils';
-import { asProfile, getAllFrom, getAllGameMeta, getRom, getRomIds, putInto, STORES, type StoredGameMeta, type StoredRom, type StoredSave, type StoredSaveState, type StoredScreenshot } from './db';
+import { asProfile, eachIn, getAllFrom, getAllGameMeta, getRom, getRomIds, putInto, STORES, type StoredGameMeta, type StoredRom, type StoredSave, type StoredSaveState, type StoredScreenshot } from './db';
 import { cleanSetting } from './settings-clean';
 import { SETTINGS_KEYS, displayFromV3, useSettingsStore, type SettingsValues } from '../store/settingsStore';
 
@@ -20,7 +20,8 @@ interface Backup {
   /** Read one at a time when restored (a big library's ROMs don't fit in memory at once); null: not a valid ROM. */
   roms: (() => Promise<StoredRom | null>)[];
   saves: StoredSave[];
-  states: StoredSaveState[];
+  /** Read one at a time too (a resume point and five slots per game: gigabytes for a big library); null: not valid. */
+  states: (() => Promise<StoredSaveState | null>)[];
   meta: StoredGameMeta[];
   screenshots: StoredScreenshot[];
 }
@@ -64,7 +65,7 @@ export async function readBackup(file: File): Promise<Backup> {
     throw e instanceof SyntaxError ? notBackup()
       : new Error(t(e instanceof RangeError ? 'settings.storage.tooBig' : 'settings.storage.unreadable', { file: file.name }), { cause: e });
   }
-  const b = decode(raw) as Partial<Omit<Backup, 'roms'>>;
+  const b = decode(raw) as Partial<Omit<Backup, 'roms' | 'states'>>;
   const item = async ([start, end]: [number, number]) => decode(JSON.parse(await file.slice(start, end).text()));
   const readItems = async (at: [number, number][]) => {
     const out = [];
@@ -83,12 +84,17 @@ export async function readBackup(file: File): Promise<Backup> {
     roms: items.roms.map((at) => async () => backupRom(await item(at))),
     // Save profiles; a backup from before profiles has one save per game, which becomes its "Main".
     saves: list<StoredSave>(b.saves, (r) => str(r.id) && r.sram instanceof Uint8Array).map(asProfile),
-    // A state without its picture still loads (the storage page, sync and the slots all read one: an empty one).
-    states: list<StoredSaveState>(await readItems(items.states), (r) => str(r.id) && r.data instanceof Uint8Array && (r.profile === undefined || str(r.profile)))
-      .map((r) => (r.thumbnail instanceof Uint8Array ? r : { ...r, thumbnail: new Uint8Array() })),
+    states: items.states.map((at) => async () => backupState(await item(at).catch(() => null))), // a damaged one is skipped
     meta: list<StoredGameMeta>(b.meta, (r) => str(r.id)),
     screenshots: list<StoredScreenshot>(await readItems(items.screenshots), (r) => str(r.gameId) && r.png instanceof Blob),
   };
+}
+
+/** A save state from a backup (untrusted), or null. One without its picture still loads (the storage page, sync and the slots all read one: an empty one). */
+function backupState(x: unknown): StoredSaveState | null {
+  const r = x as StoredSaveState;
+  if (!r || typeof r !== 'object' || !str(r.id) || !(r.data instanceof Uint8Array) || !(r.profile === undefined || str(r.profile))) return null;
+  return r.thumbnail instanceof Uint8Array ? r : { ...r, thumbnail: new Uint8Array() };
 }
 
 export interface RestoreCount { roms: number; saves: number; screenshots: number }
@@ -98,14 +104,17 @@ export interface RestoreCount { roms: number; saves: number; screenshots: number
  * a save or save state is replaced only by a newer one, favorites and play time are combined.
  * ROMs are matched by SHA-1: a backup game whose id is taken here by another game gets a free id, its saves with it.
  * Settings are applied only when asked. `count` is filled as it goes (a full disk stops it midway: it says what landed);
- * `progress` gets how many of the backup's ROMs are through.
+ * `progress` gets how many of the backup's ROMs and save states are through.
  */
 export async function restoreBackup(b: Backup, withSettings: boolean, count: RestoreCount = { roms: 0, saves: 0, screenshots: 0 }, progress?: (n: number, of: number) => void): Promise<RestoreCount> {
-  const [romIds, saves, states, meta, shots] = await Promise.all([
-    getRomIds(), getAllFrom<StoredSave>(STORES.saves), getAllFrom<StoredSaveState>(STORES.states),
-    getAllGameMeta(), getAllFrom<StoredScreenshot>(STORES.screenshots),
+  const stateAt = new Map<string, number>(); // the states here: only their dates (all of them whole are gigabytes)
+  const [romIds, saves, meta, shots] = await Promise.all([
+    getRomIds(), getAllFrom<StoredSave>(STORES.saves), getAllGameMeta(), getAllFrom<StoredScreenshot>(STORES.screenshots),
+    eachIn<StoredSaveState>(STORES.states, (x) => stateAt.set(x.id, x.timestamp)),
   ]);
   const moved = new Map<string, string>();
+  const of = b.roms.length + b.states.length;
+  let done = 0;
   if (b.roms.length) {
     const here = new Map<string, string>(); // id → SHA-1
     const claimed = new Set<string>();
@@ -113,8 +122,8 @@ export async function restoreBackup(b: Backup, withSettings: boolean, count: Res
     for (const id of romIds) { // from the summaries; a ROM without one yet is read alone
       here.set(id, summaries.get(id) ?? await getRom(id).then((r) => (r ? computeSha1(r.data) : '')));
     }
-    for (const [i, read] of b.roms.entries()) {
-      progress?.(i, b.roms.length);
+    for (const read of b.roms) {
+      progress?.(done++, of);
       const r = await read();
       if (!r) continue;
       const to = placeRom(r.id, await computeSha1(r.data), here, claimed);
@@ -124,12 +133,12 @@ export async function restoreBackup(b: Backup, withSettings: boolean, count: Res
   }
   const move = mover(moved);
 
-  const newer = async <T extends { id: string; timestamp: number }>(store: typeof STORES.saves | typeof STORES.states, mine: T[], theirs: T[]) => {
-    const at = new Map(mine.map((x) => [x.id, x.timestamp]));
-    for (const x of theirs) if ((at.get(x.id) ?? -1) < x.timestamp) { await putInto(store, x); count.saves++; }
+  const newer = async <T extends { id: string; timestamp: number }>(store: typeof STORES.saves | typeof STORES.states, at: Map<string, number>, x: T) => {
+    if ((at.get(x.id) ?? -1) < x.timestamp) { await putInto(store, x); count.saves++; }
   };
-  await newer(STORES.saves, saves, b.saves.map(move.save));
-  await newer(STORES.states, states, b.states.map(move.state));
+  const saveAt = new Map(saves.map((x) => [x.id, x.timestamp]));
+  for (const x of b.saves) await newer(STORES.saves, saveAt, move.save(x));
+  for (const read of b.states) { progress?.(done++, of); const x = await read(); if (x) await newer(STORES.states, stateAt, move.state(x)); }
 
   const metaById = new Map(meta.map((m) => [m.id, m]));
   for (const m of b.meta.map(move.meta)) await putInto(STORES.meta, mergeMeta(metaById.get(m.id), m));
