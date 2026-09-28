@@ -46,6 +46,12 @@ export function changes(before: [number, number][], after: [number, number][]) {
   return { press: [...now].filter(([k]) => !was.has(k)).map(([, x]) => x), release: [...was].filter(([k]) => !now.has(k)).map(([, x]) => x) };
 }
 
+/** The first pad's right stick (axes 2, 3), for MBC7 tilt; null without a pad. The left stick stays the D-pad. */
+export function rightStick(): [number, number] | null {
+  const gp = [...(navigator.getGamepads?.() ?? [])].find((g) => g !== null);
+  return gp && gp.axes.length >= 4 ? [gp.axes[2], gp.axes[3]] : null;
+}
+
 export function useGamepad(
   pressButton: (button: number, player?: number) => void,
   releaseButton: (button: number, player?: number) => void,

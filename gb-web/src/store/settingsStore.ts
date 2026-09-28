@@ -98,6 +98,8 @@ export interface SettingsState {
   rumble: boolean;
   rumbleIntensity: number;
   rumbleShake: boolean;
+  /** MBC7 tilt cartridges: scales the tilt input, in % (real sensors read off; the player tunes it). */
+  tiltSensitivity: number;
 
   // Library
   /** Fetch box art from libretro-thumbnails (only for recognized ROMs the user added). When off, no request is ever made. */
@@ -174,6 +176,7 @@ const DEFAULT_STATE = {
   rumble: true,
   rumbleIntensity: 80,
   rumbleShake: true,
+  tiltSensitivity: 100,
 };
 export type SettingsValues = typeof DEFAULT_STATE;
 /** Keys saved in a backup and in localStorage. */
