@@ -3,7 +3,9 @@
 // =============================================================================
 //
 // 4 channels: CH1 (square+sweep), CH2 (square), CH3 (wave), CH4 (noise)
-// Frame sequencer clocked at 512 Hz (every 8192 T-cycles)
+// Clocked at 2 MHz (`step` takes 2 MHz ticks: two per M-cycle, one in double speed). The frame
+// sequencer is the DIV-APU event: the falling edge of DIV bit 4 (bit 5 in double speed), which the
+// bus reports through `div_event`, as on hardware (so a DIV write clocks it too).
 // Output mixed to stereo at 44100 Hz
 
 const CPU_CLOCK: u32 = 4_194_304;
@@ -625,8 +627,13 @@ pub struct Apu {
     pub ch4: NoiseChannel,
     nr50: u8,
     nr51: u8, // panning
-    frame_sequencer_counter: u32,
-    frame_sequencer_step: u8,
+    /// NR10-NR51 as last written (a save state's layout-independent part).
+    regs: [u8; 0x16],
+    /// DIV-APU events counted since power-on: length on odd values, sweep every 4th, envelope every 8th.
+    div_divider: u8,
+    /// Powering on while the DIV-APU bit is set skips the first event (and starts the count at 1):
+    /// 0 no skip, 1 the next event is skipped, 2 it was (the one after doesn't count up).
+    skip_div_event: u8,
     sample_counter: f64,
     sample_buffer: Vec<f32>,
     pub channel_muted: [bool; 4],
@@ -651,8 +658,9 @@ impl Apu {
             ch4: NoiseChannel::new(),
             nr50: 0,
             nr51: 0,
-            frame_sequencer_counter: 0,
-            frame_sequencer_step: 0,
+            regs: [0; 0x16],
+            div_divider: 0,
+            skip_div_event: 0,
             sample_counter: 0.0,
             sample_buffer: Vec::with_capacity(AUDIO_BUFFER_SIZE),
             channel_muted: [false; 4],
@@ -668,7 +676,9 @@ impl Apu {
         }
     }
 
-    pub fn step(&mut self, cycles: u32) {
+    /// Runs `ticks` 2 MHz APU ticks (two per M-cycle, one per double-speed M-cycle).
+    pub fn step(&mut self, ticks: u32) {
+        let cycles = ticks * 2; // in 4 MHz T-cycles of wall-clock time
         if !self.enabled {
             return self.silence(cycles);
         }
@@ -678,13 +688,6 @@ impl Apu {
         self.ch2.step(cycles);
         self.ch3.step(cycles);
         self.ch4.step(cycles);
-
-        // Frame sequencer (512 Hz = every 8192 T-cycles)
-        self.frame_sequencer_counter += cycles;
-        while self.frame_sequencer_counter >= 8192 {
-            self.frame_sequencer_counter -= 8192;
-            self.clock_frame_sequencer();
-        }
 
         // Accumulate samples
         self.sample_counter += cycles as f64;
@@ -704,26 +707,46 @@ impl Apu {
         }
     }
 
-    fn clock_frame_sequencer(&mut self) {
-        match self.frame_sequencer_step {
-            0 | 4 => self.clock_length_all(),
-            2 | 6 => {
-                self.clock_length_all();
-                self.ch1_sweep.clock(&mut self.ch1.enabled, &mut self.ch1.frequency);
-            }
-            7 => {
-                self.ch1.clock_envelope();
-                self.ch2.clock_envelope();
-                self.ch4.clock_envelope();
-            }
-            _ => {}
+    /// The DIV-APU event: the falling edge of DIV bit 4 (bit 5 in double speed), from the timer's
+    /// counting or a DIV write.
+    pub fn div_event(&mut self) {
+        if !self.enabled {
+            return;
         }
-        self.frame_sequencer_step = (self.frame_sequencer_step + 1) & 7;
+        match self.skip_div_event {
+            1 => {
+                self.skip_div_event = 2;
+                return;
+            }
+            2 => self.skip_div_event = 0,
+            _ => self.div_divider = self.div_divider.wrapping_add(1),
+        }
+        if self.div_divider & 7 == 7 {
+            self.ch1.clock_envelope();
+            self.ch2.clock_envelope();
+            self.ch4.clock_envelope();
+        }
+        if self.div_divider & 1 == 1 {
+            self.clock_length_all();
+        }
+        if self.div_divider & 3 == 3 {
+            self.ch1_sweep.clock(&mut self.ch1.enabled, &mut self.ch1.frequency);
+        }
     }
 
-    /// True when the next frame-sequencer step doesn't clock length counters.
+    /// Powered on with the DIV-APU bit set: the first event is skipped.
+    pub fn skip_first_div_event(&mut self) {
+        self.skip_div_event = 1;
+        self.div_divider = 1;
+    }
+
+    pub fn is_on(&self) -> bool {
+        self.enabled
+    }
+
+    /// True when the next DIV-APU event doesn't clock length counters.
     fn length_first_half(&self) -> bool {
-        self.frame_sequencer_step & 1 == 1
+        self.div_divider & 1 == 1
     }
 
     fn clock_length_all(&mut self) {
@@ -863,10 +886,11 @@ impl Apu {
         if !self.enabled {
             match addr {
                 0xFF26 if value & 0x80 != 0 => {
-                    // Power on: the frame sequencer restarts at step 0.
+                    // Power on: the DIV-APU count restarts (the bus calls `skip_first_div_event`
+                    // when DIV's APU bit is set).
                     self.enabled = true;
-                    self.frame_sequencer_step = 0;
-                    self.frame_sequencer_counter = 0;
+                    self.div_divider = 0;
+                    self.skip_div_event = 0;
                 }
                 0xFF30..=0xFF3F => self.ch3.write_wave_ram(addr - 0xFF30, value, self.cgb_mode),
                 // DMG only: length counters stay writable while powered off.
@@ -879,6 +903,9 @@ impl Apu {
             return;
         }
 
+        if let 0xFF10..=0xFF25 = addr {
+            self.regs[(addr - 0xFF10) as usize] = value;
+        }
         let first_half = self.length_first_half();
         match addr {
             // CH1 — Square with sweep
@@ -996,11 +1023,12 @@ impl Field for [u8; 16] {
 }
 
 /// Every piece of APU state that affects emulation (not the sample buffer or channel mutes),
-/// listed once for both export_state and import_state so the two cannot drift apart.
+/// listed once for both export_state and import_state so the two cannot drift apart. `$fs0`/`$fs1`
+/// are the frame-sequencer fields: the DIV-APU count now, a counter and step before v8.
 macro_rules! apu_fields {
-    ($m:ident, $a:expr) => {
+    ($m:ident, $a:expr, $fs0:expr, $fs1:expr) => {
         $m!(
-            $a.enabled, $a.nr50, $a.nr51, $a.frame_sequencer_counter, $a.frame_sequencer_step,
+            $a.enabled, $a.nr50, $a.nr51, $fs0, $fs1,
             $a.sample_counter,
             $a.ch1_sweep.enabled, $a.ch1_sweep.frequency_shadow, $a.ch1_sweep.period,
             $a.ch1_sweep.direction, $a.ch1_sweep.shift, $a.ch1_sweep.timer, $a.ch1_sweep.negate_used,
@@ -1023,27 +1051,128 @@ macro_rules! apu_fields {
     };
 }
 
+/// The layout of the fields after the registers in a v8+ APU block. Bump it when `apu_fields`
+/// changes: a block of another layout is restored from its registers instead.
+const STATE_LAYOUT: u8 = 1;
+/// NR10-NR51 as last written, then NR52 as read (power and channel flags), then wave RAM.
+const STATE_REGS_LEN: usize = 0x16 + 1 + 16;
+
 impl Apu {
+    /// v8+: u16 LE length, the layout byte, the registers (`STATE_REGS_LEN`), then `apu_fields`.
     pub fn export_state(&self, out: &mut Vec<u8>) {
-        macro_rules! put { ($($f:expr),*) => { $( $f.put(out); )* }; }
-        apu_fields!(put, self);
+        let mut block = vec![STATE_LAYOUT];
+        block.extend_from_slice(&self.regs);
+        block.push(self.read_register(0xFF26));
+        block.extend_from_slice(&self.ch3.wave_ram);
+        {
+            let out = &mut block;
+            macro_rules! put { ($($f:expr),*) => { $( $f.put(out); )* }; }
+            apu_fields!(put, self, self.div_divider, self.skip_div_event);
+        }
+        out.extend_from_slice(&(block.len() as u16).to_le_bytes());
+        out.extend_from_slice(&block);
     }
 
-    /// Returns false if `data` ends early.
-    pub fn import_state(&mut self, data: &[u8], pos: &mut usize) -> bool {
+    /// Reads a `version` save state's APU block at `*pos`. Returns false if `data` ends early.
+    pub fn import_state(&mut self, data: &[u8], pos: &mut usize, version: u32) -> bool {
+        if version < 8 {
+            return self.import_legacy_state(data, pos);
+        }
+        let Some(&[lo, hi]) = data.get(*pos..*pos + 2) else { return false };
+        let len = u16::from_le_bytes([lo, hi]) as usize;
+        let Some(block) = data.get(*pos + 2..*pos + 2 + len) else { return false };
+        *pos += 2 + len;
+        let Some(regs) = block.get(1..1 + STATE_REGS_LEN) else { return false };
+        let mut p = 1 + STATE_REGS_LEN;
+        let parsed = block[0] == STATE_LAYOUT && {
+            let data = block;
+            let pos = &mut p;
+            (|| {
+                macro_rules! take { ($($f:expr),*) => { $( $f.take(data, pos)?; )* }; }
+                apu_fields!(take, self, self.div_divider, self.skip_div_event);
+                Some(())
+            })()
+            .is_some()
+        };
+        if parsed {
+            self.regs.copy_from_slice(&regs[..0x16]);
+            self.after_import();
+        } else {
+            self.restore_from_registers(regs);
+        }
+        true
+    }
+
+    /// v3-v7 states: the fields in the same order, with the old frame sequencer's 8192-cycle
+    /// counter (dropped: DIV clocks it now) and its next step, which is the DIV-APU count.
+    fn import_legacy_state(&mut self, data: &[u8], pos: &mut usize) -> bool {
+        let (mut _counter, mut step) = (0u32, 0u8);
         macro_rules! take { ($($f:expr),*) => { $( if $f.take(data, pos).is_none() { return false; } )* }; }
-        apu_fields!(take, self);
-        // Table indexes and shifts are clamped: a damaged state must not index out of the tables.
+        apu_fields!(take, self, _counter, step);
+        self.div_divider = step & 7;
+        self.skip_div_event = 0;
+        self.after_import();
+        self.rebuild_regs();
+        true
+    }
+
+    /// A block of another layout: power, registers, running channels and wave RAM come back;
+    /// the channels' timers restart.
+    fn restore_from_registers(&mut self, regs: &[u8]) {
+        let (cgb, muted) = (self.cgb_mode, self.channel_muted);
+        self.power_off();
+        self.enabled = false;
+        self.ch3.wave_ram.copy_from_slice(&regs[0x17..0x27]);
+        let nr52 = regs[0x16];
+        if nr52 & 0x80 != 0 {
+            self.write_register(0xFF26, 0x80);
+            for (i, &v) in regs[..0x16].iter().enumerate() {
+                let addr = 0xFF10 + i as u16;
+                // No trigger, and length enable as is (without the enable glitch).
+                let v = if matches!(addr, 0xFF14 | 0xFF19 | 0xFF1E | 0xFF23) { v & 0x07 } else { v };
+                self.write_register(addr, v);
+            }
+            self.ch1.length.enabled = regs[0x04] & 0x40 != 0;
+            self.ch2.length.enabled = regs[0x09] & 0x40 != 0;
+            self.ch3.length.enabled = regs[0x0E] & 0x40 != 0;
+            self.ch4.length.enabled = regs[0x13] & 0x40 != 0;
+            self.ch1.enabled = nr52 & 1 != 0 && self.ch1.dac_enabled;
+            self.ch2.enabled = nr52 & 2 != 0 && self.ch2.dac_enabled;
+            self.ch3.enabled = nr52 & 4 != 0 && self.ch3.dac_enabled;
+            self.ch4.enabled = nr52 & 8 != 0 && self.ch4.dac_enabled;
+        }
+        self.regs.copy_from_slice(&regs[..0x16]);
+        self.cgb_mode = cgb;
+        self.channel_muted = muted;
+        self.after_import();
+    }
+
+    /// Table indexes and shifts are clamped: a damaged state must not index out of the tables.
+    fn after_import(&mut self) {
         for ch in [&mut self.ch1, &mut self.ch2] { ch.duty &= 3; ch.duty_position &= 7; }
         self.ch3.sample_index &= 31;
         self.ch3.volume_shift &= 3;
         self.ch4.clock_shift &= 0x0F;
         self.ch4.divisor_code &= 7;
         self.ch1_sweep.shift &= 7;
-        self.frame_sequencer_step &= 7;
+        self.skip_div_event = self.skip_div_event.min(2);
         self.charged = false;
         self.external = [0.0; 2];
-        true
+    }
+
+    /// The written registers, as far as the channels still hold them (legacy states kept none).
+    fn rebuild_regs(&mut self) {
+        let len = |l: &Length, bits: u8| if l.enabled { bits | 0x40 } else { bits };
+        self.regs = [
+            self.ch1_sweep.read_nr10(), self.ch1.read_nrx1(), self.ch1.read_nrx2(),
+            self.ch1.frequency as u8, len(&self.ch1.length, (self.ch1.frequency >> 8) as u8),
+            0xFF, self.ch2.read_nrx1(), self.ch2.read_nrx2(),
+            self.ch2.frequency as u8, len(&self.ch2.length, (self.ch2.frequency >> 8) as u8),
+            self.ch3.read_nr30(), 0xFF, self.ch3.read_nr32(),
+            self.ch3.frequency as u8, len(&self.ch3.length, (self.ch3.frequency >> 8) as u8),
+            0xFF, 0xFF, self.ch4.read_nr42(), self.ch4.read_nr43(), len(&self.ch4.length, 0),
+            self.nr50, self.nr51,
+        ];
     }
 }
 
@@ -1055,7 +1184,7 @@ mod tests {
     /// The last sample (left) after `ms` milliseconds.
     fn settle(apu: &mut Apu, ms: u32) -> f32 {
         apu.clear_samples();
-        for _ in 0..ms { apu.step(CPU_CLOCK / 1000); }
+        for _ in 0..ms { apu.step(CPU_CLOCK / 2000); } // 2 MHz ticks
         let last = apu.sample_buffer[apu.sample_buffer.len() - 2];
         apu.clear_samples();
         last
@@ -1070,10 +1199,40 @@ mod tests {
         // Channel 2 on at volume 0: its DAC holds -1, a DC level and no tone.
         assert_eq!(settle(&mut apu, 50), 0.0, "the capacitor charges at start: no click");
         apu.set_channel_muted(1, true);
-        apu.step(100);
+        apu.step(50);
         assert!(apu.sample_buffer[0] > 0.2, "a DAC switched off still steps (as on the console)");
         assert!(settle(&mut apu, 50).abs() < 0.01, "then the baseline is 0 again");
         apu.write_register(0xFF26, 0x00); // powered off
         assert!(settle(&mut apu, 50).abs() < 0.01);
+    }
+
+    /// A playing APU, saved: a block of another layout still restores power, registers and the
+    /// channels that were on.
+    #[test]
+    fn a_block_of_another_layout_restores_from_its_registers() {
+        let mut apu = Apu::new();
+        for (reg, v) in [(0xFF26, 0x80), (0xFF24, 0x77), (0xFF25, 0xF3), (0xFF11, 0x80), (0xFF12, 0xF3),
+                         (0xFF13, 0x42), (0xFF14, 0x87), (0xFF1A, 0x80), (0xFF1C, 0x40), (0xFF1E, 0x80)] {
+            apu.write_register(reg, v);
+        }
+        apu.ch3.wave_ram[5] = 0xA5;
+        apu.div_event();
+        let mut state = Vec::new();
+        apu.export_state(&mut state);
+
+        let mut same = Apu::new();
+        assert!(same.import_state(&state, &mut 0, 8));
+        assert_eq!(same.div_divider, 1);
+
+        state[2] = STATE_LAYOUT + 1;
+        let mut other = Apu::new();
+        let mut pos = 0;
+        assert!(other.import_state(&state, &mut pos, 8));
+        assert_eq!(pos, state.len());
+        for reg in 0xFF10..=0xFF26 {
+            assert_eq!(other.read_register(reg), apu.read_register(reg), "{reg:#06x}");
+        }
+        assert_eq!(other.ch1.frequency, 0x742);
+        assert_eq!(other.ch3.wave_ram[5], 0xA5);
     }
 }
