@@ -97,6 +97,18 @@ impl Timer {
         }
     }
 
+    /// DIV reset by a CGB speed switch: like a DIV write, except that the 4 KHz input (DIV bit 9)
+    /// only counts the reset as a falling edge when it was already high one M-cycle `earlier`
+    /// (CGB B/C, Age spsw-tima).
+    // ponytail: CGB B/C only; CGB E also delays the 65 KHz and 16 KHz inputs (spsw-tima-cgbE).
+    pub fn speed_switch_div_reset(&mut self, earlier: u16) {
+        let mask = self.tac_bit_mask();
+        let seen = if mask == 1 << 9 { earlier & self.div_counter } else { self.div_counter };
+        let edge = self.tac & 0x04 != 0 && seen & mask != 0;
+        self.div_counter = 0;
+        if edge { self.increment(); }
+    }
+
     fn bit_mask_for_tac(&self, tac: u8) -> u16 {
         match tac & 0x03 {
             0 => 1 << 9,  // every 1024 T-cycles

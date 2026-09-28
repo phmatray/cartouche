@@ -332,12 +332,17 @@ impl MemoryBus {
         if !self.cgb_mode || self.key1 & 0x01 == 0 {
             return false;
         }
+        // STOP's second M-cycle reads the byte after it; DIV resets at the end of the next one.
+        self.tick_components();
+        let earlier = self.timer.div_counter;
+        self.tick_components();
+        self.timer.speed_switch_div_reset(earlier);
         self.double_speed = !self.double_speed;
         self.key1 = 0;
-        // Pan Docs, "CGB Registers": DIV resets and the CPU waits 2050 M-cycles for the clock to settle.
-        self.timer.write(0xFF04, 0);
-        for _ in 0..2050 {
-            self.stop_tick();
+        // Then the CPU waits while the clock settles and everything else runs: $20000 DIV counts,
+        // so DIV is back at 0 when it resumes (Age spsw-div, spsw-tima).
+        for _ in 0..0x8000 {
+            self.tick_components();
         }
         true
     }
@@ -568,11 +573,14 @@ mod tests {
         assert_ne!(bus.read_byte(0xFF04), 0);
         bus.write_byte(0xFF4D, 0x01);
         assert_eq!(bus.read_byte(0xFF4D), 0x7F, "armed, normal speed");
+        bus.write_byte(0xFF07, 0x04); // TIMA at 4 KHz
+        bus.write_byte(0xFF05, 0x00);
         bus.cycle_count = 0;
         assert!(bus.try_speed_switch());
         assert_eq!(bus.read_byte(0xFF4D), 0xFE, "double speed, disarmed");
-        assert_eq!(bus.read_byte(0xFF04), 0, "DIV reset, and still while the clock settles");
-        assert_eq!(bus.cycle_count, 2050 * 2, "2050 M-cycles at the new speed");
+        assert_eq!(bus.read_byte(0xFF04), 0, "DIV reset, then $20000 counts: back at 0");
+        assert_eq!(bus.read_byte(0xFF05), 0x80, "the timer ran through the pause (Age spsw-tima)");
+        assert_eq!(bus.cycle_count, 2 * 4 + 0x8000 * 2, "STOP's 2 M-cycles, then $8000 at the new speed");
     }
 
     #[test]
