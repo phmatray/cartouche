@@ -383,6 +383,10 @@ impl GameBoy {
         if let Some(s) = &self.bus.sgb { s.export_state(&mut data); }
         // Optional tail (absent from older states): stop mode, KEY0 (DMG compatibility set by the boot ROM).
         data.extend_from_slice(&[self.cpu.stopped as u8, self.bus.key0]);
+        // Then the mapper block: u16 LE length + `Cartridge::export_extra`.
+        let extra = self.bus.cartridge.export_extra();
+        data.extend_from_slice(&(extra.len() as u16).to_le_bytes());
+        data.extend_from_slice(&extra);
 
         data
     }
@@ -576,6 +580,11 @@ impl GameBoy {
         if let Some(&[_, key0, ..]) = data.get(pos..) {
             self.bus.key0 = key0;
         }
+        let extra = match data.get(pos + 2..) {
+            Some(&[lo, hi, ref rest @ ..]) => rest.get(..u16::from_le_bytes([lo, hi]) as usize).unwrap_or(&[]),
+            _ => &[],
+        };
+        self.bus.cartridge.import_extra(extra);
         true
     }
 }
@@ -663,5 +672,34 @@ mod tests {
         assert_eq!(g.bus.key0, 0x04);
         g.finish_boot().unwrap();
         assert!(!g.bus.boot_rom_active && g.bus.ppu.compat && !g.bus.cgb_mode, "DMG compatibility mode");
+    }
+
+    /// A HuC3 caught mid-command (mode 0xB, address set) goes on from the same place after a load;
+    /// a state from before the mapper block still loads.
+    #[test]
+    fn a_huc3_state_keeps_its_command_registers() {
+        let mut rom = vec![0u8; 0x8000];
+        rom[0x100..0x102].copy_from_slice(&[0x18, 0xFE]);
+        (rom[0x147], rom[0x149]) = (0xFE, 0x03);
+        rom[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(rom[i]).wrapping_sub(1));
+        let mut gb = GameBoy::new(rom.clone()).unwrap();
+        let c = &mut gb.bus.cartridge;
+        c.write_rom(0x0000, 0x0B);
+        for cmd in [0x43, 0x52, 0x37, 0x43] { c.write_ram(0, cmd); } // memory 0x23 = 7, address back to 0x23
+        let state = gb.save_state();
+
+        let mut g = GameBoy::new(rom.clone()).unwrap();
+        assert!(g.load_state(&state));
+        let c = &mut g.bus.cartridge;
+        c.write_ram(0, 0x10); // still in mode 0xB: read memory 0x23
+        c.write_rom(0x0000, 0x0C);
+        assert_eq!(c.read_ram(0), 0x97);
+
+        // The pre-change layout ends right after KEY0.
+        let extra = u16::from_le_bytes([state[state.len() - 134], state[state.len() - 133]]);
+        assert_eq!(extra, 132, "mode, address, result, opcode, 128 bytes of nibbles");
+        let old = &state[..state.len() - 134];
+        let mut g = GameBoy::new(rom).unwrap();
+        assert!(g.load_state(old));
     }
 }
