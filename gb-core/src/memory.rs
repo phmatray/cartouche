@@ -594,6 +594,20 @@ mod tests {
     }
 
     #[test]
+    fn an_interrupt_ends_the_speed_switch_pause() {
+        let mut bus = bus();
+        bus.cgb_mode = true;
+        bus.interrupts.interrupt_enable = TIMER_BIT;
+        bus.write_byte(0xFF07, 0x05); // TIMA at 262 KHz: overflows 16 x 256 counts in
+        bus.write_byte(0xFF4D, 0x01);
+        bus.cycle_count = 0;
+        assert!(bus.try_speed_switch());
+        assert_ne!(bus.interrupts.interrupt_flag & TIMER_BIT, 0);
+        assert!(bus.cycle_count < 0x8000 * 2, "woken by the timer, not after $8000 M-cycles");
+        assert_ne!(bus.read_byte(0xFF04), 0, "DIV has not wrapped");
+    }
+
+    #[test]
     fn oam_dma_restart_starts_over() {
         let mut bus = bus();
         bus.write_byte(0xFF46, 0xC0);
