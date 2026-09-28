@@ -3,7 +3,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Lang } from '../i18n/core';
 import type { Layout, Shell, Skin } from '../lib/touch-layout';
-import type { Startup } from '../lib/settings-clean';
+import type { Motion, Startup } from '../lib/settings-clean';
 import { DEFAULT_DISPLAY, normalizeDisplay, presetOf, sameFilters, type DisplayConfig, type Filters, type PresetName, type ScreenKind } from '../shaders/filters';
 import { resolve } from '../utils/keybindings';
 
@@ -75,6 +75,8 @@ export interface SettingsState {
   autoSaveIntervalSeconds: number;
   /** The start-up animation and chime played when a game starts fresh (Start skips it), or 'off'. */
   startupAnimation: Startup;
+  /** The interface's animations (page transitions, sheets, toasts): 'system' follows prefers-reduced-motion. */
+  motion: Motion;
   /** The console original Game Boy games run on, and a game’s own choice (by game id). */
   console: ConsoleChoice;
   gameConsole: Record<string, ConsoleChoice>;
@@ -154,6 +156,7 @@ const DEFAULT_STATE = {
   autoSaveEnabled: true,
   autoSaveIntervalSeconds: 60,
   startupAnimation: startupDefault(),
+  motion: 'system' as Motion,
   console: 'dmg' as ConsoleChoice,
   gameConsole: {} as Record<string, ConsoleChoice>,
   gameSgb: {} as Record<string, boolean>,

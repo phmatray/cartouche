@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { consoleOf, useSettingsStore, type ScreenSize } from '../../store/settingsStore';
 import type { ScreenKind } from '../../shaders/filters';
+import type { Motion } from '../../lib/settings-clean';
 import { ConsoleRows, MotionRows, ScreenFilters } from './ScreenFilters';
 import { Row, Seg } from './parts';
 import { rich, useT } from '../../i18n';
@@ -27,7 +28,7 @@ const SAMPLES: Record<ScreenKind, Uint8ClampedArray> = (() => {
 })();
 
 export function DisplayTab() {
-  const { screenSize, setScreenSize } = useSettingsStore();
+  const { screenSize, setScreenSize, motion, set } = useSettingsStore();
   const colorized = useSettingsStore((s) => consoleOf(s.console) !== 'dmg');
   const [kind, setKind] = useState<ScreenKind>('dmg');
   const t = useT();
@@ -50,6 +51,11 @@ export function DisplayTab() {
       <h3>{t('settings.display.size')}</h3>
       <Row label={t('settings.display.defaultSize')} sub={t('settings.display.sizeSub')}>
         <Seg<ScreenSize> label={t('settings.display.defaultSize')} value={screenSize} options={[['fit', t('settings.display.fit')], ['2', '2×'], ['3', '3×'], ['4', '4×']]} set={setScreenSize} />
+      </Row>
+      <h3>{t('settings.display.ui')}</h3>
+      <Row label={t('settings.display.anims')} sub={t('settings.display.animsSub')}>
+        <Seg<Motion> label={t('settings.display.anims')} value={motion} set={(v) => set({ motion: v })}
+          options={[['system', t('settings.display.animsSystem')], ['full', t('settings.display.animsFull')], ['reduced', t('settings.display.animsReduced')]]} />
       </Row>
       <h3>{t('settings.storage.art')}</h3>
       <p className="intro" style={{ margin: '8px 0 0' }}>{rich(t('settings.display.art'), { a: (s) => <Link to="/settings/storage" style={{ color: 'var(--ink)' }}>{s}</Link> })}</p>

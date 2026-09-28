@@ -6,6 +6,12 @@ import { useGamepadNav } from './hooks/useGamepadNav';
 import { AppShell, NotFound } from './components/shell/AppShell';
 import { LibraryPage } from './components/library/LibraryPage';
 import { t } from './i18n';
+import { useSettingsStore } from './store/settingsStore';
+
+// Settings › Display › Animations, on <html> before the first paint: CSS and lib/ui's reducedMotion() read it.
+const applyMotion = (m: string) => { if (m === 'system') delete document.documentElement.dataset.motion; else document.documentElement.dataset.motion = m; };
+applyMotion(useSettingsStore.getState().motion);
+useSettingsStore.subscribe((s) => applyMotion(s.motion));
 
 // Every screen but the library loads on first visit, so the first paint only ships what it shows.
 // The game page and the player are fetched once the library is idle: opening a game never waits for its code.

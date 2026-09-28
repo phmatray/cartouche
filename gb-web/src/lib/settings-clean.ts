@@ -10,6 +10,9 @@ const isBool = (x: unknown): x is boolean => typeof x === 'boolean';
 
 /** The start-up animations, in the core's order (the index is its `animation` argument, 0 none). */
 export const STARTUP = ['off', 'registration', 'insert', 'shelf'] as const;
+/** The interface's animations: as the system asks (reduced motion or not), always, or reduced whatever it says. */
+export const MOTION = ['system', 'full', 'reduced'] as const;
+export type Motion = (typeof MOTION)[number];
 export type Startup = (typeof STARTUP)[number];
 /** A stored start-up animation made safe; before 1.3 it was a switch (true: on). */
 export const startupOf = (v: unknown): Startup | undefined =>
@@ -44,6 +47,8 @@ export function cleanSetting(key: string, value: unknown, cur: unknown): unknown
     }
     case 'startupAnimation':
       return startupOf(value);
+    case 'motion':
+      return (MOTION as readonly unknown[]).includes(value) ? value : undefined;
     case 'touchSkin':
       return (SKINS as readonly unknown[]).includes(value) ? value : undefined;
     case 'touchShell':

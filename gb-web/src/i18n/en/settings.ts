@@ -70,6 +70,12 @@ export default {
     defaultSize: 'Default size',
     sizeSub: 'Fit fills the stage; fixed sizes stay pixel-perfect',
     fit: 'Fit',
+    ui: 'Interface',
+    anims: 'Animations',
+    animsSub: 'Page changes, page turns, sheets and notices. System follows your device’s “reduce motion” setting; Reduced keeps short fades and nothing moves.',
+    animsSystem: 'System',
+    animsFull: 'On',
+    animsReduced: 'Reduced',
     art: 'Box art is off by default. Turn it on, see its size or delete it in <a>Storage</a>.',
   },
   screen: {

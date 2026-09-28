@@ -6,6 +6,7 @@ import { download, printOut, share } from './output';
 import { MS_PER_ROW, PAPER_W, paperRgba } from './paper';
 import type { Printout } from './usePeripherals';
 import './peripherals.css';
+import { reducedMotion } from '../lib/ui';
 
 const PrinterIcon = <svg className="icon s" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V3h10v6M7 17H4v-8h16v8h-3M7 14h10v7H7z" fill="none" stroke="currentColor" strokeWidth="2.2" /></svg>;
 
@@ -24,7 +25,7 @@ export default function PrinterTray({ paper, gameId, title, onClose }: { paper: 
   }, [paper.shades, paper.rows]);
   // Tear-off and buttons wait for the paper to finish feeding (the feed runs in real time, whatever the speed).
   const [fedRows, setFedRows] = useState(0);
-  const fed = paper.done && (fedRows === paper.rows || matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const fed = paper.done && (fedRows === paper.rows || reducedMotion());
   // A finished print leaves the screen after a while (it is in the album), unless the player is on the tray.
   const tray = useRef<HTMLElement>(null);
   useEffect(() => {

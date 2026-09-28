@@ -189,8 +189,17 @@ export function download(blob: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-/** Scroll behavior that respects prefers-reduced-motion. */
-export const motion = (): ScrollBehavior => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
+/**
+ * Reduced motion: chosen in Settings › Display (html[data-motion], set by App), else as the system asks.
+ * CSS reads the same: `@media (prefers-reduced-motion:reduce)` rules sit under html:not([data-motion=full]),
+ * and repeat under html[data-motion=reduced].
+ */
+export const reducedMotion = () => {
+  const m = typeof document === 'undefined' ? undefined : document.documentElement.dataset.motion;
+  return m === 'reduced' || (m !== 'full' && typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
+};
+/** Scroll behavior that respects reduced motion. */
+export const motion = (): ScrollBehavior => (reducedMotion() ? 'auto' : 'smooth');
 
 /** onKeyDown for a modal <dialog>: keep Tab inside it (it otherwise lets focus leave for the page body or the browser's own UI). */
 export function trapTab(e: KeyboardEvent<HTMLElement>) {

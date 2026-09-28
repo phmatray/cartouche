@@ -71,6 +71,12 @@ export default {
     defaultSize: 'Taille par défaut',
     sizeSub: 'Ajuster remplit la scène ; les tailles fixes restent nettes au pixel près',
     fit: 'Ajuster',
+    ui: 'Interface',
+    anims: 'Animations',
+    animsSub: 'Changements de page, pages qui se tournent, volets et notifications. Système suit le réglage « Réduire les animations » de votre appareil ; Réduites garde de courts fondus et rien ne bouge.',
+    animsSystem: 'Système',
+    animsFull: 'Activées',
+    animsReduced: 'Réduites',
     art: 'Les jaquettes sont désactivées par défaut. Activez-les, consultez leur taille ou supprimez-les dans <a>Stockage</a>.',
   },
   screen: {
