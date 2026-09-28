@@ -15,7 +15,7 @@ pub(crate) type Sprite = (u8, usize, u8, u8, u8);
 const MODE0_EARLY: u32 = 2;
 /// The longest mode 3 a line can have (172 + 7 fine scroll + 6 window + 10 OBJs of 11 dots): what
 /// `mode3_len` holds until the FIFO measures the line (`measure_len`).
-pub(crate) const MODE3_MAX: u32 = 295;
+const MODE3_MAX: u32 = 295;
 
 pub const PALETTE_COLORS: [[u8; 4]; 4] = [
     [0xE0, 0xF8, 0xD0, 0xFF], // lightest
