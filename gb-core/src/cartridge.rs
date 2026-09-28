@@ -179,7 +179,31 @@ impl Huc3Rtc {
     fn read(&self) -> u8 {
         0x80 | self.last_opcode << 4 | self.result
     }
+
+    /// Cartouche's own `.sav` footer: minutes of the day, days, alarm minutes, alarm days and alarm
+    /// enabled as u32 LE, then the unix time (u64 LE, seconds) they were taken at.
+    fn export_footer(&self) -> [u8; HUC3_FOOTER_LEN] {
+        let (minutes, days) = self.minutes_and_days();
+        let words = [minutes as u32, days as u32, self.nibbles(0x58, 3), self.nibbles(0x5B, 4), self.nibbles(0x5F, 1) & 1];
+        let mut out = [0; HUC3_FOOTER_LEN];
+        for (i, w) in words.iter().enumerate() { out[i * 4..i * 4 + 4].copy_from_slice(&w.to_le_bytes()); }
+        out[20..].copy_from_slice(&((now_ms() / 1000.0) as u64).to_le_bytes());
+        out
+    }
+
+    /// Restores the footer; the clock goes on by the wall time elapsed since it was written.
+    fn import_footer(&mut self, f: &[u8]) {
+        let word = |i: usize| u32::from_le_bytes(f[i * 4..i * 4 + 4].try_into().unwrap());
+        let saved_at = u64::from_le_bytes(f[20..28].try_into().unwrap()) as f64;
+        let elapsed = (word(0) % 1440) as f64 * 60.0 + (word(1) % 4096) as f64 * 86400.0;
+        self.base_timestamp = (saved_at - elapsed) * 1000.0;
+        self.set_nibbles(0x58, 3, word(2));
+        self.set_nibbles(0x5B, 4, word(3));
+        self.set_nibbles(0x5F, 1, word(4) & 1);
+    }
 }
+
+const HUC3_FOOTER_LEN: usize = 28;
 
 pub const MAPPER_STATE_LEN: usize = 7;
 
@@ -669,6 +693,9 @@ impl Cartridge {
             }
             data.extend_from_slice(&((now_ms() / 1000.0) as u64).to_le_bytes());
         }
+        if let Some(ref huc3) = self.huc3 {
+            data.extend_from_slice(&huc3.export_footer());
+        }
         data
     }
 
@@ -753,6 +780,11 @@ impl Cartridge {
                 if rtc_data.len() >= 22 {
                     rtc.latched.copy_from_slice(&rtc_data[17..22]);
                 }
+            }
+        }
+        if let Some(huc3) = &mut self.huc3 {
+            if data.len() == ram_len + HUC3_FOOTER_LEN {
+                huc3.import_footer(&data[ram_len..]);
             }
         }
     }
@@ -1000,6 +1032,35 @@ mod tests {
         assert_eq!(c.read_ram(0), 0xC0, "IR: no light");
         c.write_rom(0x0000, 0x07);
         assert_eq!(c.read_ram(0), 0xFF);
+    }
+
+    #[test]
+    fn huc3_sav_footer_round_trips_and_advances() {
+        let ram_len = 32 * 1024;
+        let word = |s: &[u8], i: usize| u32::from_le_bytes(s[ram_len + 4 * i..ram_len + 4 * i + 4].try_into().unwrap());
+        let mut c = cart(0xFE, 0x03);
+        huc3_set_clock(&mut c, 615, 3);
+        // Alarm at day 0x0102, 08:00, enabled: nibbles at 0x58-0x5A, 0x5B-0x5E, 0x5F.
+        huc3_cmd(&mut c, 0x48);
+        huc3_cmd(&mut c, 0x55);
+        for n in [0x0, 0xE, 0x1, 0x2, 0x0, 0x1, 0x0, 0x1] { huc3_cmd(&mut c, 0x30 | n); }
+        let mut sav = c.export_sram();
+        assert_eq!(sav.len(), ram_len + 28);
+        assert_eq!([word(&sav, 0), word(&sav, 1), word(&sav, 2), word(&sav, 3), word(&sav, 4)], [615, 3, 480, 0x0102, 1]);
+
+        let at = sav.len() - 8;
+        let saved_at = u64::from_le_bytes(sav[at..].try_into().unwrap());
+        sav[at..].copy_from_slice(&(saved_at - 2 * 86400).to_le_bytes());
+        let mut fresh = cart(0xFE, 0x03);
+        fresh.import_sram(&sav);
+        assert_eq!(huc3_clock(&mut fresh), (615, 5), "two days passed since the save");
+        let again = fresh.export_sram();
+        assert_eq!([word(&again, 2), word(&again, 3), word(&again, 4)], [480, 0x0102, 1], "alarm kept");
+
+        let mut blank = cart(0xFE, 0x03);
+        blank.import_sram(&vec![7; ram_len]);
+        assert_eq!(blank.ram_byte(0), Some(7));
+        assert_eq!(huc3_clock(&mut blank), (0, 0), "no footer: the clock starts at 0");
     }
 
     #[test]
