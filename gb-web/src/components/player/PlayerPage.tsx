@@ -215,6 +215,13 @@ function Player({ game }: { game: GameEntry }) {
     else if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     else rootRef.current?.requestFullscreen().catch(() => {});
   }, []);
+  // Left by Escape or the system as often as by the button: the button follows the browser.
+  const [full, setFull] = useState(false);
+  useEffect(() => {
+    const sync = () => setFull(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', sync);
+    return () => document.removeEventListener('fullscreenchange', sync);
+  }, []);
   // The pad plays the game while it runs; paused, it works the Manual and the page (useGamepadNav).
   const { connected: gamepad } = useGamepad(pressButton, releaseButton, romLoaded && isRunning, toggleFullscreen);
 
@@ -711,7 +718,7 @@ function Player({ game }: { game: GameEntry }) {
         <span className="push" />
         <button className="dk hide-m" onClick={mute} aria-pressed={muted} aria-label={t('player.deck.muteM')}>{muted ? I.mute : I.sound}</button>
         {document.fullscreenEnabled
-          ? <button className="dk fs" onClick={toggleFullscreen} aria-label={t('player.deck.fullF')}>{I.full}</button>
+          ? <button className="dk fs" onClick={toggleFullscreen} aria-pressed={full} aria-label={full ? t('player.deck.leaveFullF') : t('player.deck.fullF')}>{full ? I.close : I.full}</button>
           : <button className="dk fs" onClick={toggleFullscreen} aria-pressed={immersive} aria-label={immersive ? t('player.deck.leaveImmF') : t('player.deck.immF')}>{immersive ? I.close : I.full}</button>}
       </nav>
 
