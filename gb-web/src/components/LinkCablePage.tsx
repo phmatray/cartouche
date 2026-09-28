@@ -249,9 +249,18 @@ export function LinkCablePage() {
       }
     };
     const down = on(true), up = on(false);
+    // A key released in another window never comes back as a keyup: let go of everything when the page loses focus.
+    const releaseAll = () => { for (const p of [1, 2] as LinkPlayer[]) if (held[p]) { held[p] = 0; setInput(p, 0); } };
+    const onHidden = () => { if (document.visibilityState === 'hidden') releaseAll(); };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
-    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); setInput(1, 0); setInput(2, 0); };
+    window.addEventListener('blur', releaseAll);
+    document.addEventListener('visibilitychange', onHidden);
+    return () => {
+      window.removeEventListener('keydown', down); window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', releaseAll); document.removeEventListener('visibilitychange', onHidden);
+      setInput(1, 0); setInput(2, 0);
+    };
   }, [state.isRunning, setInput]);
 
   // The letters this keyboard prints on the fixed keys (Chromium only; elsewhere the QWERTY letters).
