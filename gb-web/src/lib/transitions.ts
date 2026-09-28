@@ -64,17 +64,11 @@ function slotBox(id: string) {
   return slot ?? all.find(inView) ?? null;
 }
 
-/**
- * Which way the move goes, read off the links on screen: to a later page of the settings manual (or back), or to a
- * tab further right in the header (or left). Null when the two aren't neighbours in either list.
- */
-function directionOf(kind: Kind, from: string, to: string): 'fwd' | 'back' | null {
-  const paths = [...document.querySelectorAll<HTMLAnchorElement>(kind === 'page' ? '.toc a' : '.top .nav a')]
-    .map((a) => (routed ? strip(routed, a.pathname) : a.pathname));
+/** Which way the move goes, read off the header's tabs: to one further right, or left. Null unless both are tabs. */
+function directionOf(from: string, to: string): 'fwd' | 'back' | null {
+  const paths = [...document.querySelectorAll<HTMLAnchorElement>('.top .nav a')].map((a) => (routed ? strip(routed, a.pathname) : a.pathname));
   const at = (p: string) => paths.findIndex((h) => (h === '/' ? p === '/' : p === h || p.startsWith(`${h}/`)));
-  // Settings without a section is its first page.
-  const norm = (p: string) => (kind === 'page' && !/^\/settings\/./.test(p) ? paths[0] ?? p : p);
-  const a = at(norm(from)), b = at(norm(to));
+  const a = at(from), b = at(to);
   return a < 0 || b < 0 || a === b ? null : b > a ? 'fwd' : 'back';
 }
 
@@ -142,8 +136,8 @@ function run(from: string, to: string, go: () => unknown, fade = false, overlay 
   if (src && pageOf(from) === 'lib') slots.set(idx(), { id, section: src.closest('[aria-labelledby]')?.getAttribute('aria-labelledby') ?? '' });
   const from_ = src?.getBoundingClientRect() ?? null;
   html.dataset.vt = still ? 'still' : kind;
-  const dir = still || overlay ? null : directionOf(kind, from, to);
-  if (dir && (kind === 'fade' || kind === 'page')) html.dataset.vtDir = dir;
+  const dir = still || overlay || kind !== 'fade' ? null : directionOf(from, to);
+  if (dir) html.dataset.vtDir = dir;
   // The header holds still between shell pages, but not over the search overlay it would pop in front of.
   if (pageOf(from) !== 'player' && pageOf(to) !== 'player' && !still && !overlay && !src?.closest('dialog[open]')) html.dataset.vtShell = '';
 
