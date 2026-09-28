@@ -137,3 +137,117 @@ fn flg_mute_silences_the_output_but_not_the_voice() {
     }
     assert_ne!(dsp.read_reg(0x09), 0); // OUTX still follows the voice
 }
+
+// ─── Echo and state ───
+
+/// A single source-sample impulse (sample 4 = 4 << 12), then a silent looping block.
+fn impulse_aram() -> Box<[u8; 0x10000]> {
+    let mut aram = aram_with(&[
+        [0xC0, 0, 0, 0x40, 0, 0, 0, 0, 0],
+        [0x03, 0, 0, 0, 0, 0, 0, 0, 0],
+    ]);
+    aram[0x202..0x204].copy_from_slice(&[0x09, 0x03]); // loop on the silent block
+    aram
+}
+
+/// Voice 0 on echo: EON 1, ESA $80 ($8000), EFB 0, echo volume 7F, FLG 0 (echo writes on).
+fn echo_setup(edl: u8, fir: &[(u8, u8)]) -> Sdsp {
+    let echo = [
+        (0x4D, 0x01),
+        (0x6D, 0x80),
+        (0x7D, edl),
+        (0x0D, 0),
+        (0x2C, 0x7F),
+        (0x3C, 0x7F),
+    ];
+    let mut dsp = voice0(&echo);
+    for &(r, v) in fir.iter().chain(&[(0x6C, 0x00), (0x4C, 0x01)]) {
+        dsp.write_reg(r, v);
+    }
+    dsp
+}
+
+/// Left outputs of the first `n` samples that are not zero, as (sample, value).
+fn nonzero(dsp: &mut Sdsp, aram: &mut [u8; 0x10000], n: usize) -> Vec<(usize, i16)> {
+    (0..n)
+        .map(|k| (k, dsp.sample(aram)))
+        .filter(|(_, s)| s.0 != 0)
+        .map(|(k, s)| (k, s.0))
+        .collect()
+}
+
+#[test]
+fn echo_repeats_an_impulse_after_the_buffer_length() {
+    // AC4. The impulse leaves the voice at samples 8-10 (window 4.12 at fraction 0, env $7FF):
+    // 2903, 10271, 2880 after VOL and MVOL. Its echo-path copy (VOL only: 2926, 10352, 2902) is
+    // written to the buffer; EDL 1 = 2 KB = 512 samples later it is read back halved into the FIR
+    // history. C0 weighs the oldest of the 8 history entries, so it reaches the output 7 samples
+    // after that: (h × $7F >> 6) & ~1 = 2902, 10270, 2878, then × EVOL >> 7.
+    let mut aram = impulse_aram();
+    let mut dsp = echo_setup(1, &[(0x0F, 0x7F)]);
+    let echo = [(527, 2879), (528, 10189), (529, 2855)];
+    let expected = [(8, 2903), (9, 10271), (10, 2880)]
+        .into_iter()
+        .chain(echo)
+        .collect::<Vec<_>>();
+    assert_eq!(nonzero(&mut dsp, &mut aram, 1000), expected);
+
+    // C7 weighs the newest entry: the echo comes back exactly 512 samples (16 ms) later.
+    let mut aram = impulse_aram();
+    let mut dsp = echo_setup(1, &[(0x7F, 0x7F)]);
+    let echo = [(520, 2879), (521, 10189), (522, 2855)];
+    let expected = [(8, 2903), (9, 10271), (10, 2880)]
+        .into_iter()
+        .chain(echo)
+        .collect::<Vec<_>>();
+    assert_eq!(nonzero(&mut dsp, &mut aram, 1000), expected);
+}
+
+#[test]
+fn edl_zero_is_a_four_byte_buffer_and_flg_bit5_stops_writes() {
+    let mut aram = impulse_aram();
+    let mut dsp = echo_setup(0, &[(0x7F, 0x7F)]);
+    for _ in 0..10 {
+        dsp.sample(&mut aram);
+    }
+    // Sample 9's echo-path values sit at ESA × 256: L 10352 = $2870 (VOL 7F), R 5216 = $1460 (VOL 40).
+    assert_eq!(aram[0x8000..0x8004], [0x70, 0x28, 0x60, 0x14]);
+    assert!(aram[0x8004..0x8800].iter().all(|&b| b == 0));
+
+    let mut aram = impulse_aram();
+    let mut dsp = echo_setup(0, &[(0x7F, 0x7F)]);
+    dsp.write_reg(0x6C, 0x20);
+    for _ in 0..10 {
+        dsp.sample(&mut aram);
+    }
+    assert!(aram[0x8000..0x8800].iter().all(|&b| b == 0));
+}
+
+#[test]
+fn state_round_trips_mid_note() {
+    // AC5: voices, envelopes, echo history and counters all carry over. EDL 2 = 1024 samples, so
+    // by sample 1100 the echo is feeding back.
+    let mut aram = aram_with(&[BLOCK_A, BLOCK_B]);
+    let mut a = echo_setup(2, &[(0x0F, 0x40), (0x3F, 0x20), (0x7F, 0x30), (0x0D, 0x50)]);
+    a.write_reg(0x14, 0x00); // voice 1 on the same source, pitch-modulated, one octave up, GAIN
+    a.write_reg(0x13, 0x20);
+    a.write_reg(0x10, 0x60);
+    a.write_reg(0x17, 0xDF);
+    a.write_reg(0x2D, 0x02);
+    a.write_reg(0x4C, 0x03);
+    for _ in 0..1100 {
+        a.sample(&mut aram);
+    }
+    let mut state = Vec::new();
+    a.export_state(&mut state);
+    let mut b = Sdsp::new();
+    let mut pos = 0;
+    assert!(b.import_state(&state, &mut pos));
+    assert_eq!(pos, state.len());
+    let mut aram_b = aram.clone();
+    for _ in 0..1000 {
+        assert_eq!(a.sample(&mut aram), b.sample(&mut aram_b));
+    }
+    assert!(aram == aram_b);
+    assert!(!Sdsp::new().import_state(&state[..state.len() - 1], &mut 0));
+}

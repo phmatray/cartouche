@@ -17,6 +17,14 @@ const ENDX: usize = 0x7C;
 const PMON: usize = 0x2D;
 const NON: usize = 0x3D;
 const DIR: usize = 0x5D;
+const EVOLL: usize = 0x2C;
+const EVOLR: usize = 0x3C;
+const EFB: usize = 0x0D;
+const EON: usize = 0x4D;
+const ESA: usize = 0x6D;
+const EDL: usize = 0x7D;
+/// FIR coefficient i sits at `$iF`.
+const FIR: usize = 0x0F;
 
 // Voice registers, at voice × $10.
 const VOLL: usize = 0;
@@ -89,6 +97,13 @@ pub struct Sdsp {
     /// KON/KOF are read on every other sample, starting with the first.
     every_other: bool,
     new_kon: u8,
+    /// Byte offset of this sample's L/R pair in the echo buffer at ESA × 256.
+    echo_offset: u16,
+    /// EDL × 2 KB, latched when `echo_offset` wraps to 0.
+    echo_length: u16,
+    /// The last 8 samples read back from the echo buffer (halved), a ring ending at `echo_hist_pos`.
+    echo_hist: [[i16; 2]; 8],
+    echo_hist_pos: u8,
 }
 
 impl Default for Sdsp {
@@ -111,6 +126,10 @@ impl Sdsp {
             noise: 0x4000,
             every_other: false,
             new_kon: 0,
+            echo_offset: 0,
+            echo_length: 0,
+            echo_hist: [[0; 2]; 8],
+            echo_hist_pos: 0,
         }
     }
 
@@ -146,24 +165,119 @@ impl Sdsp {
             false => (0, 0),
         };
 
-        let mut main = [0; 2];
+        let (mut main, mut echo_out) = ([0; 2], [0; 2]);
         let mut out = 0;
         for i in 0..8 {
             out = self.run_voice(i, aram, kon, koff, out);
-            for (ch, m) in main.iter_mut().enumerate() {
+            for ch in 0..2 {
                 let amp = (out * self.regs[i * 0x10 + VOLL + ch] as i8 as i32) >> 7;
-                *m = (*m + amp).clamp(-0x8000, 0x7FFF);
+                main[ch] = (main[ch] + amp).clamp(-0x8000, 0x7FFF);
+                if self.regs[EON] & (1 << i) != 0 {
+                    echo_out[ch] = (echo_out[ch] + amp).clamp(-0x8000, 0x7FFF);
+                }
             }
         }
 
-        if self.regs[FLG] & 0x40 != 0 {
-            return (0, 0);
+        // Echo: read this slot into the FIR history, filter, feed back, write the slot.
+        let ptr = self.regs[ESA] as usize * 0x100 + self.echo_offset as usize;
+        let at = |ch: usize, b: usize| (ptr + ch * 2 + b) & 0xFFFF;
+        self.echo_hist_pos = (self.echo_hist_pos + 1) & 7;
+        let pos = self.echo_hist_pos as usize;
+        for ch in 0..2 {
+            self.echo_hist[pos][ch] = i16::from_le_bytes([aram[at(ch, 0)], aram[at(ch, 1)]]) >> 1;
         }
-        let mix = |ch: usize, vol: usize| {
-            let o = ((main[ch] * self.regs[vol] as i8 as i32) >> 7) as i16 as i32;
-            o.clamp(-0x8000, 0x7FFF) as i16
+        let mut result = [0; 2];
+        for ch in 0..2 {
+            // C0 weighs the oldest entry, C7 the newest; the first seven taps wrap at 16 bits.
+            let tap = |i: usize| {
+                let c = self.regs[FIR + i * 0x10] as i8 as i32;
+                (self.echo_hist[(pos + 1 + i) & 7][ch] as i32 * c) >> 6
+            };
+            let fir = (0..7).map(tap).sum::<i32>() as i16 as i32 + tap(7) as i16 as i32;
+            let echo_in = fir.clamp(-0x8000, 0x7FFF) & !1;
+
+            let mvol = self.regs[[MVOLL, MVOLR][ch]] as i8 as i32;
+            let evol = self.regs[[EVOLL, EVOLR][ch]] as i8 as i32;
+            let o = ((main[ch] * mvol) >> 7) as i16 as i32 + ((echo_in * evol) >> 7) as i16 as i32;
+            result[ch] = o.clamp(-0x8000, 0x7FFF) as i16;
+
+            let feedback = ((echo_in * self.regs[EFB] as i8 as i32) >> 7) as i16 as i32;
+            let e = (echo_out[ch] + feedback).clamp(-0x8000, 0x7FFF) & !1;
+            if self.regs[FLG] & 0x20 == 0 {
+                [aram[at(ch, 0)], aram[at(ch, 1)]] = (e as i16).to_le_bytes();
+            }
+        }
+        if self.echo_offset == 0 {
+            self.echo_length = (self.regs[EDL] & 0x0F) as u16 * 0x800;
+        }
+        self.echo_offset += 4;
+        if self.echo_offset >= self.echo_length {
+            self.echo_offset = 0;
+        }
+
+        match self.regs[FLG] & 0x40 {
+            0 => (result[0], result[1]),
+            _ => (0, 0),
+        }
+    }
+
+    pub fn export_state(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.regs);
+        out.extend_from_slice(&self.counter.to_le_bytes());
+        out.extend_from_slice(&(self.noise as u16).to_le_bytes());
+        out.extend_from_slice(&[self.every_other as u8, self.new_kon, self.echo_hist_pos]);
+        out.extend_from_slice(&self.echo_offset.to_le_bytes());
+        out.extend_from_slice(&self.echo_length.to_le_bytes());
+        for s in self.echo_hist.iter().flatten() {
+            out.extend_from_slice(&s.to_le_bytes());
+        }
+        for v in &self.voices {
+            for s in &v.buf {
+                out.extend_from_slice(&s.to_le_bytes());
+            }
+            out.extend_from_slice(&[v.buf_pos, v.brr_offset, v.kon_delay, v.mode]);
+            out.extend_from_slice(&v.interp_pos.to_le_bytes());
+            out.extend_from_slice(&v.brr_addr.to_le_bytes());
+            out.extend_from_slice(&(v.env as u16).to_le_bytes());
+            out.extend_from_slice(&v.hidden_env.to_le_bytes());
+        }
+    }
+
+    /// Reads what `export_state` wrote at `*pos`; truncated data is rejected and changes nothing.
+    /// Out-of-range fields are clamped so a damaged state cannot index out of bounds.
+    pub fn import_state(&mut self, data: &[u8], pos: &mut usize) -> bool {
+        const VOICE: usize = 24 + 4 + 2 + 2 + 2 + 4;
+        const LEN: usize = 128 + 2 + 2 + 3 + 2 + 2 + 32 + 8 * VOICE;
+        let Some(d) = data.get(*pos..).and_then(|d| d.get(..LEN)) else {
+            return false;
         };
-        (mix(0, MVOLL), mix(1, MVOLR))
+        *pos += LEN;
+        let u16_at = |i: usize| u16::from_le_bytes([d[i], d[i + 1]]);
+        self.regs.copy_from_slice(&d[..128]);
+        self.counter = u16_at(128) % COUNTER_RANGE;
+        self.noise = (u16_at(130) & 0x7FFF) as i32;
+        self.every_other = d[132] != 0;
+        self.new_kon = d[133];
+        self.echo_hist_pos = d[134] & 7;
+        self.echo_length = u16_at(137).min(0x7800);
+        self.echo_offset = u16_at(135).min(self.echo_length) & !3;
+        for (i, s) in self.echo_hist.iter_mut().flatten().enumerate() {
+            *s = u16_at(139 + i * 2) as i16;
+        }
+        for (v, d) in self.voices.iter_mut().zip(d[171..].chunks(VOICE)) {
+            for (i, s) in v.buf.iter_mut().enumerate() {
+                *s = i16::from_le_bytes([d[i * 2], d[i * 2 + 1]]);
+            }
+            v.buf_pos = d[24] % 12;
+            v.brr_offset = d[25].min(7) | 1;
+            v.kon_delay = d[26].min(5);
+            v.mode = d[27] & 3;
+            v.interp_pos = u16::from_le_bytes([d[28], d[29]]).min(0x7FFF);
+            v.brr_addr = u16::from_le_bytes([d[30], d[31]]);
+            v.env = u16::from_le_bytes([d[32], d[33]]).min(0x7FF) as i32;
+            v.hidden_env = i32::from_le_bytes([d[34], d[35], d[36], d[37]]);
+        }
+        true
     }
 
     /// Whether the envelope/noise step of `rate` happens this sample.
