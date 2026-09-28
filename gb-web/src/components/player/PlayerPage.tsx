@@ -117,7 +117,7 @@ function Player({ game }: { game: GameEntry }) {
   const linkRom = useLinkRom(game);
   const onPrinted = useCallback(() => {
     album.reload();
-    toast(tNow('periph.printer.added'), '', { label: tNow('player.toast.view'), run: () => { setTab('album'); setManual(true); } });
+    toast(tNow('periph.printer.added'), '', { label: tNow('player.toast.view'), target: '#mt-album', run: () => { setTab('album'); setManual(true); } });
   }, [album]);
   const frameEl = useCallback(() => rootRef.current?.querySelector<HTMLElement>('.screen .frame') ?? null, []);
   const periph = usePeripherals(emu.core, power, game.id, onPrinted, frameEl);
@@ -143,7 +143,7 @@ function Player({ game }: { game: GameEntry }) {
       const s = useSettingsStore.getState();
       if (s.gameSgb[game.id] === undefined) {
         s.set({ gameSgb: { ...s.gameSgb, [game.id]: false }, snesMusic: { ...s.snesMusic, [game.id]: true } });
-        toast(tNow('player.toast.snesMusic'), 'm', { label: tNow('player.tabs.screen'), run: () => { setTab('screen'); setManual(true); } });
+        toast(tNow('player.toast.snesMusic'), 'm', { label: tNow('player.tabs.screen'), target: '#mt-screen', run: () => { setTab('screen'); setManual(true); } });
       }
     }
     const b = sgbBorder(borderVersion.current);
@@ -505,7 +505,7 @@ function Player({ game }: { game: GameEntry }) {
     if (!rgba) return;
     // A full device must say so, like a save slot: the player would go on trusting the album.
     try { await album.add(rgba); } catch (e) { warnSaveFailed(e); return; }
-    toast(tNow('player.toast.shot'), '', { label: tNow('player.toast.view'), run: () => { setTab('album'); setManual(true); } });
+    toast(tNow('player.toast.shot'), '', { label: tNow('player.toast.view'), target: '#mt-album', run: () => { setTab('album'); setManual(true); } });
   }, [romLoaded, framebufferSnapshot, album]);
   const mute = useCallback(() => { toggleMute(); toast(muted ? tNow('player.toast.soundOn') : tNow('player.toast.soundOff'), 'c'); }, [toggleMute, muted]);
 
