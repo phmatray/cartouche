@@ -158,7 +158,7 @@ export function LibraryPage() {
     el.classList.remove('hl');
     void el.offsetWidth; // restart the highlight animation
     el.classList.add('hl');
-    setTimeout(() => (el.matches('a') ? el : el.querySelector<HTMLElement>('a.t'))?.focus({ preventScroll: true }), 400);
+    setTimeout(() => (el.matches('a') ? el : el.querySelector<HTMLElement>('.t a'))?.focus({ preventScroll: true }), 400);
   };
 
   if (loading && !games.length) return <main className="wrap loading" aria-busy="true">{t('common.loadingLibrary')}</main>;
