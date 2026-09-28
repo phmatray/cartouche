@@ -343,7 +343,8 @@ Cartouche license as `LICENSE.txt`; the in-app Legal page links to all three.
 - Also from SameBoy (same tag): the APU's 2 MHz channel timing, for CGB-E and
   DMG-B, ported to Rust in `gb-core/src/apu.rs`. This covers the start delays,
   the duty step on restart, the envelope clock and its lock, CH1's delayed
-  sweep calculation, and the NRx2 write glitch ("zombie mode"), all from
+  sweep calculation, the NRx2 write glitch ("zombie mode"), and the noise
+  channel's counter, start delays and NR43 LFSR glitches, all from
   `Core/apu.c`.
 - License: Expat (MIT), which covers every file of the SameBoy repository
   except its `iOS` and `HexFiend` directories, so the boot ROMs this fork is

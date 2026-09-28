@@ -28,16 +28,7 @@ same-suite/apu/channel_1/channel_1_freq_change_timing-cgb0BC.gb  # apu
 same-suite/apu/channel_2/channel_2_extra_length_clocking-cgb0B.gb  # apu
 same-suite/apu/channel_3/channel_3_extra_length_clocking-cgb0.gb  # apu
 same-suite/apu/channel_3/channel_3_extra_length_clocking-cgbB.gb  # apu
-same-suite/apu/channel_4/channel_4_align.gb  # apu
-same-suite/apu/channel_4/channel_4_delay.gb  # apu
-same-suite/apu/channel_4/channel_4_equivalent_frequencies.gb  # apu
 same-suite/apu/channel_4/channel_4_extra_length_clocking-cgb0B.gb  # apu
-same-suite/apu/channel_4/channel_4_freq_change.gb  # apu
-same-suite/apu/channel_4/channel_4_frequency_alignment.gb  # apu
-same-suite/apu/channel_4/channel_4_lfsr_7_15.gb  # apu
-same-suite/apu/channel_4/channel_4_lfsr_restart.gb  # apu
-same-suite/apu/channel_4/channel_4_lfsr_restart_fast.gb  # apu
-same-suite/apu/channel_4/channel_4_volume_div.gb  # apu
 same-suite/sgb/command_mlt_req.gb  # sgb
 same-suite/sgb/command_mlt_req_1_incrementing.gb  # sgb
 age-test-roms/halt/halt-m0-interrupt-dmgC-cgbBCE.gb  # interrupt
