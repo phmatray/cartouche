@@ -10,7 +10,6 @@ mooneye-test-suite/acceptance/boot_div-dmg0.gb  # boot
 mooneye-test-suite/acceptance/boot_div2-S.gb  # boot
 mooneye-test-suite/acceptance/boot_hwio-S.gb  # boot
 mooneye-test-suite/acceptance/boot_hwio-dmg0.gb  # boot
-mooneye-test-suite/acceptance/boot_hwio-dmgABCmgb.gb  # boot
 mooneye-test-suite/acceptance/boot_regs-dmg0.gb  # boot
 mooneye-test-suite/acceptance/boot_regs-mgb.gb  # boot
 mooneye-test-suite/acceptance/boot_regs-sgb.gb  # boot
@@ -158,7 +157,6 @@ gbmicrotest/oam_write_l1_b.gb  # ppu
 gbmicrotest/oam_write_l1_d.gb  # ppu
 gbmicrotest/oam_write_l1_e.gb  # ppu
 gbmicrotest/poweron.gb  # no-verdict
-gbmicrotest/poweron_joy_000.gb  # boot
 gbmicrotest/poweron_oam_006.gb  # boot
 gbmicrotest/poweron_oam_069.gb  # boot
 gbmicrotest/poweron_oam_120.gb  # boot

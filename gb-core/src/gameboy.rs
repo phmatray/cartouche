@@ -195,6 +195,8 @@ impl GameBoy {
         self.cpu.regs.pc = 0x0100;
 
         self.bus.boot_rom_active = false;
+        // The DMG boot ROM never writes P1, which powers on with both groups selected.
+        self.bus.joypad.select = 0x00;
         self.bus.timer.div_counter = 0xABC8;
         self.bus.interrupts.interrupt_flag = 0xE1;
         self.bus.ppu.lcdc = 0x91;
@@ -205,9 +207,13 @@ impl GameBoy {
         self.bus.ppu.mode = crate::ppu::PpuMode::VBlank;
         self.bus.ppu.mode_clock = 396;
 
+        // The boot sound's channel 1 registers; it is still on (silent, its envelope has run down).
         self.bus.apu.write_register(0xFF26, 0x80);
+        self.bus.apu.write_register(0xFF11, 0x80);
+        self.bus.apu.write_register(0xFF12, 0xF3);
         self.bus.apu.write_register(0xFF24, 0x77);
-        self.bus.apu.write_register(0xFF25, 0xFF);
+        self.bus.apu.write_register(0xFF25, 0xF3);
+        self.bus.apu.ch1.enabled = true;
 
         if self.cgb_mode {
             self.bus.wram_bank = 1;
