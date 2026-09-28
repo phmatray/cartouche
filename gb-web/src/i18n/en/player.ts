@@ -232,4 +232,17 @@ export default {
     removeBreakpoint: 'Remove breakpoint {addr}',
     stoppedAt: 'Stopped: {reason}',
   },
+  music: {
+    play: 'Play',
+    pause: 'Pause',
+    prev: 'Previous track',
+    next: 'Next track',
+    tracks: 'Tracks',
+    track: 'Track {n}',
+    delete: 'Delete',
+    deleteTitle: 'Delete {title}?',
+    deleteBody: 'This music file is deleted from this browser. This can’t be undone.',
+    bad: 'This music file can’t be played.',
+    missing: 'This music file is not in this browser.',
+  },
 };

@@ -9,6 +9,7 @@ pub mod disasm;
 pub mod error;
 pub mod flash;
 pub mod gameboy;
+pub mod gbs;
 pub mod interrupts;
 pub mod joypad;
 pub mod mbc7;
@@ -61,6 +62,18 @@ impl Emulator {
                 self.last_error = None;
                 true
             }
+            Err(e) => {
+                self.last_error = Some(e.to_string());
+                false
+            }
+        }
+    }
+
+    /// Plays `track` (0-based) of a GBS music file, wrapped in a synthetic cartridge (`gbs::to_rom`)
+    /// on a fresh machine. Changing track = calling this again.
+    pub fn load_gbs(&mut self, data: &[u8], track: u8) -> bool {
+        match gbs::to_rom(data, track) {
+            Ok(rom) => self.load_rom_with(&rom, false, 0, 0),
             Err(e) => {
                 self.last_error = Some(e.to_string());
                 false

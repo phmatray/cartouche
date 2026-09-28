@@ -233,4 +233,17 @@ export default {
     removeBreakpoint: 'Quitar el punto de interrupción {addr}',
     stoppedAt: 'Detenido: {reason}',
   },
+  music: {
+    play: 'Reproducir',
+    pause: 'Pausa',
+    prev: 'Pista anterior',
+    next: 'Pista siguiente',
+    tracks: 'Pistas',
+    track: 'Pista {n}',
+    delete: 'Eliminar',
+    deleteTitle: '¿Eliminar {title}?',
+    deleteBody: 'Este archivo de música se elimina de este navegador. No se puede deshacer.',
+    bad: 'Este archivo de música no se puede reproducir.',
+    missing: 'Este archivo de música no está en este navegador.',
+  },
 } satisfies Messages['player'];

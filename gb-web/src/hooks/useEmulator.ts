@@ -109,6 +109,19 @@ export function useEmulator() {
     }
   }, [addError]);
 
+  /** Track `track` (0-based) of a GBS music file, on a fresh console (gb-core/src/gbs.rs). */
+  const loadGbs = useCallback((data: Uint8Array, track: number): boolean => {
+    const emu = emulatorRef.current;
+    if (!emu?.load_gbs(data, track)) {
+      addError(t('player.music.bad'), emu?.get_error());
+      setPower(0);
+      return false;
+    }
+    setPower((n) => n + 1);
+    stopped.current = false;
+    return true;
+  }, [addError]);
+
   const runFrame = useCallback((): Uint8ClampedArray | null => {
     const emu = emulatorRef.current;
     if (!emu || stopped.current) return null;
@@ -425,6 +438,7 @@ export function useEmulator() {
     power,
     isCgb,
     loadRom,
+    loadGbs,
     runFrame,
     getAudioSamples,
     stepInstruction,
