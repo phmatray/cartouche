@@ -44,6 +44,11 @@ pub struct MemoryBus {
     pub(crate) key1: u8,
     /// Whether the CPU is running at double speed (CGB only)
     pub double_speed: bool,
+    /// After an odd number of switches into double speed with the APU on, the DIV-APU event
+    /// reaches the APU one M-cycle late until it is powered off (Age spsw-ch2-lc-delay).
+    pub(crate) apu_event_late: bool,
+    /// A DIV-APU event held back that M-cycle (`Some(from a DIV write)`), delivered with the next one.
+    pub(crate) apu_event_due: Option<bool>,
     // CGB HDMA/GDMA
     pub hdma5: u8,
     pub(crate) hdma_active: bool,
@@ -87,6 +92,8 @@ impl MemoryBus {
             cgb_mode,
             key1: 0,
             double_speed: false,
+            apu_event_late: false,
+            apu_event_due: None,
             hdma5: 0xFF,
             hdma_active: false,
             hdma_source: 0,
@@ -260,7 +267,7 @@ impl MemoryBus {
                 // An overflow requests the interrupt at once, a TIMA write cancelling the reload withdraws it (Timer::step).
                 let (pending, div) = (self.timer.reload_pending, self.timer.div_counter);
                 self.timer.write(addr, value);
-                self.div_apu_edge(div);
+                self.div_apu_edge(div, true);
                 match (pending, self.timer.reload_pending) {
                     (false, true) => self.interrupts.request(TIMER_BIT),
                     (true, false) => self.interrupts.interrupt_flag &= !TIMER_BIT,
@@ -271,6 +278,7 @@ impl MemoryBus {
             0xFF10..=0xFF3F => {
                 let was_on = self.apu.is_on();
                 self.apu.write_register(addr, value);
+                if !self.apu.is_on() { (self.apu_event_late, self.apu_event_due) = (false, None); }
                 // Powered on while DIV's APU bit is set: the first DIV-APU event is skipped.
                 if !was_on && self.apu.is_on() && self.timer.div_counter & self.div_apu_bit() != 0 {
                     self.apu.skip_first_div_event();
@@ -357,14 +365,23 @@ impl MemoryBus {
         self.tick_components();
         let div = self.timer.div_counter;
         self.timer.speed_switch_div_reset(earlier);
-        self.div_apu_edge(div); // the reset can drop DIV's APU bit, in the old speed
+        // The reset can drop DIV's APU bit (old speed), seen one M-cycle late like the 4 KHz timer
+        // input: a bit that only just rose does not count (Age spsw-ch2-lc-delay).
+        self.div_apu_edge(div & earlier, true);
         self.double_speed = !self.double_speed;
+        if self.double_speed && self.apu.is_on() { self.apu_event_late = !self.apu_event_late; }
         self.ppu.m_cycle_dots = if self.double_speed { 2 } else { 4 };
         self.key1 = 0;
         // Then the CPU halts while the clock settles and everything else runs: $20000 DIV counts,
         // so DIV is back at 0 when it resumes (Age spsw-div, spsw-tima). Like HALT, an interrupt
         // ends it early (Age spsw-interrupts). Back in single speed the PPU comes out one dot
         // behind (Age spsw-mode0: the LCD-to-CPU alignment shifts).
+        // An interrupt already pending skips that pause, but the divider still stops for two
+        // M-cycles while the oscillator restarts (Age spsw-interrupts, CGB B/C).
+        if self.interrupts.pending() & !self.late_interrupts() != 0 {
+            self.timer.div_hold = 2;
+            return true;
+        }
         let mut behind = !self.double_speed;
         for _ in 0..0x8000 {
             self.tick_components();
@@ -418,13 +435,14 @@ impl MemoryBus {
         if self.timer.step(4) {
             self.interrupts.request(TIMER_BIT);
         }
-        self.div_apu_edge(div);
+        self.div_apu_edge(div, false);
         if self.serial.tick(4) {
             self.interrupts.request(SERIAL_BIT);
         }
         self.cartridge.tick();
         self.cartridge.tick_clock(ppu_step as u64);
         self.apu.cgb_mode = self.cgb_mode || self.ppu.compat; // CGB hardware, whatever the mode
+        self.apu.double_speed = self.double_speed;
         if let Some((l, r)) = self.sgb.as_deref_mut().and_then(|s| s.audio.run(ppu_step)) {
             self.apu.mix_external(l, r);
         }
@@ -435,10 +453,27 @@ impl MemoryBus {
     }
 
     /// The DIV-APU event: DIV bit 4 (bit 5 in double speed) fell since the counter read `old`,
-    /// whether it counted there or was reset by a write.
-    fn div_apu_edge(&mut self, old: u16) {
-        if old & !self.timer.div_counter & self.div_apu_bit() != 0 {
-            self.apu.div_event();
+    /// whether it counted there or was reset by a `write`; its rise arms the envelopes.
+    fn div_apu_edge(&mut self, old: u16, write: bool) {
+        let (new, bit) = (self.timer.div_counter, self.div_apu_bit());
+        let fell = old & !new & bit != 0;
+        if fell | self.apu_event_late {
+            self.deliver_div_event(fell.then_some(write));
+        }
+        // The rise is not held back: only the falling edge is measured late (spsw-ch2-lc-delay).
+        if !old & new & bit != 0 {
+            self.apu.div_secondary_event();
+        }
+    }
+
+    /// Kept out of the per-M-cycle path: one event every 2048 or more M-cycles.
+    #[inline(never)]
+    fn deliver_div_event(&mut self, mut event: Option<bool>) {
+        if self.apu_event_late {
+            event = std::mem::replace(&mut self.apu_event_due, event);
+        }
+        if let Some(write) = event {
+            self.apu.div_event(write);
         }
     }
 
@@ -653,6 +688,50 @@ mod tests {
         assert_ne!(bus.interrupts.interrupt_flag & TIMER_BIT, 0);
         assert!(bus.cycle_count < 0x8000 * 2, "woken by the timer, not after $8000 M-cycles");
         assert_ne!(bus.read_byte(0xFF04), 0, "DIV has not wrapped");
+    }
+
+    #[test]
+    fn a_pending_interrupt_skips_the_pause_but_stops_the_divider() {
+        let mut bus = bus();
+        bus.cgb_mode = true;
+        bus.interrupts.interrupt_enable = VBLANK_BIT;
+        bus.interrupts.interrupt_flag = VBLANK_BIT;
+        bus.write_byte(0xFF4D, 0x01);
+        bus.cycle_count = 0;
+        assert!(bus.try_speed_switch());
+        assert_eq!(bus.cycle_count, 2 * 4, "STOP's two M-cycles, no pause");
+        for _ in 0..2 { bus.cycle_tick(); }
+        assert_eq!(bus.timer.div_counter, 0, "held for two M-cycles");
+        bus.cycle_tick();
+        assert_eq!(bus.timer.div_counter, 4);
+    }
+
+    #[test]
+    fn odd_switches_into_double_speed_delay_the_div_apu_event_until_power_off() {
+        let mut bus = bus();
+        bus.cgb_mode = true;
+        bus.interrupts.interrupt_enable = VBLANK_BIT; // pending: no pause to wait out
+        bus.interrupts.interrupt_flag = VBLANK_BIT;
+        bus.write_byte(0xFF26, 0x80);
+        let mut switch = |bus: &mut MemoryBus| { bus.write_byte(0xFF4D, 0x01); bus.try_speed_switch(); };
+        switch(&mut bus);
+        assert!(bus.double_speed && bus.apu_event_late, "first switch into double speed");
+        switch(&mut bus);
+        assert!(bus.apu_event_late, "back to normal speed: still late");
+        switch(&mut bus);
+        assert!(!bus.apu_event_late, "second switch into double speed");
+        switch(&mut bus);
+        switch(&mut bus);
+        assert!(bus.apu_event_late);
+        // A DIV-APU edge (bit 5 in double speed) is held for one M-cycle.
+        bus.timer.div_hold = 0;
+        bus.timer.div_counter = 0x3FFC;
+        bus.cycle_tick();
+        assert_eq!(bus.apu_event_due, Some(false), "held back");
+        bus.cycle_tick();
+        assert_eq!(bus.apu_event_due, None, "delivered one M-cycle later");
+        bus.write_byte(0xFF26, 0x00);
+        assert!(!bus.apu_event_late, "power off ends it");
     }
 
     #[test]

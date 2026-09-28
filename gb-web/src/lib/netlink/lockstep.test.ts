@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chooseMode, delayFor, fromB64, isBootMsg, isLockMsg, isRomsMsg, Lockstep, toB64, type LockMsg } from './lockstep.ts';
+import { chooseMode, delayFor, fromB64, isBootMsg, isLockMsg, isRomsMsg, Lockstep, rollbackDelay, toB64, type LockMsg } from './lockstep.ts';
 
 // Literal input scripts: what each player holds when their console is about to run frame n.
 const P1 = (n: number) => (n * 7) & 0xff;
@@ -56,6 +56,10 @@ test('delayFor: half the round trip in frames, plus one, 2 to 10', () => {
   assert.equal(delayFor(1000), 10);
 });
 
+test('rollbackDelay: 2 frames, and what the 4-frame window leaves of a long line', () => {
+  assert.deepEqual([2, 3, 6, 7, 10].map(rollbackDelay), [2, 2, 2, 3, 6]);
+});
+
 test('isLockMsg rejects bad frames and buttons', () => {
   assert.equal(isLockMsg({ t: 'i', f: -1, b: 0 }), false);
   assert.equal(isLockMsg({ t: 'i', f: 1, b: 256 }), false);
@@ -102,4 +106,35 @@ test('isBootMsg: seed, delay and save checked', () => {
 test('a battery save survives the trip as base64', () => {
   const save = Uint8Array.from({ length: 0x8030 }, (_, i) => (i * 31) & 0xff);
   assert.deepEqual(fromB64(toB64(save)), save);
+});
+
+test('rollback: a partner script 9 frames late, predicted then corrected, ends with the no-prediction pairs', () => {
+  const D = 2, LATE = 9, FRAMES = 400;
+  const mine = (f: number) => (f < D ? 0 : (f * 7) & 0xff);
+  const theirs = (f: number) => (f < D ? 0 : [0, 1, 1, 0x10, 0x81, 0x81, 0][Math.floor(f / 13) % 7]);
+  const lock = new Lockstep(1, D);
+  const used = new Map<number, [number, number]>();
+  const wrong: number[] = [];
+  const inbox: { at: number; m: LockMsg }[] = [];
+  let frame = 0;
+  const deliver = (tick: number) => {
+    while (inbox.length && inbox[0].at <= tick) {
+      const r = lock.remote(inbox.shift()!.m);
+      if (r === null) continue;
+      wrong.push(r);
+      for (let f = r; f < frame; f++) used.set(f, lock.predict(f)); // the re-run, with what is known now
+    }
+  };
+  for (let tick = 0; frame < FRAMES; tick++) {
+    inbox.push({ at: tick + LATE, m: { t: 'i', f: tick + D, b: theirs(tick + D) } }); // the partner, sampling now
+    deliver(tick);
+    lock.local(frame, mine(frame + D));
+    used.set(frame, lock.predict(frame));
+    frame++;
+  }
+  deliver(Infinity);
+  assert.ok(lock.confirmed() >= FRAMES - 1);
+  for (let f = 0; f < FRAMES; f++) assert.deepEqual(used.get(f), [mine(f), theirs(f)], `frame ${f}`);
+  const changes = Array.from({ length: FRAMES }, (_, f) => f).filter((f) => f >= D && theirs(f) !== theirs(f - 1));
+  assert.deepEqual(wrong, changes);
 });

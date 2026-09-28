@@ -4,7 +4,8 @@
 use gb_core::gameboy::GameBoy;
 
 /// An MBC3+TIMER+RAM+BATTERY ROM that, forever: latches the clock and copies its seconds register
-/// to $C000, then copies the joypad's button row to $C001.
+/// to $C000, then copies the joypad's button row to $C001 and adds it to $C002 (so a button held
+/// for one frame leaves a trace).
 fn clock_rom() -> Vec<u8> {
     let mut r = vec![0u8; 0x8000];
     r[0x100..0x104].copy_from_slice(&[0x00, 0xC3, 0x50, 0x01]); // NOP; JP $0150
@@ -19,7 +20,8 @@ fn clock_rom() -> Vec<u8> {
         0xFA, 0x00, 0xA0, 0xEA, 0x00, 0xC0, // LD A,($A000); LD ($C000),A
         0x3E, 0x10, 0xE0, 0x00, // LD A,$10; LDH ($00),A        buttons
         0xF0, 0x00, 0xEA, 0x01, 0xC0, // LDH A,($00); LD ($C001),A
-        0x18, 0xE5, // JR loop
+        0x21, 0x02, 0xC0, 0x86, 0x77, // LD HL,$C002; ADD A,(HL); LD (HL),A
+        0x18, 0xE2, // JR loop
     ];
     r[0x150..0x150 + code.len()].copy_from_slice(&code);
     r[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(r[i]).wrapping_sub(1));
@@ -102,4 +104,139 @@ fn a_state_loaded_back_hashes_the_same() {
     let before = gb.state_hash();
     assert!(gb.load_state(&gb.save_state()));
     assert_eq!(gb.state_hash(), before);
+}
+
+/// Rollback (#164): frames 0–99 run with a wrong input at frame 50, then both consoles load their
+/// frame-50 states and re-run 50–99 with the right one. The clock crosses a second on the way
+/// (frame 60), so the state must carry its position and the second's dots, not catch up to "now".
+#[test]
+fn a_rolled_back_session_matches_a_straight_run() {
+    let right = |f: usize| [0x00, 0x01, 0x10, 0x81][f / 7 % 4];
+    let wrong = |f: usize| if f == 50 { 0x08 } else { right(f) };
+    let run = |a: &mut GameBoy, b: &mut GameBoy, f: usize, mask: u8| {
+        press(a, mask);
+        press(b, !mask);
+        gb_core::gameboy::run_linked_frame(a, b).unwrap();
+    };
+
+    let (mut a, mut b) = pair();
+    for f in 0..100 { run(&mut a, &mut b, f, right(f) as u8); }
+    let straight = (a.state_hash(), b.state_hash());
+
+    let (mut a, mut b) = pair();
+    let mut ring = Vec::new();
+    for f in 0..100 {
+        ring.push((a.save_state(), b.save_state()));
+        run(&mut a, &mut b, f, wrong(f) as u8);
+    }
+    assert_ne!((a.state_hash(), b.state_hash()), straight, "the wrong input changed the game");
+    assert!(a.load_state(&ring[50].0) && b.load_state(&ring[50].1));
+    for f in 50..100 { run(&mut a, &mut b, f, right(f) as u8); }
+    assert_eq!((a.state_hash(), b.state_hash()), straight);
+    assert_eq!(a.bus.read_byte(0xC000), 1, "one second on the clock");
+}
+
+/// Rollback on real games (the bundled ROMs, DMG and GBC): a pair re-run from any frame's states,
+/// wherever that frame ended in the line (mid mode 3 included), ends where a straight run ends.
+#[test]
+fn a_real_game_re_run_from_any_frame_matches_a_straight_run() {
+    for rom in ["tobutobugirl.gb", "tobutobugirldx.gb", "gbstudio/dawn-will-come.gb"] {
+        let data = std::fs::read(format!("{}/../gb-web/public/roms/{rom}", env!("CARGO_MANIFEST_DIR"))).unwrap();
+        let boot = || {
+            let mut gb = GameBoy::new(data.clone()).unwrap();
+            gb.skip_boot_rom();
+            gb.set_emulated_clock(1_700_000_000.0);
+            gb
+        };
+        let input = |f: usize| [0x00, 0x08, 0x00, 0x01, 0x00, 0x10, 0x20][f / 11 % 7];
+        let (mut a, mut b) = (boot(), boot());
+        let mut ring = Vec::new();
+        for f in 0..400 {
+            ring.push((a.save_state(), b.save_state()));
+            press(&mut a, input(f));
+            press(&mut b, input(f + 5));
+            gb_core::gameboy::run_linked_frame(&mut a, &mut b).unwrap();
+        }
+        let straight = (a.state_hash(), b.state_hash());
+        for from in (250..400).step_by(6) {
+            let (mut a, mut b) = (boot(), boot());
+            // The buttons held before `from`, then its states (a load keeps the held buttons).
+            press(&mut a, input(from - 1));
+            press(&mut b, input(from + 4));
+            assert!(a.load_state(&ring[from].0) && b.load_state(&ring[from].1));
+            for f in from..400 {
+                press(&mut a, input(f));
+                press(&mut b, input(f + 5));
+                gb_core::gameboy::run_linked_frame(&mut a, &mut b).unwrap();
+            }
+            assert_eq!((a.state_hash(), b.state_hash()), straight, "{rom}: re-run from frame {from}");
+        }
+    }
+}
+
+/// A ROM of cartridge type `cart_type` that runs `code` from $0150.
+fn rom_with(cart_type: u8, code: &[u8]) -> Vec<u8> {
+    let mut r = vec![0u8; 0x8000];
+    r[0x100..0x104].copy_from_slice(&[0x00, 0xC3, 0x50, 0x01]); // NOP; JP $0150
+    (r[0x147], r[0x149]) = (cart_type, 0x02);
+    r[0x150..0x150 + code.len()].copy_from_slice(code);
+    r[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(r[i]).wrapping_sub(1));
+    r
+}
+
+/// A console on `rom` loaded back at frame 50 from its own state and re-run to frame 110 ends where
+/// a straight run ends. The clock crosses a second at frame 60, so the state has to carry the
+/// mapper clock's position and dots, not catch up to "now" (#222).
+fn assert_rollback_matches_a_straight_run(rom: Vec<u8>) {
+    let boot = || {
+        let mut gb = GameBoy::new(rom.clone()).unwrap();
+        gb.skip_boot_rom();
+        gb.set_emulated_clock(1_700_000_000.0);
+        gb
+    };
+    let mut straight = boot();
+    for _ in 0..110 { straight.run_frame().unwrap(); }
+
+    let mut gb = boot();
+    for _ in 0..50 { gb.run_frame().unwrap(); }
+    let state = gb.save_state();
+    for _ in 50..100 { gb.run_frame().unwrap(); }
+    assert!(gb.load_state(&state));
+    for _ in 50..110 { gb.run_frame().unwrap(); }
+    assert_eq!(gb.bus.read_byte(0xC000), straight.bus.read_byte(0xC000), "what the game read of its clock");
+    assert_eq!(gb.state_hash(), straight.state_hash());
+}
+
+/// HuC3: forever copies the clock to memory (command $60), reads nibble 0 back, stores it to $C000.
+#[test]
+fn a_rolled_back_huc3_clock_matches_a_straight_run() {
+    let code = [
+        0x3E, 0x0B, 0xEA, 0x00, 0x00, // LD A,$0B; LD ($0000),A   command mode
+        // loop:
+        0x3E, 0x60, 0xEA, 0x00, 0xA0, // time to memory
+        0x3E, 0x40, 0xEA, 0x00, 0xA0, // address low nibble 0
+        0x3E, 0x50, 0xEA, 0x00, 0xA0, // address high nibble 0
+        0x3E, 0x10, 0xEA, 0x00, 0xA0, // read memory[0]
+        0x3E, 0x0C, 0xEA, 0x00, 0x00, // result mode
+        0xFA, 0x00, 0xA0, 0xEA, 0x00, 0xC0, // LD A,($A000); LD ($C000),A
+        0x3E, 0x0B, 0xEA, 0x00, 0x00, // command mode
+        0x18, 0xDA, // JR loop
+    ];
+    assert_rollback_matches_a_straight_run(rom_with(0xFE, &code));
+}
+
+/// TAMA5: forever reads clock digit 0 (the seconds' units, command $A) and stores it to $C000.
+#[test]
+fn a_rolled_back_tama5_clock_matches_a_straight_run() {
+    let code = [
+        // loop:
+        0x3E, 0x06, 0xEA, 0x01, 0xA0, // select register 6
+        0x3E, 0x0A, 0xEA, 0x00, 0xA0, // command A: read a clock digit
+        0x3E, 0x07, 0xEA, 0x01, 0xA0, // select register 7
+        0xAF, 0xEA, 0x00, 0xA0, // digit 0: runs the command
+        0x3E, 0x0C, 0xEA, 0x01, 0xA0, // select C: the digit read
+        0xFA, 0x00, 0xA0, 0xEA, 0x00, 0xC0, // LD A,($A000); LD ($C000),A
+        0x18, 0xE0, // JR loop
+    ];
+    assert_rollback_matches_a_straight_run(rom_with(0xFD, &code));
 }

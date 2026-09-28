@@ -537,10 +537,10 @@ fn a_state_keeps_the_snes_sound_playing() {
     assert!(rms < 0.01 && !snes(&gb).covered(), "with the SNES side idle: RMS {rms}");
 }
 
-/// A version 8 `state` as version 7 saved it: the APU block without its length, layout byte and
-/// registers, and the frame sequencer as an 8192-cycle counter and a step. Found as the one
-/// candidate block (a plausible length, then layout 1) whose v7 form saves back as `state` does
-/// after a load, but for the written registers, which version 7 did not keep.
+/// A version 8 `state` as version 7 saved it: in place of the APU block (u16 length, layout,
+/// registers, fields), the 113 bytes of the T-cycle APU v7 kept, here power, NR50/NR51 and wave
+/// RAM with every channel off. Found as the one candidate block (a plausible length, then a layout
+/// byte) whose v7 form loads and saves back as `state` does, but for the APU block itself.
 fn v7(state: &[u8]) -> Vec<u8> {
     assert_eq!(state[4], 8, "this layout is version 8");
     let mut reloaded = sgb();
@@ -549,23 +549,23 @@ fn v7(state: &[u8]) -> Vec<u8> {
     const REGS: usize = 0x16 + 1 + 16;
     (0..state.len() - 3).find_map(|i| {
         let len = u16::from_le_bytes([state[i], state[i + 1]]) as usize;
-        if !(64..256).contains(&len) || state[i + 2] != 1 || i + 2 + len > state.len() { return None; }
-        let fields = &state[i + 3 + REGS..i + 2 + len];
+        if !(64..512).contains(&len) || !(1..16).contains(&state[i + 2]) || i + 2 + len > state.len() { return None; }
+        let regs = &state[i + 3..i + 3 + REGS];
+        let mut apu = vec![0u8; 113];
+        apu[0] = regs[0x16] >> 7; // power
+        apu[1] = regs[0x14]; // NR50
+        apu[2] = regs[0x15]; // NR51
+        apu[72..88].copy_from_slice(&regs[0x17..0x27]); // wave RAM
         let mut old = state[..i].to_vec();
-        old.extend_from_slice(&fields[..3]); // power, NR50, NR51
-        old.extend_from_slice(&[0; 4]); // the 8192-cycle counter
-        old.push(fields[3]); // the next step: the DIV-APU count
-        old.extend_from_slice(&fields[5..]);
+        old.extend_from_slice(&apu);
         old.extend_from_slice(&state[i + 2 + len..]);
         old[4] = 7;
         let mut probe = sgb();
         if !probe.load_state(&old) { return None; }
-        let (mut a, mut b) = (probe.save_state(), resaved.clone());
-        let regs = i + 3..i + 3 + 0x16;
-        if a.len() != b.len() { return None; }
-        a[regs.clone()].fill(0);
-        b[regs].fill(0);
-        (a == b).then_some(old)
+        let a = probe.save_state();
+        let tail = state.len() - (i + 2 + len);
+        (a.len() == resaved.len() && a[..i] == resaved[..i] && a[a.len() - tail..] == resaved[resaved.len() - tail..])
+            .then_some(old)
     }).expect("a version 7 state round-trips to this one")
 }
 

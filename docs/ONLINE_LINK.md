@@ -104,9 +104,51 @@ cable (`run_frame_linked`, serial and infrared), and only the buttons cross the 
    its own battery save. The partner's inputs late more than 600 ms bring the usual *Waiting for Player N* banner
    (paused, lost, left); unplugging goes on alone from the current state.
 
+### Rollback (on top of lockstep)
+
+Input delay alone costs D frames of lag, 6 (100 ms) at a 150 ms round trip. Rollback cuts it to
+`rollbackDelay(D) = max(min(D, 2), D − 4)`: 2 frames up to a ~200 ms round trip, and whatever the 4-frame window can't
+cover beyond that (6 at 300 ms). `lockstep.ts` + `useLockstep.ts`, on the player page's own core (as the lockstep
+slice, not the link worker):
+
+1. A frame whose partner buttons aren't here yet runs on a guess: their last known buttons (`Lockstep.predict`).
+   Before it runs, both consoles' `save_state()` and the buttons they held go into a ring of WINDOW + 2 slots.
+2. When the partner's buttons for a guessed frame F arrive and differ (`Lockstep.remote` returns F), the next frame
+   first sets both consoles' buttons as they were before F, loads their F states (a load keeps the held buttons),
+   and runs F … now again with what is known now: sound drained (`clear_audio_buffer`), no frame drawn. Then the
+   current frame runs as usual.
+3. More than 4 frames (WINDOW, from the budget below) ahead of the partner's buttons, the frame waits, as in
+   lockstep; a long wait brings the usual *Waiting for Player N* banner.
+4. The hash check runs on confirmed frames only: the state before frame 60n once every input before it is known
+   (from the ring slot, or the consoles when it is the current frame). Test knob:
+   `localStorage['cartouche.netlink.stats'] = '1'` keeps `{frame, rollbacks, rerun}` in `globalThis.__rb`.
+
+The guessed frames' sound was already heard, so a correction can drop or repeat a few milliseconds of it; the
+screen shows the corrected game from the next frame. Achievements see the frames as drawn.
+
 Every received message is checked for shape, types and ranges (`isLockMsg`, `isHashMsg`, `isRomsMsg` with at most
 4096 SHA-1s, `isBootMsg` with the save capped at 128 KiB + clock, and `abort` only alone). A reload mid-session
-goes back to the byte mode for that page (no resume in this slice); rollback is the next slice (#151).
+goes back to the byte mode for that page (no resume).
+
+## Rollback budget
+
+A rollback loads both consoles' states at the mispredicted frame and re-runs every frame since, inside one display
+frame. Measured in headless Chromium (desktop, Apple M1 Max), two linked consoles on an emulated clock, median of
+60–300 runs:
+
+| Game | State size | 1 frame, both consoles | + `save_state` ×2 | Re-run 2 / 5 / 8 / 10 frames (load ×2, save ×2 each) |
+|---|---|---|---|---|
+| Tobu Tobu Girl Deluxe (GBC) | 58 KB | 1.8 ms | 1.8 ms | 3.7 / 9.2 / 18.4 / 23.2 ms |
+| Dawn Will Come (GB Studio) | 83 KB | 2.7 ms | 2.8 ms | 5.5 / 13.5 / 21.3 / 26.4 ms |
+| µCity (GBC, 128 KB RAM) | 181 KB | 2.6 ms | 2.7 ms | 5.4 / 13.4 / 21.3 / 26.9 ms |
+
+Saving the states costs next to nothing; the re-run is the frames themselves, about 2.7 ms each. Ten frames take
+23–27 ms, over the 12 ms budget, so the **rollback window is 4 frames** (≈ 11 ms at the slowest game above). An
+iPhone-class device was not measured; it is slower, so the window is not larger than the desktop's.
+
+The save state carries the cartridge clock's position (MBC3: its emulated time and the dots into the current second,
+in the mapper block): without it, loading a state in a deterministic session caught the clock up to "now", and a
+rolled-back run no longer matched a straight one (`gb-core/tests/determinism.rs`). Older states still load.
 
 ## Measurements (localhost, two Chrome contexts; artificial one-way delay added on each side)
 
@@ -141,6 +183,19 @@ The hashes still matched after 5 minutes at ~150 ms (59.7 fps both sides); with 
 showed *Desynchronised* within 2 s. Two different games held by both players (Dawn Will Come ↔ Poltersprite) run
 in lockstep too; a game the other player lacks falls back to the byte mode. No real-time link game was at hand to
 play: the tests check that both browsers run the same frames, not a game's own link play.
+
+Rollback (same setup, Dawn Will Come on both sides, a button pressed or released twice a second on each side; frame
+rate from the frames advanced, re-runs not counted; 5 s samples; the machine was shared with other builds, load
+average ~20, which explains the dips):
+
+| Round trip | Input delay | Frame rate, each side (mean, 5 s samples) | Rollbacks/s, each side | Frames re-run per rollback |
+|---|---|---|---|---|
+| ~50 ms | 2 | 59.7 (59.5–59.8) | 0–2 | 2–3 |
+| ~150 ms | 2 | 59.5 (54.8–62.0), 5 minutes | 1–2 | 1.2–4 |
+| ~300 ms | 6 | 58.2 (53.0–61.7) | 1–2 | 3–4 |
+
+No desync in any run (hash check every 60 confirmed frames); with the desync knob on one side, both showed
+*Desynchronised* within 5 s. A re-run of 4 frames costs ≈ 11 ms (see *Rollback budget*).
 
 Verified end to end on localhost (Playwright): Chrome↔Chrome and Chrome↔WebKit (iPhone 15 profile) lobbies;
 invite link; both ready → both games; pause on one side shows *Player N paused* on the other; a reload of one

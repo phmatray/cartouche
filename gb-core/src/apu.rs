@@ -85,22 +85,106 @@ impl Length {
 }
 
 // -----------------------------------------------------------------------------
+// Envelope clock (CH1, CH2, CH4)
+// -----------------------------------------------------------------------------
+
+/// The envelope's clock line. The secondary DIV-APU edge raises it when the envelope's countdown
+/// is due, the next DIV-APU event steps the volume and drops it. Reaching 15 going up (0 going
+/// down) locks the envelope until the next trigger.
+#[derive(Clone, Copy, Default)]
+pub struct EnvelopeClock {
+    clock: bool,
+    locked: bool,
+    should_lock: bool,
+}
+
+impl EnvelopeClock {
+    fn set(&mut self, value: bool, increase: bool, volume: u8) {
+        if self.clock == value {
+            return;
+        }
+        self.clock = value;
+        if value {
+            self.should_lock = (volume == 15 && increase) || (volume == 0 && !increase);
+        } else {
+            self.locked |= self.should_lock;
+        }
+    }
+
+    fn bits(&self) -> u8 {
+        self.clock as u8 | (self.locked as u8) << 1 | (self.should_lock as u8) << 2
+    }
+
+    fn from_bits(b: u8) -> Self {
+        Self { clock: b & 1 != 0, locked: b & 2 != 0, should_lock: b & 4 != 0 }
+    }
+}
+
+/// An NRx2 write while the channel plays ("zombie mode", as measured on a CGB-E; SameBoy's
+/// `_nrx2_glitch`): the volume can step, invert or both, depending on the old and new values.
+fn nrx2_glitch_step(volume: &mut u8, value: u8, old: u8, countdown: &mut u8, lock: &mut EnvelopeClock) {
+    if lock.clock {
+        *countdown = value & 7;
+    }
+    let mut tick = value & 7 != 0 && old & 7 == 0 && !lock.locked;
+    if value & 0xF == 8 && old & 0xF == 8 && !lock.locked {
+        tick = true;
+    }
+    if (value ^ old) & 8 != 0 {
+        if value & 8 != 0 {
+            *volume = if old & 7 == 0 && !lock.locked { *volume ^ 0xF } else { 0xE_u8.wrapping_sub(*volume) & 0xF };
+            tick = false;
+        } else {
+            *volume = 0x10_u8.wrapping_sub(*volume) & 0xF;
+        }
+    }
+    if tick {
+        *volume = if value & 8 != 0 { volume.wrapping_add(1) } else { volume.wrapping_sub(1) } & 0xF;
+    } else if value & 7 == 0 && lock.clock {
+        lock.set(false, false, 0);
+    }
+}
+
+/// CGB-E applies the new value directly; the DMG (like CGB-C and older) goes through $FF first.
+fn nrx2_glitch(cgb: bool, volume: &mut u8, value: u8, old: u8, countdown: &mut u8, lock: &mut EnvelopeClock) {
+    if cgb {
+        nrx2_glitch_step(volume, value, old, countdown, lock);
+    } else {
+        nrx2_glitch_step(volume, 0xFF, old, countdown, lock);
+        nrx2_glitch_step(volume, value, 0xFF, countdown, lock);
+    }
+}
+
+// -----------------------------------------------------------------------------
 // SquareChannel (used by CH1 and CH2)
 // -----------------------------------------------------------------------------
 
+/// A square channel on the 2 MHz APU clock. Its timer counts `(frequency ^ $7FF) * 2 + 1` ticks
+/// per duty step, a trigger starts it after a delay (shorter when it already plays), the duty
+/// position survives restarts, and `sample` latches what the DAC (and PCM12) sees.
 pub struct SquareChannel {
     pub enabled: bool,
     pub dac_enabled: bool,
     duty: u8,
     length: Length,
+    /// NRx2 as written: initial volume, direction, period.
+    nrx2: u8,
     volume: u8,
-    volume_init: u8,
-    envelope_direction: bool, // true = increase
-    envelope_period: u8,
-    envelope_timer: u8,
+    volume_countdown: u8,
+    envelope: EnvelopeClock,
     pub frequency: u16,
-    frequency_timer: i32,
+    countdown: u16,
+    /// The start delay the current countdown carries from a trigger, in ticks.
+    delay: u16,
     duty_position: u8,
+    /// Until the first duty step after starting, the output holds 0.
+    suppressed: bool,
+    /// The last tick reloaded the countdown: an NRx3/NRx4 write lands on the new period.
+    just_reloaded: bool,
+    /// A duty step happened since the last trigger.
+    did_tick: bool,
+    /// The digital output (0-15): what PCM12 reads and the DAC converts.
+    sample: u8,
 }
 
 impl SquareChannel {
@@ -110,64 +194,104 @@ impl SquareChannel {
             dac_enabled: false,
             duty: 0,
             length: Length::new(64),
+            nrx2: 0,
             volume: 0,
-            volume_init: 0,
-            envelope_direction: false,
-            envelope_period: 0,
-            envelope_timer: 0,
+            volume_countdown: 0,
+            envelope: EnvelopeClock::default(),
             frequency: 0,
-            frequency_timer: 0,
+            // Power-on: as far from a reload as it gets.
+            countdown: 0xFFFF,
+            delay: 0,
             duty_position: 0,
+            suppressed: false,
+            just_reloaded: false,
+            did_tick: false,
+            sample: 0,
         }
     }
 
-    pub fn step(&mut self, cycles: u32) {
-        if !self.enabled { return; }
-        self.frequency_timer -= cycles as i32;
-        while self.frequency_timer <= 0 {
-            self.frequency_timer += ((2048 - self.frequency as i32) * 4).max(1);
-            self.duty_position = (self.duty_position + 1) & 7;
+    fn period(&self) -> u16 {
+        (self.frequency ^ 0x7FF) * 2
+    }
+
+    /// `ticks` 2 MHz ticks.
+    pub fn step(&mut self, ticks: u32) {
+        if !self.enabled {
+            return;
         }
+        let mut left = ticks as u16;
+        self.delay = self.delay.saturating_sub(left);
+        while left > self.countdown {
+            left -= self.countdown + 1;
+            self.countdown = self.period() + 1;
+            self.duty_position = (self.duty_position + 1) & 7;
+            self.suppressed = false;
+            self.did_tick = true;
+            self.update_sample();
+        }
+        self.just_reloaded = left == 0;
+        self.countdown -= left;
+    }
+
+    fn update_sample(&mut self) {
+        if !self.suppressed {
+            self.sample = if DUTY_TABLE[self.duty as usize][self.duty_position as usize] != 0 { self.volume } else { 0 };
+        }
+    }
+
+    fn silence(&mut self) {
+        self.enabled = false;
+        self.sample = 0;
     }
 
     /// The digital output (0-15) while the channel plays.
     fn digital(&self) -> u8 {
-        if DUTY_TABLE[self.duty as usize][self.duty_position as usize] != 0 { self.volume } else { 0 }
+        self.sample
     }
 
     pub fn output(&self) -> f32 {
         if !self.enabled || !self.dac_enabled {
             return 0.0;
         }
-        self.digital() as f32 / 7.5 - 1.0
+        self.sample as f32 / 7.5 - 1.0
     }
 
     pub fn clock_length(&mut self) {
         self.length.clock(&mut self.enabled);
+        if !self.enabled {
+            self.sample = 0;
+        }
     }
 
-    pub fn clock_envelope(&mut self) {
-        if self.envelope_period == 0 {
+    /// Every 8th DIV-APU event: an envelope whose clock is low counts down.
+    fn count_envelope(&mut self) {
+        if !self.envelope.clock {
+            self.volume_countdown = self.volume_countdown.wrapping_sub(1) & 7;
+        }
+    }
+
+    /// A DIV-APU event with the envelope's clock high: the volume steps, unless locked.
+    fn tick_envelope(&mut self) {
+        if !self.envelope.clock {
             return;
         }
-        if self.envelope_timer > 0 {
-            self.envelope_timer -= 1;
+        self.envelope.set(false, false, 0);
+        if self.envelope.locked || self.nrx2 & 7 == 0 {
+            return;
         }
-        if self.envelope_timer == 0 {
-            self.envelope_timer = self.envelope_period;
-            if self.envelope_direction && self.volume < 15 {
-                self.volume += 1;
-            } else if !self.envelope_direction && self.volume > 0 {
-                self.volume -= 1;
-            }
+        self.volume = if self.nrx2 & 8 != 0 { self.volume.wrapping_add(1) } else { self.volume.wrapping_sub(1) };
+        if self.enabled {
+            self.update_sample();
         }
     }
 
-    fn trigger(&mut self) {
-        self.enabled = self.dac_enabled;
-        self.frequency_timer = (2048 - self.frequency as i32) * 4;
-        self.volume = self.volume_init;
-        self.envelope_timer = self.envelope_period;
+    /// The secondary DIV-APU edge (DIV's APU bit rising): a due envelope reloads its countdown
+    /// and raises its clock.
+    fn arm_envelope(&mut self) {
+        if self.enabled && self.volume_countdown == 0 {
+            self.volume_countdown = self.nrx2 & 7;
+            self.envelope.set(self.volume_countdown != 0, self.nrx2 & 8 != 0, self.volume);
+        }
     }
 
     // -- Register access --
@@ -177,25 +301,82 @@ impl SquareChannel {
         self.length.load(value & 0x3F);
     }
 
-    pub fn write_nrx2(&mut self, value: u8) {
-        self.volume_init = (value >> 4) & 0x0F;
-        self.envelope_direction = value & 0x08 != 0;
-        self.envelope_period = value & 0x07;
+    fn write_nrx2(&mut self, value: u8, cgb: bool) {
         self.dac_enabled = value & 0xF8 != 0;
         if !self.dac_enabled {
-            self.enabled = false;
+            self.silence();
+        } else if self.enabled {
+            nrx2_glitch(cgb, &mut self.volume, value, self.nrx2, &mut self.volume_countdown, &mut self.envelope);
+            self.update_sample();
         }
+        self.nrx2 = value;
     }
 
     pub fn write_nrx3(&mut self, value: u8) {
         self.frequency = (self.frequency & 0x700) | value as u16;
+        if self.just_reloaded {
+            self.countdown = self.period() + 1;
+        }
     }
 
-    pub fn write_nrx4(&mut self, value: u8, first_half: bool) {
+    /// `lf_div`: the 1 MHz phase of the 2 MHz clock. `first_half`: the next DIV-APU event won't
+    /// clock length.
+    fn write_nrx4(&mut self, value: u8, first_half: bool, lf_div: u16, cgb: bool) {
+        // The frequency's high bits leaving 7 just as the countdown reloads: the duty step that
+        // reload made is taken back (CGB-D/E; elsewhere only on an odd countdown).
+        if value & 0x80 == 0 && self.enabled && self.frequency >> 8 == 7 && value & 7 != 7
+            && (cgb || self.countdown & 1 != 0)
+            && self.did_tick && self.countdown >> 1 == self.frequency ^ 0x7FF
+        {
+            self.duty_position = self.duty_position.wrapping_sub(1) & 7;
+            self.suppressed = false;
+        }
+        let old_frequency = self.frequency;
         self.frequency = (self.frequency & 0x00FF) | (((value & 0x07) as u16) << 8);
-        self.length.write_nrx4(value, first_half, &mut self.enabled);
+        if self.just_reloaded {
+            self.countdown = self.period() + 1;
+        }
         if value & 0x80 != 0 {
-            self.trigger();
+            self.envelope = EnvelopeClock::default();
+            self.did_tick = false;
+            // CGB-D/E: starting with NRx4 bit 2 clear while the countdown's bit 10 (in 1 MHz
+            // steps) is clear advances the duty position once.
+            let steps = |countdown: u16, delay: u16| ((countdown as i32 - delay as i32) / 2) & 0x400 == 0;
+            let mut force_unsuppressed = false;
+            if !self.enabled {
+                if cgb && value & 4 == 0 && steps(self.countdown, self.delay) {
+                    self.duty_position = (self.duty_position + 1) & 7;
+                    force_unsuppressed = true;
+                }
+                self.delay = 6 - lf_div;
+            } else {
+                let mut extra = 0;
+                if cgb {
+                    if !self.just_reloaded && value & 4 == 0 && steps(self.countdown.wrapping_sub(1), self.delay) {
+                        self.duty_position = (self.duty_position + 1) & 7;
+                        self.suppressed = false;
+                    } else if self.frequency == 0x7FF && old_frequency != 0x7FF && self.suppressed {
+                        extra = 2;
+                    }
+                }
+                // Already playing: the sound restarts 2 ticks sooner.
+                self.delay = 4 - lf_div + extra;
+            }
+            self.countdown = self.period() + self.delay;
+            self.volume = self.nrx2 >> 4;
+            if self.enabled {
+                self.update_sample();
+            }
+            self.volume_countdown = self.nrx2 & 7;
+            if self.dac_enabled && !self.enabled {
+                self.enabled = true;
+                self.sample = 0;
+                self.suppressed = !force_unsuppressed;
+            }
+        }
+        self.length.write_nrx4(value, first_half, &mut self.enabled);
+        if !self.enabled {
+            self.sample = 0;
         }
     }
 
@@ -204,9 +385,7 @@ impl SquareChannel {
     }
 
     pub fn read_nrx2(&self) -> u8 {
-        (self.volume_init << 4)
-            | if self.envelope_direction { 0x08 } else { 0 }
-            | self.envelope_period
+        self.nrx2
     }
 
     pub fn read_nrx4(&self) -> u8 {
@@ -215,88 +394,193 @@ impl SquareChannel {
 }
 
 // -----------------------------------------------------------------------------
-// SweepUnit (CH1 only)
+// Sweep (CH1 only)
 // -----------------------------------------------------------------------------
 
-pub struct SweepUnit {
-    enabled: bool,
-    frequency_shadow: u16,
-    period: u8,
-    direction: bool, // true = decrease
-    pub shift: u8,
-    timer: u8,
-    /// A calculation in negate mode happened since the last trigger.
-    negate_used: bool,
+/// CH1's frequency sweep. Every 4th DIV-APU event counts `countdown` (in 128 Hz steps). When it
+/// wraps, the frequency takes the last addend, and the next one is computed `NR10 & 7` 1 MHz ticks
+/// later, where the overflow check can silence the channel. A restart holds the shadow frequency
+/// for a few ticks. Times are SameBoy's `Core/apu.c` (CGB-E and DMG-B).
+pub struct Sweep {
+    /// NR10 as written.
+    nr10: u8,
+    countdown: u8,
+    /// 1 MHz ticks until the pending calculation completes (0: none).
+    calculate_countdown: u8,
+    /// 1 MHz ticks before `calculate_countdown` starts counting.
+    reload_timer: u8,
+    addend: u16,
+    shadow: u16,
+    /// The calculation was started with shift 0 (it then runs even with NR10's shift cleared).
+    unshifted: bool,
+    /// A shift-0 calculation completes as soon as its reload timer runs out.
+    instant_done: bool,
+    /// 2 MHz ticks after a restart during which the shadow frequency and addend keep their value.
+    restart_hold: u8,
+    /// The addend of the last completed calculation (an NR10 write checks it).
+    completed_addend: u16,
 }
 
-impl SweepUnit {
+impl Sweep {
     pub fn new() -> Self {
         Self {
-            enabled: false,
-            frequency_shadow: 0,
-            period: 0,
-            direction: false,
-            shift: 0,
-            timer: 0,
-            negate_used: false,
+            nr10: 0,
+            countdown: 0,
+            calculate_countdown: 0,
+            reload_timer: 0,
+            addend: 0,
+            shadow: 0,
+            unshifted: false,
+            instant_done: false,
+            restart_hold: 0,
+            completed_addend: 0,
         }
     }
 
-    /// Returns false when the write must disable the channel: leaving negate mode
-    /// after a negate calculation has been made.
-    pub fn write_nr10(&mut self, value: u8) -> bool {
-        self.period = (value >> 4) & 0x07;
-        self.direction = value & 0x08 != 0;
-        self.shift = value & 0x07;
-        !(self.negate_used && !self.direction)
+    fn shift(&self) -> u8 {
+        self.nr10 & 7
     }
 
-    pub fn read_nr10(&self) -> u8 {
-        0x80 // bit 7 unused, reads 1
-            | (self.period << 4)
-            | if self.direction { 0x08 } else { 0 }
-            | self.shift
+    fn negate(&self) -> bool {
+        self.nr10 & 8 != 0
     }
 
-    pub fn trigger(&mut self, frequency: u16) {
-        self.frequency_shadow = frequency;
-        self.timer = if self.period != 0 { self.period } else { 8 };
-        self.enabled = self.period != 0 || self.shift != 0;
-        self.negate_used = false;
+    /// The overflow check, frequency + addend (APU bug: made with the addend already applied).
+    fn calculation_done(&mut self, ch1: &mut SquareChannel) {
+        if self.restart_hold == 0 {
+            self.shadow = ch1.frequency;
+        }
+        if self.negate() {
+            self.addend ^= 0x7FF;
+        }
+        if self.shadow + self.addend > 0x7FF && !self.negate() {
+            ch1.silence();
+        }
+        self.completed_addend = self.addend;
     }
 
-    pub fn calculate(&mut self) -> (u16, bool) {
-        let delta = self.frequency_shadow >> self.shift;
-        let new_freq = if self.direction {
-            self.negate_used = true;
-            self.frequency_shadow.wrapping_sub(delta)
+    /// The sweep step: the frequency takes the last addend, and the next calculation starts.
+    /// `div_write`: this DIV-APU event came from a DIV write (the reload lands a tick sooner).
+    fn step(&mut self, ch1: &mut SquareChannel, lf_div: u16, double_speed: bool, div_write: bool) {
+        if self.nr10 & 0x70 == 0 || self.countdown != 7 {
+            return;
+        }
+        if self.shift() != 0 {
+            ch1.frequency = (self.addend + self.shadow + self.negate() as u16) & 0x7FF;
+        }
+        if self.restart_hold == 0 {
+            self.addend = ch1.frequency >> self.shift();
+        }
+        self.calculate_countdown = self.shift();
+        self.reload_timer = if !double_speed && div_write { 1 } else { 1 + lf_div as u8 };
+        self.unshifted = self.shift() == 0;
+        self.countdown = ((self.nr10 >> 4) & 7) ^ 7;
+        if self.calculate_countdown == 0 {
+            self.instant_done = true;
+        }
+    }
+
+    /// Every 4th DIV-APU event.
+    fn div_event(&mut self, ch1: &mut SquareChannel, lf_div: u16, double_speed: bool, div_write: bool) {
+        self.countdown = (self.countdown + 1) & 7;
+        self.step(ch1, lf_div, double_speed, div_write);
+    }
+
+    /// `ticks` 2 MHz ticks, after `lf_div` flipped for them.
+    fn tick(&mut self, ch1: &mut SquareChannel, ticks: u32, lf_div: u16) {
+        if self.reload_timer | self.calculate_countdown | self.restart_hold == 0 {
+            return; // nothing pending: the common case, every M-cycle
+        }
+        let mut sweep_ticks = (ticks / 2) as u8 + (ticks & 1 != 0 && lf_div == 0) as u8;
+        if self.reload_timer > sweep_ticks {
+            self.reload_timer -= sweep_ticks;
+            sweep_ticks = 0;
         } else {
-            self.frequency_shadow.wrapping_add(delta)
-        };
-        (new_freq, new_freq > 2047)
+            if self.reload_timer != 0 && self.calculate_countdown == 0 && self.instant_done {
+                self.calculation_done(ch1);
+            }
+            self.instant_done = false;
+            sweep_ticks -= self.reload_timer;
+            self.reload_timer = 0;
+        }
+        // The calculation pauses while NR10's shift is 0 (unless it started that way).
+        if self.calculate_countdown != 0 && (self.shift() != 0 || self.unshifted) {
+            if self.calculate_countdown > sweep_ticks {
+                self.calculate_countdown -= sweep_ticks;
+            } else {
+                self.calculate_countdown = 0;
+                self.calculation_done(ch1);
+            }
+        }
+        self.restart_hold = self.restart_hold.saturating_sub(ticks as u8);
     }
 
-    pub fn clock(&mut self, channel_enabled: &mut bool, frequency: &mut u16) {
-        if self.timer > 0 {
-            self.timer -= 1;
+    /// NR10 write. `cgb`: CGB-E, else DMG-B.
+    fn write_nr10(&mut self, value: u8, ch1: &mut SquareChannel, lf_div: u16, cgb: bool, double_speed: bool) {
+        if self.calculate_countdown != 0 || self.reload_timer != 0 {
+            self.write_glitch(value, ch1, lf_div, cgb, double_speed);
         }
-        if self.timer == 0 {
-            self.timer = if self.period != 0 { self.period } else { 8 };
-            if self.enabled && self.period != 0 {
-                let (new_freq, overflow) = self.calculate();
-                if overflow {
-                    *channel_enabled = false;
-                } else if self.shift != 0 {
-                    self.frequency_shadow = new_freq;
-                    *frequency = new_freq;
-                    // Do overflow check again with new frequency
-                    let (_, overflow2) = self.calculate();
-                    if overflow2 {
-                        *channel_enabled = false;
-                    }
+        // The DMG (like CGB-C and older) checks as if the old value negated.
+        let old_negate = !cgb || self.negate();
+        self.nr10 = value;
+        if self.shadow + self.completed_addend + old_negate as u16 > 0x7FF && value & 8 == 0 {
+            ch1.silence();
+        }
+        self.step(ch1, lf_div, double_speed, false);
+    }
+
+    /// NR10 written while a calculation is pending.
+    fn write_glitch(&mut self, value: u8, ch1: &mut SquareChannel, lf_div: u16, cgb: bool, double_speed: bool) {
+        if cgb {
+            if self.reload_timer == 2 {
+                // The countdown just reloaded: it reloads again.
+                self.calculate_countdown = value & 7;
+                if self.calculate_countdown == 0 {
+                    self.reload_timer = 0;
+                }
+            }
+            if value & 7 != 0 && self.shift() == 0 && lf_div == 0 && self.calculate_countdown > 1 {
+                self.calculate_countdown -= 1;
+                if self.calculate_countdown == 0 {
+                    self.calculation_done(ch1);
+                }
+            }
+        } else if (self.reload_timer == 0 || self.reload_timer == 1 && lf_div != 0) && self.calculate_countdown != 0 {
+            let zombie_step = if self.shift() == 0 {
+                lf_div != 0 && !double_speed || lf_div == 0 && double_speed
+            } else {
+                double_speed && self.calculate_countdown == 1
+            };
+            if zombie_step {
+                self.calculate_countdown -= 1;
+                if self.calculate_countdown <= 1 {
+                    self.calculate_countdown = 0;
+                    self.calculation_done(ch1);
                 }
             }
         }
+    }
+
+    /// CH1 triggered; `was_active`: it already played.
+    fn trigger(&mut self, ch1: &SquareChannel, was_active: bool, lf_div: u16, cgb: bool) {
+        self.instant_done = false;
+        self.shadow = 0;
+        self.completed_addend = 0;
+        if self.shift() != 0 {
+            // APU bug: with a shift, the overflow check also runs after a restart.
+            self.calculate_countdown = self.shift();
+            self.reload_timer = 2 + !was_active as u8;
+            self.unshifted = false;
+            self.addend = ch1.frequency >> self.shift();
+        } else {
+            self.addend = 0;
+        }
+        self.restart_hold = (2 - lf_div + if cgb { 2 } else { 0 }) as u8;
+        self.countdown = ((self.nr10 >> 4) & 7) ^ 7;
+    }
+
+    fn read_nr10(&self) -> u8 {
+        self.nr10 | 0x80
     }
 }
 
@@ -340,20 +624,23 @@ impl WaveChannel {
     }
 
     pub fn step(&mut self, cycles: u32) {
-        // Per T-cycle: wave RAM access while playing depends on the exact fetch cycle.
-        for _ in 0..cycles {
-            self.since_fetch = self.since_fetch.saturating_add(1);
-            if !self.enabled {
-                continue;
-            }
-            self.frequency_timer -= 1;
-            if self.frequency_timer <= 0 {
-                self.frequency_timer = self.period();
-                self.sample_index = (self.sample_index + 1) & 31;
-                self.sample_byte = self.wave_ram[(self.sample_index / 2) as usize];
-                self.since_fetch = 0;
-            }
+        // `since_fetch` counts the T-cycles after the last fetch: wave RAM access while playing
+        // depends on the exact fetch cycle.
+        self.since_fetch = self.since_fetch.saturating_add(cycles);
+        if !self.enabled {
+            return;
         }
+        let mut left = cycles as i32;
+        let mut timer = self.frequency_timer.max(1);
+        while timer <= left {
+            // The fetch lands on the timer's last cycle.
+            left -= timer;
+            timer = self.period();
+            self.sample_index = (self.sample_index + 1) & 31;
+            self.sample_byte = self.wave_ram[(self.sample_index / 2) as usize];
+            self.since_fetch = left as u32;
+        }
+        self.frequency_timer = timer - left;
     }
 
     /// The digital output (0-15) while the channel plays.
@@ -466,20 +753,42 @@ impl WaveChannel {
 // NoiseChannel (CH4)
 // -----------------------------------------------------------------------------
 
+/// CH4 on the 2 MHz APU clock (SameBoy's `Core/apu.c`, CGB-E and DMG-B). A 14-bit counter counts
+/// every `(NR43 & 7) * 4` ticks (2 for divisor 0); its bit `NR43 >> 4` rising steps the LFSR. The
+/// counter keeps running after the channel stops ("background counting"), a trigger reloads it
+/// with a start delay that depends on the clock's phase (`alignment`), and NR43 writes that swap
+/// the selected bit glitch the LFSR.
 pub struct NoiseChannel {
     pub enabled: bool,
     pub dac_enabled: bool,
     length: Length,
+    nr42: u8,
+    nr43: u8,
+    nr44: u8,
     volume: u8,
-    volume_init: u8,
-    envelope_direction: bool,
-    envelope_period: u8,
-    envelope_timer: u8,
-    clock_shift: u8,
-    width_mode: bool,
-    divisor_code: u8,
-    frequency_timer: i32,
+    volume_countdown: u8,
+    envelope: EnvelopeClock,
     lfsr: u16,
+    narrow: bool,
+    counter: u16,
+    counter_countdown: u8,
+    /// 2 MHz ticks since power-on, mod 256: the clock's phase at a trigger or NR43 write.
+    alignment: u8,
+    lfsr_sample: bool,
+    did_step_counter: bool,
+    /// The last tick reloaded the counter's countdown.
+    countdown_reloaded: bool,
+    /// DMG: a trigger off the 512 kHz phase starts this many ticks later.
+    dmg_delayed_start: u8,
+    /// The counter runs: started with the DAC on (reset by DAC off and power-off) ...
+    counter_active: bool,
+    /// ... or in the background, since any trigger.
+    background_counter_active: bool,
+    stepped_in_narrow: bool,
+    bit7_before_step: bool,
+    started_with_dac_disabled: bool,
+    /// The digital output (0-15): what PCM34 reads and the DAC converts.
+    sample: u8,
 }
 
 impl NoiseChannel {
@@ -488,82 +797,141 @@ impl NoiseChannel {
             enabled: false,
             dac_enabled: false,
             length: Length::new(64),
+            nr42: 0,
+            nr43: 0,
+            nr44: 0,
             volume: 0,
-            volume_init: 0,
-            envelope_direction: false,
-            envelope_period: 0,
-            envelope_timer: 0,
-            clock_shift: 0,
-            width_mode: false,
-            divisor_code: 0,
-            frequency_timer: 0,
-            lfsr: 0x7FFF,
+            volume_countdown: 0,
+            envelope: EnvelopeClock::default(),
+            lfsr: 0,
+            narrow: false,
+            counter: 0,
+            counter_countdown: 0,
+            alignment: 0,
+            lfsr_sample: false,
+            did_step_counter: false,
+            countdown_reloaded: false,
+            dmg_delayed_start: 0,
+            counter_active: false,
+            background_counter_active: false,
+            stepped_in_narrow: false,
+            bit7_before_step: false,
+            started_with_dac_disabled: false,
+            sample: 0,
         }
     }
 
-    fn divisor(&self) -> i32 {
-        let base = if self.divisor_code == 0 {
-            8
-        } else {
-            self.divisor_code as i32 * 16
-        };
-        base << self.clock_shift
+    fn divisor_ticks(&self) -> u8 {
+        match (self.nr43 & 7) << 2 {
+            0 => 2,
+            d => d,
+        }
     }
 
-    pub fn step(&mut self, cycles: u32) {
-        if !self.enabled { return; }
-        self.frequency_timer -= cycles as i32;
-        while self.frequency_timer <= 0 {
-            self.frequency_timer += self.divisor().max(1);
-            // Clock the LFSR
-            let xor_bit = (self.lfsr & 0x01) ^ ((self.lfsr >> 1) & 0x01);
-            self.lfsr >>= 1;
-            self.lfsr |= xor_bit << 14;
-            if self.width_mode {
-                self.lfsr = (self.lfsr & !(1 << 6)) | (xor_bit << 6);
+    /// `ticks` 2 MHz ticks.
+    pub fn step(&mut self, ticks: u32) {
+        self.alignment = self.alignment.wrapping_add(ticks as u8);
+        if !self.counter_active && !self.background_counter_active {
+            return;
+        }
+        let mut left = ticks as u8;
+        let divisor = self.divisor_ticks();
+        if self.counter_countdown == 0 {
+            self.counter_countdown = divisor;
+        }
+        while left >= self.counter_countdown {
+            left -= self.counter_countdown;
+            self.counter_countdown = divisor;
+            let mask = 1u32 << (self.nr43 >> 4);
+            let old = self.counter as u32 & mask;
+            self.counter = (self.counter + 1) & 0x3FFF;
+            self.did_step_counter = true;
+            if self.counter as u32 & mask != 0 && old == 0 && self.enabled {
+                self.step_lfsr();
             }
         }
+        if left != 0 {
+            self.counter_countdown -= left;
+            self.countdown_reloaded = false;
+        } else {
+            self.countdown_reloaded = true;
+        }
+    }
+
+    fn update_lfsr(&mut self) {
+        self.lfsr_sample = self.lfsr & 1 != 0;
+        if self.enabled {
+            self.update_sample();
+        }
+    }
+
+    fn update_sample(&mut self) {
+        self.sample = if self.lfsr_sample { self.volume } else { 0 };
+    }
+
+    fn high_mask(&self) -> u16 {
+        if self.narrow { 0x4040 } else { 0x4000 }
+    }
+
+    fn step_lfsr(&mut self) {
+        self.bit7_before_step = self.lfsr & 0x80 != 0;
+        let high = (self.lfsr ^ (self.lfsr >> 1) ^ 1) & 1 != 0;
+        let mask = self.high_mask();
+        self.lfsr >>= 1;
+        if high { self.lfsr |= mask } else { self.lfsr &= !mask }
+        self.update_lfsr();
+        self.stepped_in_narrow = self.narrow;
+    }
+
+    fn silence(&mut self) {
+        self.enabled = false;
+        self.sample = 0;
     }
 
     /// The digital output (0-15) while the channel plays.
     fn digital(&self) -> u8 {
-        if self.lfsr & 0x01 == 0 { self.volume } else { 0 }
+        self.sample
     }
 
     pub fn output(&self) -> f32 {
         if !self.enabled || !self.dac_enabled {
             return 0.0;
         }
-        self.digital() as f32 / 7.5 - 1.0
+        self.sample as f32 / 7.5 - 1.0
     }
 
     pub fn clock_length(&mut self) {
         self.length.clock(&mut self.enabled);
+        if !self.enabled {
+            self.sample = 0;
+        }
     }
 
-    pub fn clock_envelope(&mut self) {
-        if self.envelope_period == 0 {
+    fn count_envelope(&mut self) {
+        if !self.envelope.clock {
+            self.volume_countdown = self.volume_countdown.wrapping_sub(1) & 7;
+        }
+    }
+
+    fn tick_envelope(&mut self) {
+        if !self.envelope.clock {
             return;
         }
-        if self.envelope_timer > 0 {
-            self.envelope_timer -= 1;
+        self.envelope.set(false, false, 0);
+        if self.envelope.locked || self.nr42 & 7 == 0 {
+            return;
         }
-        if self.envelope_timer == 0 {
-            self.envelope_timer = self.envelope_period;
-            if self.envelope_direction && self.volume < 15 {
-                self.volume += 1;
-            } else if !self.envelope_direction && self.volume > 0 {
-                self.volume -= 1;
-            }
+        self.volume = if self.nr42 & 8 != 0 { self.volume.wrapping_add(1) } else { self.volume.wrapping_sub(1) };
+        if self.enabled {
+            self.update_sample();
         }
     }
 
-    fn trigger(&mut self) {
-        self.enabled = self.dac_enabled;
-        self.frequency_timer = self.divisor();
-        self.lfsr = 0x7FFF;
-        self.volume = self.volume_init;
-        self.envelope_timer = self.envelope_period;
+    fn arm_envelope(&mut self) {
+        if self.enabled && self.volume_countdown == 0 {
+            self.volume_countdown = self.nr42 & 7;
+            self.envelope.set(self.volume_countdown != 0, self.nr42 & 8 != 0, self.volume);
+        }
     }
 
     // -- Register access (NR41-NR44) --
@@ -572,26 +940,280 @@ impl NoiseChannel {
         self.length.load(value & 0x3F);
     }
 
-    pub fn write_nr42(&mut self, value: u8) {
-        self.volume_init = (value >> 4) & 0x0F;
-        self.envelope_direction = value & 0x08 != 0;
-        self.envelope_period = value & 0x07;
+    fn write_nr42(&mut self, value: u8, cgb: bool) {
         self.dac_enabled = value & 0xF8 != 0;
         if !self.dac_enabled {
-            self.enabled = false;
+            if self.enabled && self.nr43 & 7 != 0 {
+                if self.counter_countdown <= 2 {
+                    self.counter = (self.counter + 1) & 0x3FFF;
+                }
+                self.background_counter_active = false;
+            }
+            self.silence();
+            self.counter_active = false;
+        } else if self.enabled {
+            nrx2_glitch(cgb, &mut self.volume, value, self.nr42, &mut self.volume_countdown, &mut self.envelope);
+            self.update_sample();
+        }
+        self.nr42 = value;
+    }
+
+    fn write_nr43(&mut self, value: u8, cgb: bool) {
+        if self.countdown_reloaded {
+            let divisor = match (value & 7) << 2 {
+                0 => 2,
+                d => d,
+            };
+            let phase = if cgb { [2, 1, 0, 3] } else { [2, 1, 4, 3] }[(self.alignment & 3) as usize];
+            self.counter_countdown = divisor + if divisor == 2 { 0 } else { phase };
+        }
+        if !cgb {
+            if self.countdown_reloaded {
+                let bit = |counter: u16, nr43: u8| (counter as u32 >> (nr43 >> 4)) & 1 != 0;
+                let c = self.counter;
+                if !bit(c, self.nr43) && bit(c, value) && c & 0x80 != 0 {
+                    let prev = c.wrapping_sub(1) & 0x3FFF;
+                    if bit(prev, self.nr43) && !bit(prev, value) && prev & 0x80 != 0 {
+                        self.step_lfsr();
+                    }
+                }
+            }
+            // The DMG (like CGB-C and older) passes through $FF.
+            self.nr43_glitch(0xFF, cgb);
+        }
+        self.nr43_glitch(value, cgb);
+    }
+
+    /// NR43's selected counter bit changing: a rising bit steps the LFSR, and some changes through
+    /// an intermediate value glitch it (the CGB-E's deterministic variants; the DMG steps).
+    fn nr43_glitch(&mut self, new: u8, cgb: bool) {
+        let old_narrow = self.narrow;
+        self.narrow = new & 8 != 0;
+        let old = self.nr43;
+        self.nr43 = new;
+        if old & 0xF0 == new & 0xF0 {
+            return;
+        }
+        let mut effective = self.counter;
+        if !cgb && self.countdown_reloaded {
+            effective |= effective.wrapping_sub(1) & 0x3FFF;
+        }
+        let bit = |v: u8| (effective as u32 >> (v >> 4)) & 1 != 0;
+        let old_bit = bit(old);
+        let glitch_bit = bit((old & 0x7F) | (new & 0x80));
+        let new_bit = bit(new);
+        if old_bit == new_bit && new_bit != glitch_bit {
+            if new_bit {
+                if cgb {
+                    self.glitch_rising(old, new, old_narrow);
+                }
+            } else if cgb {
+                self.glitch_falling(old, new);
+            } else {
+                self.step_lfsr();
+            }
+        } else if !old_bit && new_bit {
+            if cgb {
+                self.step_lfsr();
+            } else {
+                let narrow = self.narrow;
+                self.narrow = true;
+                self.step_lfsr();
+                self.narrow = narrow;
+                if new & 0xF0 <= 0x20 && glitch_bit && effective & 8 == 0 {
+                    self.step_lfsr();
+                    self.lfsr &= !self.high_mask();
+                    let next = if self.narrow { 0x2020 } else { 0x2000 };
+                    self.lfsr |= (self.lfsr & next) << 1;
+                }
+            }
+        } else if !cgb && new & 0xF0 <= 0x20 && !glitch_bit && !new_bit && !old_bit && effective & 8 != 0 {
+            self.step_lfsr();
         }
     }
 
-    pub fn write_nr43(&mut self, value: u8) {
-        self.clock_shift = (value >> 4) & 0x0F;
-        self.width_mode = value & 0x08 != 0;
-        self.divisor_code = value & 0x07;
+    /// CGB-E, a glitch with the selected bit high: a step, or bit copies when the new value
+    /// has bit 7 set.
+    fn glitch_rising(&mut self, old: u8, new: u8, old_narrow: bool) {
+        if new & 0x80 == 0 {
+            self.step_lfsr();
+            return;
+        }
+        let (t1, t2) = ((old >> 4) & 7, (new >> 4) & 7);
+        if (t1 ^ 7) + t2 <= 7 && (t1 ^ 7) & t2 == 0 {
+            return;
+        }
+        // Bit 8 is copied to bit 7.
+        self.lfsr = (self.lfsr & !0x80) | ((self.lfsr >> 1) & 0x80);
+        if (t1 == 0 || t1 == 4) && t2 == 3 {
+            self.lfsr &= (self.lfsr >> 1) | 0x545;
+            self.update_lfsr();
+        } else if t1 == 2 && t2 == 3 {
+            let mut mask = 0x555;
+            if self.lfsr & 0xC == 0xC { mask |= 8; }
+            if self.lfsr & 0xC00 == 0xC00 { mask |= 0x800; }
+            self.lfsr &= (self.lfsr >> 1) | mask;
+            self.update_lfsr();
+        }
+        if !self.narrow && old_narrow && self.stepped_in_narrow {
+            if self.bit7_before_step { self.lfsr |= 0x40 } else { self.lfsr &= !0x40 }
+        }
+        self.lfsr |= self.high_mask();
+        self.stepped_in_narrow = self.narrow;
     }
 
-    pub fn write_nr44(&mut self, value: u8, first_half: bool) {
-        self.length.write_nrx4(value, first_half, &mut self.enabled);
-        if value & 0x80 != 0 {
-            self.trigger();
+    /// CGB-E, a glitch with the selected bit low: a step with AND glitches, per old/new shift.
+    fn glitch_falling(&mut self, old: u8, new: u8) {
+        const MAP: [u8; 64] = {
+            let mut m = [0u8; 64];
+            m[0o02] = 4; m[0o03] = 2; m[0o04] = 2; m[0o05] = 2;
+            m[0o12] = 2; m[0o13] = 4; m[0o14] = 2; m[0o15] = 2;
+            m[0o20] = 1; m[0o21] = 2; m[0o23] = 1; m[0o24] = 5; m[0o25] = 3;
+            m[0o34] = 2; m[0o35] = 2;
+            m[0o41] = 2; m[0o42] = 2; m[0o43] = 2;
+            m[0o50] = 6; m[0o52] = 2; m[0o53] = 2;
+            m
+        };
+        let glitch = if new & 0x80 != 0 { MAP[(((old & 0x70) >> 1) | ((new & 0x70) >> 4)) as usize] } else { 0 };
+        match glitch {
+            1 | 6 => {
+                self.step_lfsr();
+                if glitch == 6 {
+                    if (self.narrow && self.lfsr & 0x71 == 0x20) || self.lfsr & 0x71 == 0x61 {
+                        self.lfsr &= !0x20;
+                    }
+                    if self.lfsr & 0x7001 == 0x2000 || self.lfsr & 0x7001 == 0x6001 {
+                        self.lfsr &= !0x2000;
+                    }
+                }
+                if self.lfsr & 3 == 2 {
+                    self.lfsr &= !2;
+                }
+            }
+            2 => {
+                let prev = self.lfsr;
+                self.step_lfsr();
+                self.lfsr &= prev | 1;
+            }
+            3 | 5 => {
+                if glitch == 5 {
+                    if self.lfsr & 3 == 2 {
+                        self.lfsr &= !self.high_mask();
+                    }
+                    if self.lfsr & 0x19 == 8 {
+                        self.lfsr &= !8;
+                    }
+                }
+                self.lfsr = (self.lfsr & !1) | ((self.lfsr >> 1) & 1);
+                self.update_lfsr();
+                self.stepped_in_narrow = self.narrow;
+            }
+            4 => {
+                let prev = self.lfsr;
+                self.step_lfsr();
+                self.lfsr &= prev | if self.narrow { !0x2022 } else { !0x2002 };
+            }
+            _ => self.step_lfsr(),
+        }
+    }
+
+    /// A trigger: the counter's countdown reloads with a delay that depends on the clock's
+    /// phase, the divisor and whether the counter was running.
+    fn prepare_start(&mut self, cgb: bool) {
+        self.counter_active = self.nr42 & 0xF8 != 0;
+        let was_started_with_dac_disabled = self.started_with_dac_disabled;
+        self.started_with_dac_disabled = !self.counter_active;
+        let mut divisor = self.nr43 & 7;
+        let was_background = self.background_counter_active;
+        self.background_counter_active = true;
+        let mut instant_step = false;
+        let mut div_1_glitch = false;
+        let active = self.enabled;
+        let align = self.alignment;
+
+        if divisor > 1 && self.counter_countdown == 1 {
+            self.counter = (self.counter + 1) & 0x3FFF;
+        } else if self.counter_countdown == 2 && align & 3 == 0 && active {
+            if divisor == 0 {
+                divisor = 8;
+            } else if divisor == 1 {
+                if !self.did_step_counter {
+                    div_1_glitch = true;
+                }
+                let mask = 1u32 << (self.nr43 >> 4);
+                let old = self.counter as u32 & mask;
+                self.counter = (self.counter + 1) & 0x3FFF;
+                instant_step = self.counter as u32 & mask != 0 && old == 0;
+            }
+        }
+        let mut countdown: i32 = if divisor == 0 { 6 } else { divisor as i32 * 4 + 6 };
+        if align & 1 != 0 {
+            if divisor == 0 {
+                countdown += if !cgb || !was_background { 1 } else { -1 };
+            } else if align & 2 != 0 {
+                countdown += if divisor == 1 && !active { 1 } else { -3 };
+            } else {
+                countdown -= 1;
+                if divisor == 1 && active {
+                    countdown -= 4;
+                }
+            }
+        } else if divisor != 0 {
+            if align & 2 != 0 {
+                countdown -= 2;
+            } else if divisor > 1 || (divisor == 1 && active && self.nr43 & 0xF0 == 0) {
+                countdown -= 4;
+            }
+        }
+        // Background counting glitches.
+        if divisor > 1 {
+            if !self.counter_active && align & 3 == 0 {
+                countdown += 4;
+            }
+        } else if was_background && !active && align & 3 == 0 {
+            if divisor == 0 {
+                if was_started_with_dac_disabled {
+                    countdown += 28;
+                }
+            } else {
+                countdown -= 4;
+            }
+        }
+        if div_1_glitch {
+            countdown -= 4;
+        }
+        self.counter_countdown = countdown as u8;
+        self.lfsr = if divisor == 0 && active && align & 3 == 3 { 0x55 } else { 0 };
+        if instant_step {
+            self.step_lfsr();
+        }
+    }
+
+    /// NR44. `first_half`: the next DIV-APU event won't clock length.
+    fn write_nr44(&mut self, value: u8, first_half: bool, cgb: bool) {
+        self.nr44 = value;
+        let mut trigger = value & 0x80 != 0;
+        if trigger {
+            self.envelope = EnvelopeClock::default();
+            if !cgb && self.alignment & 3 != 0 {
+                // Off the 512 kHz phase a DMG starts 6 ticks later (`Apu::step` re-writes NR44).
+                self.dmg_delayed_start = 6;
+                trigger = false;
+            } else {
+                self.prepare_start(cgb);
+                self.volume = self.nr42 >> 4;
+                self.lfsr_sample = false;
+                self.volume_countdown = self.nr42 & 7;
+                self.did_step_counter = self.alignment & 3 == 2;
+                if self.dac_enabled {
+                    self.enabled = true;
+                    self.sample = 0;
+                }
+            }
+        }
+        self.length.write_nrx4(if trigger { value } else { value & 0x7F }, first_half, &mut self.enabled);
+        if !self.enabled {
+            self.sample = 0;
         }
     }
 
@@ -600,15 +1222,11 @@ impl NoiseChannel {
     }
 
     pub fn read_nr42(&self) -> u8 {
-        (self.volume_init << 4)
-            | if self.envelope_direction { 0x08 } else { 0 }
-            | self.envelope_period
+        self.nr42
     }
 
     pub fn read_nr43(&self) -> u8 {
-        (self.clock_shift << 4)
-            | if self.width_mode { 0x08 } else { 0 }
-            | self.divisor_code
+        self.nr43
     }
 
     pub fn read_nr44(&self) -> u8 {
@@ -630,7 +1248,7 @@ pub struct Apu {
     /// CGB APU quirks (wave RAM access, length counters on power-off). Synced by the bus.
     pub cgb_mode: bool,
     pub ch1: SquareChannel,
-    pub ch1_sweep: SweepUnit,
+    pub ch1_sweep: Sweep,
     pub ch2: SquareChannel,
     pub ch3: WaveChannel,
     pub ch4: NoiseChannel,
@@ -643,6 +1261,14 @@ pub struct Apu {
     /// Powering on while the DIV-APU bit is set skips the first event (and starts the count at 1):
     /// 0 no skip, 1 the next event is skipped, 2 it was (the one after doesn't count up).
     skip_div_event: u8,
+    /// The 1 MHz phase of the 2 MHz clock (squares and noise run at 1 MHz): 1 from power-on,
+    /// flipping on every odd tick, so only in double speed.
+    lf_div: u16,
+    /// In double speed a CGB-D/E steps the envelopes one M-cycle after the DIV-APU event:
+    /// 2 set by the event, 1 on the next M-cycle's ticks, which step them.
+    pending_envelope: u8,
+    /// The CPU runs in double speed (synced by the bus).
+    pub double_speed: bool,
     sample_counter: f64,
     sample_buffer: Vec<f32>,
     pub channel_muted: [bool; 4],
@@ -661,7 +1287,7 @@ impl Apu {
             enabled: false,
             cgb_mode: false,
             ch1: SquareChannel::new(),
-            ch1_sweep: SweepUnit::new(),
+            ch1_sweep: Sweep::new(),
             ch2: SquareChannel::new(),
             ch3: WaveChannel::new(),
             ch4: NoiseChannel::new(),
@@ -670,6 +1296,9 @@ impl Apu {
             regs: [0; 0x16],
             div_divider: 0,
             skip_div_event: 0,
+            lf_div: 1,
+            pending_envelope: 0,
+            double_speed: false,
             sample_counter: 0.0,
             sample_buffer: Vec::with_capacity(AUDIO_BUFFER_SIZE),
             channel_muted: [false; 4],
@@ -692,11 +1321,24 @@ impl Apu {
             return self.silence(cycles);
         }
 
+        if self.pending_envelope == 1 {
+            self.tick_envelopes();
+        }
+        self.pending_envelope >>= 1;
+        self.lf_div ^= (ticks & 1) as u16;
+        self.ch1_sweep.tick(&mut self.ch1, ticks, self.lf_div);
+
         // Tick channels
-        self.ch1.step(cycles);
-        self.ch2.step(cycles);
+        self.ch1.step(ticks);
+        self.ch2.step(ticks);
         self.ch3.step(cycles);
-        self.ch4.step(cycles);
+        self.ch4.step(ticks);
+        if self.ch4.dmg_delayed_start != 0 {
+            self.ch4.dmg_delayed_start = self.ch4.dmg_delayed_start.saturating_sub(ticks as u8);
+            if self.ch4.dmg_delayed_start == 0 {
+                self.write_register(0xFF23, self.ch4.nr44 | 0x80);
+            }
+        }
 
         // Accumulate samples
         self.sample_counter += cycles as f64;
@@ -718,7 +1360,7 @@ impl Apu {
 
     /// The DIV-APU event: the falling edge of DIV bit 4 (bit 5 in double speed), from the timer's
     /// counting or a DIV write.
-    pub fn div_event(&mut self) {
+    pub fn div_event(&mut self, div_write: bool) {
         if !self.enabled {
             return;
         }
@@ -731,15 +1373,35 @@ impl Apu {
             _ => self.div_divider = self.div_divider.wrapping_add(1),
         }
         if self.div_divider & 7 == 7 {
-            self.ch1.clock_envelope();
-            self.ch2.clock_envelope();
-            self.ch4.clock_envelope();
+            self.ch1.count_envelope();
+            self.ch2.count_envelope();
+            self.ch4.count_envelope();
+        }
+        if self.double_speed && self.cgb_mode {
+            self.pending_envelope = 2;
+        } else {
+            self.tick_envelopes();
         }
         if self.div_divider & 1 == 1 {
             self.clock_length_all();
         }
         if self.div_divider & 3 == 3 {
-            self.ch1_sweep.clock(&mut self.ch1.enabled, &mut self.ch1.frequency);
+            self.ch1_sweep.div_event(&mut self.ch1, self.lf_div, self.double_speed, div_write);
+        }
+    }
+
+    fn tick_envelopes(&mut self) {
+        self.ch1.tick_envelope();
+        self.ch2.tick_envelope();
+        self.ch4.tick_envelope();
+    }
+
+    /// DIV's APU bit rising (the secondary DIV-APU edge): due envelopes raise their clock.
+    pub fn div_secondary_event(&mut self) {
+        if self.enabled {
+            self.ch1.arm_envelope();
+            self.ch2.arm_envelope();
+            self.ch4.arm_envelope();
         }
     }
 
@@ -905,6 +1567,9 @@ impl Apu {
                     self.enabled = true;
                     self.div_divider = 0;
                     self.skip_div_event = 0;
+                    self.lf_div = 1;
+                    self.ch1.countdown = 0xFFFF;
+                    self.ch2.countdown = 0xFFFF;
                 }
                 0xFF30..=0xFF3F => self.ch3.write_wave_ram(addr - 0xFF30, value, self.cgb_mode),
                 // DMG only: length counters stay writable while powered off.
@@ -923,30 +1588,23 @@ impl Apu {
         let first_half = self.length_first_half();
         match addr {
             // CH1 — Square with sweep
-            0xFF10 => {
-                if !self.ch1_sweep.write_nr10(value) {
-                    self.ch1.enabled = false;
-                }
-            }
+            0xFF10 => self.ch1_sweep.write_nr10(value, &mut self.ch1, self.lf_div, self.cgb_mode, self.double_speed),
             0xFF11 => self.ch1.write_nrx1(value),
-            0xFF12 => self.ch1.write_nrx2(value),
+            0xFF12 => self.ch1.write_nrx2(value, self.cgb_mode),
             0xFF13 => self.ch1.write_nrx3(value),
             0xFF14 => {
-                self.ch1.write_nrx4(value, first_half);
+                let was_active = self.ch1.enabled;
+                self.ch1.write_nrx4(value, first_half, self.lf_div, self.cgb_mode);
                 if value & 0x80 != 0 {
-                    self.ch1_sweep.trigger(self.ch1.frequency);
-                    // Overflow check on trigger if shift != 0
-                    if self.ch1_sweep.shift != 0 && self.ch1_sweep.calculate().1 {
-                        self.ch1.enabled = false;
-                    }
+                    self.ch1_sweep.trigger(&self.ch1, was_active, self.lf_div, self.cgb_mode);
                 }
             }
 
             // CH2 — Square
             0xFF16 => self.ch2.write_nrx1(value),
-            0xFF17 => self.ch2.write_nrx2(value),
+            0xFF17 => self.ch2.write_nrx2(value, self.cgb_mode),
             0xFF18 => self.ch2.write_nrx3(value),
-            0xFF19 => self.ch2.write_nrx4(value, first_half),
+            0xFF19 => self.ch2.write_nrx4(value, first_half, self.lf_div, self.cgb_mode),
 
             // CH3 — Wave
             0xFF1A => self.ch3.write_nr30(value),
@@ -957,9 +1615,9 @@ impl Apu {
 
             // CH4 — Noise
             0xFF20 => self.ch4.write_nr41(value),
-            0xFF21 => self.ch4.write_nr42(value),
-            0xFF22 => self.ch4.write_nr43(value),
-            0xFF23 => self.ch4.write_nr44(value, first_half),
+            0xFF21 => self.ch4.write_nr42(value, self.cgb_mode),
+            0xFF22 => self.ch4.write_nr43(value, self.cgb_mode),
+            0xFF23 => self.ch4.write_nr44(value, first_half, self.cgb_mode),
 
             // Control
             0xFF24 => self.nr50 = value,
@@ -1036,40 +1694,72 @@ impl Field for [u8; 16] {
     }
 }
 
+impl Field for EnvelopeClock {
+    fn put(&self, out: &mut Vec<u8>) { out.push(self.bits()); }
+    fn take(&mut self, data: &[u8], pos: &mut usize) -> Option<()> {
+        *self = Self::from_bits(*data.get(*pos)?);
+        *pos += 1;
+        Some(())
+    }
+}
+
 /// Every piece of APU state that affects emulation (not the sample buffer or channel mutes),
-/// listed once for both export_state and import_state so the two cannot drift apart. `$fs0`/`$fs1`
-/// are the frame-sequencer fields: the DIV-APU count now, a counter and step before v8.
+/// listed once for both export_state and import_state so the two cannot drift apart.
 macro_rules! apu_fields {
-    ($m:ident, $a:expr, $fs0:expr, $fs1:expr) => {
+    ($m:ident, $a:expr) => {
         $m!(
-            $a.enabled, $a.nr50, $a.nr51, $fs0, $fs1,
-            $a.sample_counter,
-            $a.ch1_sweep.enabled, $a.ch1_sweep.frequency_shadow, $a.ch1_sweep.period,
-            $a.ch1_sweep.direction, $a.ch1_sweep.shift, $a.ch1_sweep.timer, $a.ch1_sweep.negate_used,
+            $a.enabled, $a.nr50, $a.nr51, $a.div_divider, $a.skip_div_event, $a.lf_div,
+            $a.pending_envelope, $a.sample_counter,
+            $a.ch1_sweep.nr10, $a.ch1_sweep.countdown, $a.ch1_sweep.calculate_countdown,
+            $a.ch1_sweep.reload_timer, $a.ch1_sweep.addend, $a.ch1_sweep.shadow, $a.ch1_sweep.unshifted,
+            $a.ch1_sweep.instant_done, $a.ch1_sweep.restart_hold, $a.ch1_sweep.completed_addend,
             $a.ch1.enabled, $a.ch1.dac_enabled, $a.ch1.duty, $a.ch1.length.counter,
-            $a.ch1.length.enabled, $a.ch1.volume, $a.ch1.volume_init, $a.ch1.envelope_direction,
-            $a.ch1.envelope_period, $a.ch1.envelope_timer, $a.ch1.frequency, $a.ch1.frequency_timer,
-            $a.ch1.duty_position,
+            $a.ch1.length.enabled, $a.ch1.nrx2, $a.ch1.volume, $a.ch1.volume_countdown,
+            $a.ch1.envelope, $a.ch1.frequency, $a.ch1.countdown, $a.ch1.delay,
+            $a.ch1.duty_position, $a.ch1.suppressed, $a.ch1.just_reloaded, $a.ch1.did_tick,
+            $a.ch1.sample,
             $a.ch2.enabled, $a.ch2.dac_enabled, $a.ch2.duty, $a.ch2.length.counter,
-            $a.ch2.length.enabled, $a.ch2.volume, $a.ch2.volume_init, $a.ch2.envelope_direction,
-            $a.ch2.envelope_period, $a.ch2.envelope_timer, $a.ch2.frequency, $a.ch2.frequency_timer,
-            $a.ch2.duty_position,
+            $a.ch2.length.enabled, $a.ch2.nrx2, $a.ch2.volume, $a.ch2.volume_countdown,
+            $a.ch2.envelope, $a.ch2.frequency, $a.ch2.countdown, $a.ch2.delay,
+            $a.ch2.duty_position, $a.ch2.suppressed, $a.ch2.just_reloaded, $a.ch2.did_tick,
+            $a.ch2.sample,
             $a.ch3.enabled, $a.ch3.dac_enabled, $a.ch3.length.counter, $a.ch3.length.enabled,
             $a.ch3.volume_shift, $a.ch3.frequency, $a.ch3.frequency_timer, $a.ch3.wave_ram,
             $a.ch3.sample_index, $a.ch3.sample_byte, $a.ch3.since_fetch,
             $a.ch4.enabled, $a.ch4.dac_enabled, $a.ch4.length.counter, $a.ch4.length.enabled,
-            $a.ch4.volume, $a.ch4.volume_init, $a.ch4.envelope_direction, $a.ch4.envelope_period,
-            $a.ch4.envelope_timer, $a.ch4.clock_shift, $a.ch4.width_mode, $a.ch4.divisor_code,
-            $a.ch4.frequency_timer, $a.ch4.lfsr
+            $a.ch4.nr42, $a.ch4.nr43, $a.ch4.nr44, $a.ch4.volume, $a.ch4.volume_countdown,
+            $a.ch4.envelope, $a.ch4.lfsr, $a.ch4.narrow, $a.ch4.counter, $a.ch4.counter_countdown,
+            $a.ch4.alignment, $a.ch4.lfsr_sample, $a.ch4.did_step_counter, $a.ch4.countdown_reloaded,
+            $a.ch4.dmg_delayed_start, $a.ch4.counter_active, $a.ch4.background_counter_active,
+            $a.ch4.stepped_in_narrow, $a.ch4.bit7_before_step, $a.ch4.started_with_dac_disabled,
+            $a.ch4.sample
         )
     };
 }
 
 /// The layout of the fields after the registers in a v8+ APU block. Bump it when `apu_fields`
 /// changes: a block of another layout is restored from its registers instead.
-const STATE_LAYOUT: u8 = 1;
+/// 1: #206 (DIV-clocked frame sequencer). 2: #207 (2 MHz square channels). 3: #209 (CH1 sweep).
+/// 4: #210 (noise counter and LFSR).
+const STATE_LAYOUT: u8 = 4;
 /// NR10-NR51 as last written, then NR52 as read (power and channel flags), then wave RAM.
 const STATE_REGS_LEN: usize = 0x16 + 1 + 16;
+
+/// Reads little-endian values in order; `None` once the data runs out.
+struct Cursor<'a> {
+    data: &'a [u8],
+    pos: usize,
+}
+
+impl Cursor<'_> {
+    fn bytes(&mut self, n: usize) -> Option<&[u8]> {
+        let b = self.data.get(self.pos..self.pos + n)?;
+        self.pos += n;
+        Some(b)
+    }
+    fn u8(&mut self) -> Option<u8> { Some(self.bytes(1)?[0]) }
+    fn u16(&mut self) -> Option<u16> { Some(u16::from_le_bytes(self.bytes(2)?.try_into().ok()?)) }
+}
 
 impl Apu {
     /// v8+: u16 LE length, the layout byte, the registers (`STATE_REGS_LEN`), then `apu_fields`.
@@ -1081,7 +1771,7 @@ impl Apu {
         {
             let out = &mut block;
             macro_rules! put { ($($f:expr),*) => { $( $f.put(out); )* }; }
-            apu_fields!(put, self, self.div_divider, self.skip_div_event);
+            apu_fields!(put, self);
         }
         out.extend_from_slice(&(block.len() as u16).to_le_bytes());
         out.extend_from_slice(&block);
@@ -1103,7 +1793,7 @@ impl Apu {
             let pos = &mut p;
             (|| {
                 macro_rules! take { ($($f:expr),*) => { $( $f.take(data, pos)?; )* }; }
-                apu_fields!(take, self, self.div_divider, self.skip_div_event);
+                apu_fields!(take, self);
                 Some(())
             })()
             .is_some()
@@ -1117,16 +1807,75 @@ impl Apu {
         true
     }
 
-    /// v3-v7 states: the fields in the same order, with the old frame sequencer's 8192-cycle
-    /// counter (dropped: DIV clocks it now) and its next step, which is the DIV-APU count.
+    /// v3-v7 states: the fields of the T-cycle model before v8, turned into registers (plus the
+    /// length counters, volumes and the frame sequencer's step, the DIV-APU count now).
     fn import_legacy_state(&mut self, data: &[u8], pos: &mut usize) -> bool {
-        let (mut _counter, mut step) = (0u32, 0u8);
-        macro_rules! take { ($($f:expr),*) => { $( if $f.take(data, pos).is_none() { return false; } )* }; }
-        apu_fields!(take, self, _counter, step);
+        let mut c = Cursor { data, pos: *pos };
+        let Some((regs, lengths, volumes, step)) = (|| {
+            let mut regs = [0u8; STATE_REGS_LEN];
+            let power = c.u8()?;
+            let (nr50, nr51) = (c.u8()?, c.u8()?);
+            c.bytes(4)?; // the 8192-cycle counter: DIV clocks the sequencer now
+            let step = c.u8()?;
+            c.bytes(8)?; // sample_counter
+            let (_, _, period, negate, shift) = (c.u8()?, c.u16()?, c.u8()?, c.u8()?, c.u8()?);
+            c.bytes(2)?; // sweep timer, negate used
+            regs[0x00] = 0x80 | (period & 7) << 4 | (negate & 1) << 3 | (shift & 7);
+            let mut flags = 0;
+            let mut lengths = [0u16; 4];
+            let mut volumes = [0u8; 3];
+            for (i, base) in [(0, 0x01), (1, 0x06)] {
+                let (on, _dac, duty, length, len_on) = (c.u8()?, c.u8()?, c.u8()?, c.u16()?, c.u8()?);
+                let (volume, init, up, env_period) = (c.u8()?, c.u8()?, c.u8()?, c.u8()?);
+                c.u8()?; // envelope timer
+                let frequency = c.u16()?;
+                c.bytes(5)?; // frequency timer, duty position
+                regs[base] = (duty & 3) << 6;
+                regs[base + 1] = (init & 0xF) << 4 | (up & 1) << 3 | (env_period & 7);
+                regs[base + 2] = frequency as u8;
+                regs[base + 3] = (len_on & 1) << 6 | (frequency >> 8) as u8 & 7;
+                flags |= (on & 1) << i;
+                lengths[i] = length;
+                volumes[i] = volume & 0xF;
+            }
+            let (on, dac, length, len_on, shift, frequency) = (c.u8()?, c.u8()?, c.u16()?, c.u8()?, c.u8()?, c.u16()?);
+            c.bytes(4)?; // frequency timer
+            regs[0x17..0x27].copy_from_slice(c.bytes(16)?);
+            c.bytes(6)?; // sample index and byte, cycles since the fetch
+            regs[0x0A] = (dac & 1) << 7;
+            regs[0x0C] = (shift & 3) << 5;
+            regs[0x0D] = frequency as u8;
+            regs[0x0E] = (len_on & 1) << 6 | (frequency >> 8) as u8 & 7;
+            flags |= (on & 1) << 2;
+            lengths[2] = length;
+            let (on, _dac, length, len_on, volume, init, up, env_period) =
+                (c.u8()?, c.u8()?, c.u16()?, c.u8()?, c.u8()?, c.u8()?, c.u8()?, c.u8()?);
+            c.u8()?; // envelope timer
+            let (clock_shift, width, divisor) = (c.u8()?, c.u8()?, c.u8()?);
+            c.bytes(6)?; // frequency timer, LFSR
+            regs[0x11] = (init & 0xF) << 4 | (up & 1) << 3 | (env_period & 7);
+            regs[0x12] = (clock_shift & 0xF) << 4 | (width & 1) << 3 | (divisor & 7);
+            regs[0x13] = (len_on & 1) << 6;
+            flags |= (on & 1) << 3;
+            lengths[3] = length;
+            volumes[2] = volume & 0xF;
+            regs[0x14] = nr50;
+            regs[0x15] = nr51;
+            regs[0x16] = (power & 1) << 7 | flags;
+            Some((regs, lengths, volumes, step))
+        })() else {
+            return false;
+        };
+        *pos = c.pos;
+        self.restore_from_registers(&regs);
+        self.ch1.length.counter = lengths[0].min(64);
+        self.ch2.length.counter = lengths[1].min(64);
+        self.ch3.length.counter = lengths[2].min(256);
+        self.ch4.length.counter = lengths[3].min(64);
+        self.ch1.volume = volumes[0];
+        self.ch2.volume = volumes[1];
+        self.ch4.volume = volumes[2];
         self.div_divider = step & 7;
-        self.skip_div_event = 0;
-        self.after_import();
-        self.rebuild_regs();
         true
     }
 
@@ -1150,10 +1899,16 @@ impl Apu {
             self.ch2.length.enabled = regs[0x09] & 0x40 != 0;
             self.ch3.length.enabled = regs[0x0E] & 0x40 != 0;
             self.ch4.length.enabled = regs[0x13] & 0x40 != 0;
-            self.ch1.enabled = nr52 & 1 != 0 && self.ch1.dac_enabled;
-            self.ch2.enabled = nr52 & 2 != 0 && self.ch2.dac_enabled;
+            for (i, ch) in [&mut self.ch1, &mut self.ch2].into_iter().enumerate() {
+                ch.enabled = nr52 & (1 << i) != 0 && ch.dac_enabled;
+                ch.volume = ch.nrx2 >> 4;
+                ch.countdown = ch.period() + 1;
+            }
             self.ch3.enabled = nr52 & 4 != 0 && self.ch3.dac_enabled;
             self.ch4.enabled = nr52 & 8 != 0 && self.ch4.dac_enabled;
+            self.ch4.counter_active = self.ch4.enabled;
+            self.ch4.background_counter_active = self.ch4.enabled;
+            self.ch4.volume = self.ch4.nr42 >> 4;
         }
         self.regs.copy_from_slice(&regs[..0x16]);
         self.cgb_mode = cgb;
@@ -1163,30 +1918,31 @@ impl Apu {
 
     /// Table indexes and shifts are clamped: a damaged state must not index out of the tables.
     fn after_import(&mut self) {
-        for ch in [&mut self.ch1, &mut self.ch2] { ch.duty &= 3; ch.duty_position &= 7; }
+        for ch in [&mut self.ch1, &mut self.ch2] {
+            ch.duty &= 3;
+            ch.duty_position &= 7;
+            ch.volume &= 0xF;
+            ch.volume_countdown &= 7;
+            ch.sample &= 0xF;
+            ch.frequency &= 0x7FF;
+            ch.length.counter = ch.length.counter.min(64);
+        }
         self.ch3.sample_index &= 31;
         self.ch3.volume_shift &= 3;
-        self.ch4.clock_shift &= 0x0F;
-        self.ch4.divisor_code &= 7;
-        self.ch1_sweep.shift &= 7;
+        self.ch4.volume &= 0xF;
+        self.ch4.volume_countdown &= 7;
+        self.ch4.sample &= 0xF;
+        self.ch4.counter &= 0x3FFF;
+        self.ch4.length.counter = self.ch4.length.counter.min(64);
+        self.ch4.dmg_delayed_start = self.ch4.dmg_delayed_start.min(6);
+        self.ch1_sweep.countdown &= 7;
+        self.ch1_sweep.addend &= 0x7FF;
+        self.ch1_sweep.shadow &= 0x7FF;
         self.skip_div_event = self.skip_div_event.min(2);
+        self.lf_div &= 1;
+        self.pending_envelope = self.pending_envelope.min(2);
         self.charged = false;
         self.external = [0.0; 2];
-    }
-
-    /// The written registers, as far as the channels still hold them (legacy states kept none).
-    fn rebuild_regs(&mut self) {
-        let len = |l: &Length, bits: u8| if l.enabled { bits | 0x40 } else { bits };
-        self.regs = [
-            self.ch1_sweep.read_nr10(), self.ch1.read_nrx1(), self.ch1.read_nrx2(),
-            self.ch1.frequency as u8, len(&self.ch1.length, (self.ch1.frequency >> 8) as u8),
-            0xFF, self.ch2.read_nrx1(), self.ch2.read_nrx2(),
-            self.ch2.frequency as u8, len(&self.ch2.length, (self.ch2.frequency >> 8) as u8),
-            self.ch3.read_nr30(), 0xFF, self.ch3.read_nr32(),
-            self.ch3.frequency as u8, len(&self.ch3.length, (self.ch3.frequency >> 8) as u8),
-            0xFF, 0xFF, self.ch4.read_nr42(), self.ch4.read_nr43(), len(&self.ch4.length, 0),
-            self.nr50, self.nr51,
-        ];
     }
 }
 
@@ -1230,7 +1986,7 @@ mod tests {
             apu.write_register(reg, v);
         }
         apu.ch3.wave_ram[5] = 0xA5;
-        apu.div_event();
+        apu.div_event(false);
         let mut state = Vec::new();
         apu.export_state(&mut state);
 
@@ -1270,5 +2026,31 @@ mod tests {
         apu.cgb_mode = false;
         assert_eq!(apu.read_register(0xFF76), 0xFF, "no PCM registers on a DMG");
         assert_eq!(apu.read_register(0xFF77), 0xFF);
+    }
+
+    /// A v3-v7 APU block (the T-cycle model's 113 bytes): power, registers, the playing channels,
+    /// their lengths and volumes, and wave RAM come back.
+    #[test]
+    fn a_legacy_block_loads_as_registers() {
+        let mut old = vec![0u8; 113];
+        old[0] = 1; // power
+        old[1] = 0x77; // NR50
+        old[2] = 0xF3; // NR51
+        old[7] = 5; // the frame sequencer's next step
+        // CH1 at 24: on, DAC, duty 2, length 10, length on, volume 9, NRx2 $F3, frequency $742.
+        old[24..42].copy_from_slice(&[1, 1, 2, 10, 0, 1, 9, 0xF, 0, 3, 0, 0x42, 0x07, 0, 0, 0, 0, 0]);
+        old[72 + 3] = 0xA5; // wave RAM byte 3
+        let mut apu = Apu::new();
+        let mut pos = 0;
+        assert!(apu.import_state(&old, &mut pos, 7));
+        assert_eq!(pos, 113);
+        assert_eq!(apu.read_register(0xFF26), 0xF1, "powered, CH1 playing");
+        assert_eq!(apu.read_register(0xFF24), 0x77);
+        assert_eq!(apu.read_register(0xFF11), 0xBF);
+        assert_eq!(apu.read_register(0xFF12), 0xF3);
+        assert_eq!(apu.read_register(0xFF14), 0xFF, "length enabled");
+        assert_eq!((apu.ch1.frequency, apu.ch1.volume, apu.ch1.length.counter), (0x742, 9, 10));
+        assert_eq!(apu.ch3.wave_ram[3], 0xA5);
+        assert_eq!(apu.div_divider, 5);
     }
 }

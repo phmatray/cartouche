@@ -107,9 +107,9 @@ fn a_save_state_keeps_the_led_and_an_older_state_still_loads() {
     assert!(fresh.load_state(&state));
     assert_eq!(fresh.bus.read_byte(0xFF56), 0xFF, "LED on and reading enabled after a load");
 
-    // A state from before RP: the same bytes without the last five (RP, then the mode-3 length).
+    // A state from before RP: the same bytes without the last six (RP, the mode-3 length, the speed switch).
     let mut older = console(&[], true);
-    assert!(older.load_state(&state[..state.len() - 5]));
+    assert!(older.load_state(&state[..state.len() - 6]));
     assert_eq!(older.bus.read_byte(0xFF56), 0x3E, "RP starts off");
 }
 
@@ -185,13 +185,15 @@ fn a_save_state_keeps_the_huc_led_and_an_older_state_still_loads() {
         assert!(fresh.load_state(&state));
         assert!(fresh.bus.ir_led(), "{kind:02X}: LED on after a load");
 
-        // A state from before the LED byte: its mapper block one byte shorter.
+        // A state from before the LED byte: its mapper block cut before it (and the HuC3 clock
+        // tail that came after it, #222).
         let extra = gb.bus.cartridge.export_extra().len();
+        let short = if kind == HUC3 { 132 } else { 0 };
         let tail = 4 + 1 + 4; // after the mapper block: the timing tail, RP, the mode-3 length
         let at = state.len() - tail - extra - 2;
         let mut old = state[..at].to_vec();
-        old.extend(((extra - 1) as u16).to_le_bytes());
-        old.extend(&state[at + 2..state.len() - tail - 1]);
+        old.extend((short as u16).to_le_bytes());
+        old.extend(&state[at + 2..at + 2 + short]);
         old.extend(&state[state.len() - tail..]);
         let mut older = cart(&[], false, kind);
         assert!(older.load_state(&old));
