@@ -72,8 +72,9 @@ export function useGamepad(
 
   useEffect(() => {
     const onConnect = () => setConnected(true);
-    const onDisconnect = () => {
-      setConnected(false);
+    const onDisconnect = (e: GamepadEvent) => {
+      // Another pad still plugged in (Super Game Boy players) keeps playing.
+      setConnected(!!navigator.getGamepads?.().some((g) => g && g.index !== e.gamepad.index));
       // A pad that sleeps or runs flat mid-press: let go of what it held, as on blur.
       for (const [b, player] of heldBy(prevButtonsRef.current, prevAxesRef.current)) releaseRef.current(b, player);
       prevButtonsRef.current = {};
