@@ -116,6 +116,8 @@ export default {
   },
   mode: {
     lockstep: 'Los dos tenéis los dos juegos: las dos consolas corren ahora en sincronía, a toda velocidad',
+    abort: 'El modo en sincronía no ha podido arrancar aquí (el juego del jugador {p} no se ha cargado): vuelta al cable de siempre',
+    partnerAbort: 'El modo en sincronía no ha podido arrancar para el jugador {p}: vuelta al cable de siempre',
   },
   desync: {
     title: 'Desincronizado',

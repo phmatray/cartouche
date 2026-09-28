@@ -6,6 +6,8 @@ import { create } from 'zustand';
 import { joinRoom, type P2PRoom } from '../p2p/room';
 import { makeCode } from '../p2p/code';
 import { isLinkMsg, SerialBridge, type LinkCore, type LinkMsg } from './bridge';
+import { toast } from '../../components/shell/actions';
+import { t } from '../../i18n';
 import { chooseMode, delayFor, isBootMsg, isHashMsg, isLockMsg, isRomsMsg, type BootMsg, type HashMsg, type LockMsg, type RomsMsg } from './lockstep';
 
 /** What each player tells the other about themselves. */
@@ -296,6 +298,12 @@ export function endLockstep() {
   set({ mode: 'bytes', rtt: null });
 }
 
+/** Lockstep couldn't start here (the partner's game didn't load): tell the partner, and both go back to the byte mode. */
+export function abortLockstep() {
+  toPartner({ t: 'boot', abort: true });
+  endLockstep();
+}
+
 const both = () => !!offer && !!theirs && chooseMode(offer.s, theirs.s, offer.g, theirs.g) === 'lockstep';
 let deciding = false;
 function lockstepMsg(m: RomsMsg | BootMsg | LockMsg | HashMsg | Echo) {
@@ -306,7 +314,11 @@ function lockstepMsg(m: RomsMsg | BootMsg | LockMsg | HashMsg | Echo) {
     if (lockSink) lockSink(m);
     else if (boot && early.length < 4096) early.push(m);
   }
-  else if (m.t === 'roms') {
+  else if (m.t === 'boot' && m.abort) { // lockstep couldn't start on their side
+    const was = !!(boot || hostBoot);
+    endLockstep();
+    if (was) toast(t('online.mode.partnerAbort', { p: other(useNet.getState().me.host) }));
+  } else if (m.t === 'roms') {
     if (boot) return; // already running (a reloaded partner starts over in the byte mode: no resume in this slice)
     theirs = { t: 'roms', g: m.g, s: m.s };
     if (!m.k && offer) toPartner({ t: 'roms', g: offer.g, s: offer.s, k: true });
