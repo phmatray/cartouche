@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { gameOfSave, getAllFrom, getAllGameMeta, getGameMeta, getRom, getRomIds, setGameMeta, STORES, type StoredSave, type StoredSaveState, type StoredScreenshot } from '../../lib/db';
+import { eachIn, gameOfSave, getAllGameMeta, getGameMeta, getRom, getRomIds, setGameMeta, STORES, type StoredSave, type StoredSaveState, type StoredScreenshot } from '../../lib/db';
 import { backupFileName, exportBackup, readBackup, restoreBackup } from '../../lib/backup';
 import { refreshSavedIds, reloadLibrary, useGameLibrary } from '../../hooks/useGameLibrary';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -26,31 +26,33 @@ async function romSize(id: string): Promise<number> {
   return n;
 }
 
-/** Everything stored, per game: ROMs, cartridge saves + save states, screenshots, downloaded box art. */
+/**
+ * Everything stored, per game: ROMs, cartridge saves + save states, screenshots, downloaded box art. Saves, states and
+ * screenshots are walked one at a time: read whole, a big library's save states alone were most of a gigabyte in memory.
+ */
 async function measure(games: GameEntry[]): Promise<Usage> {
-  const [romIds, metas, sram, states, shots, art] = await Promise.all([
-    getRomIds(), getAllGameMeta(), getAllFrom<StoredSave>(STORES.saves),
-    getAllFrom<StoredSaveState>(STORES.states), getAllFrom<StoredScreenshot>(STORES.screenshots),
-    boxArtPerGame(games),
-  ]);
   const perGame = new Map<string, GameUsage>();
   const of = (id: string) => {
     let g = perGame.get(id);
     if (!g) perGame.set(id, (g = { rom: 0, saves: 0, nSaves: 0, shots: 0, nShots: 0, art: 0 }));
     return g;
   };
+  let nShots = 0;
+  const [romIds, metas, art] = await Promise.all([
+    getRomIds(), getAllGameMeta(), boxArtPerGame(games),
+    eachIn<StoredSave>(STORES.saves, (s) => { const g = of(gameOfSave(s.id)); g.saves += s.sram.length; g.nSaves++; }),
+    eachIn<StoredSaveState>(STORES.states, (s) => { const g = of(gameOf(s.id)); g.saves += s.data.length + s.thumbnail.length; g.nSaves++; }),
+    eachIn<StoredScreenshot>(STORES.screenshots, (s) => { const g = of(s.gameId); g.shots += s.png.size; g.nShots++; nShots++; }),
+  ]);
   // ROM sizes from their summaries: reading every ROM would hold the whole library in memory.
   const sizes = new Map(metas.map((m) => [m.id, m.rom?.size]));
   let romBytes = 0;
   for (const id of romIds) romBytes += of(id).rom = sizes.get(id) ?? await romSize(id);
-  for (const s of sram) { const g = of(gameOfSave(s.id)); g.saves += s.sram.length; g.nSaves++; }
-  for (const s of states) { const g = of(gameOf(s.id)); g.saves += s.data.length + s.thumbnail.length; g.nSaves++; }
-  for (const s of shots) { const g = of(s.gameId); g.shots += s.png.size; g.nShots++; }
   // Box art only counts for games that have something else stored (it is listed with them).
   for (const [id, n] of art) if (perGame.has(id)) perGame.get(id)!.art = n;
   let saves = 0, nSaves = 0, shotBytes = 0;
   for (const g of perGame.values()) { saves += g.saves; nSaves += g.nSaves; shotBytes += g.shots; }
-  return { roms: romBytes, saves, shots: shotBytes, perGame, nSaves, nShots: shots.length };
+  return { roms: romBytes, saves, shots: shotBytes, perGame, nSaves, nShots };
 }
 
 export function StorageTab() {
