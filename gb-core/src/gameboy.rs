@@ -207,13 +207,14 @@ impl GameBoy {
         self.bus.ppu.mode = crate::ppu::PpuMode::VBlank;
         self.bus.ppu.mode_clock = 396;
 
-        // The boot sound's channel 1 registers; it is still on (silent, its envelope has run down).
+        // The boot sound's channel 1 registers; on a DMG it is still on (silent, its envelope
+        // has run down), the SGB boot ROM plays no sound.
         self.bus.apu.write_register(0xFF26, 0x80);
         self.bus.apu.write_register(0xFF11, 0x80);
         self.bus.apu.write_register(0xFF12, 0xF3);
         self.bus.apu.write_register(0xFF24, 0x77);
         self.bus.apu.write_register(0xFF25, 0xF3);
-        self.bus.apu.ch1.enabled = true;
+        self.bus.apu.ch1.enabled = self.console != Console::Sgb;
 
         if self.cgb_mode {
             self.bus.wram_bank = 1;
