@@ -237,13 +237,50 @@ impl GameBoy {
                 }
             }
             self.bus.cycle_count = 0;
+            let before = self.cpu.regs.pc;
             self.cpu.handle_interrupts(&mut self.bus);
+            let pc = self.cpu.regs.pc;
+            if let Some(d) = &mut self.debugger {
+                // An interrupt dispatch lands on its vector: check the breakpoint there too.
+                if pc != before && d.should_stop(pc) {
+                    self.frame_cycles += self.bus.cycle_count;
+                    return Ok(());
+                }
+            }
             self.cpu.step(&mut self.bus)?;
             self.frame_cycles += self.bus.cycle_count;
             self.double_speed = self.bus.double_speed;
+            if self.debugger.is_some() && self.stopped_after(pc) {
+                return Ok(());
+            }
         }
         self.frame_cycles = 0;
         Ok(())
+    }
+
+    /// After the instruction that started at `pc`: a watchpoint hit becomes the break.
+    fn stopped_after(&mut self, pc: u16) -> bool {
+        let Some((addr, value, write)) = self.bus.watch.as_mut().and_then(|w| w.hit.take()) else {
+            return false;
+        };
+        self.debugger_mut().hit = Some(Break::Watch { addr, value, write, pc });
+        true
+    }
+
+    /// Stops `run_frame` after any CPU access of `kind` (`debug::WATCH_READ` / `WATCH_WRITE` bits)
+    /// to `addr`.
+    pub fn watch_add(&mut self, addr: u16, kind: u8) {
+        self.debugger_mut();
+        self.bus.watch.get_or_insert_with(Box::default).add(addr, kind);
+    }
+
+    pub fn watch_remove(&mut self, addr: u16, kind: u8) {
+        if let Some(w) = &mut self.bus.watch {
+            w.remove(addr, kind);
+            if w.entries.is_empty() {
+                self.bus.watch = None;
+            }
+        }
     }
 
     /// GameShark writes, once per frame like the real device at VBlank.
@@ -449,6 +486,9 @@ impl GameBoy {
             if let Some(d) = &mut self.debugger {
                 d.hit = None;
                 d.resume_pc = None;
+            }
+            if let Some(w) = &mut self.bus.watch {
+                w.hit = None;
             }
             return true;
         }

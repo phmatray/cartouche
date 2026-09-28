@@ -142,3 +142,83 @@ fn emulator_disassembles_and_steps_over_without_side_effects() {
     assert!(emu.debug_step_over());
     assert_eq!(emu.get_pc(), 0x0103);
 }
+
+fn booted(program: &[u8]) -> GameBoy {
+    let mut gb = GameBoy::new(rom(program)).unwrap();
+    gb.skip_boot_rom();
+    gb
+}
+
+const READ: u8 = 1;
+const WRITE: u8 = 2;
+const ACCESS: u8 = 3;
+
+#[test]
+fn write_watchpoint_stops_after_the_writing_instruction() {
+    // $0100: LD A, $3F; $0102: LD [$C000], A; $0105: JR -2.
+    let mut gb = booted(&[0x3E, 0x3F, 0xEA, 0x00, 0xC0, 0x18, 0xFE]);
+    gb.watch_add(0xC000, WRITE);
+    gb.run_frame().unwrap();
+    assert_eq!(gb.cpu.regs.pc, 0x0105);
+    assert_eq!(gb.take_break().unwrap().describe(), "write $C000 = $3F at $0102");
+}
+
+/// $0100: LD HL, $C000; $0103: LD [HL], $3F; $0105: LD A, [HL]; $0106: JR -2.
+const WRITE_THEN_READ: [u8; 8] = [0x21, 0x00, 0xC0, 0x36, 0x3F, 0x7E, 0x18, 0xFE];
+
+#[test]
+fn read_watchpoint_fires_on_a_read_and_not_on_a_write() {
+    let mut gb = booted(&WRITE_THEN_READ);
+    gb.watch_add(0xC000, READ);
+    gb.run_frame().unwrap();
+    assert_eq!(gb.cpu.regs.pc, 0x0106);
+    assert_eq!(gb.take_break().unwrap().describe(), "read $C000 = $3F at $0105");
+}
+
+#[test]
+fn access_watchpoint_fires_on_both() {
+    let mut gb = booted(&WRITE_THEN_READ);
+    gb.watch_add(0xC000, ACCESS);
+    gb.run_frame().unwrap();
+    assert_eq!(gb.take_break().unwrap().describe(), "write $C000 = $3F at $0103");
+    gb.run_frame().unwrap();
+    assert_eq!(gb.take_break().unwrap().describe(), "read $C000 = $3F at $0105");
+}
+
+#[test]
+fn write_watchpoint_ignores_reads_and_removal_stops_it() {
+    // $0100: LD HL, $C000; $0103: LD A, [HL]; $0104: JR -2.
+    let mut gb = booted(&[0x21, 0x00, 0xC0, 0x7E, 0x18, 0xFE]);
+    gb.watch_add(0xC000, WRITE);
+    gb.run_frame().unwrap();
+    assert!(gb.take_break().is_none());
+
+    let mut gb = booted(&WRITE_THEN_READ);
+    gb.watch_add(0xC000, ACCESS);
+    gb.watch_remove(0xC000, ACCESS);
+    gb.run_frame().unwrap();
+    assert!(gb.take_break().is_none());
+}
+
+#[test]
+fn oam_dma_over_a_watched_address_does_not_fire() {
+    // $0100: LD SP, $DFF0; LD A, $C1; LDH [$46], A; JR -2. During the DMA the CPU fetches $FF
+    // (RST $38) from ROM: the stack is moved off OAM so only the DMA writes there.
+    let mut gb = booted(&[0x31, 0xF0, 0xDF, 0x3E, 0xC1, 0xE0, 0x46, 0x18, 0xFE]);
+    gb.watch_add(0xFE00, WRITE);
+    gb.run_frame().unwrap();
+    assert_eq!(gb.take_break(), None);
+}
+
+#[test]
+fn breakpoint_on_an_interrupt_vector_fires_on_dispatch() {
+    // $0100: LD A, 1; $0102: LDH [$FF], A; $0104: EI; $0105: JR -2. VBlank jumps to $0040.
+    let mut gb = booted(&[0x3E, 0x01, 0xE0, 0xFF, 0xFB, 0x18, 0xFE]);
+    gb.debugger_mut().breakpoints.insert(0x0040);
+    gb.run_frame().unwrap();
+    assert_eq!(gb.cpu.regs.pc, 0x0040);
+    assert_eq!(gb.take_break().unwrap().describe(), "breakpoint $0040");
+    gb.debugger_mut().breakpoints.insert(0x0041);
+    gb.run_frame().unwrap(); // continuing runs the handler's first instruction (a NOP) once
+    assert_eq!(gb.take_break().unwrap().describe(), "breakpoint $0041");
+}

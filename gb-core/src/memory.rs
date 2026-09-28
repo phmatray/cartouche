@@ -52,6 +52,8 @@ pub struct MemoryBus {
     pub(crate) hdma_remaining: u8,
     /// Active cheat codes (Game Genie ROM patches, GameShark RAM writes).
     pub cheats: crate::cheats::Cheats,
+    /// Debugger watchpoints; `None` unless one is set, so the CPU accessors pay one check.
+    pub watch: Option<Box<crate::debug::WatchSet>>,
 }
 
 impl MemoryBus {
@@ -87,6 +89,7 @@ impl MemoryBus {
             hdma_dest: 0,
             hdma_remaining: 0,
             cheats: Default::default(),
+            watch: None,
         }
     }
 
@@ -396,7 +399,9 @@ impl MemoryBus {
     pub fn cycle_read(&mut self, addr: u16) -> u8 {
         self.tick_components();
         if (0xFE00..=0xFEFF).contains(&addr) { self.ppu.oam_bug_read(); }
-        self.read_byte(addr)
+        let value = self.read_byte(addr);
+        if let Some(w) = &mut self.watch { w.record(addr, value, false); }
+        value
     }
 
     /// Read whose address register is incremented/decremented in the same
@@ -404,12 +409,15 @@ impl MemoryBus {
     pub fn cycle_read_inc(&mut self, addr: u16) -> u8 {
         self.tick_components();
         if (0xFE00..=0xFEFF).contains(&addr) { self.ppu.oam_bug_read_inc(); }
-        self.read_byte(addr)
+        let value = self.read_byte(addr);
+        if let Some(w) = &mut self.watch { w.record(addr, value, false); }
+        value
     }
 
     pub fn cycle_write(&mut self, addr: u16, value: u8) {
         self.tick_components();
         if (0xFE00..=0xFEFF).contains(&addr) { self.ppu.oam_bug_write(); }
+        if let Some(w) = &mut self.watch { w.record(addr, value, true); }
         self.write_byte(addr, value);
     }
 
