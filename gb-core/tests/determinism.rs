@@ -135,3 +135,41 @@ fn a_rolled_back_session_matches_a_straight_run() {
     assert_eq!((a.state_hash(), b.state_hash()), straight);
     assert_eq!(a.bus.read_byte(0xC000), 1, "one second on the clock");
 }
+
+/// Rollback on real games (the bundled ROMs, DMG and GBC): a pair re-run from any frame's states,
+/// wherever that frame ended in the line (mid mode 3 included), ends where a straight run ends.
+#[test]
+fn a_real_game_re_run_from_any_frame_matches_a_straight_run() {
+    for rom in ["tobutobugirl.gb", "tobutobugirldx.gb", "gbstudio/dawn-will-come.gb"] {
+        let data = std::fs::read(format!("{}/../gb-web/public/roms/{rom}", env!("CARGO_MANIFEST_DIR"))).unwrap();
+        let boot = || {
+            let mut gb = GameBoy::new(data.clone()).unwrap();
+            gb.skip_boot_rom();
+            gb.set_emulated_clock(1_700_000_000.0);
+            gb
+        };
+        let input = |f: usize| [0x00, 0x08, 0x00, 0x01, 0x00, 0x10, 0x20][f / 11 % 7];
+        let (mut a, mut b) = (boot(), boot());
+        let mut ring = Vec::new();
+        for f in 0..400 {
+            ring.push((a.save_state(), b.save_state()));
+            press(&mut a, input(f));
+            press(&mut b, input(f + 5));
+            gb_core::gameboy::run_linked_frame(&mut a, &mut b).unwrap();
+        }
+        let straight = (a.state_hash(), b.state_hash());
+        for from in (250..400).step_by(6) {
+            let (mut a, mut b) = (boot(), boot());
+            // The buttons held before `from`, then its states (a load keeps the held buttons).
+            press(&mut a, input(from - 1));
+            press(&mut b, input(from + 4));
+            assert!(a.load_state(&ring[from].0) && b.load_state(&ring[from].1));
+            for f in from..400 {
+                press(&mut a, input(f));
+                press(&mut b, input(f + 5));
+                gb_core::gameboy::run_linked_frame(&mut a, &mut b).unwrap();
+            }
+            assert_eq!((a.state_hash(), b.state_hash()), straight, "{rom}: re-run from frame {from}");
+        }
+    }
+}
