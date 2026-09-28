@@ -32,30 +32,39 @@ export function decode(v: unknown): unknown {
 }
 
 /**
- * `head` with `key` added as an array whose items arrive one at a time: each is encoded and folded into the Blob
- * before the next is read, so a multi-GB list is never in memory at once. The JSON is the same as encoding it whole.
+ * `head` with each of `lists` added as an array whose items arrive one at a time: each is encoded and folded into the
+ * Blob before the next is read, so no list is ever one string (a long one is past the longest string a browser allows)
+ * nor, for an async one, in memory at once. The JSON is the same as encoding it whole.
  */
-export async function jsonBlob(head: object, key: string, items: AsyncIterable<unknown>): Promise<Blob> {
+export async function jsonBlob(head: object, lists: Record<string, Iterable<unknown> | AsyncIterable<unknown>>): Promise<Blob> {
   const h = JSON.stringify(await encode(head));
-  let out = new Blob([`${h.slice(0, -1)}${h === '{}' ? '' : ','}${JSON.stringify(key)}:[`]);
-  let sep = '';
-  for await (const x of items) {
-    out = new Blob([out, sep, JSON.stringify(await encode(x))]);
-    sep = ',';
+  // One Blob per item, then one flat Blob of them (a Blob nested thousands deep overflows the stack when read).
+  const out: Blob[] = [new Blob([h.slice(0, -1)])];
+  let comma = h !== '{}';
+  for (const [key, items] of Object.entries(lists)) {
+    out.push(new Blob([`${comma ? ',' : ''}${JSON.stringify(key)}:[`]));
+    comma = true;
+    let sep = '';
+    for await (const x of items) {
+      out.push(new Blob([sep, JSON.stringify(await encode(x))]));
+      sep = ',';
+    }
+    out.push(new Blob([']']));
   }
-  return new Blob([out, ']}'], { type: 'application/json' });
+  return new Blob([...out, '}'], { type: 'application/json' });
 }
 
 /**
  * Read a backup without holding it as one string (a big library's backup is past the longest string a browser allows):
- * the bytes are scanned in chunks; `head` is the JSON with `key`'s array left empty, and each item of that array is a
- * byte range of `file`, parsed only when read. JSON's structural characters are ASCII, never part of a UTF-8 sequence.
+ * the bytes are scanned in chunks; `head` is the JSON with each of `keys`' arrays left empty, and each item of those
+ * arrays is a byte range of `file` (`items[key]`), parsed only when read. JSON's structural characters are ASCII, never part of a UTF-8 sequence.
  * Throws SyntaxError when it isn't a JSON object.
  */
-export async function splitJson(file: Blob, key: string, chunk = 8 << 20): Promise<{ head: unknown; items: [number, number][] }> {
+export async function splitJson(file: Blob, keys: string[], chunk = 8 << 20): Promise<{ head: unknown; items: Record<string, [number, number][]> }> {
   const parts: Blob[] = [];
-  const items: [number, number][] = [];
-  let depth = 0, inStr = false, esc = false, str = '', lastKey = '', inList = false, itemAt = -1, headAt = 0, started = false;
+  const items: Record<string, [number, number][]> = {};
+  const keyLen = Math.max(...keys.map((k) => k.length));
+  let depth = 0, inStr = false, esc = false, str = '', lastKey = '', list: [number, number][] | null = null, itemAt = -1, headAt = 0, started = false;
   for (let at = 0; at < file.size; at += chunk) {
     const b = new Uint8Array(await file.slice(at, at + chunk).arrayBuffer());
     for (let i = 0; i < b.length; i++) {
@@ -70,7 +79,7 @@ export async function splitJson(file: Blob, key: string, chunk = 8 << 20): Promi
           i = (s < 0 ? end : i + 1 + s) - 1;
           continue;
         }
-        if (depth === 1 && str.length <= key.length) str += String.fromCharCode(c);
+        if (depth === 1 && str.length <= keyLen) str += String.fromCharCode(c);
         continue;
       }
       if (!started) {
@@ -79,17 +88,18 @@ export async function splitJson(file: Blob, key: string, chunk = 8 << 20): Promi
         started = true;
       }
       if (c === 0x22) { inStr = true; str = ''; } else if (c === 0x7b || c === 0x5b) { // { [
-        if (depth === 1 && c === 0x5b && lastKey === key && !parts.length) { inList = true; parts.push(file.slice(headAt, at + i + 1)); }
-        else if (inList && depth === 2) itemAt = at + i;
+        if (depth === 1 && c === 0x5b && keys.includes(lastKey) && !items[lastKey]) { list = items[lastKey] = []; parts.push(file.slice(headAt, at + i + 1)); }
+        else if (list && depth === 2) itemAt = at + i;
         depth++;
       } else if (c === 0x7d || c === 0x5d) { // } ]
         depth--;
-        if (inList && depth === 2 && itemAt >= 0) { items.push([itemAt, at + i + 1]); itemAt = -1; }
-        else if (inList && depth === 1) { inList = false; headAt = at + i; }
+        if (list && depth === 2 && itemAt >= 0) { list.push([itemAt, at + i + 1]); itemAt = -1; }
+        else if (list && depth === 1) { list = null; headAt = at + i; }
       }
     }
   }
   if (depth || inStr) throw new SyntaxError('Unexpected end of JSON'); // cut short: never parse the whole file as the head
   parts.push(file.slice(headAt));
+  for (const k of keys) items[k] ??= [];
   return { head: JSON.parse(await new Blob(parts).text()), items };
 }

@@ -25,6 +25,9 @@ interface Backup {
   screenshots: StoredScreenshot[];
 }
 
+/** The lists written one item at a time (a few thousand save states are past the longest string a browser allows). */
+const LISTS = ['roms', 'states', 'screenshots'];
+
 /** Everything in this browser as one downloadable file. The ROMs are read one at a time (a library can be gigabytes). */
 export async function exportBackup(): Promise<Blob> {
   const s = useSettingsStore.getState();
@@ -34,11 +37,12 @@ export async function exportBackup(): Promise<Blob> {
   const head = {
     app: APP, version: VERSION, exported: new Date().toISOString(),
     settings: Object.fromEntries(SETTINGS_KEYS.map((k) => [k, s[k]])),
-    saves, states, meta, screenshots,
+    saves, meta,
   };
-  return jsonBlob(head, 'roms', (async function* () {
-    for (const id of await getRomIds()) { const r = await getRom(id); if (r) yield r; }
-  })());
+  return jsonBlob(head, {
+    states, screenshots,
+    roms: (async function* () { for (const id of await getRomIds()) { const r = await getRom(id); if (r) yield r; } })(),
+  });
 }
 
 export const backupFileName = () => `cartouche-backup-${new Date().toISOString().slice(0, 10)}.cartouche`;
@@ -48,13 +52,19 @@ const str = (x: unknown) => typeof x === 'string' && x.length > 0;
 /** Read and check a backup file. Throws with a readable message when it isn't one. */
 export async function readBackup(file: File): Promise<Backup> {
   const notBackup = () => new Error(t('settings.storage.notBackup', { file: file.name }));
-  let raw: unknown, items: [number, number][];
-  try { ({ head: raw, items } = await splitJson(file, 'roms')); } catch (e) {
+  let raw: unknown, items: Record<string, [number, number][]>;
+  try { ({ head: raw, items } = await splitJson(file, LISTS)); } catch (e) {
     // SyntaxError: not JSON. RangeError: a head or a ROM past what this browser can hold. Else: the file couldn't be read.
     throw e instanceof SyntaxError ? notBackup()
       : new Error(t(e instanceof RangeError ? 'settings.storage.tooBig' : 'settings.storage.unreadable', { file: file.name }), { cause: e });
   }
   const b = decode(raw) as Partial<Omit<Backup, 'roms'>>;
+  const item = async ([start, end]: [number, number]) => decode(JSON.parse(await file.slice(start, end).text()));
+  const readItems = async (at: [number, number][]) => {
+    const out = [];
+    try { for (const x of at) out.push(await item(x)); } catch { throw notBackup(); }
+    return out;
+  };
   // 'cartshelf': backups exported before the app was renamed.
   if (!b || (b.app !== APP && b.app !== 'cartshelf')) throw notBackup();
   if (b.version !== VERSION) throw new Error(t('settings.storage.newer'));
@@ -62,17 +72,15 @@ export async function readBackup(file: File): Promise<Backup> {
   return {
     app: APP, version: VERSION, exported: String(b.exported ?? ''),
     settings: b.settings && typeof b.settings === 'object' ? b.settings : {},
-    romCount: items.length,
-    roms: items.map(([start, end]) => async () => {
-      return backupRom(decode(JSON.parse(await file.slice(start, end).text())));
-    }),
+    romCount: items.roms.length,
+    roms: items.roms.map((at) => async () => backupRom(await item(at))),
     // Save profiles; a backup from before profiles has one save per game, which becomes its "Main".
     saves: list<StoredSave>(b.saves, (r) => str(r.id) && r.sram instanceof Uint8Array).map(asProfile),
     // A state without its picture still loads (the storage page, sync and the slots all read one: an empty one).
-    states: list<StoredSaveState>(b.states, (r) => str(r.id) && r.data instanceof Uint8Array && (r.profile === undefined || str(r.profile)))
+    states: list<StoredSaveState>(await readItems(items.states), (r) => str(r.id) && r.data instanceof Uint8Array && (r.profile === undefined || str(r.profile)))
       .map((r) => (r.thumbnail instanceof Uint8Array ? r : { ...r, thumbnail: new Uint8Array() })),
     meta: list<StoredGameMeta>(b.meta, (r) => str(r.id)),
-    screenshots: list<StoredScreenshot>(b.screenshots, (r) => str(r.gameId) && r.png instanceof Blob),
+    screenshots: list<StoredScreenshot>(await readItems(items.screenshots), (r) => str(r.gameId) && r.png instanceof Blob),
   };
 }
 
