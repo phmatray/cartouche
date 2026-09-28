@@ -123,7 +123,6 @@ gbmicrotest/lcdon_to_oam_int_l2.gb  # ppu
 gbmicrotest/lcdon_to_oam_unlock_b.gb  # ppu
 gbmicrotest/lcdon_to_oam_unlock_c.gb  # ppu
 gbmicrotest/lcdon_to_stat1_d.gb  # stat
-gbmicrotest/lcdon_to_stat3_a.gb  # stat
 gbmicrotest/lcdon_write_timing.gb  # no-verdict
 gbmicrotest/line_144_oam_int_b.gb  # ppu
 gbmicrotest/line_144_oam_int_c.gb  # ppu
