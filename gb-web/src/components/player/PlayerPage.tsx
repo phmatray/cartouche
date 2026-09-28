@@ -666,7 +666,7 @@ function Player({ game }: { game: GameEntry }) {
 
       <div className="pl-body">
         <main className="stage" style={screenStyle}>
-          <div className={`rw${isRewinding ? ' on' : ''}`}>{I.rew}{t('player.rewinding')}<span className="meter"><i style={{ width: `${bufferFill * 100}%` }} /></span></div>
+          <div className={`rw${isRewinding ? ' on' : ''}`}>{I.rew}{t('player.rewinding')}<span className="meter"><i style={{ transform: `scaleX(${bufferFill})` }} /></span></div>
           <div className="screen">
             <div className="frame">
               <canvas ref={borderRef} className="sgb-border" width={256} height={224} hidden={!bordered} aria-hidden="true" />

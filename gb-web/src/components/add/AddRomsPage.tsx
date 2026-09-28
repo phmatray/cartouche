@@ -67,7 +67,7 @@ export function AddRomsPage() {
             {left > 0 && <button className="btn line end" style={{ height: 38, alignSelf: 'center' }} onClick={cancelImport}>{t('add.stop')}</button>}
           </div>
           <div className="progress" role="progressbar" aria-label={t('add.progress')} aria-valuemin={0} aria-valuemax={rows.length} aria-valuenow={done}>
-            <i style={{ width: `${(done / rows.length) * 100}%` }} />
+            <i style={{ transform: `scaleX(${done / rows.length})` }} />
           </div>
           <div>
             {rows.map((r) => <Row key={r.key} r={r} g={r.id ? byId.get(r.id) : undefined} onRename={setRenaming} />)}

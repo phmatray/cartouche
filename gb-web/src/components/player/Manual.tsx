@@ -26,7 +26,7 @@ const PrintsSection = lazy(() => import('../../peripherals/PrintsSection'));
 
 export type Tab = 'controls' | 'saves' | 'screen' | 'album' | 'game';
 // The Codes page of the printed manual is left out until the core can apply cheat codes.
-const TABS: [Tab, Key, number][] = [['controls', 'player.tabs.controls', 4], ['saves', 'player.tabs.saves', 6], ['screen', 'player.tabs.screen', 8], ['album', 'player.tabs.album', 10], ['game', 'player.tabs.game', 12]];
+const TABS: [Tab, Key][] = [['controls', 'player.tabs.controls'], ['saves', 'player.tabs.saves'], ['screen', 'player.tabs.screen'], ['album', 'player.tabs.album'], ['game', 'player.tabs.game']];
 
 interface ManualProps {
   game: GameEntry;
@@ -87,9 +87,9 @@ export function Manual(p: ManualProps) {
         onClick={() => { if (document.activeElement !== clicked.current) clicked.current = null; }}
         onFocus={(e) => { if (e.target !== clicked.current) clicked.current = null; }}
         onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) clicked.current = null; }}>
-        {TABS.map(([k, label, pg]) => (
+        {TABS.map(([k, label]) => (
           <button key={k} id={`mt-${k}`} role="tab" aria-selected={tab === k} aria-controls="mt-panel" tabIndex={tab === k ? 0 : -1}
-            onClick={() => p.onTab(k)}>{t(label)}<small>{t('player.page', { n: String(pg) })}</small></button>
+            onClick={() => p.onTab(k)}>{t(label)}</button>
         ))}
       </div>
       <section className="page on" id="mt-panel" role="tabpanel" aria-labelledby={`mt-${tab}`}>{page[tab]()}</section>

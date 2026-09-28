@@ -10,8 +10,8 @@
   transition:background-color .9s var(--ease),color .9s var(--ease)}
 .sy-lcd::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(transparent 0 3px,rgba(0,0,0,.07) 3px 4px);pointer-events:none}
 .sy-lcd.lit{background:#9ba86e;color:#1c2413}
-.sy-lcd b{font:900 26px/.9 var(--font);font-stretch:62%;text-transform:uppercase;overflow-wrap:anywhere;max-width:100%}
-.sy-lcd small{font:800 11px/1 var(--font);letter-spacing:.08em;text-transform:uppercase;opacity:.75}
+.sy-lcd b{font:900 var(--fs-d3)/.9 var(--font);font-stretch:62%;text-transform:uppercase;overflow-wrap:anywhere;max-width:100%}
+.sy-lcd small{font:800 var(--fs-micro)/1 var(--font);letter-spacing:var(--tr-caps);text-transform:uppercase;opacity:.75}
 .sy-lcd:not(.lit) small{opacity:1}
 /* Segmented like a battery gauge. */
 .sy-meter{display:block;width:100%;max-width:130px;height:14px;border:2px solid currentColor;padding:2px}
@@ -24,11 +24,11 @@
 /* ---------- paired devices ---------- */
 .sy-devs{list-style:none;margin:10px 0 0;padding:0}
 .sy-dev{display:grid;grid-template-columns:180px minmax(0,1fr) auto;gap:22px;align-items:start;padding:18px 0;border-bottom:1px solid var(--paper-2)}
-.sy-dev h4{margin:4px 0 6px;font:900 34px/.9 var(--font);font-stretch:62%;text-transform:uppercase;overflow-wrap:anywhere}
-.sy-dev p{margin:0;font:500 14px/1.45 var(--font);color:var(--ink-2);max-width:60ch;font-variant-numeric:tabular-nums}
+.sy-dev h4{margin:4px 0 6px;font:900 var(--fs-d2)/.9 var(--font);font-stretch:62%;text-transform:uppercase;overflow-wrap:anywhere}
+.sy-dev p{margin:0;font:500 var(--fs-body)/1.45 var(--font);color:var(--ink-2);max-width:60ch;font-variant-numeric:tabular-nums}
 .sy-dev .sy-sum{margin-top:8px;color:var(--ink);font-weight:600}
 .sy-notes{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:8px;max-width:64ch}
-.sy-notes li{position:relative;padding-left:18px;font:600 14px/1.45 var(--font);color:var(--ink)}
+.sy-notes li{position:relative;padding-left:18px;font:600 var(--fs-body)/1.45 var(--font);color:var(--ink)}
 .sy-notes li::before{content:"";position:absolute;left:0;top:.45em;width:8px;height:8px;background:var(--m)}
 .sy-notes li.warn::before{background:var(--err)}
 .sy-dev-acts{display:flex;flex-direction:column;gap:8px}
@@ -38,25 +38,25 @@
 .sy-doors{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border:2px solid var(--ink);margin-top:12px;background:#fff}
 .sy-doors section{padding:24px 26px 26px;display:flex;flex-direction:column;align-items:flex-start;gap:12px;min-width:0}
 .sy-doors section+section{border-left:2px dashed var(--paper-3)}
-.sy-doors h4,.sy-pair h4{margin:0;font:900 44px/.85 var(--font);font-stretch:62%;text-transform:uppercase}
-.sy-doors p{margin:0 0 4px;font:500 15px/1.5 var(--font);color:var(--ink-2);max-width:44ch}
+.sy-doors h4,.sy-pair h4{margin:0;font:900 var(--fs-d2)/.85 var(--font);font-stretch:62%;text-transform:uppercase}
+.sy-doors p{margin:0 0 4px;font:500 var(--fs-body)/1.5 var(--font);color:var(--ink-2);max-width:44ch}
 .sy-type{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;width:100%;margin-top:10px;padding-top:14px;border-top:1px solid var(--paper-2)}
-.sy-type label{font:800 12px var(--font);text-transform:uppercase;letter-spacing:.06em;color:var(--ink-3)}
+.sy-type label{font:800 var(--fs-micro) var(--font);text-transform:uppercase;letter-spacing:var(--tr-caps);color:var(--ink-3)}
 .sy-type .btn{justify-self:start;color:var(--ink)}
 .sy-code-in{min-width:0;resize:none;border:2px solid var(--ink);background:#fff;color:var(--ink);padding:10px 12px;
-  font:800 17px/1.35 var(--font);font-stretch:80%;letter-spacing:.1em;text-transform:uppercase;font-variant-numeric:tabular-nums}
+  font:800 var(--fs-lead)/1.35 var(--font);font-stretch:80%;letter-spacing:var(--tr-caps);text-transform:uppercase;font-variant-numeric:tabular-nums}
 .sy-code-in::placeholder{color:var(--paper-3)}
 .sy-code-in:focus{outline:none;box-shadow:0 0 0 3px var(--y)}
 .sy-code-in[aria-invalid=true]{border-color:var(--err)}
-.sy-off{border:2px solid var(--err);padding:10px 14px;margin:0 0 16px;font:600 14px/1.45 var(--font);color:var(--ink);background:#fff}
-.sy-err{font:600 13px/1.4 var(--font);color:#b3261e;min-height:1.4em;margin:0}
+.sy-off{border:2px solid var(--err);padding:10px 14px;margin:0 0 16px;font:600 var(--fs-body)/1.45 var(--font);color:var(--ink);background:#fff}
+.sy-err{font:600 var(--fs-s)/1.4 var(--font);color:#b3261e;min-height:1.4em;margin:0}
 
 /* ---------- the camera, in a Game Boy's bezel ---------- */
 .sy-scan{display:flex;flex-direction:column;align-items:flex-start;gap:10px;width:100%}
 .sy-view{position:relative;width:100%;max-width:340px;aspect-ratio:1;border:12px solid #0b0b0b;background:#23261d;overflow:hidden;box-shadow:0 12px 28px rgba(0,0,0,.25)}
 .sy-view video{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .4s var(--ease)}
 .sy-view.live video{opacity:1}
-.sy-view-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:20px;text-align:center;color:#9ba86e;font:700 14px/1.45 var(--font)}
+.sy-view-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:20px;text-align:center;color:#9ba86e;font:700 var(--fs-body)/1.45 var(--font)}
 .sy-reticle{position:absolute;inset:16%;pointer-events:none}
 .sy-reticle b{position:absolute;width:22%;height:22%;border:4px solid var(--y)}
 .sy-reticle b:nth-child(1){top:0;left:0;border-right:0;border-bottom:0}
@@ -65,13 +65,13 @@
 .sy-reticle b:nth-child(4){bottom:0;right:0;border-left:0;border-top:0}
 .sy-view.live .sy-reticle{animation:sy-seek 1.6s var(--ease) infinite alternate}
 @keyframes sy-seek{to{transform:scale(.9)}}
-.sy-scan-hint{margin:0;font:600 14px/1.4 var(--font);color:var(--ink-2)}
+.sy-scan-hint{margin:0;font:600 var(--fs-body)/1.4 var(--font);color:var(--ink-2)}
 .sy-scan .btn{color:var(--ink)}
 
 /* ---------- pairing: two screens, one cable ---------- */
 .sy-pair{border:2px solid var(--ink);background:#fff;margin-top:12px;padding:24px 26px 26px}
 .sy-cable-row{display:grid;grid-template-columns:minmax(0,200px) minmax(0,1fr) minmax(0,200px);align-items:center;gap:0}
-.sy-cable{display:flex;align-items:center;gap:10px;min-width:0;padding:0 2px;font:800 12px/1.2 var(--font);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);text-align:center}
+.sy-cable{display:flex;align-items:center;gap:10px;min-width:0;padding:0 2px;font:800 var(--fs-micro)/1.2 var(--font);text-transform:uppercase;letter-spacing:var(--tr-caps);color:var(--ink-3);text-align:center}
 .sy-cable i{flex:1;min-width:14px;height:4px;background:repeating-linear-gradient(90deg,var(--paper-3) 0 8px,transparent 8px 14px)}
 .sy-pair.found .sy-cable,.sy-pair.paired .sy-cable{color:var(--ink)}
 .sy-pair.found .sy-cable i{background:repeating-linear-gradient(90deg,var(--ink) 0 8px,transparent 8px 14px);background-size:14px 4px;animation:sy-flow-x .35s linear infinite}
@@ -83,11 +83,11 @@
 .sy-ticket{display:grid;grid-template-columns:auto minmax(0,1fr);gap:28px;align-items:start;margin-top:26px;padding-top:24px;border-top:2px dashed var(--paper-3)}
 .sy-qr{width:210px;height:210px;display:block;color:var(--ink)}
 .sy-code{display:grid;grid-template-columns:repeat(3,max-content);gap:8px;margin:0 0 14px;-webkit-user-select:all;user-select:all}
-.sy-code span{padding:6px 10px;border:2px solid var(--ink);font:900 28px/1 var(--font);font-stretch:70%;letter-spacing:.1em;font-variant-numeric:tabular-nums}
+.sy-code span{padding:6px 10px;border:2px solid var(--ink);font:900 var(--fs-d3)/1 var(--font);font-stretch:70%;letter-spacing:var(--tr-caps);font-variant-numeric:tabular-nums}
 .sy-code::selection,.sy-code span::selection{background:var(--y)}
-.sy-fine{margin:0 0 14px;font:500 13px/1.5 var(--font);color:var(--ink-3);max-width:62ch}
+.sy-fine{margin:0 0 14px;font:500 var(--fs-s)/1.5 var(--font);color:var(--ink-3);max-width:62ch}
 .sy-pair>.sy-fine{margin:18px 0 0}
-.sy-done{display:flex;align-items:center;gap:10px;margin:22px 0 0;font:800 18px/1.3 var(--font);color:var(--ink)}
+.sy-done{display:flex;align-items:center;gap:10px;margin:22px 0 0;font:800 var(--fs-lead)/1.3 var(--font);color:var(--ink)}
 .sy-done .icon{width:22px;height:22px;background:var(--y);padding:2px}
 .sy-pair .sy-err{margin-top:14px}
 .sy-pair-acts{display:flex;justify-content:flex-end;margin-top:20px}
@@ -95,8 +95,8 @@
 
 /* ---------- what syncs, how it connects ---------- */
 .sy-what{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px 32px;margin:14px 0 0}
-.sy-what dt{font:900 20px/1 var(--font);font-stretch:62%;text-transform:uppercase;margin-bottom:6px}
-.sy-what dd{margin:0;font:500 14px/1.55 var(--font);color:var(--ink-2);max-width:62ch}
+.sy-what dt{font:900 var(--fs-d4)/1 var(--font);font-stretch:62%;text-transform:uppercase;margin-bottom:6px}
+.sy-what dd{margin:0;font:500 var(--fs-body)/1.55 var(--font);color:var(--ink-2);max-width:62ch}
 .sy-what a{color:var(--ink);font-weight:700;text-underline-offset:3px}
 
 @media (max-width:760px){
@@ -107,18 +107,18 @@
   .sy-doors{grid-template-columns:minmax(0,1fr)}
   .sy-doors section{padding:20px 18px 22px}
   .sy-doors section+section{border-left:0;border-top:2px dashed var(--paper-3)}
-  .sy-doors h4{font-size:38px}
+  .sy-doors h4{font-size:var(--fs-d2)}
   .sy-doors .btn.lg{width:100%;padding-inline:16px}
   .sy-pair{padding:18px 16px 20px}
   .sy-cable-row{grid-template-columns:minmax(0,1fr) 64px minmax(0,1fr)}
   .sy-cable span{display:none}
   .sy-cable-row .sy-lcd{height:88px;border-width:8px}
-  .sy-cable-row .sy-lcd b{font-size:20px}
+  .sy-cable-row .sy-lcd b{font-size:var(--fs-d4)}
   .sy-ticket{grid-template-columns:minmax(0,1fr);justify-items:center;gap:20px}
   .sy-qr{width:min(240px,100%);height:auto}
   .sy-ticket>div{width:100%}
   .sy-code{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
-  .sy-code span{font-size:clamp(15px,4.6vw,24px);padding:5px 0;text-align:center;letter-spacing:.02em}
+  .sy-code span{font-size:clamp(15px,4.6vw,24px);padding:5px 0;text-align:center;letter-spacing:var(--tr-tight)}
   .sy-name{width:150px;flex:none}
   .sy-what{grid-template-columns:minmax(0,1fr)}
 }
@@ -126,7 +126,7 @@
 @media (max-width:400px){
   .sy-cable-row{grid-template-columns:minmax(0,1fr) 28px minmax(0,1fr)}
   .sy-cable-row .sy-lcd{padding:8px 4px}
-  .sy-lcd small{letter-spacing:.02em}
+  .sy-lcd small{letter-spacing:var(--tr-tight)}
   .sy-code-in{height:calc(5lh + 24px)} /* 2 groups a line: the whole 9-group code in 5 lines */
 }
 @media (prefers-reduced-motion:reduce){
