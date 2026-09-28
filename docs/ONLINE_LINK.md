@@ -108,6 +108,26 @@ Every received message is checked for shape, types and ranges (`isLockMsg`, `isH
 4096 SHA-1s, `isBootMsg` with the save capped at 128 KiB + clock, and `abort` only alone). A reload mid-session
 goes back to the byte mode for that page (no resume in this slice); rollback is the next slice (#151).
 
+## Rollback budget
+
+A rollback loads both consoles' states at the mispredicted frame and re-runs every frame since, inside one display
+frame. Measured in headless Chromium (desktop, Apple M1 Max), two linked consoles on an emulated clock, median of
+60–300 runs:
+
+| Game | State size | 1 frame, both consoles | + `save_state` ×2 | Re-run 2 / 5 / 8 / 10 frames (load ×2, save ×2 each) |
+|---|---|---|---|---|
+| Tobu Tobu Girl Deluxe (GBC) | 58 KB | 1.8 ms | 1.8 ms | 3.7 / 9.2 / 18.4 / 23.2 ms |
+| Dawn Will Come (GB Studio) | 83 KB | 2.7 ms | 2.8 ms | 5.5 / 13.5 / 21.3 / 26.4 ms |
+| µCity (GBC, 128 KB RAM) | 181 KB | 2.6 ms | 2.7 ms | 5.4 / 13.4 / 21.3 / 26.9 ms |
+
+Saving the states costs next to nothing; the re-run is the frames themselves, about 2.7 ms each. Ten frames take
+23–27 ms, over the 12 ms budget, so the **rollback window is 4 frames** (≈ 11 ms at the slowest game above). An
+iPhone-class device was not measured; it is slower, so the window is not larger than the desktop's.
+
+The save state carries the cartridge clock's position (MBC3: its emulated time and the dots into the current second,
+in the mapper block): without it, loading a state in a deterministic session caught the clock up to "now", and a
+rolled-back run no longer matched a straight one (`gb-core/tests/determinism.rs`). Older states still load.
+
 ## Measurements (localhost, two Chrome contexts; artificial one-way delay added on each side)
 
 Real two-ROM test with a falling-block puzzle game in 2-player mode: the link handshake goes through, both

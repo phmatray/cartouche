@@ -721,6 +721,12 @@ impl GameBoy {
             _ => &[],
         };
         self.bus.cartridge.import_extra(extra);
+        if self.bus.cartridge.rewinds_clock(extra) {
+            // The clock went back with the state: its battery RAM footer is read again against it
+            // (nothing to catch up), which zeroes the second's dots, so they go back once more.
+            self.bus.cartridge.import_sram(ram_data);
+            self.bus.cartridge.import_extra(extra);
+        }
         let timing = data.get(pos + 4 + extra.len()..).unwrap_or(&[]);
         let byte = |i: usize| timing.get(i).copied();
         self.bus.timer.reload_pending = byte(0) == Some(1);
