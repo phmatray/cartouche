@@ -223,6 +223,7 @@ impl GameBoy {
     /// for the partner's byte (`bus.serial.stalled()`), and on a breakpoint (`take_break`); the
     /// next call finishes that frame.
     pub fn run_frame(&mut self) -> Result<(), EmulatorError> {
+        self.bus.ir_light_in = false; // alone: no partner's light (only `run_linked_frame` sets it)
         if self.frame_cycles == 0 {
             self.bus.ppu.frame_ready = false;
             self.apply_ram_cheats();
@@ -427,6 +428,8 @@ impl GameBoy {
         data.extend_from_slice(&extra);
         // Then the sub-instruction timing (TIMING_TAIL_LEN bytes, absent from older states): TIMA reload, OAM DMA.
         data.extend_from_slice(&[self.bus.timer.reload_pending as u8, b.dma_delay, b.dma_index, b.dma_source]);
+        // Then the infrared port (RP; absent from older states: LED off, reading disabled).
+        data.push(self.bus.rp);
 
         data
     }
@@ -633,6 +636,7 @@ impl GameBoy {
         self.bus.dma_delay = byte(1).unwrap_or(0).min(2);
         self.bus.dma_index = byte(2).unwrap_or(0xA0).min(0xA0); // older states: the transfer is done
         if let Some(source) = byte(3) { self.bus.dma_source = source; }
+        self.bus.rp = byte(TIMING_TAIL_LEN).map_or(0, |rp| rp & 0xC1);
         true
     }
 }
@@ -652,6 +656,9 @@ pub fn run_linked_frame(a: &mut GameBoy, b: &mut GameBoy) -> Result<(), (usize, 
         }
         connect(a, b);
         connect(b, a);
+        // Infrared: each LED shines into the other console's sensor (never its own).
+        a.bus.ir_light_in = b.bus.ir_led();
+        b.bus.ir_light_in = a.bus.ir_led();
     }
     Ok(())
 }
@@ -670,8 +677,7 @@ fn connect(master: &mut GameBoy, slave: &mut GameBoy) {
 }
 
 const SAVE_MAGIC: &[u8; 4] = b"GBSS";
-/// Bytes after the mapper block: TIMA reload, OAM DMA start-up/index/page.
-#[cfg(test)]
+/// Bytes after the mapper block: TIMA reload, OAM DMA start-up/index/page (then RP).
 const TIMING_TAIL_LEN: usize = 4;
 // v3 (1.0.0) adds the mapper, HDMA/KEY1/OAM-DMA, serial, PPU/CPU latch and APU state; v2 states are
 // rejected because loading them into a freshly booted ROM maps the wrong banks.
@@ -730,7 +736,7 @@ mod tests {
         assert_eq!(g.save_state(), state);
 
         let mut g = GameBoy::new(rom).unwrap();
-        assert!(g.load_state(&state[..state.len() - TIMING_TAIL_LEN]));
+        assert!(g.load_state(&state[..state.len() - TIMING_TAIL_LEN - 1])); // - 1: RP
         assert!(!g.bus.timer.reload_pending);
         assert_eq!(g.bus.dma_index, 0xA0, "an older state's transfer is already in OAM");
     }
@@ -773,8 +779,8 @@ mod tests {
         c.write_rom(0x0000, 0x0C);
         assert_eq!(c.read_ram(0), 0x97);
 
-        // The pre-change layout ends right after KEY0 (then the mapper block and the timing tail).
-        let end = state.len() - TIMING_TAIL_LEN;
+        // The pre-change layout ends right after KEY0 (then the mapper block, the timing tail and RP).
+        let end = state.len() - TIMING_TAIL_LEN - 1;
         let extra = u16::from_le_bytes([state[end - 134], state[end - 133]]);
         assert_eq!(extra, 132, "mode, address, result, opcode, 128 bytes of nibbles");
         let old = &state[..end - 134];
@@ -829,7 +835,8 @@ mod tests {
     /// state cut right after KEY0 (before the mapper block existed) still loads.
     fn reload(gb: &GameBoy, rom: &[u8]) -> GameBoy {
         let state = gb.save_state();
-        let cut = state.len() - TIMING_TAIL_LEN - 2 - gb.bus.cartridge.export_extra().len();
+        let cut = state.len() - 1 - TIMING_TAIL_LEN - 2 - gb.bus.cartridge.export_extra().len(); // 1: RP
+        assert_eq!(state[cut..cut + 2], (gb.bus.cartridge.export_extra().len() as u16).to_le_bytes());
         let mut old = GameBoy::new(rom.to_vec()).unwrap();
         assert!(old.load_state(&state[..cut]), "a state without the mapper block");
         let mut g = GameBoy::new(rom.to_vec()).unwrap();
