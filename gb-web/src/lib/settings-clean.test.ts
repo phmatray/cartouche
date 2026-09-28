@@ -3,10 +3,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cleanSetting } from './settings-clean.ts';
 
-const KEYS = { Up: 'ArrowUp', Down: 'ArrowDown', Left: 'ArrowLeft', Right: 'ArrowRight', A: 'z', B: 'x', Start: 'Enter', Select: 'Shift' };
+const KEYS = { Up: 'ArrowUp', Down: 'ArrowDown', Left: 'ArrowLeft', Right: 'ArrowRight', A: 'KeyZ', B: 'KeyX', Start: 'Enter', Select: 'Shift' };
 
 test('a partial keybindings keeps the current keys for the buttons it leaves out', () => {
-  assert.deepEqual(cleanSetting('keybindings', { A: 'k', B: 7, Turbo: 'q' }, KEYS), { ...KEYS, A: 'k' });
+  assert.deepEqual(cleanSetting('keybindings', { A: 'KeyK', B: 7, Turbo: 'q' }, KEYS), { ...KEYS, A: 'KeyK' });
   assert.deepEqual(cleanSetting('keybindings', {}, KEYS), KEYS);
   assert.equal(cleanSetting('keybindings', 'z', KEYS), undefined);
 });

@@ -8,6 +8,7 @@ import type { SlotKey } from '../../hooks/useSaveStates';
 import { machineFor, useSettingsStore, type Machine, type ScreenSize, type SgbCart } from '../../store/settingsStore';
 import { ConsoleRows, MotionRows, ScreenFilters } from '../settings/ScreenFilters';
 import { ago, dur, keyLabel, paths, touchOnly } from '../../lib/ui';
+import { useKeyLayout } from '../../hooks/useKeyLayout';
 import { I } from '../icons';
 import { Frame } from '../library/Heroes';
 import { Title } from '../library/Cover';
@@ -97,9 +98,10 @@ export function Manual(p: ManualProps) {
 }
 
 const ARROWS: Record<string, ReactNode> = { ArrowUp: I.up, ArrowDown: I.down, ArrowLeft: I.left, ArrowRight: I.right };
-const Cap = ({ k }: { k: string }) => (
-  <span className={`key${k.length > 2 && !k.startsWith('Arrow') ? ' wide' : ''}`}>{ARROWS[k] ?? (k.length === 1 && k !== ' ' ? k.toUpperCase() : keyLabel(k))}</span>
-);
+const Cap = ({ k }: { k: string }) => {
+  const label = keyLabel(k, useKeyLayout());
+  return <span className={`key${label.length > 2 && !ARROWS[k] ? ' wide' : ''}`}>{ARROWS[k] ?? label}</span>;
+};
 const Wide = ({ children }: { children: ReactNode }) => <span className="key wide">{children}</span>;
 const Round = ({ children }: { children: ReactNode }) => <span className="key round">{children}</span>;
 

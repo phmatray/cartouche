@@ -6,6 +6,7 @@ import { importSav, readRomFile, useRomHeader } from '../hooks/useGameExtras';
 import { createProfile, getActiveProfileId, getGameSaveStates, getSaveState, getSram, listProfiles, newProfileId, resumeStateId, slotStateId, uniqueName, type StoredSave, type StoredSaveState } from '../lib/db';
 import { useSettingsStore } from '../store/settingsStore';
 import { ago, bytes, keyLabel, linkReady as isLinkReady, owned, PLATFORM, sortTitle, TEST_CATEGORY } from '../lib/ui';
+import { useKeyLayout } from '../hooks/useKeyLayout';
 import type { GameEntry } from '../types/game';
 import { CartridgePicker } from './CartridgePicker';
 import { Item } from './library/GameItem';
@@ -30,9 +31,6 @@ const LEGEND: Record<LinkPlayer, string[][]> = {
   1: [['{arrows}'], ['KeyZ'], ['KeyX'], ['Enter'], ['Shift']],
   2: [['KeyW', 'KeyA', 'KeyS', 'KeyD'], ['KeyN'], ['KeyM'], ['KeyT'], ['KeyY']],
 };
-type LayoutMap = { get(code: string): string | undefined };
-const keyName = (code: string, layout: LayoutMap | null) =>
-  code.startsWith('Key') ? (layout?.get(code) ?? code.slice(3)).toUpperCase() : keyLabel(code);
 const FILE = '__file';
 
 /**
@@ -264,10 +262,7 @@ export function LinkCablePage() {
   }, [state.isRunning, setInput]);
 
   // The letters this keyboard prints on the fixed keys (Chromium only; elsewhere the QWERTY letters).
-  const [layout, setLayout] = useState<LayoutMap | null>(null);
-  useEffect(() => {
-    (navigator as Navigator & { keyboard?: { getLayoutMap?: () => Promise<LayoutMap> } }).keyboard?.getLayoutMap?.().then(setLayout, () => {});
-  }, []);
+  const layout = useKeyLayout();
 
   const ready = state.p1Ready && state.p2Ready;
   /** The cartridge in a player's slot: box, title, platform, link support, and the "Change" button. */
@@ -338,7 +333,7 @@ export function LinkCablePage() {
     return (
       <section className="player" aria-labelledby={`h-p${p}`}>
         <h2 id={`h-p${p}`}><i style={{ background: p === 1 ? 'var(--c)' : 'var(--m)' }} />{t('link.player', { p: String(p) })}</h2>
-        <div className="ctl">{LEGEND[p].map((g) => g.map((c) => (c === '{arrows}' ? t('link.arrows') : keyName(c, layout))).join(' ')).join(' · ')}</div>
+        <div className="ctl">{LEGEND[p].map((g) => g.map((c) => (c === '{arrows}' ? t('link.arrows') : keyLabel(c, layout))).join(' ')).join(' · ')}</div>
         <div className="frame">
           <canvas ref={p === 1 ? link.p1CanvasRef : link.p2CanvasRef} className="lcd" width={160} height={144} aria-label={t('link.screen', { p: String(p) })} />
         </div>

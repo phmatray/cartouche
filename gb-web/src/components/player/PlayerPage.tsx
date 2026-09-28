@@ -16,7 +16,7 @@ import { useAnimationFrame } from '../../hooks/useAnimationFrame';
 import { CHANNEL_KEYS, machineFor, paletteOf, useDisplay, useSettingsStore, type Machine } from '../../store/settingsStore';
 import { parseRomHeader, sgbCartOf } from '../../lib/rom-utils';
 import { presetOf } from '../../shaders/filters';
-import { BUTTON_NUMBERS, chord } from '../../utils/keybindings';
+import { BUTTON_NUMBERS, chord, isKey, learn } from '../../utils/keybindings';
 import { dpadAt, slide } from '../../lib/touch-slide';
 import { getActiveProfileId, getSaveState, getSram, resumeStateId, type StoredSaveState } from '../../lib/db';
 import { bootFrom, skipSilentResume } from '../../lib/boot-from';
@@ -524,8 +524,9 @@ function Player({ game }: { game: GameEntry }) {
   // Each finger holds what's under it: a thumb rolls across the D-pad (diagonals on the way) or from B onto A.
   const held = useRef(new Map<number, string[]>());
   useEffect(() => {
-    const buttonOf = (key: string) => {
-      for (const [b, k] of Object.entries(keybindings)) if (k === key || k.toLowerCase() === key.toLowerCase()) return BUTTON_NUMBERS[b];
+    // By physical key: Select (Shift) held doesn't turn the 1 bound to A into a '!' that matches nothing.
+    const buttonOf = (e: KeyboardEvent) => {
+      for (const [b, k] of Object.entries(keybindings)) if (isKey(k, e)) return BUTTON_NUMBERS[b];
       return undefined;
     };
     // The control last focused by a click or a tap (a focus moved on by Tab or the pad forgets it).
@@ -546,8 +547,16 @@ function Player({ game }: { game: GameEntry }) {
       const slider = /^(Arrow|Home$|End$|Page)/.test(e.key) && e.target instanceof HTMLInputElement && e.target.type === 'range' ? e.target : null;
       if (slider && slider !== clicked) return;
       const a = actions.current;
-      const b = buttonOf(e.key);
-      if (b !== undefined) { e.preventDefault(); if (!e.repeat) { pressed.set(e.code, b); input.press('key', b); } return; }
+      const b = buttonOf(e);
+      if (b !== undefined) {
+        e.preventDefault();
+        if (e.repeat) return;
+        pressed.set(e.code, b); input.press('key', b);
+        // A key saved as its character learns its physical key from this press (and then plays with Shift held too).
+        const learnt = learn(keybindings, e);
+        if (learnt) useSettingsStore.setState({ keybindings: learnt });
+        return;
+      }
       const k = e.key.toLowerCase();
       const run = { f5: () => a.saveSlot(0), f8: () => a.loadSlot(0), f12: a.screenshot, p: a.togglePlay, m: a.mute, f: a.toggleFullscreen, r: a.startRewind }[k];
       if (!run) return;
@@ -555,7 +564,7 @@ function Player({ game }: { game: GameEntry }) {
       if (!e.repeat) run();
     };
     const up = (e: KeyboardEvent) => {
-      const b = pressed.get(e.code) ?? buttonOf(e.key);
+      const b = pressed.get(e.code) ?? buttonOf(e);
       pressed.delete(e.code);
       if (b !== undefined) input.release('key', b);
       else if (e.key.toLowerCase() === 'r') actions.current.stopRewind();
