@@ -67,3 +67,23 @@ fn step_frame_stops_at_the_next_vblank() {
     assert_eq!(gb.take_break().unwrap().describe(), "frame");
     assert!(gb.bus.ppu.frame_ready);
 }
+
+#[test]
+fn emulator_reports_a_breakpoint_once_and_clears() {
+    let mut emu = gb_core::Emulator::new();
+    assert!(emu.load_rom(&rom(&LOOP)));
+    emu.debug_add_breakpoint(0x0101);
+    assert!(emu.run_frame());
+    assert_eq!(emu.debug_break_reason().as_deref(), Some("breakpoint $0101"));
+    assert_eq!(emu.get_pc(), 0x0101);
+    assert_eq!(emu.debug_break_reason(), None);
+
+    emu.debug_remove_breakpoint(0x0101);
+    emu.debug_add_breakpoint(0x0102);
+    emu.debug_clear();
+    assert!(emu.run_frame());
+    assert_eq!(emu.debug_break_reason(), None);
+
+    assert!(emu.debug_step_frame());
+    assert_eq!(emu.debug_break_reason().as_deref(), Some("frame"));
+}
