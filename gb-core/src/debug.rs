@@ -25,12 +25,22 @@ pub struct Debugger {
     pub hit: Option<Break>,
     /// The PC the machine stopped at: the next check there lets its instruction run once.
     pub resume_pc: Option<u16>,
+    /// One-shot stop for step over: the address after the `CALL`/`RST` (no `hit` when it fires).
+    pub temp_stop: Option<u16>,
 }
 
 impl Debugger {
     /// Called before each instruction at `pc`; `true` stops the machine there.
     pub fn should_stop(&mut self, pc: u16) -> bool {
-        if self.resume_pc.take() == Some(pc) || !self.breakpoints.contains(&pc) {
+        if self.resume_pc.take() == Some(pc) {
+            return false;
+        }
+        if self.temp_stop == Some(pc) {
+            self.temp_stop = None;
+            self.resume_pc = Some(pc);
+            return true;
+        }
+        if !self.breakpoints.contains(&pc) {
             return false;
         }
         self.hit = Some(Break::Breakpoint(pc));

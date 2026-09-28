@@ -85,7 +85,7 @@ function Player({ game }: { game: GameEntry }) {
   const emu = useEmulator();
   const { isReady, isRunning, setIsRunning, romLoaded, isCgb, loadRom, runFrame, getAudioSamples, pressButton, releaseButton,
     errors, hasBatteryRam, exportSram, importSram, saveState, loadState, framebufferSnapshot, setTraceEnabled, getTrace,
-    consoleNow, stateConsole, paletteNow, skipBoot, sgbBorder, sgbSnesMusic, power } = emu;
+    consoleNow, stateConsole, paletteNow, skipBoot, sgbBorder, sgbSnesMusic, power, steps } = emu;
   // Keyboard, pad and touch each hold their own buttons: letting go on one keeps what another still holds.
   const input = useMemo(() => combine(pressButton, releaseButton), [pressButton, releaseButton]);
   const padPress = useCallback((b: number, p?: number) => input.press('pad', b, p), [input]);
@@ -201,6 +201,11 @@ function Player({ game }: { game: GameEntry }) {
     const fb = restores && framebufferSnapshot();
     if (fb) renderFrame(new Uint8ClampedArray(fb.buffer, fb.byteOffset, fb.length), true);
   }, [restores, framebufferSnapshot, renderFrame]);
+  // A debugger step runs the core while paused, outside the frame loop: show the picture it left.
+  useEffect(() => {
+    const fb = steps > 0 && framebufferSnapshot();
+    if (fb) renderFrame(new Uint8ClampedArray(fb.buffer, fb.byteOffset, fb.length), true);
+  }, [steps, framebufferSnapshot, renderFrame]);
   const saves = useSaveStates(game.id, { ...emu, loadState: loadAndShow }, saveTo);
   /**
    * New game (from the game page, or the Saves page of the Manual): a moment to change one's mind and go back to the
