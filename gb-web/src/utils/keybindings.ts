@@ -37,3 +37,17 @@ export const BUTTON_NUMBERS: Record<string, number> = {
  */
 export const chord = (e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey'>) =>
   (e.ctrlKey && e.key !== 'Control') || (e.metaKey && e.key !== 'Meta') || (e.altKey && e.key !== 'Alt' && e.key !== 'AltGraph');
+
+/**
+ * What a keydown binds a button to, as the player matches keys (`key`, a letter in lower case), or null when it can't:
+ * a dead key (an accent waiting for its letter), or a character Shift made that the key alone doesn't type ('!' for 1).
+ * Under Shift the key's own character comes from `layout` (the browser's keyboard map, where it has one), else from a
+ * digit key's code when Shift changed it. Unknown (another symbol): null, the player lets go of Shift and presses again.
+ */
+export function bindable(e: Pick<KeyboardEvent, 'key' | 'code' | 'shiftKey'>, layout?: { get(code: string): string | undefined }): string | null {
+  if (e.key === 'Dead' || e.key === 'Unidentified') return null;
+  if (e.key.length !== 1) return e.key;
+  if (!e.shiftKey || /^Key[A-Z]$/.test(e.code)) return e.key.toLowerCase();
+  const digit = /^Digit\d$/.test(e.code) && e.key !== e.code[5] ? e.code[5] : undefined;
+  return (layout?.get(e.code) ?? digit)?.toLowerCase() ?? null;
+}

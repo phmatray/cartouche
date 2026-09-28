@@ -8,6 +8,7 @@ import { toast } from '../shell/actions';
 import { Row, Seg, SwitchRow } from './parts';
 import { t as tNow, useT, type Key } from '../../i18n';
 import { RumbleRows } from '../../peripherals/RumbleRows';
+import { bindable } from '../../utils/keybindings';
 
 const BUTTONS: GameBoyButton[] = ['Up', 'Down', 'Left', 'Right', 'A', 'B', 'Start', 'Select'];
 /** Keys the player already uses for its own shortcuts. */
@@ -39,11 +40,15 @@ export function ControlsTab() {
 
   useEffect(() => {
     if (!listening) return;
+    // The keyboard's own characters (Chromium): a key captured with Shift held binds what the key alone types.
+    let layout: Map<string, string> | undefined;
+    (navigator as { keyboard?: { getLayoutMap?: () => Promise<Map<string, string>> } }).keyboard?.getLayoutMap?.().then((m) => { layout = m; }, () => {});
     const capture = (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
       if (e.key === 'Escape') { setListening(null); return; }
-      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      const key = bindable(e, layout);
+      if (!key) return; // a dead key, or Shift's character: still listening
       const clash = BUTTONS.find((b) => b !== listening && keybindings[b].toLowerCase() === key.toLowerCase());
       if (clash) { toast(tNow('settings.controls.clash', { key: keyLabel(key), button: btn(clash) }), 'm'); return; }
       const reserved = RESERVED[key];
