@@ -182,8 +182,22 @@ function flushPending() {
   setGames((prev) => add.reduce(withLocal, prev));
 }
 
-/** Load the library again from IndexedDB (after a restore). */
-export const reloadLibrary = () => (loadPromise = loadLibrary());
+/**
+ * Another tab of this browser (a browser tab beside the installed app, say) changed the library: it's loaded again
+ * here, so this shelf shows the change and an import here knows a ROM just added there (no second copy of it).
+ * A burst of changes (a big import there) is one reload; an import here waits for it.
+ */
+const channel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('cartouche-library') : null;
+const changed = () => channel?.postMessage(0);
+let reloadQueued = false;
+if (channel) channel.onmessage = () => {
+  if (!loadPromise || reloadQueued) return; // not loaded yet (the first load reads it all), or a reload is on its way
+  reloadQueued = true;
+  loadPromise = loadPromise.catch(() => {}).then(() => new Promise((r) => setTimeout(r, 1000))).then(() => { reloadQueued = false; return loadLibrary(); });
+};
+
+/** Load the library again from IndexedDB (after a restore or a sync), here and in the other tabs. */
+export const reloadLibrary = () => { changed(); return (loadPromise = loadLibrary()); };
 
 export const isRomFile = (name: string) => /\.(gb|gbc|rom|bin)$/i.test(name);
 
@@ -211,6 +225,7 @@ export async function importRom(name: string, data: Uint8Array, force = false, i
   const cat = catalogMatch(useLibraryStore.getState().games, localEntry('', title, genre, data, sha1, dbEntry));
   // A catalog game keeps its id (and its page's address) once its file is here.
   const stored = await addRom(cat?.id ?? id ?? (slugify(title) || 'rom'), { title, genre, data }, { importedAt, rom: summary });
+  changed();
   const entry = localEntry(stored, title, genre, data, sha1, dbEntry, importedAt);
   const added = withLocal(cat ? [cat] : [], entry).at(-1)!; // as it will show on the shelf
   pending.push(entry);
@@ -261,6 +276,7 @@ export async function renameGame(id: string, title: string) {
   if (!rom) return;
   await saveRom({ ...rom, title });
   if (meta?.rom) await setGameMeta({ ...meta, rom: { ...meta.rom, title } });
+  changed();
   setGames((prev) => prev.map((g) => (g.id === id ? { ...g, title } : g)));
 }
 
@@ -309,6 +325,7 @@ export function useGameLibrary() {
     if (list.some((g) => open.includes(g.id))) return false;
     const roms = new Set(list.filter((g) => g.isLocal).map((g) => g.id));
     await eraseGames(list.map((g) => g.id), [...roms]);
+    if (roms.size) changed();
     // A catalog game (a downloaded GB Studio ROM keeps the catalog id) goes back to its catalog entry, "on the server".
     // ponytail: a ROM that replaced a catalog entry under another id (same title) brings it back on the next load only.
     if (roms.size) setGames((prev) => prev.flatMap((g) => {
@@ -335,6 +352,7 @@ export function useGameLibrary() {
     const importedAt = Date.now();
     await saveRom({ id: game.id, title: game.title, genre: game.genre, data });
     await setGameMeta({ ...(await getGameMeta(game.id)), id: game.id, importedAt, rom: await summarize(game.title, game.genre, data) });
+    changed();
     const dbEntry = await lookupByHash(sha1);
     setGames((prev) => withLocal(prev, localEntry(game.id, game.title, game.genre, data, sha1, dbEntry, importedAt)));
   }, []);
