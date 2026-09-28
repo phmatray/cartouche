@@ -342,10 +342,10 @@ export function useGameLibrary() {
   const deleteGame = useCallback((gameId: string) => removeGames([{ id: gameId, isLocal: true }]), [removeGames]);
 
   const toggleFavorite = useCallback(async (gameId: string) => {
-    const meta = (await getGameMeta(gameId)) ?? { id: gameId };
-    const updated = { ...meta, isFavorite: !meta.isFavorite };
-    await setGameMeta(updated);
-    setGames((prev) => prev.map((g) => g.id === gameId ? { ...g, isFavorite: updated.isFavorite } : g));
+    const isFavorite = !useLibraryStore.getState().games.find((g) => g.id === gameId)?.isFavorite;
+    setGames((prev) => prev.map((g) => g.id === gameId ? { ...g, isFavorite } : g));
+    // Storage blocked: the favorite holds for this visit only.
+    try { await setGameMeta({ ...((await getGameMeta(gameId)) ?? { id: gameId }), isFavorite }); } catch { /* kept in memory */ }
   }, []);
 
   const linkRomToGame = useCallback(async (game: GameEntry, data: Uint8Array, sha1: string) => {
