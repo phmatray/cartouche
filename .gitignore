@@ -6,8 +6,11 @@ gb-core/pkg/
 gb-web/node_modules/
 gb-web/dist/
 
-# IDE and local agent/tool settings
-.claude/
+# IDE and local agent/tool settings (the repo profile is the one committed .claude file)
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/repo-profile.md
 .idea/
 .vscode/
 *.swp
