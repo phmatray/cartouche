@@ -4,9 +4,10 @@ import { spatialNext } from '../lib/ui';
 
 /**
  * The player's hold on the pad: while its game runs (`game`), only the menu button reaches the app (`menu`: pause and
- * open the Manual, or resume); everywhere else the pad works the interface.
+ * open the Manual, or resume); everywhere else the pad works the interface. `back`: what B does instead of going back
+ * a page (the touch layout editor: Done).
  */
-export const padNav: { game: boolean; menu?: () => void } = { game: false };
+export const padNav: { game: boolean; menu?: () => void; back?: () => void } = { game: false };
 
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),summary,[tabindex]:not([tabindex="-1"])';
 const shown = (el: HTMLElement) => el.getClientRects().length > 0 && !el.closest('[inert],[aria-hidden=true]')
@@ -22,6 +23,7 @@ function act(k: PadKey) {
   if (k === 'b') {
     // As Escape does: a dialog closes (unless it handles its own cancel), else back one page.
     if (dlg) { if (dlg.dispatchEvent(new Event('cancel', { cancelable: true }))) dlg.close(); }
+    else if (padNav.back) padNav.back();
     else if (((history.state as { idx?: number } | null)?.idx ?? 0) > 0) history.back();
     return;
   }

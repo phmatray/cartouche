@@ -3,6 +3,7 @@ import { centreOf, MAX_SCALE, MIN_OPACITY, MIN_SCALE, OPTIONAL, overlaps, PARTS,
 import { SwitchRow } from '../settings/parts';
 import { geometry as zoneGeometry, hits, holdTouches, outside, rectOf } from './touch-dom';
 import { toast } from '../shell/actions';
+import { padNav } from '../../hooks/useGamepadNav';
 import { I } from '../icons';
 import { pct, useT } from '../../i18n';
 
@@ -104,7 +105,7 @@ export default function ControlsEditor({ zone, layout, layoutName, onDraft, onCo
     if (changed) apply(l);
   };
 
-  // Keyboard and screen readers: into the editor on open, nothing behind it reachable meanwhile, Escape is Done.
+  // Keyboard and screen readers: into the editor on open, nothing behind it reachable meanwhile, Escape (and pad B) is Done.
   const done = useRef(onDone);
   useEffect(() => { done.current = onDone; });
   useEffect(() => {
@@ -113,7 +114,8 @@ export default function ControlsEditor({ zone, layout, layoutName, onDraft, onCo
     behind.forEach((el) => { el.inert = true; });
     const esc = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); done.current(); } };
     addEventListener('keydown', esc);
-    return () => { cancelAnimationFrame(f); behind.forEach((el) => { el.inert = false; }); removeEventListener('keydown', esc); };
+    padNav.back = () => done.current();
+    return () => { cancelAnimationFrame(f); behind.forEach((el) => { el.inert = false; }); removeEventListener('keydown', esc); padNav.back = undefined; };
   }, []);
 
   // No layout of the player's own yet: start from the skin's, as drawn.
