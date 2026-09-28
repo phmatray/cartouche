@@ -69,6 +69,8 @@ Core hooks (`gb-core/src/serial.rs`, WASM: `set_link_remote`, `link_stalled`, `l
    completes with 0xFF and the game handles a missing partner as it would on hardware. A pause the other player
    reported counts through a lost connection too (an iPhone that switches apps pauses, then goes silent).
 
+Infrared is not carried in this mode: its pulses are timed in CPU cycles, which one round trip per byte can't preserve.
+
 While linked: speed is fixed at 1×; rewind and loading states are off; battery saves work as usual.
 
 ## Measurements (localhost, two Chrome contexts; artificial one-way delay added on each side)
