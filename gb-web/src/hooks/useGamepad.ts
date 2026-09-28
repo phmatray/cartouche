@@ -96,8 +96,11 @@ export function useGamepad(
     const gamepads = navigator.getGamepads?.();
     if (!gamepads) return;
     // A button still down from the menus (A on Play) doesn't reach the game: only presses made from now on.
-    const quiet = quietRef.current;
-    quietRef.current = false;
+    // Nor a press made in a dialog over the game (useGamepadNav gives it the pad), until the poll after it closed: the
+    // A that answered it may have closed it earlier this frame. A release always counts.
+    const dialog = !!document.querySelector('dialog[open]');
+    const quiet = quietRef.current || dialog;
+    quietRef.current = dialog;
 
     // The first connected gamepad is player 1; the next ones are Super Game Boy players 2-4 (ignored elsewhere).
     [...gamepads].filter((g) => g !== null).slice(0, 4).forEach((gp, player) => {

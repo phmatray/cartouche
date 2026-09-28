@@ -14,8 +14,8 @@ const shown = (el: HTMLElement) => el.getClientRects().length > 0 && !el.closest
 
 function act(k: PadKey) {
   if (k === 'menu') { padNav.menu?.(); return; }
-  if (padNav.game) return;
   const dlg = document.querySelector<HTMLDialogElement>('dialog[open]');
+  if (padNav.game && !dlg) return; // a dialog over the running game takes the pad, as it takes the keyboard
   const cur = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
   if (adjust(cur, k)) return; // a slider or dropdown takes left/right (and A)
   if (k === 'a') { cur?.click(); return; }
