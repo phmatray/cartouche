@@ -1,4 +1,5 @@
-import { lazy, Suspense, useCallback, useEffect, useState, type CSSProperties, type Dispatch, type SetStateAction } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties, type Dispatch, type SetStateAction } from 'react';
+import { flushSync } from 'react-dom';
 import { Link, useNavigate, useParams } from 'react-router';
 import type { GameEntry } from '../../types/game';
 import { downloadGame, FetchError, refreshSavedIds, useGameLibrary } from '../../hooks/useGameLibrary';
@@ -23,6 +24,8 @@ import { date, headerSize, rich, size, t as tNow, useT } from '../../i18n';
 import { raShown } from '../../lib/retroachievements';
 
 const Achievements = lazy(() => import('./Achievements'));
+/** Newest screenshots shown before "See all": hundreds of prints would push the saves (below the album on a phone) metres down. */
+const ALBUM_MAX = 12;
 
 export function GamePage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -46,6 +49,8 @@ function GameDetails({ game }: { game: GameEntry }) {
   const [states, setStates] = useState<(StoredSaveState | undefined)[]>([]);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [profiles, setProfiles] = useState<StoredSave[]>([]);
+  const [allShots, setAllShots] = useState(false);
+  const album = useRef<HTMLDivElement>(null);
   const [kind, label] = tagOf(game, savedIds);
   const need = !owned(game);
   const unsupported = !!header && !mapperSupported(header);
@@ -171,9 +176,17 @@ function GameDetails({ game }: { game: GameEntry }) {
           )}
           <h3>{t('game.album')}</h3>
           {shots.length ? (
-            <div className="album">
-              {shots.map((s) => <figure key={s.id}><Shot png={s.png} label={t(s.kind === 'print' ? 'game.print' : 'game.shot', { ago: ago(s.timestamp) })} /><figcaption>{ago(s.timestamp)}</figcaption></figure>)}
-            </div>
+            <>
+              <div className="album" ref={album}>
+                {(allShots ? shots : shots.slice(0, ALBUM_MAX)).map((s) => <figure key={s.id} tabIndex={-1}><Shot png={s.png} label={t(s.kind === 'print' ? 'game.print' : 'game.shot', { ago: ago(s.timestamp) })} /><figcaption>{ago(s.timestamp)}</figcaption></figure>)}
+              </div>
+              {/* The rest on demand; focus goes to the first one it adds (the button leaves). */}
+              {shots.length > ALBUM_MAX && !allShots && (
+                <button className="btn line album-more" onClick={() => { flushSync(() => setAllShots(true)); (album.current?.children[ALBUM_MAX] as HTMLElement | undefined)?.focus(); }}>
+                  {I.plus}{t('library.shelfAll', { count: shots.length })}
+                </button>
+              )}
+            </>
           ) : (
             <div className="empty-inline">{I.cam}<span>{rich(t(touchOnly() ? 'game.noShotsTouch' : 'game.noShots'), { b: (s) => <b>{s}</b> })}</span></div>
           )}
