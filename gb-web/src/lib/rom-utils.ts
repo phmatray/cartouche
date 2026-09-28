@@ -15,14 +15,31 @@ export function isGameBoyRom(data: Uint8Array): boolean {
 }
 
 /**
+ * The header that names the cartridge: an MMM01 boots its menu from the last 32 KiB, whose header
+ * (type 0x0B-0x0D, valid checksum, in a ROM of 64 KiB or more) names the chip; bank 0's is the first
+ * game's. As the core decides (gb-core cartridge.rs).
+ */
+function mainHeader(data: Uint8Array): Uint8Array {
+  const m = data.length - 0x8000;
+  if (m < 0x8000 || data[m + 0x147] < 0x0b || data[m + 0x147] > 0x0d) return data;
+  let sum = 0;
+  for (let a = 0x134; a <= 0x14c; a++) sum = (sum - data[m + a] - 1) & 0xff;
+  return sum === data[m + 0x14d] ? data.subarray(m) : data;
+}
+
+/**
  * Why a .sav file can't be this cartridge's battery save, or null when its size fits: exactly the
- * cartridge RAM (header 0x149; MBC2's built-in 512 bytes), plus 44 or 48 bytes of clock on an MBC3 with a timer.
+ * cartridge RAM (header 0x149; MBC2's built-in 512 bytes, MBC6's 32 KiB, TAMA5's 32 bytes), plus
+ * 44 or 48 bytes of clock on an MBC3 with a timer, MBC6's 1 MiB of flash, or TAMA5's 60-byte clock.
  */
 export function savSizeError(rom: Uint8Array, bytes: number): string | null {
+  rom = mainHeader(rom);
   const type = rom[0x147];
-  const ram = type === 0x05 || type === 0x06 ? 512 : ({ 1: 2048, 2: 8192, 3: 32768, 4: 131072, 5: 65536 } as Record<number, number>)[rom[0x149]] ?? 0;
+  const fixed: Record<number, number> = { 0x05: 512, 0x06: 512, 0x20: 32768, 0xfd: 32 };
+  const ram = fixed[type] ?? ({ 1: 2048, 2: 8192, 3: 32768, 4: 131072, 5: 65536 } as Record<number, number>)[rom[0x149]] ?? 0;
   if (!ram) return t('game.sav.noRam');
-  const ok = [ram, ...(type === 0x0f || type === 0x10 ? [ram + 44, ram + 48] : [])];
+  const extra = type === 0x0f || type === 0x10 ? [44, 48] : type === 0x20 ? [0x100000] : type === 0xfd ? [60] : [];
+  const ok = [ram, ...extra.map((n) => ram + n)];
   return ok.includes(bytes) ? null : t('game.sav.wrongSize', { size: num(bytes), ram: size(ram), bytes: num(ram) });
 }
 
@@ -89,9 +106,9 @@ const CARTRIDGE_TYPE_MAP: Record<number, string> = {
 };
 
 /** Mappers the core emulates (gb-core cartridge.rs); anything else fails to load. */
-const SUPPORTED_TYPES = new Set([0x00, 0x01, 0x02, 0x03, 0x05, 0x06, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x22, 0xFC, 0xFE, 0xFF].map((b) => CARTRIDGE_TYPE_MAP[b]));
+const SUPPORTED_TYPES = new Set([0x00, 0x01, 0x02, 0x03, 0x05, 0x06, 0x0B, 0x0C, 0x0D, 0x0F, 0x10, 0x11, 0x12, 0x13, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0x1E, 0x20, 0x22, 0xFC, 0xFD, 0xFE, 0xFF].map((b) => CARTRIDGE_TYPE_MAP[b]));
 
-/** False for a cartridge whose mapper the core can't run yet (MMM01, MBC6...). */
+/** False for a cartridge whose mapper the core can't run yet (ROM+RAM, ...). */
 export const mapperSupported = (h: RomMetadata) => SUPPORTED_TYPES.has(h.cartridgeType);
 
 const ROM_SIZE_MAP: Record<number, string> = {
@@ -360,6 +377,7 @@ export interface RomMetadata {
  */
 export function parseRomHeader(data: Uint8Array): RomMetadata | null {
   if (data.length < 0x0150) return null;
+  data = mainHeader(data);
 
   // Title: 0x0134-0x0143 (last byte overlaps with CGB flag)
   const titleBytes = data.slice(0x0134, 0x0144);

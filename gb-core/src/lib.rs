@@ -7,6 +7,7 @@ pub mod cpu;
 pub mod debug;
 pub mod disasm;
 pub mod error;
+pub mod flash;
 pub mod gameboy;
 pub mod interrupts;
 pub mod joypad;
@@ -19,6 +20,7 @@ pub mod sdsp;
 pub mod serial;
 pub mod sgb;
 pub mod spc700;
+pub mod tama5;
 pub mod timer;
 pub mod trace;
 
