@@ -28,8 +28,11 @@ interface Backup {
 /** The lists written one item at a time (a few thousand save states are past the longest string a browser allows). */
 const LISTS = ['roms', 'states', 'screenshots'];
 
-/** Everything in this browser as one downloadable file. The ROMs are read one at a time (a library can be gigabytes). */
-export async function exportBackup(): Promise<Blob> {
+/**
+ * Everything in this browser as one downloadable file. The ROMs are read one at a time (a library can be gigabytes);
+ * `progress` gets how many are written, of how many.
+ */
+export async function exportBackup(progress?: (n: number, of: number) => void): Promise<Blob> {
   const s = useSettingsStore.getState();
   const [saves, states, meta, screenshots] = await Promise.all([
     getAllFrom(STORES.saves), getAllFrom(STORES.states), getAllFrom(STORES.meta), getAllFrom(STORES.screenshots),
@@ -41,7 +44,10 @@ export async function exportBackup(): Promise<Blob> {
   };
   return jsonBlob(head, {
     states, screenshots,
-    roms: (async function* () { for (const id of await getRomIds()) { const r = await getRom(id); if (r) yield r; } })(),
+    roms: (async function* () {
+      const ids = await getRomIds();
+      for (const [i, id] of ids.entries()) { progress?.(i, ids.length); const r = await getRom(id); if (r) yield r; }
+    })(),
   });
 }
 
@@ -91,9 +97,10 @@ export interface RestoreCount { roms: number; saves: number; screenshots: number
  * Merge a backup into this browser. Nothing here is lost: a ROM already stored is kept,
  * a save or save state is replaced only by a newer one, favorites and play time are combined.
  * ROMs are matched by SHA-1: a backup game whose id is taken here by another game gets a free id, its saves with it.
- * Settings are applied only when asked. `count` is filled as it goes (a full disk stops it midway: it says what landed).
+ * Settings are applied only when asked. `count` is filled as it goes (a full disk stops it midway: it says what landed);
+ * `progress` gets how many of the backup's ROMs are through.
  */
-export async function restoreBackup(b: Backup, withSettings: boolean, count: RestoreCount = { roms: 0, saves: 0, screenshots: 0 }): Promise<RestoreCount> {
+export async function restoreBackup(b: Backup, withSettings: boolean, count: RestoreCount = { roms: 0, saves: 0, screenshots: 0 }, progress?: (n: number, of: number) => void): Promise<RestoreCount> {
   const [romIds, saves, states, meta, shots] = await Promise.all([
     getRomIds(), getAllFrom<StoredSave>(STORES.saves), getAllFrom<StoredSaveState>(STORES.states),
     getAllGameMeta(), getAllFrom<StoredScreenshot>(STORES.screenshots),
@@ -106,7 +113,8 @@ export async function restoreBackup(b: Backup, withSettings: boolean, count: Res
     for (const id of romIds) { // from the summaries; a ROM without one yet is read alone
       here.set(id, summaries.get(id) ?? await getRom(id).then((r) => (r ? computeSha1(r.data) : '')));
     }
-    for (const read of b.roms) {
+    for (const [i, read] of b.roms.entries()) {
+      progress?.(i, b.roms.length);
       const r = await read();
       if (!r) continue;
       const to = placeRom(r.id, await computeSha1(r.data), here, claimed);
