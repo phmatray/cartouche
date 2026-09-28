@@ -6,6 +6,8 @@ export default {
   shelfAll: { one: 'See all {count}', other: 'See all {count}' },
   shelfEmpty: 'Nothing here yet',
   shelfHint: 'Games you add or play stand here, most recent first.',
+  shelfEmptyMore: 'Nothing else yet',
+  shelfHintMore: 'The other games you add or play will line up here, most recent first.',
   onlyMine: 'Only mine',
   free: 'Play right now',
   freeSub: 'No file needed: free homebrew that comes with the app',

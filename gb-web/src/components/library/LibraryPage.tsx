@@ -171,7 +171,7 @@ export function LibraryPage() {
         <section className="sec" aria-labelledby="h-shelf">
           <div className="sec-h">
             <h2 id="h-shelf">{t('library.shelf')}</h2>
-            <span className="count">{shelf.length ? t(cont ? 'library.shelfMore' : 'library.shelfCount', { count: shelf.length }) : t('library.shelfEmpty')}</span>
+            <span className="count">{shelf.length ? t(cont ? 'library.shelfMore' : 'library.shelfCount', { count: shelf.length }) : t(cont ? 'library.shelfEmptyMore' : 'library.shelfEmpty')}</span>
             {hasRoms && <button className="linkbtn end" onClick={() => pickFilter('mine', true)}>{t('library.onlyMine')} {I.next}</button>}
           </div>
           {shelf.length ? (
@@ -185,7 +185,7 @@ export function LibraryPage() {
                 <Link to="/add">{I.plus}{t('shell.addRoms')}</Link>
                 {Array.from({ length: 6 }, (_, i) => <span key={i} />)}
               </div>
-              <p className="shelf-empty">{t('library.shelfHint')}{cont ? '' : ` ${t('shell.dropSub')}`}</p>
+              <p className="shelf-empty">{cont ? t('library.shelfHintMore') : `${t('library.shelfHint')} ${t('shell.dropSub')}`}</p>
             </>
           )}
         </section>
