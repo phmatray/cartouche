@@ -103,6 +103,7 @@ export default {
     deleteOk: 'Eliminar partida',
     deleteBody: 'Esta partida guardada de {title} ({size}, última partida {ago}) se elimina de este navegador. Expórtala antes para conservar una copia. No se puede deshacer.',
     deleted: '«{name}» eliminada',
+    failed: 'No se pudieron cambiar las partidas: el almacenamiento de este navegador está lleno o no funciona. Libera espacio en Ajustes › Almacenamiento.',
     imported: '«{name}» importada',
     importedName: 'Importada',
     newName: 'Nuevo nombre para {name}',

@@ -102,6 +102,7 @@ export default {
     deleteOk: 'Delete save',
     deleteBody: 'This battery save of {title} ({size}, last played {ago}) is deleted from this browser. Export it first to keep a copy. This can’t be undone.',
     deleted: '“{name}” deleted',
+    failed: 'Couldn’t change the saves: this browser’s storage is full or not working. Free up space in Settings › Storage.',
     imported: '“{name}” imported',
     importedName: 'Imported',
     newName: 'New name for {name}',

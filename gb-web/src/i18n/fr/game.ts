@@ -103,6 +103,7 @@ export default {
     deleteOk: 'Supprimer la sauvegarde',
     deleteBody: 'Cette sauvegarde de {title} ({size}, dernière partie {ago}) est supprimée de ce navigateur. Exportez-la d’abord pour en garder une copie. Action irréversible.',
     deleted: '« {name} » supprimée',
+    failed: 'Impossible de modifier les sauvegardes : le stockage de ce navigateur est plein ou ne répond pas. Libérez de l’espace dans Réglages › Stockage.',
     imported: '« {name} » importée',
     importedName: 'Importée',
     newName: 'Nouveau nom pour {name}',
