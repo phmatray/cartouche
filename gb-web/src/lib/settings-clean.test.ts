@@ -34,4 +34,6 @@ test('a start-up animation from a backup: one of the four, or the old switch rea
   assert.equal(cleanSetting('startupAnimation', true, 'off'), 'registration');
   assert.equal(cleanSetting('startupAnimation', false, 'insert'), 'off');
   assert.equal(cleanSetting('startupAnimation', 'logo', 'off'), undefined);
+  assert.equal(cleanSetting('motion', 'reduced', 'system'), 'reduced');
+  assert.equal(cleanSetting('motion', 'none', 'system'), undefined);
 });

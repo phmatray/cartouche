@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 import { encode } from 'uqr';
 import { useGameLibrary } from '../../hooks/useGameLibrary';
 import { createProfile, getActiveProfileId, getGameSaveStates, listProfiles, uniqueName, type StoredSave, type StoredSaveState } from '../../lib/db';
-import { ago, bytes, focusIfLost, linkReady, owned, paths, PLATFORM, sortTitle, TEST_CATEGORY } from '../../lib/ui';
+import { ago, bytes, focusIfLost, linkReady, owned, paths, PLATFORM, reducedMotion, sortTitle, TEST_CATEGORY } from '../../lib/ui';
 import { useSettingsStore } from '../../store/settingsStore';
 import { inviteUrl, parseCode, spaced } from '../../lib/p2p/code';
 import { loadTurn, saveTurn, useOnline, validTurn } from '../../lib/p2p/room';
@@ -126,7 +126,7 @@ function Lobby() {
       if (profile === 'new') profile = (await createProfile(game.id, uniqueName(saves?.profiles ?? [], tNow('online.save.newName')), new Uint8Array(0)).catch(() => null))?.id ?? game.id;
       const from = save.slot === null ? '' : save.slot === 'auto' ? '&resume=1' : `&slot=${save.slot}`;
       navigate(`${paths.game(game.id)}/play?online=${code}&save=${encodeURIComponent(profile)}${from}`);
-    }, matchMedia('(prefers-reduced-motion: reduce)').matches ? 200 : 1100);
+    }, reducedMotion() ? 200 : 1100);
     return () => clearTimeout(timer);
   }, [go]); // eslint-disable-line react-hooks/exhaustive-deps -- fires once when both are ready; the choices are fixed by then
 

@@ -123,7 +123,8 @@
 @media (orientation:landscape) and (max-height:500px){.ced-bar{min-height:calc(52px + var(--sat))}.ced-more{top:calc(52px + var(--sat))}}
 /* the deck waits while the layout is edited */
 .pl:has(.ced) .deck{pointer-events:none;opacity:.35}
-@media (prefers-reduced-motion:reduce){.ced-more{animation:none}}
+@media (prefers-reduced-motion:reduce){html:not([data-motion=full]) .ced-more{animation:none}}
+html[data-motion=reduced] .ced-more{animation:none}
 
 /* ---- skin swatches (Settings › Controls, Manual › Controls) ---- */
 .skins{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:10px;margin:6px 0 4px}

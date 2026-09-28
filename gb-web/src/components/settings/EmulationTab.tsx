@@ -5,6 +5,7 @@ import { pacer } from '../../lib/pace';
 import { Row, Seg, SwitchRow } from './parts';
 import { I } from '../icons';
 import { useT } from '../../i18n';
+import { reducedMotion } from '../../lib/ui';
 
 /** What the previews switch on: a cartridge that is only a header (title CARTOUCHE, a loop at $0100). */
 const PREVIEW_ROM = (() => {
@@ -140,7 +141,7 @@ function StartupRows() {
   // Each plays once when the choices first come into view (not with reduced motion: the steady pictures stay).
   useEffect(() => {
     const el = box.current;
-    if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (!el || reducedMotion()) return;
     const io = new IntersectionObserver(([e]) => {
       if (!e.isIntersecting) return;
       io.disconnect();

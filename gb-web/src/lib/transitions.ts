@@ -1,5 +1,6 @@
 import type { createBrowserRouter } from 'react-router';
 import { sampleInk } from './cover-art';
+import { reducedMotion } from './ui';
 
 /**
  * Route changes as View Transitions: one box (the clicked cover) flies between pages, the game's ink
@@ -14,7 +15,7 @@ type Kind = 'open' | 'close' | 'play' | 'eject' | 'page' | 'fade';
 type Page = 'lib' | 'game' | 'player' | 'other';
 
 const supported = typeof document !== 'undefined' && typeof document.startViewTransition === 'function';
-const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const reduced = reducedMotion;
 
 const pageOf = (p: string): Page => (p === '/' ? 'lib' : /^\/game\/[^/]+\/play\/?$/.test(p) ? 'player' : /^\/game\/[^/]+\/?$/.test(p) ? 'game' : 'other');
 const gameOf = (p: string) => decodeURIComponent(p.split('/')[2] ?? '');

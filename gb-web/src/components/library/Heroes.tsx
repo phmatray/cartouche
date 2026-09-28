@@ -6,7 +6,7 @@ import { getLatestSaveState } from '../../lib/db';
 import { useInk } from '../../hooks/useInk';
 import { fetchRom } from '../../hooks/useGameLibrary';
 import { useInstall } from '../../lib/pwa';
-import { ago, byline, dur, paths } from '../../lib/ui';
+import { ago, byline, dur, paths, reducedMotion } from '../../lib/ui';
 import { startInstall } from '../shell/actions';
 import { I } from '../icons';
 import { Cover, Title } from './Cover';
@@ -60,7 +60,7 @@ function Attract({ game, label }: { game?: GameEntry; label: string }) {
       if (!(c === 'sgb' ? emu.load_rom_sgb(rom, 0) : emu.load_rom_with(rom, c !== 'dmg', paletteOf(c), 0))) return;
       const ctx = canvas.getContext('2d')!;
       const img = ctx.createImageData(160, 144);
-      const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const still = reducedMotion();
       // Fast-forward past the boot sequence before the first frame is shown; a still waits ~5 s for the title screen.
       const warmup = still ? 300 : 150;
       let frames = 0;

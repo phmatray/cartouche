@@ -132,9 +132,11 @@
   .nl-lcd{height:130px}
 }
 @media (prefers-reduced-motion:reduce){
-  .nl-dots i,.nl-plug i,.nl-lc.go .cable i{animation:none}
-  .nl-lcd{transition:none}
+  html:not([data-motion=full]) :is(.nl-dots i,.nl-plug i,.nl-lc.go .cable i){animation:none}
+  html:not([data-motion=full]) .nl-lcd{transition:none}
 }
+html[data-motion=reduced] :is(.nl-dots i,.nl-plug i,.nl-lc.go .cable i){animation:none}
+html[data-motion=reduced] .nl-lcd{transition:none}
 
 /* The deck had no disabled look: rewind, speed and loading are off while linked (and before a ROM runs). */
 .deck .dk:disabled,.deck .speed button:disabled{opacity:.35;cursor:default}

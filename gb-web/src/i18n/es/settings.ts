@@ -71,6 +71,12 @@ export default {
     defaultSize: 'Tamaño predeterminado',
     sizeSub: 'Ajustar llena el escenario; los tamaños fijos son exactos al píxel',
     fit: 'Ajustar',
+    ui: 'Interfaz',
+    anims: 'Animaciones',
+    animsSub: 'Cambios de página, páginas que se pasan, paneles y avisos. Sistema sigue el ajuste «Reducir movimiento» de tu dispositivo; Reducidas mantiene fundidos breves y nada se mueve.',
+    animsSystem: 'Sistema',
+    animsFull: 'Activadas',
+    animsReduced: 'Reducidas',
     art: 'Las carátulas están desactivadas de forma predeterminada. Actívalas, consulta su tamaño o elimínalas en <a>Almacenamiento</a>.',
   },
   screen: {

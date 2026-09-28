@@ -9,6 +9,7 @@
 // - optionally, a shake of the LCD frame (never with reduced motion).
 
 import './peripherals.css';
+import { reducedMotion } from '../lib/ui';
 
 type Actuator = { playEffect?: (t: string, p: object) => Promise<unknown>; reset?: () => Promise<unknown>; pulse?: (v: number, ms: number) => Promise<unknown> };
 type Pad = Gamepad & { vibrationActuator?: Actuator | null; hapticActuators?: readonly Actuator[] };
@@ -19,7 +20,6 @@ const PULSE_MS = 120; // each effect outlasts the frame loop's re-issue interval
 const REISSUE_MS = 80;
 let running = false;
 let last = 0;
-const reduced = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
 
 const pads = () => (navigator.getGamepads?.() ?? []).filter((p): p is Pad => !!p);
 const padActuator = (p: Pad): Actuator | undefined => p.vibrationActuator ?? p.hapticActuators?.[0];
@@ -58,7 +58,7 @@ export function rumble(level: number, o: RumbleOpts) {
   const now = performance.now();
   if (strength <= 0.02) { if (running) stopRumble(o.frame); return; }
   if (!running) { running = true; armTicks(true); }
-  if (o.shake && !reduced?.matches && o.frame) {
+  if (o.shake && !reducedMotion() && o.frame) {
     const a = 1 + 2 * strength;
     o.frame.style.translate = `${((Math.random() * 2 - 1) * a).toFixed(1)}px ${((Math.random() * 2 - 1) * a).toFixed(1)}px`;
   }
