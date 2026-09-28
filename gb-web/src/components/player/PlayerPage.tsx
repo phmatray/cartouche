@@ -174,7 +174,11 @@ function Player({ game }: { game: GameEntry }) {
   // Cheat codes: the core gets the ones on at once, and unlocking goes off while any is.
   const codes = useSettingsStore((s) => activeCodes(s.gameCheats[game.id] ?? []));
   const { setCheats } = emu;
-  useEffect(() => { setCheats(codes); }, [codes, setCheats]);
+  // setCheats changes at each power-on, so codes stored with no game running are checked by the core then.
+  useEffect(() => {
+    const refused = setCheats(codes);
+    if (refused !== null) toast(tNow('player.codes.refused', { error: refused }), 'm', { label: tNow('player.tabs.codes'), target: '#mt-codes', run: () => { setTab('codes'); setManual(true); } });
+  }, [codes, setCheats]);
   const ra = useRaSession(power, () => romData.current, peekRa, game.title, codes !== '');
   const raJumped = ra.jumped, raFrame = ra.frame;
 
