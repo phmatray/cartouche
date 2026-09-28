@@ -278,3 +278,25 @@ fn a_timer_overflow_wakes_halt_one_m_cycle_after_a_vblank() {
     gb.cpu.handle_interrupts(&mut gb.bus);
     assert!(!gb.cpu.halted, "timer: one M-cycle later");
 }
+
+/// gbmicrotest halt_op_dupe_delay, rebuilt: HBlank STAT pending with IME off, so HALT does not
+/// halt, the NOP after it runs twice (the HALT bug), and DIV, reset 60 M-cycles earlier, reads
+/// $01. The ROM expects $55 (21,760 clocks, a third of a frame), which nothing in its code waits
+/// for; SameBoy reads $01 too, so the ROM stays listed as a defect (#215).
+#[test]
+fn halt_with_a_pending_stat_interrupt_and_ime_off_does_not_sleep() {
+    let mut sub = vec![0xF3, 0xAF, 0xE0, 0x0F, 0xE0, 0x41, 0xE0, 0x40, 0x3E, 0x91, 0xE0, 0x40];
+    sub.extend([0x00; 114]);
+    sub.extend([0x3E, 0x02, 0xE0, 0xFF, 0x3E, 0x08, 0xE0, 0x41]); // IE = STAT; STAT = HBlank
+    sub.extend([0x00; 114]);
+    sub.extend([0xAF, 0xE0, 0x04, 0x76, 0x00]); // DIV = 0; HALT; NOP
+    sub.extend([0x00; 58]);
+    sub.extend([0xF0, 0x04, 0x18, 0xFE]); // LDH A,(DIV); JR -2
+    let end = 0x200 + sub.len() as u16 - 2;
+    let mut gb = boot(&[0xC3, 0x00, 0x02], &sub);
+    while gb.cpu.regs.pc != end {
+        gb.step_instruction().unwrap();
+        assert!(!gb.cpu.halted);
+    }
+    assert_eq!(gb.cpu.regs.a, 0x01);
+}
