@@ -408,20 +408,25 @@ impl GameBoy {
         data.extend_from_slice(&b.hdma_source.to_le_bytes());
         data.extend_from_slice(&b.hdma_dest.to_le_bytes());
         data.extend_from_slice(&[b.hdma_remaining, b.hdma_active as u8, b.hdma5, b.key1]);
-        data.extend_from_slice(&[b.dma_active as u8, b.dma_cycles_remaining]);
+        data.extend_from_slice(&[b.dma_active as u8, 0xA0u8.saturating_sub(b.dma_index)]);
         data.extend_from_slice(&[b.ppu.window_was_active as u8, b.ppu.lcd_on_line0 as u8, b.ppu.stat_irq_line as u8]);
         data.extend_from_slice(&[self.cpu.ime_pending as u8, self.cpu.stopped as u8]);
         let sr = &self.bus.serial;
         data.extend_from_slice(&[sr.data, sr.control, sr.incoming]);
         data.extend_from_slice(&sr.remaining.to_le_bytes());
         self.bus.apu.export_state(&mut data);
-        if let Some(s) = &self.bus.sgb { s.export_state(&mut data); }
+        if let Some(s) = &self.bus.sgb {
+            s.export_state(&mut data);
+            s.audio.export_state(&mut data); // v6
+        }
         // Optional tail (absent from older states): stop mode, KEY0 (DMG compatibility set by the boot ROM).
         data.extend_from_slice(&[self.cpu.stopped as u8, self.bus.key0]);
         // Then the mapper block: u16 LE length + `Cartridge::export_extra`.
         let extra = self.bus.cartridge.export_extra();
         data.extend_from_slice(&(extra.len() as u16).to_le_bytes());
         data.extend_from_slice(&extra);
+        // Then the sub-instruction timing (TIMING_TAIL_LEN bytes, absent from older states): TIMA reload, OAM DMA.
+        data.extend_from_slice(&[self.bus.timer.reload_pending as u8, b.dma_delay, b.dma_index, b.dma_source]);
 
         data
     }
@@ -432,7 +437,7 @@ impl GameBoy {
         if data.len() < 9 || &data[0..4] != SAVE_MAGIC { return None; }
         match u32::from_le_bytes([data[4], data[5], data[6], data[7]]) {
             3 => Some(if self.bus.cartridge.cgb_mode() { Console::Cgb } else { Console::Dmg }),
-            4 | SAVE_VERSION => [Console::Dmg, Console::Cgb, Console::Compat, Console::Sgb].get(data[8] as usize).copied(),
+            4..=SAVE_VERSION => [Console::Dmg, Console::Cgb, Console::Compat, Console::Sgb].get(data[8] as usize).copied(),
             _ => None,
         }
     }
@@ -463,9 +468,9 @@ impl GameBoy {
         };
         let version = u32::from_le_bytes([data[4], data[5], data[6], data[7]]);
 
-        let mut pos = [8, 10, 11][version as usize - 3];
+        let mut pos = match version { 3 => 8, 4 => 10, _ => 11 };
         self.palette = if version == 3 { 0 } else { *data.get(9).unwrap_or(&0) };
-        let boot = if version == SAVE_VERSION { *data.get(10).unwrap_or(&0) } else { 0 };
+        let boot = if version >= 5 { *data.get(10).unwrap_or(&0) } else { 0 };
 
         macro_rules! read_u8 {
             () => {{
@@ -589,7 +594,7 @@ impl GameBoy {
         self.bus.hdma5 = read_u8!();
         self.bus.key1 = read_u8!();
         self.bus.dma_active = read_u8!() != 0;
-        self.bus.dma_cycles_remaining = read_u8!();
+        pos += 1; // the bytes the transfer had left: older states copied them all on the $FF46 write
         self.bus.ppu.window_was_active = read_u8!() != 0;
         self.bus.ppu.lcd_on_line0 = read_u8!() != 0;
         self.bus.ppu.stat_irq_line = read_u8!() != 0;
@@ -607,6 +612,8 @@ impl GameBoy {
             // A Game Boy state has no SGB side (but may have the tail): that side starts fresh.
             let mut p = if saved == Console::Sgb { pos } else { data.len() };
             if !s.import_state(data, &mut p) { return false; }
+            // Older states have no SNES sound: it stays idle (as `import_state` left it).
+            if saved == Console::Sgb && version >= 6 && !s.audio.import_state(data, &mut p) { return false; }
             if saved == Console::Sgb { pos = p; }
         }
         if let Some(&[stopped, ..]) = data.get(pos..) {
@@ -620,6 +627,12 @@ impl GameBoy {
             _ => &[],
         };
         self.bus.cartridge.import_extra(extra);
+        let timing = data.get(pos + 4 + extra.len()..).unwrap_or(&[]);
+        let byte = |i: usize| timing.get(i).copied();
+        self.bus.timer.reload_pending = byte(0) == Some(1);
+        self.bus.dma_delay = byte(1).unwrap_or(0).min(2);
+        self.bus.dma_index = byte(2).unwrap_or(0xA0).min(0xA0); // older states: the transfer is done
+        if let Some(source) = byte(3) { self.bus.dma_source = source; }
         true
     }
 }
@@ -657,11 +670,15 @@ fn connect(master: &mut GameBoy, slave: &mut GameBoy) {
 }
 
 const SAVE_MAGIC: &[u8; 4] = b"GBSS";
+/// Bytes after the mapper block: TIMA reload, OAM DMA start-up/index/page.
+#[cfg(test)]
+const TIMING_TAIL_LEN: usize = 4;
 // v3 (1.0.0) adds the mapper, HDMA/KEY1/OAM-DMA, serial, PPU/CPU latch and APU state; v2 states are
 // rejected because loading them into a freshly booted ROM maps the wrong banks.
 // v4 adds the console and palette bytes after the version (v3 states still load: see `state_console`).
 // v5 adds the start-up animation after them, so a state saved while it plays goes on with its own boot ROM.
-const SAVE_VERSION: u32 = 5;
+// v6 adds the Super Game Boy's SNES sound side after the SGB block (v5 states load with it idle).
+const SAVE_VERSION: u32 = 6;
 
 #[cfg(test)]
 mod tests {
@@ -690,6 +707,32 @@ mod tests {
         assert_eq!(g.bus.hdma_dest, 0x1FF0);
         assert!(g.bus.serial.remaining <= 8 * 512);
         g.run_frame().unwrap();
+    }
+
+    /// A TIMA reload and an OAM DMA caught mid-way go on after a load; a state without the
+    /// timing tail loads with neither pending.
+    #[test]
+    fn save_state_round_trips_timing_fields() {
+        let mut rom = vec![0u8; 0x8000];
+        rom[0x100..0x102].copy_from_slice(&[0x18, 0xFE]);
+        rom[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(rom[i]).wrapping_sub(1));
+        let mut gb = GameBoy::new(rom.clone()).unwrap();
+        gb.skip_boot_rom();
+        gb.bus.write_byte(0xFF46, 0xC1);
+        for _ in 0..12 { gb.bus.cycle_tick(); }
+        gb.bus.timer.reload_pending = true;
+        let state = gb.save_state();
+
+        let mut g = GameBoy::new(rom.clone()).unwrap();
+        assert!(g.load_state(&state));
+        assert!(g.bus.timer.reload_pending);
+        assert_eq!((g.bus.dma_active, g.bus.dma_delay, g.bus.dma_index, g.bus.read_byte(0xFF46)), (true, 0, 11, 0xC1));
+        assert_eq!(g.save_state(), state);
+
+        let mut g = GameBoy::new(rom).unwrap();
+        assert!(g.load_state(&state[..state.len() - TIMING_TAIL_LEN]));
+        assert!(!g.bus.timer.reload_pending);
+        assert_eq!(g.bus.dma_index, 0xA0, "an older state's transfer is already in OAM");
     }
 
     /// KEY0 set by the CGB boot ROM (DMG compatibility) goes with a state saved before it unmaps.
@@ -730,10 +773,11 @@ mod tests {
         c.write_rom(0x0000, 0x0C);
         assert_eq!(c.read_ram(0), 0x97);
 
-        // The pre-change layout ends right after KEY0.
-        let extra = u16::from_le_bytes([state[state.len() - 134], state[state.len() - 133]]);
+        // The pre-change layout ends right after KEY0 (then the mapper block and the timing tail).
+        let end = state.len() - TIMING_TAIL_LEN;
+        let extra = u16::from_le_bytes([state[end - 134], state[end - 133]]);
         assert_eq!(extra, 132, "mode, address, result, opcode, 128 bytes of nibbles");
-        let old = &state[..state.len() - 134];
+        let old = &state[..end - 134];
         let mut g = GameBoy::new(rom).unwrap();
         assert!(g.load_state(old));
     }
@@ -785,7 +829,7 @@ mod tests {
     /// state cut right after KEY0 (before the mapper block existed) still loads.
     fn reload(gb: &GameBoy, rom: &[u8]) -> GameBoy {
         let state = gb.save_state();
-        let cut = state.len() - 2 - gb.bus.cartridge.export_extra().len();
+        let cut = state.len() - TIMING_TAIL_LEN - 2 - gb.bus.cartridge.export_extra().len();
         let mut old = GameBoy::new(rom.to_vec()).unwrap();
         assert!(old.load_state(&state[..cut]), "a state without the mapper block");
         let mut g = GameBoy::new(rom.to_vec()).unwrap();

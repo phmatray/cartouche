@@ -1,12 +1,15 @@
 //! Super Game Boy: the command packets a cartridge sends over the joypad register (P1), and the
 //! picture the SNES side makes of the Game Boy's: four palettes picked per 8x8 cell, a mask, and a
 //! 256x224 border. Data transfers (`*_TRN`) are read, like on the real thing, from the picture
-//! shown a few frames after the command. Sound (SOUND, SOU_TRN; `snes_music` tells the host when a game
-//! plays its own music on the SNES side, silent here), SNES code (DATA_SND, DATA_TRN,
-//! JUMP) and the rest (ATRC_EN, TEST_EN, ICON_EN, OBJ_TRN) are ignored: their packets are read
+//! shown a few frames after the command. Sound: a program a game uploads with SOU_TRN runs on the
+//! SPC700 and S-DSP (`SnesAudio`), mixed with the Game Boy's; SOUND's parameters reach it through the
+//! APU ports; `snes_music` tells the host when a game relies on the SGB's built-in sound driver
+//! instead (not included, silent here). SNES code (DATA_SND, DATA_TRN, JUMP) and the rest (ATRC_EN, TEST_EN, ICON_EN, OBJ_TRN) are ignored: their packets are read
 //! and dropped. References: Pan Docs "Super Game Boy", SameBoy's `sgb.c` (behaviour only).
 
 use crate::ppu::{Ppu, PALETTE_COLORS, SCREEN_HEIGHT, SCREEN_WIDTH};
+use crate::sdsp::Sdsp;
+use crate::spc700::Spc700;
 
 pub const BORDER_WIDTH: usize = 256;
 pub const BORDER_HEIGHT: usize = 224;
@@ -21,7 +24,7 @@ const TRN_LEN: usize = 4096;
 const TRN_DELAY: u8 = 3;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-enum Trn { None, Pal, Attr, Chr(bool), Pct }
+enum Trn { None, Pal, Attr, Chr(bool), Pct, Sou }
 
 pub struct Sgb {
     // Packet reception.
@@ -58,11 +61,12 @@ pub struct Sgb {
     pub border: Vec<u8>,
     pub border_version: u32,
     backdrop: u16,
-    /// The game sent SOU_TRN (its own program or music for the SNES sound chip, not emulated), then
-    /// frames counted since (up to `SNES_WINDOW`) and those with a Game Boy sound channel on.
+    /// The game sent SOU_TRN (a program or music for the SNES sound chip), then frames counted since (up to `SNES_WINDOW`) and those with a Game Boy sound channel on.
     pub snes_sound: bool,
     snes_frames: u16,
     gb_sound_frames: u16,
+    /// The SNES sound side SOU_TRN programs run on.
+    pub audio: SnesAudio,
 }
 
 /// Frames (10 s) watched after SOU_TRN before telling whether the game's music is on the SNES.
@@ -103,6 +107,7 @@ impl Sgb {
             snes_sound: false,
             snes_frames: 0,
             gb_sound_frames: 0,
+            audio: SnesAudio::new(),
         }
     }
 
@@ -230,8 +235,9 @@ impl Sgb {
                 if c[1] & 0x40 != 0 { self.mask = 0; }
             }
             0x17 => self.mask = c[1] & 3,
-            0x09 => self.snes_sound = true,
-            _ => {} // sound, SNES code and the rest: not emulated
+            0x08 => self.audio.spc.ports_in.copy_from_slice(&c[1..5]),
+            0x09 => { self.snes_sound = true; self.start_trn(Trn::Sou); }
+            _ => {} // SNES code and the rest: not emulated
         }
         self.refresh_border();
     }
@@ -298,6 +304,7 @@ impl Sgb {
             Trn::Attr => self.atfs.copy_from_slice(&d[..45 * 90]),
             Trn::Chr(high) => { self.tiles[high as usize * 4096..][..4096].copy_from_slice(&d); self.backdrop = u16::MAX; }
             Trn::Pct => { self.map.copy_from_slice(&d[..0x880]); self.has_border = true; self.backdrop = u16::MAX; }
+            Trn::Sou => { self.audio.upload(&d); }
             Trn::None => {}
         }
         self.trn = Trn::None;
@@ -406,7 +413,7 @@ impl Sgb {
             s.players = if matches!(d[0], 2 | 4) { d[0] } else { 1 };
             s.player = d[1] & (s.players - 1);
             s.mask = d[2] & 3;
-            s.trn = [Trn::None, Trn::Pal, Trn::Attr, Trn::Chr(false), Trn::Chr(true), Trn::Pct][(d[3] as usize).min(5)];
+            s.trn = [Trn::None, Trn::Pal, Trn::Attr, Trn::Chr(false), Trn::Chr(true), Trn::Pct, Trn::Sou][(d[3] as usize).min(6)];
             // One VBlank more: the frame in progress at the save is not whole after a load
             // (the PPU picture is not in the state), so the transfer reads the next one.
             s.trn_wait = d[4].max(1).saturating_add(1);
@@ -449,16 +456,160 @@ impl Sgb {
 }
 
 impl Sgb {
-    /// The game plays its music on the SNES sound chip, which isn't emulated: it sent SOU_TRN,
-    /// then kept the Game Boy's own channels off most of the next 10 s (a game that only adds
-    /// SNES sound on top of its Game Boy music is not one).
+    /// The game plays its music on the SNES side and it isn't heard here: it sent SOU_TRN, then kept
+    /// the Game Boy's own channels off most of the next 10 s (a game that only adds SNES sound on
+    /// top of its Game Boy music is not one), and its sound program is not covered (it never
+    /// uploaded one, or it ran code it did not upload: the SGB's built-in sound driver).
     pub fn snes_music(&self) -> bool {
-        self.snes_frames >= SNES_WINDOW && self.gb_sound_frames < SNES_WINDOW / 2
+        !self.audio.covered() && self.snes_frames >= SNES_WINDOW && self.gb_sound_frames < SNES_WINDOW / 2
     }
 }
 
 fn trn_code(t: Trn) -> u8 {
-    match t { Trn::None => 0, Trn::Pal => 1, Trn::Attr => 2, Trn::Chr(false) => 3, Trn::Chr(true) => 4, Trn::Pct => 5 }
+    match t { Trn::None => 0, Trn::Pal => 1, Trn::Attr => 2, Trn::Chr(false) => 3, Trn::Chr(true) => 4, Trn::Pct => 5, Trn::Sou => 6 }
+}
+
+/// The SPC700 clock (1.024 MHz) and the Super Game Boy's Game Boy clock (4.295 MHz, NTSC SNES
+/// master / 5), both in Hz: the SPC700 runs `SPC_HZ / SGB_HZ` cycles per Game Boy cycle.
+const SPC_HZ: i64 = 1_024_000;
+const SGB_HZ: i64 = 4_295_454;
+/// SPC700 cycles per S-DSP sample (32 kHz).
+const SPC_PER_SAMPLE: u32 = 32;
+/// S-DSP full scale (±32768) mixed in at the Game Boy's full scale (±1: four channels at volume 15,
+/// NR50 at 7), so a program's own volumes set the balance between the two.
+const SNES_LEVEL: f32 = 1.0 / 32768.0;
+
+/// The SNES sound side: an SPC700 running the program a game uploaded with `SOU_TRN`, and the S-DSP
+/// it drives. Idle (costing nothing) until a game uploads a program. `running` is also the
+/// coverage rule: every instruction the SPC700 fetches must lie inside what the game uploaded
+/// (no IPL ROM, no SGB BIOS sound driver here); the first fetch outside stops it for good, silent,
+/// and the host's switch-back notice (`snes_music`) applies as before.
+pub struct SnesAudio {
+    spc: Spc700,
+    dsp: Sdsp,
+    /// One bit per audio RAM byte written by an upload (the union of all uploads).
+    uploaded: Vec<u64>,
+    running: bool,
+    /// Game Boy cycles × `SPC_HZ` owed to the SPC700, less the SPC cycles run × `SGB_HZ`.
+    acc: i64,
+    /// SPC700 cycles since the last DSP sample.
+    div: u32,
+    /// The last two DSP samples (left, right), interpolated between for the 44.1 kHz output.
+    prev: (i16, i16),
+    cur: (i16, i16),
+}
+
+impl Default for SnesAudio {
+    fn default() -> Self { Self::new() }
+}
+
+impl SnesAudio {
+    pub fn new() -> Self {
+        SnesAudio { spc: Spc700::new(), dsp: Sdsp::new(), uploaded: vec![0; 0x10000 / 64], running: false, acc: 0, div: 0, prev: (0, 0), cur: (0, 0) }
+    }
+
+    pub fn aram(&self) -> &[u8] { &self.spc.aram[..] }
+
+    /// What the program last wrote to `$F4-$F7` for the SNES side.
+    pub fn ports_out(&self) -> [u8; 4] { self.spc.ports_out }
+
+    /// Everything the SPC700 has run so far was uploaded by the game.
+    pub fn covered(&self) -> bool { self.running }
+
+    /// A `SOU_TRN` payload (high-level emulation of the IPL upload): blocks `[len][dest][data]`
+    /// until a zero length, then the start address. Without that end within the data, nothing
+    /// changes and it returns false; otherwise the program restarts at the start address.
+    pub fn upload(&mut self, data: &[u8]) -> bool {
+        let word = |i: usize| data.get(i..i + 2).map(|w| u16::from_le_bytes([w[0], w[1]]));
+        let mut blocks = Vec::new();
+        let mut i = 0;
+        let start = loop {
+            let Some(len) = word(i) else { return false };
+            if len == 0 { match word(i + 2) { Some(s) => break s, None => return false } }
+            let (Some(dest), Some(block)) = (word(i + 2), data.get(i + 4..i + 4 + len as usize)) else { return false };
+            blocks.push((dest, block));
+            i += 4 + len as usize;
+        };
+        for (dest, block) in blocks {
+            for (k, &b) in block.iter().enumerate() {
+                let a = dest.wrapping_add(k as u16) as usize;
+                self.spc.aram[a] = b;
+                self.uploaded[a / 64] |= 1 << (a % 64);
+            }
+        }
+        self.spc.pc = start;
+        self.spc.halted = false;
+        self.running = true;
+        true
+    }
+
+    /// A single 0 while nothing was ever uploaded (most SGB states), else 1 and the whole side.
+    pub fn export_state(&self, out: &mut Vec<u8>) {
+        if !self.running && self.uploaded.iter().all(|&w| w == 0) {
+            out.push(0);
+            return;
+        }
+        out.extend_from_slice(&[1, self.running as u8]);
+        self.spc.export_state(out);
+        self.dsp.export_state(out);
+        for w in &self.uploaded { out.extend_from_slice(&w.to_le_bytes()); }
+        out.extend_from_slice(&self.acc.to_le_bytes());
+        out.extend_from_slice(&self.div.to_le_bytes());
+        for s in [self.prev.0, self.prev.1, self.cur.0, self.cur.1] { out.extend_from_slice(&s.to_le_bytes()); }
+    }
+
+    /// Reads what `export_state` wrote at `*pos`; truncated data is rejected.
+    pub fn import_state(&mut self, data: &[u8], pos: &mut usize) -> bool {
+        let mut s = SnesAudio::new();
+        match data.get(*pos) {
+            Some(0) => *pos += 1,
+            Some(_) => {
+                let Some(&running) = data.get(*pos + 1) else { return false };
+                *pos += 2;
+                if !s.spc.import_state(data, pos) || !s.dsp.import_state(data, pos) { return false; }
+                let tail = s.uploaded.len() * 8 + 8 + 4 + 8;
+                let Some(d) = data.get(*pos..*pos + tail) else { return false };
+                *pos += tail;
+                let (bits, d) = d.split_at(s.uploaded.len() * 8);
+                for (w, b) in s.uploaded.iter_mut().zip(bits.chunks(8)) { *w = u64::from_le_bytes(b.try_into().unwrap()); }
+                s.running = running != 0;
+                // Clamped: a damaged state must not run the SPC700 for minutes in one call.
+                s.acc = i64::from_le_bytes(d[..8].try_into().unwrap()).clamp(-16 * SGB_HZ, 0);
+                s.div = u32::from_le_bytes(d[8..12].try_into().unwrap()) % SPC_PER_SAMPLE;
+                let w = |i: usize| i16::from_le_bytes([d[12 + i * 2], d[13 + i * 2]]);
+                (s.prev, s.cur) = ((w(0), w(1)), (w(2), w(3)));
+            }
+            None => return false,
+        }
+        *self = s;
+        true
+    }
+
+    /// Runs the SNES side for `gb_cycles` Game Boy cycles and returns its output level now, for
+    /// `Apu::mix_external`: linear between the last two 32 kHz samples, so sampling it at 44.1 kHz
+    /// resamples linearly (one DSP sample behind). `None` while idle; silence once it stops.
+    pub fn run(&mut self, gb_cycles: u32) -> Option<(f32, f32)> {
+        if !self.running { return None; }
+        self.acc += gb_cycles as i64 * SPC_HZ;
+        while self.acc > 0 {
+            let pc = self.spc.pc as usize;
+            if !self.spc.halted && self.uploaded[pc / 64] & 1 << (pc % 64) == 0 {
+                self.running = false;
+                return Some((0.0, 0.0));
+            }
+            let c = self.spc.step(&mut self.dsp);
+            self.acc -= c as i64 * SGB_HZ;
+            self.div += c;
+            while self.div >= SPC_PER_SAMPLE {
+                self.div -= SPC_PER_SAMPLE;
+                self.prev = self.cur;
+                self.cur = self.dsp.sample(&mut self.spc.aram);
+            }
+        }
+        let t = self.div as f32 / SPC_PER_SAMPLE as f32;
+        let lerp = |a: i16, b: i16| (a as f32 + (b as f32 - a as f32) * t) * SNES_LEVEL;
+        Some((lerp(self.prev.0, self.cur.0), lerp(self.prev.1, self.cur.1)))
+    }
 }
 
 fn rgba(c: u16) -> [u8; 4] {

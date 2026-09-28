@@ -405,3 +405,146 @@ fn the_first_frame_after_a_load_continues_the_thumbnail() {
     assert_eq!(px(&fresh, 0, 0), rgb(RED), "drawn before the save point");
     assert_eq!(px(&fresh, 0, 100), rgb(WHITE), "drawn after the load");
 }
+
+// ─── SNES sound (SOU_TRN) ───
+
+/// A SOU_TRN payload: `[len][dest][data]` blocks, then a zero length and the start address,
+/// zero-padded to 4 KB.
+fn sou(blocks: &[(u16, &[u8])], start: u16) -> Vec<u8> {
+    let mut d = Vec::new();
+    for (dest, data) in blocks {
+        d.extend_from_slice(&(data.len() as u16).to_le_bytes());
+        d.extend_from_slice(&dest.to_le_bytes());
+        d.extend_from_slice(data);
+    }
+    d.extend_from_slice(&[0, 0]);
+    d.extend_from_slice(&start.to_le_bytes());
+    d.resize(4096, 0);
+    d
+}
+
+/// Hand-assembled SPC700 loop: MOV A,$F4; MOV $F5,A; INCW $10; BRA back to the start.
+const ECHO_LOOP: [u8; 8] = [0xE4, 0xF4, 0xC4, 0xF5, 0x3A, 0x10, 0x2F, 0xF8];
+
+fn snes(gb: &GameBoy) -> &gb_core::sgb::SnesAudio {
+    &gb.bus.sgb.as_ref().unwrap().audio
+}
+
+#[test]
+fn sou_trn_uploads_and_runs_a_sound_program() {
+    let mut gb = sgb();
+    transfer(&mut gb, 0x09, 0, &sou(&[(0x0200, &ECHO_LOOP), (0x0300, &[1, 2, 3])], 0x0200));
+    assert_eq!(snes(&gb).aram()[0x200..0x208], ECHO_LOOP, "first block in audio RAM");
+    assert_eq!(snes(&gb).aram()[0x300..0x303], [1, 2, 3], "second block");
+    let count = |gb: &GameBoy| u16::from_le_bytes([snes(gb).aram()[0x10], snes(gb).aram()[0x11]]);
+    let before = count(&gb);
+    gb.run_frame().unwrap();
+    assert_ne!(count(&gb), before, "the program runs");
+    assert!(snes(&gb).covered(), "it only ran what it uploaded");
+
+    let mut gb = sgb();
+    transfer(&mut gb, 0x09, 0, &sou(&[(0x0200, &ECHO_LOOP)], 0x1000));
+    gb.run_frame().unwrap();
+    assert!(!snes(&gb).covered(), "started outside the upload");
+
+    let mut gb = sgb();
+    let mut unterminated = vec![0u8; 4096];
+    unterminated[0..4].copy_from_slice(&[0xFF, 0x0F, 0x00, 0x02]); // one block longer than the transfer
+    transfer(&mut gb, 0x09, 0, &unterminated);
+    assert!(!snes(&gb).covered() && snes(&gb).aram()[0x200] == 0, "ignored");
+}
+
+/// A hand-built BRR square wave (one looping block: eight samples up, eight down, shift 12)
+/// at $0300, its directory entry at $0400, and a program at $0200 that plays it on voice 0 at
+/// 32 kHz / 16 (2 kHz), full volume, then runs `ECHO_LOOP`.
+fn tone(start: u16) -> Vec<u8> {
+    let mut p = Vec::new();
+    // FLG (unmute, echo writes off), DIR, main volume, voice 0: volume, pitch $1000, source 0,
+    // direct GAIN $7F, then KON.
+    for (reg, v) in [(0x6C, 0x20), (0x5D, 0x04), (0x0C, 0x7F), (0x1C, 0x7F), (0x00, 0x7F), (0x01, 0x7F),
+        (0x02, 0x00), (0x03, 0x10), (0x04, 0x00), (0x05, 0x00), (0x07, 0x7F), (0x4C, 0x01)] {
+        p.extend_from_slice(&[0x8F, reg, 0xF2, 0x8F, v, 0xF3]); // MOV $F2,#reg; MOV $F3,#v
+    }
+    p.extend_from_slice(&ECHO_LOOP);
+    let brr = [0xC3, 0x77, 0x77, 0x77, 0x77, 0x88, 0x88, 0x88, 0x88];
+    sou(&[(0x0200, &p), (0x0300, &brr), (0x0400, &[0x00, 0x03, 0x00, 0x03])], start)
+}
+
+/// RMS of the mixed audio of one frame.
+fn frame_rms(gb: &mut GameBoy) -> f32 {
+    gb.bus.apu.clear_samples();
+    gb.run_frame().unwrap();
+    let n = gb.bus.apu.buffer_len();
+    let s = unsafe { std::slice::from_raw_parts(gb.bus.apu.buffer_ptr(), n) };
+    (s.iter().map(|x| x * x).sum::<f32>() / n.max(1) as f32).sqrt()
+}
+
+fn snes_music(gb: &GameBoy) -> bool {
+    gb.bus.sgb.as_ref().unwrap().snes_music()
+}
+
+#[test]
+fn a_sound_program_is_heard_with_the_game_boy_audio() {
+    let mut gb = sgb();
+    assert!(frame_rms(&mut gb) < 0.01, "silent before");
+    transfer(&mut gb, 0x09, 0, &tone(0x0200));
+    for _ in 0..30 { gb.run_frame().unwrap(); }
+    let rms = frame_rms(&mut gb);
+    assert!(rms > 0.1, "the tone plays: RMS {rms}");
+    for _ in 0..350 { frame(&mut gb); }
+    assert!(!snes_music(&gb), "covered: no switch back to the Game Boy");
+    assert!(frame_rms(&mut gb) > 0.1, "still playing");
+}
+
+#[test]
+fn a_program_that_leaves_its_upload_is_silent_and_switches_back() {
+    let mut gb = sgb();
+    transfer(&mut gb, 0x09, 0, &tone(0x1000));
+    for _ in 0..30 { gb.run_frame().unwrap(); }
+    let rms = frame_rms(&mut gb);
+    assert!(rms < 0.01, "silent: RMS {rms}");
+    for _ in 0..300 { frame(&mut gb); }
+    assert!(snes_music(&gb), "the notice path, as before");
+}
+
+#[test]
+fn sound_parameters_reach_the_program() {
+    let mut gb = sgb();
+    transfer(&mut gb, 0x09, 0, &sou(&[(0x0200, &ECHO_LOOP)], 0x0200));
+    send(&mut gb, 0x08, &[0x42, 0x01, 0x02, 0x03]); // SOUND
+    gb.run_frame().unwrap();
+    assert_eq!(snes(&gb).ports_out()[1], 0x42, "$F4 echoed to $F5");
+}
+
+#[test]
+fn a_state_keeps_the_snes_sound_playing() {
+    let mut gb = sgb();
+    transfer(&mut gb, 0x09, 0, &tone(0x0200));
+    for _ in 0..30 { gb.run_frame().unwrap(); }
+    let state = gb.save_state();
+
+    let mut fresh = sgb();
+    assert!(fresh.load_state(&state));
+    let rms = frame_rms(&mut fresh);
+    assert!(rms > 0.1, "the tone goes on: RMS {rms}");
+    assert!(snes(&fresh).covered());
+
+    // The previous version (5): the same layout without the SNES block, which an idle SNES side
+    // saves as a single 0 near the end (before the optional tails). Found as the one byte whose
+    // removal, read as version 5, saves back as the version 6 state does after a load.
+    let v6 = sgb().save_state();
+    assert_eq!(v6[4], 6, "this layout is version 6");
+    let mut reloaded = sgb();
+    assert!(reloaded.load_state(&v6));
+    let resaved = reloaded.save_state();
+    let v5 = (v6.len() - 64..v6.len()).rev().find_map(|i| {
+        let mut v5 = v6.clone();
+        v5.remove(i);
+        v5[4] = 5;
+        let mut probe = sgb();
+        (probe.load_state(&v5) && probe.save_state() == resaved).then_some(v5)
+    }).expect("a version 5 state round-trips to this one");
+    assert!(gb.load_state(&v5), "a version 5 state loads");
+    let rms = frame_rms(&mut gb);
+    assert!(rms < 0.01 && !snes(&gb).covered(), "with the SNES side idle: RMS {rms}");
+}

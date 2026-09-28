@@ -635,6 +635,8 @@ pub struct Apu {
     /// at 0 without a click and a loaded state plays the same sound on every machine.
     capacitor: [f32; 2],
     charged: bool,
+    /// Sound from outside the Game Boy (the Super Game Boy's SNES side), added to every sample.
+    external: [f32; 2],
 }
 
 impl Apu {
@@ -656,6 +658,7 @@ impl Apu {
             channel_muted: [false; 4],
             capacitor: [0.0; 2],
             charged: false,
+            external: [0.0; 2],
         }
     }
 
@@ -772,6 +775,7 @@ impl Apu {
         if self.sample_buffer.len() >= AUDIO_BUFFER_SIZE {
             return;
         }
+        let (left, right) = (left + self.external[0], right + self.external[1]);
         if !self.charged {
             self.capacitor = [left, right];
             self.charged = true;
@@ -781,6 +785,12 @@ impl Apu {
             *cap = x - out * HIGHPASS_CHARGE;
             self.sample_buffer.push(out);
         }
+    }
+
+    /// The level of an outside sound source from now on (`SnesAudio::run`), mixed before the
+    /// output capacitor like the Game Boy's own channels. Heard even with the APU powered off.
+    pub fn mix_external(&mut self, left: f32, right: f32) {
+        self.external = [left, right];
     }
 
     // -- Buffer access --
@@ -1032,6 +1042,7 @@ impl Apu {
         self.ch1_sweep.shift &= 7;
         self.frame_sequencer_step &= 7;
         self.charged = false;
+        self.external = [0.0; 2];
         true
     }
 }
