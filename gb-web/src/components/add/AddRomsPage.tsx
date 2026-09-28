@@ -9,6 +9,7 @@ import { I } from '../icons';
 import { Cover } from '../library/Cover';
 import { StorageNotice } from '../library/LibraryPage';
 import { startInstall, toast } from '../shell/actions';
+import { FileButton } from '../shell/FileButton';
 import { rich, size, t as tNow, useT, type Key } from '../../i18n';
 
 const LABEL: Record<RowState, Key> = { work: 'add.st.work', ok: 'add.st.ok', dup: 'add.st.dup', unk: 'add.st.unk', bad: 'add.st.bad', stop: 'add.st.stop' };
@@ -49,11 +50,7 @@ export function AddRomsPage() {
         <div className="ic">{I.cart}</div>
         <div><h2>{t('add.drop')}</h2><p>{t('add.dropSub')}</p></div>
         <div className="acts">
-          <label className="btn y" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
-            {I.plus}{t('add.choose')}
-            <input type="file" multiple accept={fileAccept('.gb,.gbc,.rom,.bin,.zip')} className="sr" tabIndex={-1}
-              onChange={(e) => { queueImport([...(e.target.files ?? [])]); e.target.value = ''; }} />
-          </label>
+          <FileButton className="btn y" multiple accept={fileAccept('.gb,.gbc,.rom,.bin,.zip')} onFiles={queueImport}>{I.plus}{t('add.choose')}</FileButton>
         </div>
       </div>
       <p className="tip" hidden={storageError}>

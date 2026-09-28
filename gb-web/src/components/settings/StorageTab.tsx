@@ -4,6 +4,7 @@ import { backupFileName, exportBackup, readBackup, restoreBackup } from '../../l
 import { refreshSavedIds, reloadLibrary, useGameLibrary } from '../../hooks/useGameLibrary';
 import { useSettingsStore } from '../../store/settingsStore';
 import { toast } from '../shell/actions';
+import { FileButton } from '../shell/FileButton';
 import { ConfirmDialog, type ConfirmRequest } from '../shell/ConfirmDialog';
 import { askBoxArt, boxArtBytes, boxArtPerGame, deleteBoxArt, fetchBoxArtFor, needsDownload, NO_COVERS, useBoxArtProgress } from '../../lib/cover-art';
 import { mb, owned } from '../../lib/ui';
@@ -219,12 +220,10 @@ export function StorageTab() {
         <button className="btn k" onClick={doExport}>{t('settings.storage.export')}</button>
       </Row>
       <Row label={t('settings.storage.restoreLabel')} sub={t('settings.storage.restoreSub')}>
-        <label className="btn line" style={{ color: 'var(--ink)', ...(reading && { opacity: 0.6, cursor: 'progress' }) }} tabIndex={0} aria-disabled={reading || undefined}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
+        <FileButton className="btn line" style={{ color: 'var(--ink)', ...(reading && { opacity: 0.6, cursor: 'progress' }) }} aria-disabled={reading || undefined}
+          accept={fileAccept('.cartouche,.cartshelf,application/json')} onFiles={([f]) => doImport(f)}>
           <span aria-live="polite">{t(reading ? 'settings.storage.reading' : 'settings.storage.import')}</span>
-          <input type="file" accept={fileAccept('.cartouche,.cartshelf,application/json')} className="sr" tabIndex={-1} disabled={reading}
-            onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) doImport(f); }} />
-        </label>
+        </FileButton>
       </Row>
 
       <h3>{t('settings.storage.perGame')}</h3>
