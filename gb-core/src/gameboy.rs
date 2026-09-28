@@ -321,6 +321,13 @@ impl GameBoy {
         Ok(())
     }
 
+    /// A deterministic session: the cartridge clock starts at `epoch_seconds` (unix time) and only
+    /// advances with emulated time from now on (`Cartridge::set_emulated_clock`). Solo play keeps
+    /// the wall clock for catching up between sessions.
+    pub fn set_emulated_clock(&mut self, epoch_seconds: f64) {
+        self.bus.cartridge.set_emulated_clock(epoch_seconds.max(0.0) as u64);
+    }
+
     pub fn step_instruction(&mut self) -> Result<u32, EmulatorError> {
         self.bus.cycle_count = 0;
         self.cpu.handle_interrupts(&mut self.bus);
