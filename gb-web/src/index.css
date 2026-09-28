@@ -558,7 +558,8 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .pl:fullscreen .stage{height:100%;padding:16px}
 .pl:fullscreen .screen{width:min(100%,calc((100vh - 32px - 24px) * var(--ar) + 24px))}
 .pl:fullscreen .deck{position:fixed;left:0;right:0;bottom:0;z-index:5;border:0;background:rgba(18,18,18,.88);transition:opacity .3s}
-.pl:fullscreen.idle .deck{opacity:0;pointer-events:none}
+/* ...but not while the focus is on it (a gamepad's, on a TV, moves no pointer and presses no key) */
+.pl:fullscreen.idle .deck:not(:has(:focus-visible)){opacity:0;pointer-events:none}
 .pl:fullscreen.idle{cursor:none}
 /* Phones, portrait and landscape (a landscape phone can be wider than 900 px: its own layout follows below). */
 @media (max-width:900px),(orientation:landscape) and (max-height:500px){
