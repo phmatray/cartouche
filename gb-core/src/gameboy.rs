@@ -422,6 +422,8 @@ impl GameBoy {
         let extra = self.bus.cartridge.export_extra();
         data.extend_from_slice(&(extra.len() as u16).to_le_bytes());
         data.extend_from_slice(&extra);
+        // Then the infrared port (RP; absent from older states: LED off, reading disabled).
+        data.push(self.bus.rp);
 
         data
     }
@@ -620,6 +622,7 @@ impl GameBoy {
             _ => &[],
         };
         self.bus.cartridge.import_extra(extra);
+        self.bus.rp = data.get(pos + 4 + extra.len()).map_or(0, |rp| rp & 0xC1);
         true
     }
 }
@@ -733,10 +736,11 @@ mod tests {
         c.write_rom(0x0000, 0x0C);
         assert_eq!(c.read_ram(0), 0x97);
 
-        // The pre-change layout ends right after KEY0.
-        let extra = u16::from_le_bytes([state[state.len() - 134], state[state.len() - 133]]);
+        // The pre-change layout ends right after KEY0 (then the mapper block and RP).
+        let end = state.len() - 1;
+        let extra = u16::from_le_bytes([state[end - 134], state[end - 133]]);
         assert_eq!(extra, 132, "mode, address, result, opcode, 128 bytes of nibbles");
-        let old = &state[..state.len() - 134];
+        let old = &state[..end - 134];
         let mut g = GameBoy::new(rom).unwrap();
         assert!(g.load_state(old));
     }

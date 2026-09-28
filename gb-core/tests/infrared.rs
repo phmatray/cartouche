@@ -80,3 +80,19 @@ fn a_linked_receiver_sees_the_partners_led() {
 fn a_receiver_with_reading_disabled_sees_nothing() {
     assert_eq!(samples(0x00), [2; 8]);
 }
+
+#[test]
+fn a_save_state_keeps_the_led_and_an_older_state_still_loads() {
+    let mut gb = console(&[], true);
+    gb.bus.write_byte(0xFF56, 0xC1);
+    let state = gb.save_state();
+
+    let mut fresh = console(&[], true);
+    assert!(fresh.load_state(&state));
+    assert_eq!(fresh.bus.read_byte(0xFF56), 0xFF, "LED on and reading enabled after a load");
+
+    // A state from before RP: the same bytes without the last one.
+    let mut older = console(&[], true);
+    assert!(older.load_state(&state[..state.len() - 1]));
+    assert_eq!(older.bus.read_byte(0xFF56), 0x3E, "RP starts off");
+}
