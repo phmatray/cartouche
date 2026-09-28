@@ -3,12 +3,14 @@
 //! 256x224 border. Data transfers (`*_TRN`) are read, like on the real thing, from the picture
 //! shown a few frames after the command. Sound: a program a game uploads with SOU_TRN runs on the
 //! SPC700 and S-DSP (`SnesAudio`), mixed with the Game Boy's; SOUND's parameters reach it through the
-//! APU ports; `snes_music` tells the host when a game relies on the SGB's built-in sound driver
-//! instead (not included, silent here). SNES code (DATA_SND, DATA_TRN, JUMP) and the rest (ATRC_EN, TEST_EN, ICON_EN, OBJ_TRN) are ignored: their packets are read
+//! APU ports. Without such a program, SOUND's built-in effects play as clean-room approximations
+//! (`sgb_fx`); `snes_music` tells the host when a game relies on the SGB's built-in music instead
+//! (not included, silent here). SNES code (DATA_SND, DATA_TRN, JUMP) and the rest (ATRC_EN, TEST_EN, ICON_EN, OBJ_TRN) are ignored: their packets are read
 //! and dropped. References: Pan Docs "Super Game Boy", SameBoy's `sgb.c` (behaviour only).
 
 use crate::ppu::{Ppu, PALETTE_COLORS, SCREEN_HEIGHT, SCREEN_WIDTH};
 use crate::sdsp::Sdsp;
+use crate::sgb_fx::FxPlayer;
 use crate::spc700::Spc700;
 
 pub const BORDER_WIDTH: usize = 256;
@@ -235,7 +237,11 @@ impl Sgb {
                 if c[1] & 0x40 != 0 { self.mask = 0; }
             }
             0x17 => self.mask = c[1] & 3,
-            0x08 => self.audio.spc.ports_in.copy_from_slice(&c[1..5]),
+            0x08 => {
+                self.audio.spc.ports_in.copy_from_slice(&c[1..5]);
+                // No program of the game's own running: the built-in effects (approximated).
+                if !self.audio.covered() { self.audio.fx.command(c[1], c[2], c[3]); }
+            }
             0x09 => { self.snes_sound = true; self.start_trn(Trn::Sou); }
             _ => {} // SNES code and the rest: not emulated
         }
@@ -497,6 +503,10 @@ pub struct SnesAudio {
     /// The last two DSP samples (left, right), interpolated between for the 44.1 kHz output.
     prev: (i16, i16),
     cur: (i16, i16),
+    /// The built-in `SOUND` effects, played on the DSP while no uploaded program runs.
+    fx: FxPlayer,
+    /// DSP samples since the last `fx` tick (32 = 1 ms).
+    fx_div: u8,
 }
 
 impl Default for SnesAudio {
@@ -505,7 +515,7 @@ impl Default for SnesAudio {
 
 impl SnesAudio {
     pub fn new() -> Self {
-        SnesAudio { spc: Spc700::new(), dsp: Sdsp::new(), uploaded: vec![0; 0x10000 / 64], running: false, acc: 0, div: 0, prev: (0, 0), cur: (0, 0) }
+        SnesAudio { spc: Spc700::new(), dsp: Sdsp::new(), uploaded: vec![0; 0x10000 / 64], running: false, acc: 0, div: 0, prev: (0, 0), cur: (0, 0), fx: FxPlayer::default(), fx_div: 0 }
     }
 
     pub fn aram(&self) -> &[u8] { &self.spc.aram[..] }
@@ -540,6 +550,7 @@ impl SnesAudio {
         self.spc.pc = start;
         self.spc.halted = false;
         self.running = true;
+        self.fx = FxPlayer::default(); // the program owns the DSP now
         true
     }
 
@@ -587,21 +598,35 @@ impl SnesAudio {
 
     /// Runs the SNES side for `gb_cycles` Game Boy cycles and returns its output level now, for
     /// `Apu::mix_external`: linear between the last two 32 kHz samples, so sampling it at 44.1 kHz
-    /// resamples linearly (one DSP sample behind). `None` while idle; silence once it stops.
+    /// resamples linearly (one DSP sample behind). Without a running program, the built-in effects
+    /// drive the DSP instead. `None` while idle; silence once it stops.
     pub fn run(&mut self, gb_cycles: u32) -> Option<(f32, f32)> {
-        if !self.running { return None; }
+        if !self.running && self.fx.idle() {
+            // Once back to silence, the level the APU holds goes to 0 too.
+            if (self.prev, self.cur) == ((0, 0), (0, 0)) { return None; }
+            (self.prev, self.cur) = ((0, 0), (0, 0));
+            return Some((0.0, 0.0));
+        }
         self.acc += gb_cycles as i64 * SPC_HZ;
         while self.acc > 0 {
-            let pc = self.spc.pc as usize;
-            if !self.spc.halted && self.uploaded[pc / 64] & 1 << (pc % 64) == 0 {
-                self.running = false;
-                return Some((0.0, 0.0));
-            }
-            let c = self.spc.step(&mut self.dsp);
+            let c = if self.running {
+                let pc = self.spc.pc as usize;
+                if !self.spc.halted && self.uploaded[pc / 64] & 1 << (pc % 64) == 0 {
+                    self.running = false;
+                    return Some((0.0, 0.0));
+                }
+                self.spc.step(&mut self.dsp)
+            } else {
+                SPC_PER_SAMPLE - self.div // effects only: straight to the next sample
+            };
             self.acc -= c as i64 * SGB_HZ;
             self.div += c;
             while self.div >= SPC_PER_SAMPLE {
                 self.div -= SPC_PER_SAMPLE;
+                if !self.running {
+                    if self.fx_div == 0 { self.fx.tick(&mut self.dsp, &mut self.spc.aram); }
+                    self.fx_div = (self.fx_div + 1) % 32;
+                }
                 self.prev = self.cur;
                 self.cur = self.dsp.sample(&mut self.spc.aram);
             }

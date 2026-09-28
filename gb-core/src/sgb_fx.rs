@@ -6,6 +6,8 @@
 //! generated in code (square, saw, pseudo-random noise). No recordings, no samples, nothing read
 //! from or derived from the SGB BIOS or its sound driver. They are not the original sounds.
 
+use crate::sdsp::Sdsp;
+
 /// The two effect tables of the `SOUND` command: A (decrescendo, one-shot) and B (sustained, loops
 /// until stopped).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -128,15 +130,16 @@ pub fn recipe(table: Table, id: u8) -> Option<Recipe> {
 /// the saw, 128 blocks of pseudo-random nibbles for the noise. Shift 12, filter 0.
 pub fn waveform_brr(kind: Wave) -> Vec<u8> {
     let nibbles: Vec<u8> = match kind {
-        Wave::Square => (0..16).map(|i| if i < 8 { 7 } else { 8 }).collect(),
-        Wave::Saw => (0..16).map(|i| (i as u8 + 8) & 0xF).collect(),
+        Wave::Square => (0..16).map(|i| if i < 8 { 7 } else { 9 }).collect(), // +7 / -7
+        Wave::Saw => (1..16).chain([8]).map(|i| (i as u8 + 8) & 0xF).collect(), // -7..=7, then 0: no DC
         Wave::Noise => {
             let mut x: u16 = 0xACE1;
             (0..128 * 16).map(|_| {
                 x ^= x << 7;
                 x ^= x >> 9;
                 x ^= x << 8;
-                (x >> 12) as u8
+                // -7..=7: no DC, which the output capacitor would let out as a thump at the stop.
+                ((x % 15) as i8 - 7) as u8 & 0xF
             }).collect()
         }
     };
@@ -147,4 +150,131 @@ pub fn waveform_brr(kind: Wave) -> Vec<u8> {
         out.extend(n.chunks(2).map(|p| p[0] << 4 | p[1]));
     }
     out
+}
+
+/// Where the player keeps its waveforms in audio RAM (Pan Docs' sampling data area): the sample
+/// directory at `$E000` (entry = `Wave` as u8), the waveforms from `$E100`. Written only once the
+/// player owns the DSP, i.e. while no uploaded program runs.
+const DIR_PAGE: u8 = 0xE0;
+const WAVES: u16 = 0xE100;
+/// Effect A plays on voice 7, B on voice 5: the upper channel of each effect's channels in Pan
+/// Docs (A 6-7, B 0/1/4/5), which is where a one-channel effect goes.
+// ponytail: one voice per effect, the tables' channel counts not modelled; a second voice per
+// effect (a detuned or lower copy) if an approximation ever sounds too thin.
+const VOICE_A: usize = 7;
+const VOICE_B: usize = 5;
+/// Pitch factors (×1024) for the pitch attribute minus the recommended one, -3..=3: half an octave
+/// a step.
+const PITCH_STEP: [u32; 7] = [362, 512, 724, 1024, 1448, 2048, 2896];
+/// Voice volume for the volume attribute (0 high .. 2 low, 3 mute).
+const VOLUME: [u8; 4] = [0x7F, 0x50, 0x28, 0];
+
+#[derive(Clone, Copy)]
+struct Playing {
+    r: Recipe,
+    voice: usize,
+    sustain: bool,
+    /// Pitch factor ×1024 and voice volume, from the attributes.
+    pitch: u32,
+    vol: u8,
+    /// Milliseconds played; 0 = not keyed on yet.
+    ms: u32,
+}
+
+impl Playing {
+    /// This millisecond's pitch and volume; `None` once a one-shot effect is over.
+    fn at(&self) -> Option<(u16, u8)> {
+        let len = self.r.ms.max(1) as u32;
+        if !self.sustain && self.ms >= len { return None; }
+        let pos = self.ms % len;
+        let n = self.r.steps as u32;
+        let (num, den) = if n > 1 { (pos * n / len, n - 1) } else { (pos, len) };
+        let (from, to) = (self.r.from as i64, self.r.to as i64);
+        let p = from + (to - from) * num as i64 / den as i64;
+        let pitch = ((p as u64 * self.pitch as u64) >> 10).min(0x3FFF) as u16;
+        let vol = if self.sustain { self.vol } else { (self.vol as u32 * (len - self.ms) / len) as u8 };
+        Some((pitch, vol))
+    }
+}
+
+/// Plays the built-in effects on the S-DSP while no uploaded program owns it: `command` takes the
+/// `SOUND` bytes, `tick` (1 kHz of emulated time) writes the DSP's registers.
+// ponytail: not in save states (a state loads with no effect playing); persist `a`/`b` if a
+// sustained B effect cut by a load or a rewind is ever noticed.
+#[derive(Clone, Default)]
+pub struct FxPlayer {
+    a: Option<Playing>,
+    b: Option<Playing>,
+    /// Voices to key off at the next tick.
+    off: u8,
+    /// The DSP was reset and the waveforms are in audio RAM.
+    ready: bool,
+}
+
+impl FxPlayer {
+    /// Nothing playing and nothing left to stop.
+    pub fn idle(&self) -> bool { self.a.is_none() && self.b.is_none() && self.off == 0 }
+
+    /// `SOUND`'s effect A, effect B and attribute bytes: `$00` changes nothing, `$80` stops the
+    /// effect, an id of the table (re)starts it at the attributes' pitch and volume.
+    pub fn command(&mut self, a: u8, b: u8, attrs: u8) {
+        for (table, id, attr) in [(Table::A, a, attrs & 0xF), (Table::B, b, attrs >> 4)] {
+            let (slot, voice) = match table { Table::A => (&mut self.a, VOICE_A), Table::B => (&mut self.b, VOICE_B) };
+            if id == 0x80 {
+                if slot.take().is_some() { self.off |= 1 << voice; }
+            } else if let Some(r) = recipe(table, id) {
+                let (pitch, vol) = (PITCH_STEP[(attr & 3) as usize + 3 - r.rec as usize], VOLUME[(attr >> 2) as usize]);
+                *slot = Some(Playing { r, voice, sustain: table == Table::B, pitch, vol, ms: 0 });
+            }
+        }
+    }
+
+    /// One millisecond: keys effects on, moves their pitch and volume, keys finished ones off.
+    pub fn tick(&mut self, dsp: &mut Sdsp, aram: &mut [u8; 0x10000]) {
+        if !self.ready {
+            // Whatever a stopped program left in the DSP must not play along.
+            self.ready = true;
+            *dsp = Sdsp::new();
+            let mut at = WAVES as usize;
+            for (i, w) in [Wave::Square, Wave::Saw, Wave::Noise].into_iter().enumerate() {
+                let entry = DIR_PAGE as usize * 0x100 + i * 4;
+                let [lo, hi] = (at as u16).to_le_bytes();
+                aram[entry..entry + 4].copy_from_slice(&[lo, hi, lo, hi]);
+                let brr = waveform_brr(w);
+                aram[at..at + brr.len()].copy_from_slice(&brr);
+                at += brr.len();
+            }
+            // FLG: unmuted, echo writes off; DIR; main volume. Echo stays off (EON, EVOL at 0).
+            for (reg, v) in [(0x6C, 0x20), (0x5D, DIR_PAGE), (0x0C, 0x7F), (0x1C, 0x7F)] { dsp.write_reg(reg, v); }
+        }
+        let mut kon = 0u8;
+        for slot in [&mut self.a, &mut self.b] {
+            let Some(p) = slot else { continue };
+            let base = (p.voice * 0x10) as u8;
+            match p.at() {
+                Some((pitch, vol)) => {
+                    if p.ms == 0 {
+                        // Source, ADSR off, direct GAIN at full; keyed on below.
+                        for (reg, v) in [(4, p.r.wave as u8), (5, 0), (7, 0x7F)] { dsp.write_reg(base + reg, v); }
+                        kon |= 1 << p.voice;
+                    }
+                    for (reg, v) in [(0, vol), (1, vol), (2, pitch as u8), (3, (pitch >> 8) as u8)] { dsp.write_reg(base + reg, v); }
+                    p.ms += 1;
+                }
+                None => {
+                    self.off |= 1 << p.voice;
+                    *slot = None;
+                }
+            }
+        }
+        // Stopped voices: silent at once (volume 0), then released.
+        let off = std::mem::take(&mut self.off);
+        for v in (0..8).filter(|v| off & 1 << v != 0) {
+            dsp.write_reg(v * 0x10, 0);
+            dsp.write_reg(v * 0x10 + 1, 0);
+        }
+        let kof = (dsp.read_reg(0x5C) | off) & !kon;
+        dsp.write_reg(0x5C, kof);
+        if kon != 0 { dsp.write_reg(0x4C, kon); }
+    }
 }

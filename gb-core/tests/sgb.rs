@@ -565,3 +565,82 @@ fn every_built_in_effect_has_a_recipe() {
         assert!(recipe(t, id).is_none(), "{id:#04x} is not an effect");
     }
 }
+
+/// SOUND: effect A, effect B, attributes (pitch/volume), no music score.
+fn sound(gb: &mut GameBoy, a: u8, b: u8, attrs: u8) {
+    send(gb, 0x08, &[a, b, attrs, 0]);
+}
+
+/// RMS of the mixed audio over `frames` frames.
+fn rms_over(gb: &mut GameBoy, frames: usize) -> f32 {
+    let (mut sum, mut n) = (0.0, 0);
+    for _ in 0..frames {
+        gb.bus.apu.clear_samples();
+        gb.run_frame().unwrap();
+        let len = gb.bus.apu.buffer_len();
+        let s = unsafe { std::slice::from_raw_parts(gb.bus.apu.buffer_ptr(), len) };
+        sum += s.iter().map(|x| x * x).sum::<f32>();
+        n += len;
+    }
+    (sum / n.max(1) as f32).sqrt()
+}
+
+/// Frames (59.7 per second) covering `ms`, rounded up.
+fn frames_for(ms: u32) -> usize {
+    (ms as usize * 4_295_454 / 1000).div_ceil(70224 * 4_295_454 / 4_194_304)
+}
+
+#[test]
+fn a_built_in_effect_plays_for_its_length_then_stops() {
+    let mut gb = sgb();
+    assert!(frame_rms(&mut gb) < 0.01, "silent before");
+    let len = recipe(Table::A, 0x01).unwrap().ms as u32;
+    sound(&mut gb, 0x01, 0x00, 0x03); // Nintendo, pitch 3 (recommended), volume high
+    let rms = rms_over(&mut gb, frames_for(len));
+    assert!(rms > 0.05, "heard over its {len} ms: RMS {rms}");
+    for _ in 0..frames_for(100) { gb.run_frame().unwrap(); }
+    let rms = frame_rms(&mut gb);
+    assert!(rms < 0.01, "silent 100 ms after: RMS {rms}");
+}
+
+#[test]
+fn effect_80_stops_a_playing_effect_within_a_frame() {
+    let mut gb = sgb();
+    sound(&mut gb, 0x0E, 0x04, 0x00); // large explosion, wind (sustained)
+    for _ in 0..5 { gb.run_frame().unwrap(); }
+    assert!(frame_rms(&mut gb) > 0.05, "both playing");
+    sound(&mut gb, 0x80, 0x00, 0x00);
+    let only_b = frame_rms(&mut gb);
+    assert!(only_b > 0.01, "B plays on: RMS {only_b}");
+    sound(&mut gb, 0x00, 0x80, 0x00);
+    // The stop lands in this frame (it still carries the output capacitor's few-ms discharge).
+    gb.run_frame().unwrap();
+    let rms = frame_rms(&mut gb);
+    assert!(rms < 0.01, "both stopped: RMS {rms}");
+    for _ in 0..60 { gb.run_frame().unwrap(); }
+    assert!(frame_rms(&mut gb) < 0.01, "B does not come back");
+}
+
+#[test]
+fn every_built_in_effect_is_heard() {
+    for (t, ids) in [(Table::A, FX_A), (Table::B, FX_B)] {
+        for id in ids {
+            let mut gb = sgb();
+            let (a, b) = if t == Table::A { (id, 0) } else { (0, id) };
+            sound(&mut gb, a, b, 0x00);
+            let rms = frame_rms(&mut gb);
+            assert!(rms > 0.02, "effect {t:?} {id:#04x}: RMS {rms}");
+        }
+    }
+}
+
+#[test]
+fn sound_leaves_an_uploaded_program_alone() {
+    let run = |fx: bool| {
+        let mut gb = sgb();
+        transfer(&mut gb, 0x09, 0, &tone(0x0200));
+        if fx { sound(&mut gb, 0x0E, 0x04, 0x00); }
+        (0..20).map(|_| frame_rms(&mut gb)).collect::<Vec<_>>()
+    };
+    assert_eq!(run(true), run(false), "the program's output is unchanged");
+}
