@@ -72,6 +72,18 @@ export async function progressOf(id: number, c: RaCreds): Promise<RaGame> {
   return { id: g.ID, title: g.Title, achievements };
 }
 
+/** The game with this achievement earned now, in RetroAchievements' UTC format; the same object when nothing changes. */
+export function earnedNow(g: RaGame, id: number, at = new Date()): RaGame {
+  if (!g.achievements.some((a) => a.id === id && !a.earned)) return g;
+  const earned = at.toISOString().slice(0, 19).replace('T', ' ');
+  return { ...g, achievements: g.achievements.map((a) => (a.id === id ? { ...a, earned } : a)) };
+}
+
+/** Unlocks in the player, for the achievement lists already fetched (the site's progress only says what it knew then). */
+const unlockListeners = new Set<(id: number) => void>();
+export const onUnlock = (f: (id: number) => void) => { unlockListeners.add(f); return () => { unlockListeners.delete(f); }; };
+export const unlocked = (id: number) => unlockListeners.forEach((f) => f(id));
+
 /** The ROM's MD5 off the main thread (up to ~0.1 s for 8 MB: a stutter while a game runs); inline if the worker fails. */
 export function romHash(rom: Uint8Array): Promise<string> {
   return new Promise((done) => {
