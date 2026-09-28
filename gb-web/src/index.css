@@ -117,7 +117,9 @@ kbd{border:1px solid #3a3a3a;padding:3px 7px;font:700 var(--fs-micro) var(--font
 .mnav .langs{padding:14px 0}
 .mnav .langs button{width:auto;justify-content:center;padding:0 14px;border:1.5px solid #4a4a47;font:700 var(--fs-body) var(--font);text-transform:none}
 
-/* ---------- buttons ---------- */
+/* ---------- buttons ----------
+   Uppercase condensed is the voice of headings, tabs, buttons and status tags only. Choices (chips, segments, the sort),
+   facts, breadcrumbs and credits are sentence case: set in caps they all shouted at the same volume. */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;border:0;height:44px;padding:0 20px;font:800 var(--fs-body)/1 var(--font);font-stretch:80%;text-transform:uppercase;letter-spacing:var(--tr-caps);white-space:nowrap;text-decoration:none;transition:transform .2s var(--ease),background-color .2s,color .2s}
 .btn:active{transform:translateY(1px)}
 .btn.y{background:var(--y);color:#000}
@@ -202,14 +204,14 @@ canvas.lcd{aspect-ratio:10/9}
 .tag.rom{background:var(--paper);color:#000}
 .tag.saved{background:var(--m);color:#fff}
 /* Needs a file (yours, or the author's): said in plain meta text, not boxed like the states you can act on at once. */
-.tag.need{padding-inline:0;color:var(--mute)}
+.tag.need{padding-inline:0;color:var(--mute);text-transform:none;letter-spacing:0;font-weight:600;font-size:var(--fs-s)}
 .paper .tag.need{color:var(--ink-2)}
 .paper .tag.rom{background:var(--ink);color:var(--paper)}
 .noart{background:var(--paper);color:var(--ink);display:flex;flex-direction:column;justify-content:space-between;padding:14px}
 .noart b{font:900 var(--fs-d3)/.9 var(--font);font-stretch:62%;text-transform:uppercase;overflow-wrap:break-word;hyphens:auto;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 .noart b[data-long]{font-size:var(--fs-d4)}
 .noart b{hyphenate-limit-chars:8 3 3} /* no "POF-FIN", "SPI-DER" or "DUN-GEON": only words of 8+ letters break */
-.noart small{font:700 var(--fs-micro) var(--font);text-transform:uppercase;letter-spacing:var(--tr-caps);color:var(--ink-2)}
+.noart small{font:700 var(--fs-micro) var(--font);color:var(--ink-2)}
 .noart .bar{display:grid;grid-template-columns:repeat(3,1fr);height:8px;margin-top:8px}
 .bar i:nth-child(1){background:var(--c)}.bar i:nth-child(2){background:var(--m)}.bar i:nth-child(3){background:var(--y)}
 /* Long credits ("eishiya, H0lyhandgrenade, Kezia Salmon") stay on two lines; phone-sized boxes print smaller */
@@ -231,12 +233,12 @@ canvas.lcd{aspect-ratio:10/9}
 
 .tools{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;margin-bottom:22px}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
-.chip{border:1.5px solid #4a4a47;background:transparent;height:38px;padding:0 14px;font:800 var(--fs-micro) var(--font);text-transform:uppercase;letter-spacing:var(--tr-caps);color:#d2d2cd;white-space:nowrap}
+.chip{border:1.5px solid #4a4a47;background:transparent;height:38px;padding:0 14px;font:700 var(--fs-s) var(--font);color:#d2d2cd;white-space:nowrap}
 .chip:hover{border-color:var(--paper);color:var(--paper)}
 .chip[aria-pressed=true]{background:var(--paper);color:#000;border-color:var(--paper)}
 .tools .right{margin-left:auto;min-width:0;display:flex;gap:18px;align-items:center}
 .sel{display:flex;align-items:center;gap:10px;min-width:0;font:600 var(--fs-body) var(--font);color:var(--mute)}
-.sel select{appearance:none;background:transparent;color:var(--paper);border:0;border-bottom:2px solid var(--paper);font:800 var(--fs-body) var(--font);text-transform:uppercase;letter-spacing:var(--tr-caps);padding:6px 22px 6px 0;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:right 6px center,right 1px center;background-size:5px 5px;background-repeat:no-repeat;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.sel select{appearance:none;background:transparent;color:var(--paper);border:0;border-bottom:2px solid var(--paper);font:700 var(--fs-body) var(--font);padding:6px 22px 6px 0;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:right 6px center,right 1px center;background-size:5px 5px;background-repeat:no-repeat;min-width:0;overflow:hidden;text-overflow:ellipsis}
 .sel option{background:var(--band);color:var(--paper)}
 .paper .sel{color:var(--ink-3)}
 .paper .sel select{color:var(--ink);border-color:var(--ink)}
@@ -326,11 +328,11 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 
 /* ---------- game page ---------- */
 .gp .wrap.hero{display:grid;grid-template-columns:minmax(220px,340px) minmax(0,1fr);gap:48px;align-items:center;padding-top:48px;padding-bottom:48px}
-.crumbs{font:800 var(--fs-s) var(--font);text-transform:uppercase;letter-spacing:var(--tr-caps);margin-bottom:18px;display:flex;gap:8px;align-items:center;color:#fff}
+.crumbs{font:700 var(--fs-body) var(--font);margin-bottom:18px;display:flex;gap:8px;align-items:center;color:#fff}
 .crumbs a{text-decoration:none}
 .crumbs a:hover{color:#fff;text-decoration:underline;text-underline-offset:4px}
 .gp .facts{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 26px}
-.fact{font:800 var(--fs-micro)/1 var(--font);text-transform:uppercase;letter-spacing:var(--tr-caps);padding:7px 9px;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.6)}
+.fact{font:700 var(--fs-s)/1 var(--font);padding:7px 9px;box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.6)}
 .gp .body{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:40px;padding-top:48px;align-items:start}
 .paper{background:var(--paper);color:var(--ink)}
 .sheet-card{padding:32px 36px 36px}
@@ -485,7 +487,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .page p{font:500 var(--fs-body)/1.5 var(--font);color:var(--ink-2);margin:0 0 22px;max-width:46ch}
 .page h3{font:900 var(--fs-d4)/1 var(--font);font-stretch:62%;text-transform:uppercase;margin:28px 0 10px;border-top:3px solid var(--ink);padding-top:10px}
 .seg{display:inline-grid;grid-auto-flow:column;border:2px solid var(--ink)}
-.seg button{border:0;background:transparent;height:38px;padding:0 14px;font:800 var(--fs-micro) var(--font);text-transform:uppercase;letter-spacing:var(--tr-caps);white-space:nowrap}
+.seg button{border:0;background:transparent;height:38px;padding:0 14px;font:700 var(--fs-s) var(--font);white-space:nowrap}
 .seg button+button{border-left:2px solid var(--ink)}
 .seg button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
 .map{list-style:none;margin:0;padding:0}
@@ -1084,7 +1086,7 @@ body{font-family:var(--font)}
   .row.col .seg.rows button:last-child:nth-child(3n+2){grid-column:span 2}
 }
 .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px}
-.swatch{border:2px solid var(--paper-3);background:#fff;padding:6px 6px 7px;text-align:left;font:800 var(--fs-micro) var(--font);text-transform:uppercase;letter-spacing:var(--tr-caps);color:var(--ink)}
+.swatch{border:2px solid var(--paper-3);background:#fff;padding:6px 6px 7px;text-align:left;font:700 var(--fs-s) var(--font);color:var(--ink)}
 .swatch span{display:flex;height:22px;margin:2px 2px 7px;box-shadow:0 0 0 2px #0b0b0b}
 .swatch i{flex:1}
 .swatch .combo{display:inline-flex;align-items:center;gap:1px;font:inherit}
