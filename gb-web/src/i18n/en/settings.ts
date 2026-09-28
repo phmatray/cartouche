@@ -224,6 +224,7 @@ export default {
     wipe: 'Erase everything',
     wipeTitle: 'Erase everything?',
     wipeSub: 'Removes every ROM, save, screenshot and setting from this browser',
+    wipeBusy: 'A game or the link cable is open in another tab: close it first, or it would save its game again after the erase.',
     wipeBody: 'Every ROM, save slot, resume point, screenshot and setting will be deleted from this browser, along with your RetroAchievements key and your own TURN server; paired devices are unpaired. Export a backup first if you might want them back.',
   },
   pergame: {

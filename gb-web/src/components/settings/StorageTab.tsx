@@ -169,7 +169,7 @@ export function StorageTab() {
     title: t('settings.storage.wipeTitle'), danger: true, ok: t('settings.storage.wipe'),
     body: t('settings.storage.wipeBody'),
     run: async () => {
-      await eraseEverything();
+      if (!(await eraseEverything())) { toast(tNow('settings.storage.wipeBusy'), 'm'); return; }
       location.assign(import.meta.env.BASE_URL); // start over from a clean load
     },
   });
