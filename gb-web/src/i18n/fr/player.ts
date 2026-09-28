@@ -238,6 +238,10 @@ export default {
     watchAccess: 'Accès',
     removeWatchpoint: 'Retirer la surveillance {kind} {addr}',
     runToLine: 'Aller à la ligne',
+    loadSymbols: 'Charger les symboles',
+    symbolsLoaded: '{count} symboles chargés, {skipped} lignes ignorées',
+    unknownLabel: 'Aucune étiquette ni adresse « {name} »',
+    otherBank: '{name} est dans la banque {bank} : ce point d’arrêt s’arrête en {addr} dans toutes les banques',
     stoppedAt: 'Arrêté : {reason}',
   },
   music: {

@@ -238,6 +238,10 @@ export default {
     removeWatchpoint: 'Remove {kind} watchpoint {addr}',
     runToLine: 'Run to line',
     stoppedAt: 'Stopped: {reason}',
+    loadSymbols: 'Load symbols',
+    symbolsLoaded: '{count} symbols loaded, {skipped} lines skipped',
+    unknownLabel: 'No label or address “{name}”',
+    otherBank: '{name} is in bank {bank}: this breakpoint stops at {addr} in any bank',
   },
   music: {
     play: 'Play',

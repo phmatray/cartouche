@@ -3,6 +3,11 @@ import type { useEmulator } from '../../hooks/useEmulator';
 import { useT } from '../../i18n';
 import { Disassembly } from './debug/Disassembly';
 import { PpuViews } from './debug/PpuViews';
+import { FileButton } from '../shell/FileButton';
+import { fileAccept } from '../../lib/pwa';
+import { parseSym, resolve, type SymTable } from '../../lib/sym';
+
+const NO_SYMS = parseSym('');
 
 function hex8(v: number): string {
   return v.toString(16).toUpperCase().padStart(2, '0');
@@ -15,9 +20,12 @@ function hex16(v: number): string {
 /** Development aid in the manual's Game page: CPU registers, memory, serial output, and the PPU's tiles, maps, OAM and palettes. */
 export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmulator>; isRunning: boolean }) {
   const { registers, readMemory, updateRegisters, getSerialOutput, clearSerialOutput,
-    setIsRunning, stepInstruction, stepFrame, stepOver, breakReason, breakpoints, addBreakpoint, removeBreakpoint,
+    setIsRunning, stepInstruction, stepFrame, stepOver, breakReason, breakpoints, addBreakpoint, removeBreakpoint, romBank,
     watchpoints, addWatchpoint, removeWatchpoint, runToScanline } = emu;
   const [bpInput, setBpInput] = useState('');
+  const [bpNote, setBpNote] = useState('');
+  // Session-only: the symbols of the game being debugged, never stored.
+  const [syms, setSyms] = useState<SymTable | null>(null);
   const [wpInput, setWpInput] = useState('');
   const [wpKind, setWpKind] = useState(2);
   const [lineInput, setLineInput] = useState('');
@@ -41,10 +49,18 @@ export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmula
     return () => { cancelAnimationFrame(first); window.clearInterval(t); };
   }, [isRunning, refresh, tab]);
 
+  // A label or a hex address. The core breakpoint is PC-only, so a banked label also stops in other banks: say so.
   const addBp = () => {
-    const v = parseInt(bpInput, 16);
-    if (/^[0-9a-f]{1,4}$/i.test(bpInput) && v <= 0xffff) { addBreakpoint(v); setBpInput(''); }
+    if (!bpInput) return;
+    const v = resolve(syms ?? NO_SYMS, bpInput);
+    if (v === undefined) { setBpNote(t('player.debug.unknownLabel', { name: bpInput })); return; }
+    const sym = syms?.byName.get(bpInput);
+    addBreakpoint(v);
+    setBpInput('');
+    setBpNote(sym && v >= 0x4000 && v < 0x8000 && sym.bank !== romBank()
+      ? t('player.debug.otherBank', { name: sym.name, bank: sym.bank, addr: hex16(v) }) : '');
   };
+  const loadSyms = (file: File) => file.text().then((text) => setSyms(parseSym(text)));
 
   const addWp = () => {
     const v = parseInt(wpInput, 16);
@@ -95,11 +111,12 @@ export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmula
           ) : <p>{t('player.debug.noRom')}</p>}
           {controls}
           <form style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }} onSubmit={(e) => { e.preventDefault(); addBp(); }}>
-            <label htmlFor="debug-bp">{t('player.debug.breakpoints')} 0x</label>
-            <input id="debug-bp" className="field" style={{ width: 90, height: 34 }} value={bpInput} maxLength={4}
+            <label htmlFor="debug-bp">{t('player.debug.breakpoints')}</label>
+            <input id="debug-bp" className="field" style={{ width: 140, height: 34 }} value={bpInput} spellCheck={false}
               onChange={(e) => setBpInput(e.target.value.trim())} />
             <button className="sbtn" type="submit">{t('player.debug.addBreakpoint')}</button>
           </form>
+          {bpNote && <p role="status" style={{ margin: '0 0 8px' }}>{bpNote}</p>}
           {breakpoints.length > 0 && (
             <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 12px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {breakpoints.map((a) => (
@@ -146,7 +163,11 @@ export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmula
       {tab === 'disasm' && (
         <>
           {controls}
-          {registers ? <Disassembly emu={emu} pc={registers.pc} /> : <p>{t('player.debug.noRom')}</p>}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+            <FileButton className="sbtn" accept={fileAccept('.sym')} onFiles={([f]) => loadSyms(f)}>{t('player.debug.loadSymbols')}</FileButton>
+            {syms && <span role="status">{t('player.debug.symbolsLoaded', { count: syms.byName.size, skipped: syms.skipped })}</span>}
+          </div>
+          {registers ? <Disassembly emu={emu} pc={registers.pc} syms={syms} /> : <p>{t('player.debug.noRom')}</p>}
         </>
       )}
       {tab === 'serial' && (
