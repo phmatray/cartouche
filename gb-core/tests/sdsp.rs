@@ -138,6 +138,25 @@ fn flg_mute_silences_the_output_but_not_the_voice() {
     assert_ne!(dsp.read_reg(0x09), 0); // OUTX still follows the voice
 }
 
+#[test]
+fn noise_replaces_the_sample_with_the_lfsr() {
+    // NON on voice 0, GAIN direct $7F (env $7F0), noise rate 31 (a step every sample). The LFSR
+    // starts at $4000 and shifts right, feeding bit 0 XOR bit 1 into bit 14; the voice plays
+    // noise × 2 as a 16-bit sample: $4000 >> 7 = $80 → 256 on sample 6, …, then $4001, $6000, ….
+    let mut aram = aram_with(&[BLOCK_A, BLOCK_B]);
+    let mut dsp = voice0(&[
+        (0x3D, 0x01),
+        (0x05, 0x00),
+        (0x07, 0x7F),
+        (0x6C, 0x3F),
+        (0x4C, 0x01),
+    ]);
+    let left: Vec<_> = (0..16).map(|_| dsp.sample(&mut aram).0).collect();
+    #[rustfmt::skip]
+    let expected = [0, 0, 0, 0, 0, 0, 250, 124, 60, 28, 12, 4, 0, -32006, -16003, 24003];
+    assert_eq!(left, expected);
+}
+
 // ─── Echo and state ───
 
 /// A single source-sample impulse (sample 4 = 4 << 12), then a silent looping block.
