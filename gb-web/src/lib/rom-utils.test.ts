@@ -2,7 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { headerNames, isGameBoyRom, withoutCopierHeader } from './rom-utils.ts';
+import { headerNames, isGameBoyRom, mapperSupported, withoutCopierHeader } from './rom-utils.ts';
+import type { RomMetadata } from './rom-utils.ts';
 
 const TOBU = new Uint8Array(readFileSync(new URL('../../public/roms/tobutobugirl.gb', import.meta.url)));
 
@@ -24,4 +25,11 @@ test('a header title names a catalog game by its whole title or a 6+ character s
   assert.equal(headerNames('Some Game', 'ULTRA3'), false);
   assert.equal(headerNames('Tobu Tobu Girl', 'TOBU'), false, 'too short to be a prefix');
   assert.equal(headerNames('Some Game', ''), false);
+});
+
+test('HuC1 and HuC3 cartridges can be played, MBC7 not yet', () => {
+  const on = (cartridgeType: string) => mapperSupported({ cartridgeType } as RomMetadata);
+  assert.equal(on('HuC1+RAM+BATTERY'), true);
+  assert.equal(on('HuC3'), true);
+  assert.equal(on('MBC7+SENSOR+RUMBLE+RAM+BATTERY'), false);
 });

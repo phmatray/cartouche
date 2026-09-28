@@ -3,6 +3,7 @@ pub mod boot_rom;
 pub mod camera;
 pub mod cartridge;
 pub mod cpu;
+pub mod debug;
 pub mod error;
 pub mod gameboy;
 pub mod interrupts;
@@ -136,7 +137,9 @@ impl Emulator {
 
     pub fn step(&mut self) -> u32 {
         if let Some(gb) = &mut self.gb {
-            match gb.step_instruction() {
+            let stepped = gb.step_instruction();
+            gb.resume_here();
+            match stepped {
                 Ok(cycles) => cycles,
                 Err(e) => {
                     self.last_error = Some(e.to_string());
@@ -145,6 +148,44 @@ impl Emulator {
             }
         } else {
             0
+        }
+    }
+
+    /// `run_frame` stops before the instruction at `addr` (see `debug_break_reason`).
+    pub fn debug_add_breakpoint(&mut self, addr: u16) {
+        if let Some(gb) = &mut self.gb {
+            gb.debugger_mut().breakpoints.insert(addr);
+        }
+    }
+
+    pub fn debug_remove_breakpoint(&mut self, addr: u16) {
+        if let Some(d) = self.gb.as_mut().and_then(|gb| gb.debugger.as_mut()) {
+            d.breakpoints.remove(&addr);
+        }
+    }
+
+    /// Drops every breakpoint and the debugger itself: `run_frame` is back to full speed.
+    pub fn debug_clear(&mut self) {
+        if let Some(gb) = &mut self.gb {
+            gb.debugger = None;
+        }
+    }
+
+    /// Why the last `run_frame` / `debug_step_frame` stopped ("breakpoint $0150", "frame"),
+    /// once; `None` when it ran to the end of the frame.
+    pub fn debug_break_reason(&mut self) -> Option<String> {
+        self.gb.as_mut()?.take_break().map(|b| b.describe())
+    }
+
+    /// Runs to the next VBlank and stops there (reason "frame").
+    pub fn debug_step_frame(&mut self) -> bool {
+        let Some(gb) = &mut self.gb else { return false };
+        match gb.step_frame() {
+            Ok(()) => true,
+            Err(e) => {
+                self.last_error = Some(e.to_string());
+                false
+            }
         }
     }
 

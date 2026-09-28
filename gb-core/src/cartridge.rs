@@ -115,6 +115,96 @@ impl Rtc {
     }
 }
 
+/// The HuC3's clock: minutes of the day and a day counter, reached through a nibble-wide command
+/// protocol (Pan Docs HuC3). Its 256 nibbles of memory hold the time at 0x00-0x05 (after 0x60) and
+/// the alarm at 0x58-0x5F.
+pub struct Huc3Rtc {
+    /// Wall clock (ms since epoch) at which the clock read 0 days, 00:00.
+    base_timestamp: f64,
+    memory: [u8; 256],
+    address: u8,
+    result: u8,
+    last_opcode: u8,
+}
+
+impl Huc3Rtc {
+    fn new() -> Self {
+        Self { base_timestamp: now_ms(), memory: [0; 256], address: 0, result: 0, last_opcode: 0 }
+    }
+
+    fn minutes_and_days(&self) -> (u16, u16) {
+        let total = ((now_ms() - self.base_timestamp) / 60000.0).max(0.0) as u64;
+        ((total % 1440) as u16, (total / 1440 % 4096) as u16)
+    }
+
+    fn set(&mut self, minutes: u16, days: u16) {
+        let total = (minutes % 1440) as f64 + (days % 4096) as f64 * 1440.0;
+        self.base_timestamp = now_ms() - total * 60000.0;
+    }
+
+    /// Reads `n` nibbles of memory from `at`, low nibble first.
+    fn nibbles(&self, at: usize, n: usize) -> u32 {
+        (0..n).fold(0, |v, i| v | ((self.memory[at + i] as u32 & 0xF) << (4 * i)))
+    }
+
+    fn set_nibbles(&mut self, at: usize, n: usize, v: u32) {
+        for i in 0..n { self.memory[at + i] = (v >> (4 * i) & 0xF) as u8; }
+    }
+
+    /// A write to A000-BFFF in mode 0xB: opcode in bits 6-4, argument in bits 3-0.
+    fn command(&mut self, value: u8) {
+        let (op, arg) = (value >> 4 & 0x07, value & 0x0F);
+        self.last_opcode = op;
+        let at = self.address as usize;
+        match op {
+            0x1 => { self.result = self.memory[at]; self.address = self.address.wrapping_add(1); }
+            0x3 => { self.memory[at] = arg; self.address = self.address.wrapping_add(1); }
+            0x4 => self.address = self.address & 0xF0 | arg,
+            0x5 => self.address = self.address & 0x0F | arg << 4,
+            0x6 => match arg {
+                0x0 => {
+                    let (minutes, days) = self.minutes_and_days();
+                    self.set_nibbles(0, 3, minutes as u32);
+                    self.set_nibbles(3, 3, days as u32);
+                }
+                0x1 => self.set(self.nibbles(0, 3) as u16, self.nibbles(3, 3) as u16),
+                0x2 => self.result = 0x1,
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+
+    /// A read of A000-BFFF in mode 0xC.
+    fn read(&self) -> u8 {
+        0x80 | self.last_opcode << 4 | self.result
+    }
+
+    /// Cartouche's own `.sav` footer: minutes of the day, days, alarm minutes, alarm days and alarm
+    /// enabled as u32 LE, then the unix time (u64 LE, seconds) they were taken at.
+    fn export_footer(&self) -> [u8; HUC3_FOOTER_LEN] {
+        let (minutes, days) = self.minutes_and_days();
+        let words = [minutes as u32, days as u32, self.nibbles(0x58, 3), self.nibbles(0x5B, 4), self.nibbles(0x5F, 1) & 1];
+        let mut out = [0; HUC3_FOOTER_LEN];
+        for (i, w) in words.iter().enumerate() { out[i * 4..i * 4 + 4].copy_from_slice(&w.to_le_bytes()); }
+        out[20..].copy_from_slice(&((now_ms() / 1000.0) as u64).to_le_bytes());
+        out
+    }
+
+    /// Restores the footer; the clock goes on by the wall time elapsed since it was written.
+    fn import_footer(&mut self, f: &[u8]) {
+        let word = |i: usize| u32::from_le_bytes(f[i * 4..i * 4 + 4].try_into().unwrap());
+        let saved_at = u64::from_le_bytes(f[20..28].try_into().unwrap()) as f64;
+        let elapsed = (word(0) % 1440) as f64 * 60.0 + (word(1) % 4096) as f64 * 86400.0;
+        self.base_timestamp = (saved_at - elapsed) * 1000.0;
+        self.set_nibbles(0x58, 3, word(2));
+        self.set_nibbles(0x5B, 4, word(3));
+        self.set_nibbles(0x5F, 1, word(4) & 1);
+    }
+}
+
+const HUC3_FOOTER_LEN: usize = 28;
+
 pub const MAPPER_STATE_LEN: usize = 7;
 
 pub enum MbcType {
@@ -145,6 +235,18 @@ pub enum MbcType {
         rom_bank: u8,
         ram_bank: u8,
     },
+    /// Hudson HuC1: `0000-1FFF` picks RAM or the IR port (`0x0E`), no separate RAM enable.
+    Huc1 {
+        ir_mode: bool,
+        rom_bank: u8,
+        ram_bank: u8,
+    },
+    /// Hudson HuC3: `0000-1FFF` picks what A000-BFFF is (RAM, the clock's command port, IR...).
+    Huc3 {
+        mode: u8,
+        rom_bank: u8,
+        ram_bank: u8,
+    },
 }
 
 pub struct Cartridge {
@@ -153,6 +255,7 @@ pub struct Cartridge {
     mbc: MbcType,
     rom_bank_count: usize,
     rtc: Option<Rtc>,
+    huc3: Option<Huc3Rtc>,
     rumble: bool,
     /// Rumble motor (RAM bank register bit 3 on rumble carts), and M-cycles it ran / elapsed since
     /// the host last asked (`take_rumble`).
@@ -218,6 +321,8 @@ impl Cartridge {
                 rom_bank: 1,
                 ram_bank: 0,
             },
+            0xFE => MbcType::Huc3 { mode: 0, rom_bank: 1, ram_bank: 0 },
+            0xFF => MbcType::Huc1 { ir_mode: false, rom_bank: 1, ram_bank: 0 },
             _ => return Err(CartridgeError::UnsupportedType { cart_type }),
         };
 
@@ -252,6 +357,7 @@ impl Cartridge {
             mbc,
             rom_bank_count,
             rtc,
+            huc3: (cart_type == 0xFE).then(Huc3Rtc::new),
             rumble: matches!(cart_type, 0x1C..=0x1E),
             motor: false,
             motor_on: 0,
@@ -305,7 +411,7 @@ impl Cartridge {
                 _ => 0xFF,
             },
 
-            MbcType::Camera { rom_bank, .. } => match addr {
+            MbcType::Camera { rom_bank, .. } | MbcType::Huc1 { rom_bank, .. } | MbcType::Huc3 { rom_bank, .. } => match addr {
                 0x0000..=0x3FFF => self.rom.get(addr as usize).copied().unwrap_or(0xFF),
                 0x4000..=0x7FFF => {
                     let bank = (*rom_bank as usize) % self.rom_bank_count.max(1);
@@ -425,6 +531,21 @@ impl Cartridge {
                 0x4000..=0x5FFF => *ram_bank = value & 0x1F,
                 _ => {}
             },
+
+            // Unlike MBC1, a written 0 maps bank 0 (Pan Docs HuC1).
+            MbcType::Huc1 { ir_mode, rom_bank, ram_bank } => match addr {
+                0x0000..=0x1FFF => *ir_mode = value & 0x0F == 0x0E,
+                0x2000..=0x3FFF => *rom_bank = value & 0x3F,
+                0x4000..=0x5FFF => *ram_bank = value & 0x03,
+                _ => {}
+            },
+
+            MbcType::Huc3 { mode, rom_bank, ram_bank } => match addr {
+                0x0000..=0x1FFF => *mode = value & 0x0F,
+                0x2000..=0x3FFF => *rom_bank = value & 0x7F,
+                0x4000..=0x5FFF => *ram_bank = value & 0x03,
+                _ => {}
+            },
         }
     }
 
@@ -520,6 +641,22 @@ impl Cartridge {
                 let addr = self.ram_index((*ram_bank & 0x0F) as usize, offset);
                 self.ram.get(addr).copied().unwrap_or(0xFF)
             }
+
+            // ponytail: no infrared link, so the IR receiver never sees light.
+            MbcType::Huc1 { ir_mode: true, .. } => 0xC0,
+            MbcType::Huc1 { ram_bank, .. } => {
+                if self.ram.is_empty() { return 0xFF; }
+                self.ram[self.ram_index(*ram_bank as usize, offset)]
+            }
+
+            // ponytail: the speaker and IR are not emulated; IR reads no light.
+            MbcType::Huc3 { mode, ram_bank, .. } => match mode {
+                0x0 | 0xA if !self.ram.is_empty() => self.ram[self.ram_index(*ram_bank as usize, offset)],
+                0xC => self.huc3.as_ref().map_or(0xFF, Huc3Rtc::read),
+                0xD => 0x01,
+                0xE => 0xC0,
+                _ => 0xFF,
+            },
         }
     }
 
@@ -536,7 +673,7 @@ impl Cartridge {
 
     /// Something to keep across sessions: cartridge RAM, or the clock (MBC3+TIMER+BATTERY without RAM).
     pub fn has_battery(&self) -> bool {
-        !self.ram.is_empty() || self.rtc.is_some()
+        !self.ram.is_empty() || self.rtc.is_some() || self.huc3.is_some()
     }
 
     /// SRAM, plus on MBC3+TIMER the 48-byte clock footer used by VBA-M, BGB, mGBA and SameBoy:
@@ -556,6 +693,9 @@ impl Cartridge {
             }
             data.extend_from_slice(&((now_ms() / 1000.0) as u64).to_le_bytes());
         }
+        if let Some(ref huc3) = self.huc3 {
+            data.extend_from_slice(&huc3.export_footer());
+        }
         data
     }
 
@@ -569,6 +709,8 @@ impl Cartridge {
             MbcType::Mbc3 { ram_enabled, rom_bank, ram_bank } => (rom_bank as u16, ram_bank, ram_enabled, false),
             MbcType::Mbc5 { ram_enabled, rom_bank, ram_bank } => (rom_bank, ram_bank, ram_enabled, false),
             MbcType::Camera { ram_enabled, rom_bank, ram_bank } => (rom_bank as u16, ram_bank, ram_enabled, false),
+            MbcType::Huc1 { ir_mode, rom_bank, ram_bank } => (rom_bank as u16, ram_bank, false, ir_mode),
+            MbcType::Huc3 { rom_bank, ram_bank, .. } => (rom_bank as u16, ram_bank, false, false),
         };
         let (sel, latch) = self.rtc.as_ref().map_or((0, false), |r| (r.selected_register.unwrap_or(0), r.latch_ready));
         let [lo, hi] = rom_bank.to_le_bytes();
@@ -587,10 +729,36 @@ impl Cartridge {
             MbcType::Mbc3 { ram_enabled, rom_bank, ram_bank } => (*ram_enabled, *rom_bank, *ram_bank) = (en, rb as u8, rab),
             MbcType::Mbc5 { ram_enabled, rom_bank, ram_bank } => (*ram_enabled, *rom_bank, *ram_bank) = (en, rb, rab),
             MbcType::Camera { ram_enabled, rom_bank, ram_bank } => (*ram_enabled, *rom_bank, *ram_bank) = (en, rb as u8, rab),
+            MbcType::Huc1 { ir_mode, rom_bank, ram_bank } => (*ir_mode, *rom_bank, *ram_bank) = (md, rb as u8, rab),
+            MbcType::Huc3 { rom_bank, ram_bank, .. } => (*rom_bank, *ram_bank) = (rb as u8, rab),
         }
         if let Some(rtc) = &mut self.rtc {
             rtc.selected_register = (s[5] != 0).then_some(s[5]);
             rtc.latch_ready = s[6] != 0;
+        }
+    }
+
+    /// Mapper state beyond the fixed `export_state` block, for the save state's length-prefixed
+    /// mapper block. Empty for every mapper but HuC3: mode, address, last result, last opcode, then
+    /// its 256 memory nibbles packed two per byte (low nibble first).
+    pub fn export_extra(&self) -> Vec<u8> {
+        let (MbcType::Huc3 { mode, .. }, Some(h)) = (&self.mbc, &self.huc3) else { return Vec::new() };
+        let mut out = vec![*mode, h.address, h.result, h.last_opcode];
+        out.extend(h.memory.chunks(2).map(|p| p[0] & 0xF | p[1] << 4));
+        out
+    }
+
+    /// Restores `export_extra`. Anything shorter (a state saved before the block existed) puts the
+    /// registers back to power-on; the HuC3 memory is left as the battery save restored it.
+    pub fn import_extra(&mut self, data: &[u8]) {
+        let (MbcType::Huc3 { mode, .. }, Some(h)) = (&mut self.mbc, &mut self.huc3) else { return };
+        let Some((regs, packed)) = data.split_first_chunk::<4>().filter(|(_, p)| p.len() >= 128) else {
+            (*mode, h.address, h.result, h.last_opcode) = (0, 0, 0, 0);
+            return;
+        };
+        (*mode, h.address, h.result, h.last_opcode) = (regs[0] & 0x0F, regs[1], regs[2] & 0x0F, regs[3] & 0x07);
+        for (i, b) in packed[..128].iter().enumerate() {
+            (h.memory[2 * i], h.memory[2 * i + 1]) = (b & 0xF, b >> 4);
         }
     }
 
@@ -636,6 +804,11 @@ impl Cartridge {
                 if rtc_data.len() >= 22 {
                     rtc.latched.copy_from_slice(&rtc_data[17..22]);
                 }
+            }
+        }
+        if let Some(huc3) = &mut self.huc3 {
+            if data.len() == ram_len + HUC3_FOOTER_LEN {
+                huc3.import_footer(&data[ram_len..]);
             }
         }
     }
@@ -715,6 +888,23 @@ impl Cartridge {
                     *byte = value;
                 }
             }
+            &MbcType::Huc1 { ir_mode: false, ram_bank, .. } => {
+                let addr = self.ram_index(ram_bank as usize, offset);
+                if let Some(byte) = self.ram.get_mut(addr) {
+                    *byte = value;
+                }
+            }
+            MbcType::Huc1 { .. } => {}
+            &MbcType::Huc3 { mode: 0xA, ram_bank, .. } => {
+                let addr = self.ram_index(ram_bank as usize, offset);
+                if let Some(byte) = self.ram.get_mut(addr) {
+                    *byte = value;
+                }
+            }
+            MbcType::Huc3 { mode: 0xB, .. } => {
+                if let Some(huc3) = &mut self.huc3 { huc3.command(value); }
+            }
+            MbcType::Huc3 { .. } => {}
         }
     }
 }
@@ -772,6 +962,129 @@ mod tests {
         let c = Cartridge::from_rom(dump).expect("header found past the 512-byte copier header");
         assert_eq!(c.read_rom(0x134), b'T');
         assert_eq!(c.read_rom(0x4000), 0x42, "banks line up");
+    }
+
+    #[test]
+    fn huc1_banks_rom_and_ram_and_ir_reads_no_light() {
+        let mut rom = vec![0u8; 0x8000 * 4];
+        rom[0x147] = 0xFF;
+        rom[0x148] = 0x02;
+        rom[0x149] = 0x03;
+        rom[0x14D] = (0x134..=0x14C).fold(0u8, |c, a| c.wrapping_sub(rom[a]).wrapping_sub(1));
+        rom[5 * 0x4000] = 0x55;
+        let mut c = Cartridge::from_rom(rom).expect("HuC1 loads");
+        assert!(c.has_battery());
+        c.write_rom(0x2000, 5);
+        assert_eq!(c.read_rom(0x4000), 0x55);
+        c.write_rom(0x2000, 0);
+        assert_eq!(c.read_rom(0x4147), 0xFF, "bank 0 is mapped as is, not bumped to 1");
+        c.write_rom(0x2000, 5);
+
+        c.write_rom(0x0000, 0x0A);
+        c.write_rom(0x4000, 2);
+        c.write_ram(0, 0x11);
+        assert_eq!(c.read_ram(0), 0x11);
+        c.write_rom(0x4000, 0);
+        assert_eq!(c.read_ram(0), 0x00, "bank 0 is another bank");
+        c.write_rom(0x4000, 2);
+
+        c.write_rom(0x0000, 0x0E);
+        assert_eq!(c.read_ram(0), 0xC0, "IR: no light");
+        c.write_ram(0, 0x99);
+        c.write_rom(0x0000, 0x0A);
+        assert_eq!(c.read_ram(0), 0x11, "an IR write does not reach RAM");
+
+        c.write_rom(0x0000, 0x0E);
+        let state = c.export_state();
+        let mut fresh = cart(0xFF, 0x03);
+        fresh.import_state(&state);
+        assert_eq!(fresh.read_ram(0), 0xC0, "IR mode survives");
+        assert_eq!(fresh.export_state(), state, "ROM bank 5 and RAM bank 2 survive");
+        assert_eq!(state[..3], [5, 0, 2]);
+    }
+
+    /// One HuC3 RTC command: a write to A000 in mode 0xB (left selected).
+    fn huc3_cmd(c: &mut Cartridge, cmd: u8) {
+        c.write_rom(0x0000, 0x0B);
+        c.write_ram(0, cmd);
+    }
+
+    /// Sets the HuC3 clock the way a game does: nibbles into memory 0x00-0x05, then commit (0x61).
+    fn huc3_set_clock(c: &mut Cartridge, minutes: u16, days: u16) {
+        huc3_cmd(c, 0x40);
+        huc3_cmd(c, 0x50);
+        for v in [minutes, days] {
+            for i in 0..3 { huc3_cmd(c, 0x30 | ((v >> (4 * i)) & 0xF) as u8); }
+        }
+        huc3_cmd(c, 0x61);
+    }
+
+    /// Reads the HuC3 clock back: load the time (0x60), then six 0x1 reads, each seen in mode 0xC.
+    fn huc3_clock(c: &mut Cartridge) -> (u16, u16) {
+        huc3_cmd(c, 0x60);
+        huc3_cmd(c, 0x40);
+        huc3_cmd(c, 0x50);
+        let mut n = [0u16; 6];
+        for v in n.iter_mut() {
+            huc3_cmd(c, 0x10);
+            c.write_rom(0x0000, 0x0C);
+            let r = c.read_ram(0);
+            assert_eq!(r & 0xF0, 0x90, "0x80 | read opcode 1");
+            *v = (r & 0x0F) as u16;
+        }
+        (n[0] | n[1] << 4 | n[2] << 8, n[3] | n[4] << 4 | n[5] << 8)
+    }
+
+    #[test]
+    fn huc3_clock_is_set_and_read_through_commands() {
+        let mut c = cart(0xFE, 0x03);
+        assert!(c.has_battery());
+        c.write_rom(0x0000, 0x0A);
+        c.write_rom(0x4000, 3);
+        c.write_ram(0x10, 0x42);
+        assert_eq!(c.read_ram(0x10), 0x42);
+        c.write_rom(0x0000, 0x00);
+        c.write_ram(0x10, 0x99);
+        assert_eq!(c.read_ram(0x10), 0x42, "mode 0 is read-only RAM");
+
+        huc3_set_clock(&mut c, 615, 3);
+        assert_eq!(huc3_clock(&mut c), (615, 3), "day 3, 10:15");
+
+        c.write_rom(0x0000, 0x0D);
+        assert_eq!(c.read_ram(0), 0x01, "semaphore: ready");
+        c.write_rom(0x0000, 0x0E);
+        assert_eq!(c.read_ram(0), 0xC0, "IR: no light");
+        c.write_rom(0x0000, 0x07);
+        assert_eq!(c.read_ram(0), 0xFF);
+    }
+
+    #[test]
+    fn huc3_sav_footer_round_trips_and_advances() {
+        let ram_len = 32 * 1024;
+        let word = |s: &[u8], i: usize| u32::from_le_bytes(s[ram_len + 4 * i..ram_len + 4 * i + 4].try_into().unwrap());
+        let mut c = cart(0xFE, 0x03);
+        huc3_set_clock(&mut c, 615, 3);
+        // Alarm at day 0x0102, 08:00, enabled: nibbles at 0x58-0x5A, 0x5B-0x5E, 0x5F.
+        huc3_cmd(&mut c, 0x48);
+        huc3_cmd(&mut c, 0x55);
+        for n in [0x0, 0xE, 0x1, 0x2, 0x0, 0x1, 0x0, 0x1] { huc3_cmd(&mut c, 0x30 | n); }
+        let mut sav = c.export_sram();
+        assert_eq!(sav.len(), ram_len + 28);
+        assert_eq!([word(&sav, 0), word(&sav, 1), word(&sav, 2), word(&sav, 3), word(&sav, 4)], [615, 3, 480, 0x0102, 1]);
+
+        let at = sav.len() - 8;
+        let saved_at = u64::from_le_bytes(sav[at..].try_into().unwrap());
+        sav[at..].copy_from_slice(&(saved_at - 2 * 86400).to_le_bytes());
+        let mut fresh = cart(0xFE, 0x03);
+        fresh.import_sram(&sav);
+        assert_eq!(huc3_clock(&mut fresh), (615, 5), "two days passed since the save");
+        let again = fresh.export_sram();
+        assert_eq!([word(&again, 2), word(&again, 3), word(&again, 4)], [480, 0x0102, 1], "alarm kept");
+
+        let mut blank = cart(0xFE, 0x03);
+        blank.import_sram(&vec![7; ram_len]);
+        assert_eq!(blank.ram_byte(0), Some(7));
+        assert_eq!(huc3_clock(&mut blank), (0, 0), "no footer: the clock starts at 0");
     }
 
     #[test]

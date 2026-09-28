@@ -18,7 +18,16 @@ export const CONSOLE_DMG = 0, CONSOLE_CGB = 1, CONSOLE_COMPAT = 2, CONSOLE_SGB =
 export function useEmulator() {
   const emulatorRef = useRef<import('gb-core').Emulator | null>(null);
   const [isReady, setIsReady] = useState(false);
-  const [isRunning, setIsRunning] = useState(false);
+  const [isRunning, setRunning] = useState(false);
+  /** Why the core stopped mid-game ("breakpoint $0150", "frame"): the player is paused there until it runs again. */
+  const [breakReason, setBreakReason] = useState<string | null>(null);
+  const [breakpoints, setBreakpoints] = useState<number[]>([]);
+  const bpRef = useRef<number[]>([]); // the same list, for loadRom (which must not change with it)
+  const stopped = useRef(false); // no frame runs past a break, even the rest of this animation frame's batch
+  const setIsRunning = useCallback((on: boolean) => {
+    if (on) { stopped.current = false; setBreakReason(null); }
+    setRunning(on);
+  }, []);
   /** Power-ons so far (0: no cartridge running). Each load builds a new console, so per-console setup
    *  (channel mutes, printer, link cable) keys on this, not on romLoaded, which stays true across a restart. */
   const [power, setPower] = useState(0);
@@ -79,6 +88,9 @@ export function useEmulator() {
         return false;
       }
       setPower((n) => n + 1);
+      stopped.current = false;
+      setBreakReason(null);
+      bpRef.current.forEach((a) => emu.debug_add_breakpoint(a)); // each load builds a new console
       setIsCgb(emu.is_cgb());
       setErrors([]);
       return true;
@@ -91,16 +103,22 @@ export function useEmulator() {
 
   const runFrame = useCallback((): Uint8ClampedArray | null => {
     const emu = emulatorRef.current;
-    if (!emu) return null;
+    if (!emu || stopped.current) return null;
 
     const success = emu.run_frame();
     if (!success) {
       const err = emu.get_error();
       if (err) addError(t('player.error.crashed'), err);
-      setIsRunning(false);
+      setRunning(false);
       return null;
     }
     if (emu.link_stalled()) return null; // online link cable: the frame goes on once the other player's byte arrives
+    const reason = emu.debug_break_reason();
+    if (reason) {
+      stopped.current = true;
+      setBreakReason(reason);
+      setRunning(false);
+    }
 
     const ptr = emu.framebuffer_ptr();
     const len = emu.framebuffer_len();
@@ -148,6 +166,30 @@ export function useEmulator() {
     }
     return cycles;
   }, [addError]);
+
+  /** Runs to the next VBlank and stops there (the player stays paused). */
+  const stepFrame = useCallback(() => {
+    const emu = emulatorRef.current;
+    if (!emu) return;
+    if (emu.debug_step_frame()) setBreakReason(emu.debug_break_reason() ?? null);
+    else {
+      const err = emu.get_error();
+      if (err) addError(t('player.error.crashed'), err);
+    }
+  }, [addError]);
+
+  const addBreakpoint = useCallback((addr: number) => {
+    emulatorRef.current?.debug_add_breakpoint(addr);
+    if (!bpRef.current.includes(addr)) setBreakpoints(bpRef.current = [...bpRef.current, addr].sort((a, b) => a - b));
+  }, []);
+
+  const removeBreakpoint = useCallback((addr: number) => {
+    const emu = emulatorRef.current;
+    const rest = bpRef.current.filter((a) => a !== addr);
+    if (rest.length) emu?.debug_remove_breakpoint(addr);
+    else emu?.debug_clear(); // no breakpoint left: the core runs at full speed again
+    setBreakpoints(bpRef.current = rest);
+  }, []);
 
   const updateRegisters = useCallback(() => {
     const emu = emulatorRef.current;
@@ -238,6 +280,8 @@ export function useEmulator() {
   const loadState = useCallback((data: Uint8Array, frame?: Uint8Array | Uint8ClampedArray): boolean => {
     const emu = emulatorRef.current;
     if (!emu || !emu.load_state(data)) return false;
+    stopped.current = false;
+    setBreakReason(null);
     if (frame) emu.set_screen(frame instanceof Uint8Array ? frame : new Uint8Array(frame.buffer, frame.byteOffset, frame.length));
     return true;
   }, []);
@@ -327,6 +371,11 @@ export function useEmulator() {
     runFrame,
     getAudioSamples,
     stepInstruction,
+    stepFrame,
+    breakReason,
+    breakpoints,
+    addBreakpoint,
+    removeBreakpoint,
     registers,
     updateRegisters,
     readMemory,

@@ -3,6 +3,7 @@ import colorSource from './color.glsl?raw';
 import upscaleSource from './upscale.glsl?raw';
 import outputSource from './output.glsl?raw';
 import { colorMode, hasAdjustments, paletteRgb, PRESETS, type Filters } from './filters';
+import { curveLut, GREEN_WEIGHT, type LcdModel } from './lcd-curves';
 import { loadWeights, NeuralUpscaler, OUT_H, OUT_W } from '../neural/upscaler';
 import { Governor, LEVEL_NAMES, neuralStatus } from '../neural/governor';
 import { CUT, FrameGen, parse, predictability, steady, type Parsed } from '../neural/motion';
@@ -26,7 +27,8 @@ export function supportsWebGL2(): boolean {
 
 /**
  * The display pipeline, all within the frame it is given (no added latency, except Smooth motion):
- *   1. colour (160x144): DMG palette or GBC correction, adjustments, LCD persistence (feeds back on itself)
+ *   1. colour (160x144): DMG palette or GBC/GBA LCD correction, adjustments, ghosting (LCD response feeds back on
+ *      itself; frame blending keeps the unghosted frames and mixes the last two into `blend`)
  *   2. upscale (optional): Scale2x / Scale3x
  *   3. output (canvas size): nearest or sharp bilinear, pixel grid, scanlines, CRT curvature and vignette.
  * Neural 4x and Smooth motion draw the raw frame at 640x576 first (neural/), then run the colour pass at
@@ -39,6 +41,11 @@ export class LcdEngine {
   private quad: WebGLBuffer | null = null;
   private frame: WebGLTexture | null = null;
   private hist: Target[] = [];
+  /** Frame blending's output (the history then holds unghosted frames); `blend4` at 4x. */
+  private blend: Target | null = null;
+  private blend4: Target | null = null;
+  /** One LCD curve texture per colour-correction model. */
+  private curves: Partial<Record<LcdModel, WebGLTexture>> = {};
   private up: Target | null = null;
   private cur = 0;
   private hasFrame = false;
@@ -95,6 +102,11 @@ export class LcdEngine {
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
     this.frame = this.texture(W, H);
     this.hist = [this.target(W, H), this.target(W, H)];
+    for (const m of ['gbc', 'gba'] as const) {
+      const tex = this.texture(32, 1);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 32, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, curveLut(m));
+      this.curves[m] = tex;
+    }
     if (gl2) {
       const ext = gl2.getExtension('EXT_disjoint_timer_query_webgl2');
       if (ext) this.timer = { ext, pending: [] };
@@ -291,26 +303,51 @@ export class LcdEngine {
     neuralStatus.set(this, level);
   }
 
-  /** Colour + persistence of `src` into the next of `hist` (ping-pong); returns it. */
+  /**
+   * Colour + ghosting of `src` into the next of `hist` (ping-pong); returns the picture to show. LCD response
+   * mixes in the previous output (a fading trail). Frame blending draws the unghosted frame into `hist`, then
+   * an even-handed mix of it and the previous unghosted frame into `blend` (flicker transparency, no trail).
+   */
   private colorPass(src: WebGLTexture, hist: Target[], big: boolean): Target {
     const gl = this.gl!, { color } = this.progs!, f = this.filters;
     const prev = hist[this.cur], next = hist[1 - this.cur];
     this.cur = 1 - this.cur;
+    const ghost = this.fresh ? 0 : f.ghosting;
+    const blend = f.ghostMode === 'blend';
+    // Created before any binding: a new texture is bound to the active unit, which a later draw would sample.
+    let out = big ? this.blend4 : this.blend;
+    if (blend && !out) {
+      out = this.target(next.w, next.h);
+      if (big) this.blend4 = out; else this.blend = out;
+    }
     this.use(color, next, 0);
-    this.bind(0, src, false);
+    // Unit 0 last: textures created later are bound to the active unit, never to the curve's.
+    this.bind(2, this.curves[f.correction === 'gba' ? 'gba' : 'gbc']!, true);
     this.bind(1, prev.tex, false);
+    this.bind(0, src, false);
     gl.uniform1i(color.u.u_frame, 0);
     gl.uniform1i(color.u.u_hist, 1);
+    gl.uniform1i(color.u.u_curve, 2);
+    gl.uniform1f(color.u.u_green, GREEN_WEIGHT[f.correction === 'gba' ? 'gba' : 'gbc']);
     gl.uniform1f(color.u.u_mode, colorMode(f, this.color));
     gl.uniform3fv(color.u['u_pal[0]'], paletteRgb(f).flat());
-    gl.uniform1f(color.u.u_corr, f.correction === 'vivid' ? 0.5 : 1);
     gl.uniform1f(color.u.u_adjOn, hasAdjustments(f) ? 1 : 0);
     gl.uniform3f(color.u.u_adj, f.brightness, f.contrast, f.saturation);
-    gl.uniform1f(color.u.u_ghost, this.fresh ? 0 : f.ghosting);
+    gl.uniform1f(color.u.u_ghost, blend ? 0 : ghost);
     gl.uniform1f(color.u.u_lerp, big ? 1 : 0);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     this.fresh = false;
-    return next;
+    if (!blend || ghost === 0) return next;
+
+    // Frame blending: the same program as a plain mix (raw colour, no adjustments) of the two unghosted frames.
+    this.use(color, out!, 0);
+    this.bind(1, prev.tex, false);
+    this.bind(0, next.tex, false);
+    gl.uniform1f(color.u.u_mode, 0);
+    gl.uniform1f(color.u.u_adjOn, 0);
+    gl.uniform1f(color.u.u_ghost, ghost);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+    return out!;
   }
 
   private outputPass(src: Target, smooth: boolean): void {
@@ -345,7 +382,8 @@ export class LcdEngine {
     this.gen?.destroy();
     for (const q of this.timer?.pending ?? []) this.gl2?.deleteQuery(q);
     if (this.progs) Object.values(this.progs).forEach((p) => gl.deleteProgram(p.p));
-    for (const t of [...this.hist, ...this.hist4, this.up, this.big]) if (t) { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fbo); }
+    for (const t of [...this.hist, ...this.hist4, this.up, this.big, this.blend, this.blend4]) if (t) { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fbo); }
+    for (const tex of Object.values(this.curves)) gl.deleteTexture(tex);
     if (this.frame) gl.deleteTexture(this.frame);
     if (this.quad) gl.deleteBuffer(this.quad);
     // Free the context now instead of at GC: browsers cap live WebGL contexts (~16).
