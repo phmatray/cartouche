@@ -32,6 +32,7 @@ Total: 3,407,872 bytes (3.25 MB).
 - File: `DawnWillCome.gb` from its Homebrew Hub entry
   (https://github.com/gbdev/database/tree/master/entries/dawn-will-come), byte for byte identical to the ROM the
   authors serve in their own itch.io build. Changes: none (renamed to `dawn-will-come.gb`).
+- Box art: `covers/dawn-will-come.webp`, the game's title screen, captured from this ROM with Cartouche's core, padded to a square with the screen's own edge rows or background colour, enlarged 3x (nearest neighbour) and saved as lossless WebP. Artwork © H0lyhandgrenade and eishiya, CC BY 4.0; the cover is under CC BY 4.0.
 
 ## Poltersprite
 
@@ -47,6 +48,7 @@ Total: 3,407,872 bytes (3.25 MB).
   - The code: [GNU GPL v3](https://www.gnu.org/licenses/gpl-3.0.html) (full text also at https://phmatray.github.io/cartouche/licenses/GPL-3.0-ucity.txt).
 - File: `Poltersprite2.0.4.gb` from the official v2.0.4 release
   (https://github.com/inkusalters/Poltersprite/releases/tag/v2.0.4). Changes: none (renamed to `poltersprite.gb`).
+- Box art: `covers/poltersprite.webp`, the game's title screen, captured from this ROM with Cartouche's core, padded to a square with the screen's own edge rows or background colour, enlarged 3x (nearest neighbour) and saved as lossless WebP. © Inkus Alters, CC BY-NC-SA 4.0; as an adaptation, the cover is shared under the same license, CC BY-NC-SA 4.0, non-commercially.
 
 ## Millennium Gun
 
@@ -60,6 +62,7 @@ Total: 3,407,872 bytes (3.25 MB).
 - File: `build/rom/millennium-gun_jam.gb` from the GB Compo 2025 organisers' import of the author's submitted source (its
   `CREDITS.txt` written by the author), identical to the ROM of the author's
   itch.io build. Changes: none (renamed to `millennium-gun.gb`).
+- Box art: `covers/millennium-gun.webp`, the game's title screen, captured from this ROM with Cartouche's core, padded to a square with the screen's own edge rows or background colour, enlarged 3x (nearest neighbour) and saved as lossless WebP. Graphics by Finny, CC0 1.0; the cover is under CC0 1.0 too.
 
 ## Dusky Dungeon
 
@@ -78,6 +81,7 @@ Total: 3,407,872 bytes (3.25 MB).
 - File: `DuskyDungeon-0.2.0.gb` from its Homebrew Hub entry
   (https://github.com/gbdev/database/tree/master/entries/dusky-dungeon), identical to the ROM of the author's
   itch.io build. Changes: none (renamed to `dusky-dungeon.gb`).
+- Box art: `covers/dusky-dungeon.webp`, the game's title screen, captured from this ROM with Cartouche's core, padded to a square with the screen's own edge rows or background colour, enlarged 3x (nearest neighbour) and saved as lossless WebP. Graphics © 2021 Jan Klečka, CC BY 4.0; fonts: Gothic Pixel Font by Leoda (CC BY 4.0) and Romulus by Pix3M (CC BY 3.0). The cover is under CC BY 4.0, its fonts as stated.
 
 ## GB Studio engine
 
