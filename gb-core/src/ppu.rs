@@ -156,6 +156,33 @@ impl Ppu {
         self.oam[offset as usize] = value;
     }
 
+    /// The CPU cannot reach OAM in modes 2 and 3 nor VRAM in mode 3 (reads $FF, writes are
+    /// dropped). A read is blocked from the M-cycle before STAT shows the mode (the internal mode)
+    /// until STAT shows mode 0; a write only while STAT shows it, except in the M-cycle mode 3
+    /// has begun but STAT still shows mode 2, which lets a write through. The line after the LCD
+    /// turns on has no OAM scan and no lead.
+    /// (gbmicrotest `poweron_oam_*`, `poweron_vram_*`, `oam_*_l0/l1_*`, `vram_*_l0/l1_*`.)
+    pub fn cpu_locked(&self, addr: u16, write: bool) -> bool {
+        if self.lcdc & 0x80 == 0 || !matches!(addr, 0x8000..=0x9FFF | 0xFE00..=0xFE9F) {
+            return false;
+        }
+        let shown = match self.read_register(0xFF41) & 3 {
+            2 if self.lcd_on_line0 && self.mode == PpuMode::Drawing => 0,
+            m => m,
+        };
+        let internal = match self.mode {
+            PpuMode::OamScan if !self.lcd_on_line0 => 2,
+            PpuMode::Drawing if !self.lcd_on_line0 => 3,
+            _ => 0,
+        };
+        let from = if addr >= 0xFE00 { 2 } else { 3 };
+        if write {
+            shown >= from && !(shown == 2 && self.mode == PpuMode::Drawing)
+        } else {
+            shown >= from || internal >= from
+        }
+    }
+
     pub fn read_register(&self, addr: u16) -> u8 {
         match addr {
             0xFF40 => self.lcdc,

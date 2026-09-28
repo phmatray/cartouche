@@ -215,6 +215,7 @@ impl SquareChannel {
     }
 
     /// `ticks` 2 MHz ticks.
+    #[inline]
     pub fn step(&mut self, ticks: u32) {
         if !self.enabled {
             return;
@@ -487,6 +488,7 @@ impl Sweep {
     }
 
     /// `ticks` 2 MHz ticks, after `lf_div` flipped for them.
+    #[inline]
     fn tick(&mut self, ch1: &mut SquareChannel, ticks: u32, lf_div: u16) {
         if self.reload_timer | self.calculate_countdown | self.restart_hold == 0 {
             return; // nothing pending: the common case, every M-cycle
