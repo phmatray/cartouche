@@ -261,8 +261,8 @@ impl MemoryBus {
                 if before & !self.joypad.read() & 0x0F != 0 { self.interrupts.request(JOYPAD_BIT); }
                 if let Some(s) = self.sgb.as_deref_mut() { s.write_p1(value); }
             }
-            0xFF01 => self.serial.write(addr, value),
-            0xFF02 => self.serial.write(addr, if self.cgb_mode { value } else { value & !0x02 }),
+            0xFF01 => self.serial.write(addr, value, self.timer.div_counter),
+            0xFF02 => self.serial.write(addr, if self.cgb_mode { value } else { value & !0x02 }, self.timer.div_counter),
             0xFF04..=0xFF07 => {
                 // An overflow requests the interrupt at once, a TIMA write cancelling the reload withdraws it (Timer::step).
                 let (pending, div) = (self.timer.reload_pending, self.timer.div_counter);

@@ -2,7 +2,9 @@
 ///
 /// A transfer shifts 8 bits: SC bit 7 starts it, bit 0 picks the clock (1 = internal, this
 /// console is the master; 0 = external, it waits for the partner's clock). An internal-clock
-/// transfer takes 8 x 512 CPU cycles (8 x 16 with the CGB fast clock, SC bit 1); when it ends SB
+/// transfer takes 8 periods of 512 CPU cycles (16 with the CGB fast clock, SC bit 1), whose edges
+/// come from the DIV counter: it ends on the 8th edge after the write, not 8 periods after it
+/// (Mooneye boot_sclk_align). When it ends SB
 /// holds the byte shifted in (0xFF with no partner), SC bit 7 clears and the serial interrupt
 /// fires. Two consoles are connected by `gameboy::run_linked_frame`.
 ///
@@ -68,7 +70,8 @@ impl Serial {
         }
     }
 
-    pub fn write(&mut self, addr: u16, value: u8) {
+    /// `div`: the 16-bit DIV counter, which the internal clock is divided from.
+    pub fn write(&mut self, addr: u16, value: u8, div: u16) {
         match addr {
             0xFF01 => self.data = value,
             0xFF02 => {
@@ -76,7 +79,8 @@ impl Serial {
                 if value & 0x81 == 0x81 {
                     // Blargg's test ROMs print through the serial port.
                     self.output.push(self.data);
-                    self.remaining = if value & 0x02 != 0 { 8 * 16 } else { 8 * 512 };
+                    let period = if value & 0x02 != 0 { 16 } else { 512 };
+                    self.remaining = 8 * period - (div as u32 + 4) % period;
                     // A remote partner replaces the printer: its byte arrives through remote_reply.
                     self.incoming = if self.remote { 0xFF } else { self.printer.as_mut().map_or(0xFF, |p| p.exchange(self.data)) };
                     self.started = true;
