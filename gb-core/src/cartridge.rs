@@ -2,7 +2,7 @@ use crate::error::CartridgeError;
 
 /// Wall-clock milliseconds since the epoch: `Date.now()` in the browser, the system clock natively
 /// (js_sys::Date panics outside wasm, which crashed MBC3+TIMER carts in native tests/tools).
-fn now_ms() -> f64 {
+pub(crate) fn now_ms() -> f64 {
     #[cfg(target_arch = "wasm32")]
     {
         js_sys::Date::now()
@@ -270,6 +270,8 @@ pub enum MbcType {
         flash_enabled: bool,
         flash_write: bool,
     },
+    /// Bandai TAMA5: everything, the ROM bank included, goes through `Tama5`'s registers at A000/A001.
+    Tama5,
 }
 
 pub struct Cartridge {
@@ -288,6 +290,7 @@ pub struct Cartridge {
     pub camera: Option<Box<crate::camera::Camera>>,
     mbc7: Option<Box<crate::mbc7::Mbc7>>,
     flash: Option<Box<crate::flash::Flash>>,
+    tama5: Option<Box<crate::tama5::Tama5>>,
 }
 
 impl Cartridge {
@@ -352,6 +355,7 @@ impl Cartridge {
             0xFF => MbcType::Huc1 { ir_mode: false, rom_bank: 1, ram_bank: 0 },
             0x22 => MbcType::Mbc7 { rom_bank: 1, ram_enable_1: false, ram_enable_2: false },
             0x0B..=0x0D if hdr != 0 => MbcType::Mmm01 { regs: [0; 4] },
+            0xFD => MbcType::Tama5,
             0x20 => MbcType::Mbc6 {
                 ram_enabled: false,
                 ram_banks: [0; 2],
@@ -375,6 +379,7 @@ impl Cartridge {
             // MBC7: a 93LC56 EEPROM (128 16-bit words); the header says 0x00.
             0x22 => 256,
             0x20 => 32 * 1024,
+            0xFD => 32,
             _ => match ram_size {
                 0x00 => 0,
                 0x01 => 2 * 1024,
@@ -405,6 +410,7 @@ impl Cartridge {
             camera: (cart_type == 0xFC).then(|| Box::new(crate::camera::Camera::new())),
             mbc7: (cart_type == 0x22).then(|| Box::new(crate::mbc7::Mbc7::new())),
             flash: (cart_type == 0x20).then(|| Box::new(crate::flash::Flash::new())),
+            tama5: (cart_type == 0xFD).then(|| Box::new(crate::tama5::Tama5::new())),
         })
     }
 
@@ -485,6 +491,12 @@ impl Cartridge {
                     0x4000..=0x7FFF => self.rom.get(at % (self.rom_bank_count * 0x4000)).copied().unwrap_or(0xFF),
                     _ => self.rom.get(addr as usize).copied().unwrap_or(0xFF),
                 }
+            }
+
+            MbcType::Tama5 => {
+                let bank = if addr < 0x4000 { 0 } else { self.tama5.as_ref().map_or(1, |t| t.rom_bank()) };
+                let offset = bank % self.rom_bank_count * 0x4000 + (addr as usize & 0x3FFF);
+                self.rom.get(offset).copied().unwrap_or(0xFF)
             }
 
             MbcType::Mbc5 { rom_bank, .. } => match addr {
@@ -624,6 +636,8 @@ impl Cartridge {
                 };
                 regs[r] = (regs[r] & fixed | value & !fixed) & 0x7F;
             }
+
+            MbcType::Tama5 => {}
 
             MbcType::Mbc6 { ram_enabled, ram_banks, rom_banks, in_flash, flash_enabled, flash_write } => match addr {
                 0x0000..=0x03FF => *ram_enabled = value & 0x0F == 0x0A,
@@ -775,6 +789,7 @@ impl Cartridge {
 
             MbcType::Mbc6 { ram_enabled: true, ram_banks, .. } => self.ram[Self::mbc6_ram_index(ram_banks, offset)],
             MbcType::Mbc6 { .. } => 0xFF,
+            MbcType::Tama5 => self.tama5.as_ref().map_or(0xFF, |t| t.read(offset)),
         }
     }
 
@@ -836,6 +851,7 @@ impl Cartridge {
             data.extend_from_slice(&huc3.export_footer());
         }
         if let Some(f) = &self.flash { data.extend_from_slice(&f.data); }
+        if let Some(t) = &self.tama5 { data.extend_from_slice(&t.export_footer()); }
         data
     }
 
@@ -853,7 +869,7 @@ impl Cartridge {
             MbcType::Huc3 { rom_bank, ram_bank, .. } => (rom_bank as u16, ram_bank, false, false),
             MbcType::Mbc7 { rom_bank, ram_enable_1, ram_enable_2 } => (rom_bank as u16, 0, ram_enable_1, ram_enable_2),
             // Its registers go in `export_extra`.
-            MbcType::Mmm01 { .. } | MbcType::Mbc6 { .. } => (0, 0, false, false),
+            MbcType::Mmm01 { .. } | MbcType::Mbc6 { .. } | MbcType::Tama5 => (0, 0, false, false),
         };
         let (sel, latch) = self.rtc.as_ref().map_or((0, false), |r| (r.selected_register.unwrap_or(0), r.latch_ready));
         let [lo, hi] = rom_bank.to_le_bytes();
@@ -875,7 +891,7 @@ impl Cartridge {
             MbcType::Huc1 { ir_mode, rom_bank, ram_bank } => (*ir_mode, *rom_bank, *ram_bank) = (md, rb as u8, rab),
             MbcType::Huc3 { rom_bank, ram_bank, .. } => (*rom_bank, *ram_bank) = (rb as u8, rab),
             MbcType::Mbc7 { rom_bank, ram_enable_1, ram_enable_2 } => (*rom_bank, *ram_enable_1, *ram_enable_2) = (rb as u8, en, md),
-            MbcType::Mmm01 { .. } | MbcType::Mbc6 { .. } => {}
+            MbcType::Mmm01 { .. } | MbcType::Mbc6 { .. } | MbcType::Tama5 => {}
         }
         if let Some(rtc) = &mut self.rtc {
             rtc.selected_register = (s[5] != 0).then_some(s[5]);
@@ -886,12 +902,14 @@ impl Cartridge {
     /// Mapper state beyond the fixed `export_state` block, for the save state's length-prefixed
     /// mapper block. MBC7: its serial and sensor state (`Mbc7::export`). MMM01: its four registers.
     /// MBC6: RAM enable, RAM banks A/B, ROM banks A/B, flash selects A/B, flash enable and write
-    /// enable, then the flash's command state (the flash itself goes with the RAM).
+    /// enable, then the flash's command state (the flash itself goes with the RAM). TAMA5: its
+    /// registers (`Tama5::export_state`; the clock goes with the RAM).
     /// Empty for every other mapper but HuC3: mode, address, last result, last opcode, then
     /// its 256 memory nibbles packed two per byte (low nibble first).
     pub fn export_extra(&self) -> Vec<u8> {
         if let Some(m) = &self.mbc7 { return m.export(); }
         if let MbcType::Mmm01 { regs } = &self.mbc { return regs.to_vec(); }
+        if let Some(t) = &self.tama5 { return t.export_state(); }
         if let (MbcType::Mbc6 { ram_enabled, ram_banks, rom_banks, in_flash, flash_enabled, flash_write }, Some(f)) = (&self.mbc, &self.flash) {
             let mut out = vec![*ram_enabled as u8, ram_banks[0], ram_banks[1], rom_banks[0], rom_banks[1]];
             out.extend([in_flash[0], in_flash[1], *flash_enabled, *flash_write].map(u8::from));
@@ -912,6 +930,7 @@ impl Cartridge {
             *regs = data.first_chunk::<4>().map_or([0; 4], |r| r.map(|b| b & 0x7F));
             return;
         }
+        if let Some(t) = &mut self.tama5 { return t.import_state(data); }
         if let (MbcType::Mbc6 { ram_enabled, ram_banks, rom_banks, in_flash, flash_enabled, flash_write }, Some(f)) = (&mut self.mbc, &mut self.flash) {
             let d = data.first_chunk::<12>().copied().unwrap_or([0; 12]);
             *ram_enabled = d[0] != 0;
@@ -980,6 +999,11 @@ impl Cartridge {
         if let Some(huc3) = &mut self.huc3 {
             if data.len() == ram_len + HUC3_FOOTER_LEN {
                 huc3.import_footer(&data[ram_len..]);
+            }
+        }
+        if let Some(t) = &mut self.tama5 {
+            if data.len() == ram_len + crate::tama5::FOOTER_LEN {
+                t.import_footer(&data[ram_len..]);
             }
         }
         // MBC6: RAM then the flash; a RAM-only file leaves the flash as it is.
@@ -1094,6 +1118,9 @@ impl Cartridge {
                 self.ram[i] = value;
             }
             MbcType::Mbc6 { .. } => {}
+            MbcType::Tama5 => {
+                if let Some(t) = &mut self.tama5 { t.write(offset, value, &mut self.ram); }
+            }
         }
     }
 
@@ -1694,6 +1721,62 @@ mod tests {
         assert_eq!(e.read_rom(0x4000), 0xFF, "Flash Write Enable off: sector 0 is not programmed");
         e.write_rom(0x0C00, 0);
         assert_eq!(e.read_rom(0x4000), 0xFF, "flash disabled");
+    }
+
+    /// Writes TAMA5 register `reg` (select at A001, value at A000).
+    fn tama5_reg(c: &mut Cartridge, reg: u8, v: u8) {
+        c.write_ram(1, reg);
+        c.write_ram(0, v);
+    }
+
+    /// Reads TAMA5 register `reg`.
+    fn tama5_read(c: &mut Cartridge, reg: u8) -> u8 {
+        c.write_ram(1, reg);
+        c.read_ram(0)
+    }
+
+    fn tama5_hour(c: &mut Cartridge) -> u8 {
+        let digit = |c: &mut Cartridge, r| {
+            (tama5_reg(c, 6, 0xA), tama5_reg(c, 7, r));
+            tama5_read(c, 0xC) & 0x0F
+        };
+        digit(c, 5) * 10 + digit(c, 4)
+    }
+
+    #[test]
+    fn tama5_banks_stores_nibbles_and_keeps_time() {
+        let mut rom = vec![0u8; 0x80000];
+        for n in 0..32 { rom[n * 0x4000] = n as u8; }
+        header(&mut rom, 0, 0xFD, 0x00);
+        let mut c = Cartridge::from_rom(rom.clone()).unwrap();
+        assert!(c.has_battery());
+        c.write_ram(1, 0x0A);
+        assert_eq!(c.read_ram(0) & 0x03, 0x01, "ready");
+        (tama5_reg(&mut c, 0, 0x6), tama5_reg(&mut c, 1, 0x0));
+        assert_eq!(c.read_rom(0x4000), 6);
+        (tama5_reg(&mut c, 0, 0x2), tama5_reg(&mut c, 1, 0x1));
+        assert_eq!(c.read_rom(0x4000), 18, "register 1 is bank bit 4");
+
+        // Write 0x9C at RAM address 0x13 (6 = high address bit), read it back (6 = 2 | high bit).
+        for (r, v) in [(4, 0xC), (5, 0x9), (6, 0x1), (7, 0x3)] { tama5_reg(&mut c, r, v); }
+        (tama5_reg(&mut c, 6, 0x3), tama5_reg(&mut c, 7, 0x3));
+        assert_eq!((tama5_read(&mut c, 0xC), tama5_read(&mut c, 0xD)), (0xFC, 0xF9));
+        assert_eq!(c.export_sram()[0x13], 0x9C);
+
+        // Set the clock to 13 h, keep it in the .sav with its time moved back an hour.
+        for (reg, v) in [(5, 1), (4, 3), (3, 0), (2, 0)] {
+            for (r, x) in [(4, v), (6, 0x8), (7, reg)] { tama5_reg(&mut c, r, x); }
+        }
+        assert_eq!(tama5_hour(&mut c), 13);
+        let mut sav = c.export_sram();
+        assert_eq!(sav.len(), 32 + 60);
+        let at = sav.len() - 8;
+        let t = u64::from_le_bytes(sav[at..].try_into().unwrap()) - 3600;
+        sav[at..].copy_from_slice(&t.to_le_bytes());
+        let mut d = Cartridge::from_rom(rom).unwrap();
+        d.import_sram(&sav);
+        assert_eq!(tama5_hour(&mut d), 14, "an hour went by");
+        assert_eq!(d.export_sram()[0x13], 0x9C);
     }
 
     #[test]

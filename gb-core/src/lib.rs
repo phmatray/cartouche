@@ -18,6 +18,7 @@ pub mod registers;
 pub mod serial;
 pub mod sgb;
 pub mod spc700;
+pub mod tama5;
 pub mod timer;
 pub mod trace;
 
