@@ -30,17 +30,30 @@ export function useEmulator() {
   /** The WebAssembly core couldn't load (offline before it was cached, say): the player offers a retry. */
   const [initFailed, setInitFailed] = useState(false);
 
-  const initialize = useCallback(() => import('gb-core').then(async (wasm) => {
-    const initOutput = await wasm.default();
-    wasmMemory = initOutput.memory;
-    emulatorRef.current = new wasm.Emulator();
-    setIsReady(true);
-  }).catch((e) => { console.error(e); setInitFailed(true); }), []);
+  /** The open page's life: a load still awaiting the core when the page goes stops, and builds no console nobody would free. */
+  const alive = useRef({ on: false });
+  const initialize = useCallback(() => {
+    const life = alive.current;
+    return import('gb-core').then(async (wasm) => {
+      if (!life.on) return;
+      const initOutput = await wasm.default();
+      if (!life.on) return;
+      wasmMemory = initOutput.memory;
+      emulatorRef.current?.free();
+      emulatorRef.current = new wasm.Emulator();
+      setIsReady(true);
+    }).catch((e) => { if (life.on) { console.error(e); setInitFailed(true); } });
+  }, []);
 
   useEffect(() => {
+    const life = { on: true };
+    alive.current = life;
     initialize();
     // Free the core after every other cleanup of the page has run (they may still save state or SRAM).
-    return () => { setTimeout(() => { emulatorRef.current?.free(); emulatorRef.current = null; }); };
+    return () => {
+      life.on = false;
+      setTimeout(() => { if (alive.current === life) { emulatorRef.current?.free(); emulatorRef.current = null; } });
+    };
   }, [initialize]);
   const retryInit = useCallback(() => { setInitFailed(false); initialize(); }, [initialize]);
 
