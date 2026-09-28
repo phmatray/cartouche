@@ -83,9 +83,9 @@ cable (`run_frame_linked`, serial and infrared), and only the buttons cross the 
 `lockstep.ts` (input scheduler, message guards), `session.ts` (handshake), `useLockstep.ts` (player page).
 
 1. Handshake, once both games run: each side sends `roms {g, s}`, the SHA-1 of its game and of every game it holds
-   (library entries with a SHA-1: imported ROMs and the hosted GB Studio games; the bundled catalog games have none
-   yet). No ROM ever crosses. If each holds the other's game, the host measures the round trip (median of 5 echoes
-   through the room, test delay included) and sends `boot {seed, d, save}`: the clock seed (epoch seconds, see
+   (library entries with a SHA-1: imported ROMs, the bundled catalog games and the hosted GB Studio games). No ROM
+   ever crosses. If each holds the other's game, the host measures the round trip (median of 5 echoes through the
+   room, test delay included) and sends `boot {seed, d, save}`: the clock seed (epoch seconds, see
    `set_emulated_clock`), the input delay and its battery save. The guest answers `boot {save}`. Until then the
    offer and the host's boot go again with every heartbeat.
 2. Both browsers switch both consoles on the same way: plain `load_rom` (the game's own console, no start-up
