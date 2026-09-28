@@ -51,5 +51,6 @@ export default {
     incomplete: 'Archive zip endommagée ou incomplète',
     method: 'Compression non prise en charge (méthode {method})',
     nested: 'un zip dans un zip dans un zip, ou trop gros : décompressez-le d’abord',
+    empty: 'Aucun fichier à ajouter dans cette archive',
   },
 } satisfies Messages['add'];

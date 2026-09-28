@@ -51,5 +51,6 @@ export default {
     incomplete: 'Archivo zip dañado o incompleto',
     method: 'Compresión no compatible (método {method})',
     nested: 'un zip dentro de un zip dentro de un zip, o demasiado grande: descomprímelo primero',
+    empty: 'Ningún archivo que añadir en este archivo zip',
   },
 } satisfies Messages['add'];
