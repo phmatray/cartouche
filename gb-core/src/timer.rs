@@ -16,13 +16,14 @@ impl Timer {
     }
 
     fn tac_bit_mask(&self) -> u16 {
-        match self.tac & 0x03 {
-            0 => 1 << 9,  // every 1024 T-cycles
-            1 => 1 << 3,  // every 16 T-cycles
-            2 => 1 << 5,  // every 64 T-cycles
-            3 => 1 << 7,  // every 256 T-cycles
-            _ => unreachable!(),
-        }
+        self.bit_mask_for_tac(self.tac)
+    }
+
+    /// TIMA += 1, reloaded from TMA on overflow. Returns true on overflow (timer interrupt).
+    fn increment(&mut self) -> bool {
+        let (new_tima, overflow) = self.tima.overflowing_add(1);
+        self.tima = if overflow { self.tma } else { new_tima };
+        overflow
     }
 
     /// Advance timer by the given number of T-cycles.
@@ -39,13 +40,7 @@ impl Timer {
 
                 // Falling edge: selected bit was 1, now is 0
                 if (old_div & bit_mask != 0) && (self.div_counter & bit_mask == 0) {
-                    let (new_tima, overflow) = self.tima.overflowing_add(1);
-                    if overflow {
-                        self.tima = self.tma;
-                        interrupt = true;
-                    } else {
-                        self.tima = new_tima;
-                    }
+                    interrupt |= self.increment();
                 }
             }
         }
@@ -63,63 +58,54 @@ impl Timer {
         }
     }
 
-    pub fn write(&mut self, addr: u16, value: u8) {
+    /// Returns true if the write made TIMA overflow (timer interrupt): resetting DIV or changing
+    /// TAC can drop the selected DIV bit, a falling edge that ticks TIMA like any other.
+    pub fn write(&mut self, addr: u16, value: u8) -> bool {
         match addr {
             0xFF04 => {
-                // Writing any value to DIV resets it to 0.
-                // If the timer is enabled, the falling edge caused by
-                // clearing div_counter can tick TIMA.
-                if self.tac & 0x04 != 0 {
-                    let bit_mask = self.tac_bit_mask();
-                    if self.div_counter & bit_mask != 0 {
-                        let (new_tima, overflow) = self.tima.overflowing_add(1);
-                        if overflow {
-                            self.tima = self.tma;
-                            // Note: should also trigger interrupt, but
-                            // we can't from here; caller would need to check.
-                        } else {
-                            self.tima = new_tima;
-                        }
-                    }
-                }
+                let edge = self.tac & 0x04 != 0 && self.div_counter & self.tac_bit_mask() != 0;
                 self.div_counter = 0;
+                edge && self.increment()
             }
-            0xFF05 => self.tima = value,
-            0xFF06 => self.tma = value,
+            0xFF05 => { self.tima = value; false }
+            0xFF06 => { self.tma = value; false }
             0xFF07 => {
                 let old_tac = self.tac;
                 self.tac = value & 0x07;
-                // Changing TAC can cause a falling edge if the old selected
-                // bit was 1 and the new selected bit is 0 (or timer disabled).
-                if old_tac & 0x04 != 0 {
-                    let old_bit = self.div_counter & self.bit_mask_for_tac(old_tac);
-                    let new_enabled = self.tac & 0x04 != 0;
-                    let new_bit = if new_enabled {
-                        self.div_counter & self.tac_bit_mask()
-                    } else {
-                        0
-                    };
-                    if old_bit != 0 && new_bit == 0 {
-                        let (new_tima, overflow) = self.tima.overflowing_add(1);
-                        if overflow {
-                            self.tima = self.tma;
-                        } else {
-                            self.tima = new_tima;
-                        }
-                    }
-                }
+                let old_bit = old_tac & 0x04 != 0 && self.div_counter & self.bit_mask_for_tac(old_tac) != 0;
+                let new_bit = self.tac & 0x04 != 0 && self.div_counter & self.tac_bit_mask() != 0;
+                old_bit && !new_bit && self.increment()
             }
-            _ => {}
+            _ => false,
         }
     }
 
     fn bit_mask_for_tac(&self, tac: u8) -> u16 {
         match tac & 0x03 {
-            0 => 1 << 9,
-            1 => 1 << 3,
-            2 => 1 << 5,
-            3 => 1 << 7,
-            _ => unreachable!(),
+            0 => 1 << 9,  // every 1024 T-cycles
+            1 => 1 << 3,  // every 16 T-cycles
+            2 => 1 << 5,  // every 64 T-cycles
+            _ => 1 << 7,  // every 256 T-cycles
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_overflow_from_a_div_or_tac_write_requests_the_interrupt() {
+        // TAC 1 (16 cycles): DIV bit 3 set, TIMA at $FF.
+        let armed = || Timer { div_counter: 0x0008, tima: 0xFF, tma: 0x42, tac: 0x05 };
+        let mut t = armed();
+        assert!(t.write(0xFF04, 0), "DIV reset: falling edge, overflow");
+        assert_eq!(t.tima, 0x42);
+        let mut t = armed();
+        assert!(t.write(0xFF07, 0x00), "timer stopped: falling edge, overflow");
+        assert_eq!(t.tima, 0x42);
+        let mut t = armed();
+        assert!(!t.write(0xFF07, 0x05), "same TAC: no edge");
+        assert_eq!(t.tima, 0xFF);
     }
 }
