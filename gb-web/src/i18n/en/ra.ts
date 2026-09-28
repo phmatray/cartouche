@@ -39,4 +39,5 @@ export default {
   serverError: 'RetroAchievements: {error}',
   pending: 'RetroAchievements can’t be reached: your unlocks will be sent once it’s back.',
   sent: 'Waiting unlocks sent to RetroAchievements.',
+  cheatsOff: 'Achievements are off while codes are on. Restart the game with every code off to unlock again.',
 };

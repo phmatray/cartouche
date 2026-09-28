@@ -6,8 +6,12 @@ import type { FrameTrace } from '../neural/trace';
 // These will be dynamically imported from the WASM module
 let wasmMemory: WebAssembly.Memory | null = null;
 const textDecoder = new TextDecoder();
-const VRAM_SIZE = 0x2000; // 8192 bytes
+const VRAM_SIZE = 0x4000; // both CGB banks, 8 KiB each
 const START = 3; // JoypadButton.Start
+
+/** A view of core memory at `ptr`, or null without a ROM. Valid until the WASM memory grows. */
+const coreView = (ptr: number, len: number): Uint8Array | null =>
+  ptr && wasmMemory ? new Uint8Array(wasmMemory.buffer, ptr, len) : null;
 
 /** `sgb`: a Super Game Boy (only for a cartridge with its functions; `colorize` and `palette` then do not apply). */
 /** `animation`: the start-up animation, 0 none or 1-3 (the index in `STARTUP`). */
@@ -25,6 +29,7 @@ export function useEmulator() {
   /** Debugger steps taken while paused, so the player can redraw the picture after each. */
   const [steps, setSteps] = useState(0);
   const bpRef = useRef<number[]>([]); // the same list, for loadRom (which must not change with it)
+  const cheatsRef = useRef(''); // the cheat codes on, one per line: each load builds a new console that needs them again
   const stopped = useRef(false); // no frame runs past a break, even the rest of this animation frame's batch
   const setIsRunning = useCallback((on: boolean) => {
     if (on) { stopped.current = false; setBreakReason(null); }
@@ -93,6 +98,7 @@ export function useEmulator() {
       stopped.current = false;
       setBreakReason(null);
       bpRef.current.forEach((a) => emu.debug_add_breakpoint(a)); // each load builds a new console
+      if (cheatsRef.current) emu.set_cheats(cheatsRef.current);
       setIsCgb(emu.is_cgb());
       setErrors([]);
       return true;
@@ -208,6 +214,14 @@ export function useEmulator() {
     emulatorRef.current?.debug_add_breakpoint(addr);
     if (!bpRef.current.includes(addr)) setBreakpoints(bpRef.current = [...bpRef.current, addr].sort((a, b) => a - b));
   }, []);
+
+  /** Replaces the cheat codes on (one per line); the core's reason when it refuses them (nothing changes then), else null. */
+  const setCheats = useCallback((codes: string): string | null => {
+    const emu = emulatorRef.current;
+    if (emu && power > 0 && !emu.set_cheats(codes)) return emu.get_error() ?? '';
+    cheatsRef.current = codes;
+    return null;
+  }, [power]);
 
   const removeBreakpoint = useCallback((addr: number) => {
     const emu = emulatorRef.current;
@@ -374,6 +388,23 @@ export function useEmulator() {
     return meta && final && bg && win && obj && info ? { meta, final, bg, win, obj, info } : null;
   }, []);
 
+  const getOam = useCallback((): Uint8Array | null => {
+    const emu = emulatorRef.current;
+    return emu ? coreView(emu.oam_ptr(), 0xA0) : null;
+  }, []);
+
+  const getCram = useCallback((): { bg: Uint8Array; obj: Uint8Array } | null => {
+    const emu = emulatorRef.current;
+    const bg = emu && coreView(emu.cram_bg_ptr(), 64), obj = emu && coreView(emu.cram_obj_ptr(), 64);
+    return bg && obj ? { bg, obj } : null;
+  }, []);
+
+  /** LCDC, STAT, SCY, SCX, LY, LYC, BGP, OBP0, OBP1, WY, WX, VBK. */
+  const getLcdRegs = useCallback((): Uint8Array | null => {
+    const regs = emulatorRef.current?.get_lcd_regs();
+    return regs && regs.length ? regs : null;
+  }, []);
+
   const getBgp = useCallback((): number => {
     const emu = emulatorRef.current;
     return emu ? emu.get_bgp() : 0;
@@ -405,6 +436,7 @@ export function useEmulator() {
     breakpoints,
     addBreakpoint,
     removeBreakpoint,
+    setCheats,
     registers,
     updateRegisters,
     readMemory,
@@ -427,6 +459,9 @@ export function useEmulator() {
     getSerialOutput,
     clearSerialOutput,
     getVramData,
+    getOam,
+    getCram,
+    getLcdRegs,
     getBgp,
     setChannelMuted,
     setTraceEnabled,

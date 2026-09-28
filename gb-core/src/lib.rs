@@ -2,6 +2,7 @@ pub mod apu;
 pub mod boot_rom;
 pub mod camera;
 pub mod cartridge;
+pub mod cheats;
 pub mod cpu;
 pub mod debug;
 pub mod disasm;
@@ -15,6 +16,7 @@ pub mod memory;
 pub mod ppu;
 pub mod printer;
 pub mod registers;
+pub mod sdsp;
 pub mod serial;
 pub mod sgb;
 pub mod spc700;
@@ -451,6 +453,34 @@ impl Emulator {
         }
     }
 
+    /// Replaces the active cheat codes (Game Genie / GameShark, one per line; "" clears them).
+    /// All or nothing: on the first bad code nothing changes and `get_error()` says `"<code>: <reason>"`.
+    pub fn set_cheats(&mut self, codes: &str) -> bool {
+        let Some(gb) = &mut self.gb else {
+            self.last_error = Some("No ROM loaded".to_string());
+            return false;
+        };
+        let mut list = Vec::new();
+        for code in codes.lines().map(str::trim).filter(|c| !c.is_empty()) {
+            let parsed = crate::cheats::parse(code).and_then(|c| match c {
+                crate::cheats::Cheat::Ram { bank: Some(_), .. } if !gb.bus.cgb_mode => {
+                    Err("bank codes need a Game Boy Color game".to_string())
+                }
+                c => Ok(c),
+            });
+            match parsed {
+                Ok(c) => list.push(c),
+                Err(e) => {
+                    self.last_error = Some(format!("{code}: {e}"));
+                    return false;
+                }
+            }
+        }
+        gb.bus.cheats.set(list);
+        self.last_error = None;
+        true
+    }
+
     /// Plug a Game Boy Printer into the serial port (solo play; never on a linked console).
     pub fn set_printer_connected(&mut self, on: bool) {
         if let Some(gb) = &mut self.gb {
@@ -534,6 +564,27 @@ impl Emulator {
 
     pub fn get_bgp(&self) -> u8 {
         self.gb.as_ref().map_or(0, |gb| gb.bus.ppu.bgp)
+    }
+
+    /// The 160 bytes of OAM (40 entries of Y, X, tile, flags). Null without a ROM.
+    pub fn oam_ptr(&self) -> *const u8 {
+        self.gb.as_ref().map_or(std::ptr::null(), |gb| gb.bus.ppu.oam.as_ptr())
+    }
+
+    /// The 64 bytes of CGB background palette RAM (8 palettes × 4 RGB555 colors). Null without a ROM.
+    pub fn cram_bg_ptr(&self) -> *const u8 {
+        self.gb.as_ref().map_or(std::ptr::null(), |gb| gb.bus.ppu.bg_cram.as_ptr())
+    }
+
+    /// The 64 bytes of CGB object palette RAM. Null without a ROM.
+    pub fn cram_obj_ptr(&self) -> *const u8 {
+        self.gb.as_ref().map_or(std::ptr::null(), |gb| gb.bus.ppu.obj_cram.as_ptr())
+    }
+
+    /// LCDC, STAT, SCY, SCX, LY, LYC, BGP, OBP0, OBP1, WY, WX, VBK as the CPU reads them. Empty without a ROM.
+    pub fn get_lcd_regs(&self) -> Vec<u8> {
+        const REGS: [u16; 12] = [0xFF40, 0xFF41, 0xFF42, 0xFF43, 0xFF44, 0xFF45, 0xFF47, 0xFF48, 0xFF49, 0xFF4A, 0xFF4B, 0xFF4F];
+        self.gb.as_ref().map_or(Vec::new(), |gb| REGS.iter().map(|&a| gb.bus.read_byte(a)).collect())
     }
 
     // Layer trace (see trace.rs for every buffer's layout). Off by default; the pointers below
