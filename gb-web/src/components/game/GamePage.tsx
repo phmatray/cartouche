@@ -301,7 +301,9 @@ function Saves({ game, header, setConfirm }: { game: GameEntry; header: RomMetad
   const noSave = header && header.ramSize === 'None' && !/MBC2/.test(header.cartridgeType);
   if (noSave && !list?.length) return null;
 
-  const rename = async (p: StoredSave, name: string) => {
+  /** A change to the saves that couldn't be stored (a full disk) says so: the list would otherwise just stay as it was. */
+  const safely = <A extends unknown[]>(fn: (...a: A) => Promise<void>) => (...a: A) => { fn(...a).catch(() => toast(tNow('game.saves.failed'), 'm')); };
+  const rename = safely(async (p: StoredSave, name: string) => {
     setEditing(null);
     name = name.trim().slice(0, 40);
     if (!name || name === p.name) return;
@@ -313,21 +315,22 @@ function Saves({ game, header, setConfirm }: { game: GameEntry; header: RomMetad
       if (unique !== name) toast(tNow('game.saves.renamedTo', { name, unique }), 'm');
     }
     await reload();
-  };
-  const duplicate = async (p: StoredSave) => {
+  });
+  const duplicate = safely(async (p: StoredSave) => {
     const [cur, all] = await Promise.all([getSram(p.id), listProfiles(game.id)]);
     if (!cur) { await reload(); return; }
     const c = await createProfile(game.id, uniqueName(all, tNow('game.saves.copyName', { name: cur.name })), cur.sram);
     await reload();
     toast(tNow('game.saves.created', { name: c.name }), 'c');
-  };
+  });
   const remove = (p: StoredSave) => setConfirm({
     title: t('game.saves.deleteTitle', { name: p.name }), danger: true, ok: t('game.saves.deleteOk'),
     body: t('game.saves.deleteBody', { title: game.title, size: bytes(p.sram.length), ago: ago(p.timestamp) }),
-    run: async () => { await deleteSave(p.id); await reload(); toast(tNow('game.saves.deleted', { name: p.name }), 'm'); },
+    run: safely(async () => { await deleteSave(p.id); await reload(); toast(tNow('game.saves.deleted', { name: p.name }), 'm'); }),
   });
+  const playSolo = safely(async (p: StoredSave) => { await setActiveProfile(game.id, p.id); await reload(); toast(tNow('game.saves.soloNow', { name: p.name }), 'c'); });
   const onImport = async (f: File) => {
-    const r = await importSav(game, f).catch((e) => `${f.name}: ${e instanceof Error ? e.message : e}`);
+    const r = await importSav(game, f).catch((e) => (e instanceof DOMException && e.name === 'QuotaExceededError' ? tNow('game.saves.failed') : `${f.name}: ${e instanceof Error ? e.message : e}`));
     if (typeof r === 'string') { setErr(r); return; }
     setErr('');
     await reload();
@@ -351,7 +354,7 @@ function Saves({ game, header, setConfirm }: { game: GameEntry; header: RomMetad
               <small>{t('game.saves.meta', { size: bytes(p.sram.length), ago: ago(p.timestamp) })}</small>
             </div>
             <div className="pa">
-              {p.id !== active && <button className="btn line sm" aria-label={t('game.saves.soloOf', { name: p.name })} onClick={async () => { await setActiveProfile(game.id, p.id); await reload(); toast(tNow('game.saves.soloNow', { name: p.name }), 'c'); }}>{t('game.saves.useSolo')}</button>}
+              {p.id !== active && <button className="btn line sm" aria-label={t('game.saves.soloOf', { name: p.name })} onClick={() => playSolo(p)}>{t('game.saves.useSolo')}</button>}
               <button className="btn line sm" aria-label={t('game.saves.renameOf', { name: p.name })} onClick={() => setEditing(p.id)}>{t('common.rename')}</button>
               <button className="btn line sm" aria-label={t('game.saves.duplicateOf', { name: p.name })} onClick={() => duplicate(p)}>{t('game.saves.duplicate')}</button>
               <button className="btn line sm" aria-label={t('game.saves.exportOf', { name: p.name })} onClick={() => download(new Blob([p.sram as BlobPart]), `${game.title} - ${p.name}.sav`)}>{t('game.saves.export')}</button>
