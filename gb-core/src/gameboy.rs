@@ -389,6 +389,13 @@ impl GameBoy {
         Ok(())
     }
 
+    /// A deterministic session: the cartridge clock starts at `epoch_seconds` (unix time) and only
+    /// advances with emulated time from now on (`Cartridge::set_emulated_clock`). Solo play keeps
+    /// the wall clock for catching up between sessions.
+    pub fn set_emulated_clock(&mut self, epoch_seconds: f64) {
+        self.bus.cartridge.set_emulated_clock(epoch_seconds.max(0.0) as u64);
+    }
+
     pub fn step_instruction(&mut self) -> Result<u32, EmulatorError> {
         self.bus.cycle_count = 0;
         self.cpu.handle_interrupts(&mut self.bus);
@@ -398,6 +405,11 @@ impl GameBoy {
             w.hit = None; // a step stops anyway: no break left over for the next run_frame
         }
         Ok(self.bus.cycle_count)
+    }
+
+    /// A stable 32-bit FNV-1a hash of `save_state()`, to check that two copies of a session agree.
+    pub fn state_hash(&self) -> u32 {
+        self.save_state().iter().fold(0x811C_9DC5, |h, &b| (h ^ b as u32).wrapping_mul(0x0100_0193))
     }
 
     pub fn save_state(&self) -> Vec<u8> {
