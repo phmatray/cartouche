@@ -639,6 +639,9 @@ pub fn run_linked_frame(a: &mut GameBoy, b: &mut GameBoy) -> Result<(), (usize, 
         }
         connect(a, b);
         connect(b, a);
+        // Infrared: each LED shines into the other console's sensor (never its own).
+        a.bus.ir_light_in = b.bus.ir_led();
+        b.bus.ir_light_in = a.bus.ir_led();
     }
     Ok(())
 }
