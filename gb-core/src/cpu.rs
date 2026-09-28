@@ -23,21 +23,34 @@ impl Cpu {
         }
     }
 
-    /// Handle pending interrupts. Returns true if an interrupt was serviced.
+    /// Handle pending interrupts: wake HALT, dispatch when IME is on.
     pub fn handle_interrupts(&mut self, bus: &mut MemoryBus) {
-        if self.stopped {
+        let pending = bus.interrupts.pending();
+        if pending == 0 || self.stopped {
             return; // only a button wakes stop mode (see `step`)
         }
-        if bus.interrupts.pending() != 0 {
+        if self.halted {
+            if pending & !bus.late_interrupts() == 0 {
+                return;
+            }
             self.halted = false;
         }
-
-        if !self.ime || bus.interrupts.pending() == 0 {
-            return;
+        if self.ime {
+            self.dispatch(bus);
         }
+    }
 
+    /// The 5 M-cycle interrupt dispatch.
+    #[inline(never)]
+    fn dispatch(&mut self, bus: &mut MemoryBus) {
         self.ime = false;
         self.ime_pending = false; // the handler starts with interrupts off
+        // After a HALT bug (EI; HALT with an interrupt pending) PC was never advanced past the
+        // HALT's next byte: the dispatch returns to the HALT itself.
+        if self.halt_bug {
+            self.halt_bug = false;
+            self.regs.pc = self.regs.pc.wrapping_sub(1);
+        }
         let pc = self.regs.pc;
         bus.cycle_tick(); // M1: internal
         bus.cycle_idu(self.regs.sp); // M2: SP--
@@ -54,6 +67,8 @@ impl Cpu {
 
     /// Execute one instruction. Returns the number of T-cycles consumed.
     pub fn step(&mut self, bus: &mut MemoryBus) -> Result<u32, CpuError> {
+        // IME as this instruction sees it: an EI just before takes effect only after it.
+        let ime = self.ime;
         if self.ime_pending {
             self.ime = true;
             self.ime_pending = false;
@@ -298,7 +313,7 @@ impl Cpu {
 
             // === HALT ===
             0x76 => {
-                if self.ime || bus.interrupts.pending() == 0 {
+                if ime || bus.interrupts.pending() == 0 {
                     self.halted = true;
                 } else {
                     // HALT bug: IME=0 but interrupt pending — don't halt,

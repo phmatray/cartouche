@@ -247,3 +247,31 @@ fn an_ie_write_by_the_high_byte_push_cancels_the_dispatch() {
     assert_eq!(gb.cpu.regs.pc, 0x0040);
     assert_eq!(gb.bus.interrupts.interrupt_flag & 0x01, 0);
 }
+
+/// A halted CPU samples IF mid-M-cycle. The timer raises its line with the TIMA reload, at the
+/// end of the overflow M-cycle, so it wakes HALT one M-cycle later than a VBlank raised in that
+/// same M-cycle (gbmicrotest int_timer_halt).
+#[test]
+fn a_timer_overflow_wakes_halt_one_m_cycle_after_a_vblank() {
+    let halted_on_overflow = |also_vblank: bool| {
+        let mut gb = boot(&[0x76, 0x00, 0x18, 0xFE], &[]); // HALT; NOP; JR -2
+        gb.bus.interrupts.interrupt_enable = 0x05; // VBlank, timer
+        gb.bus.interrupts.interrupt_flag = 0;
+        gb.step_instruction().unwrap();
+        assert!(gb.cpu.halted);
+        // TAC 5 (16 cycles), DIV one M-cycle before the falling edge of bit 3: TIMA overflows.
+        gb.bus.timer.tima = 0xFF;
+        gb.bus.timer.tac = 0x05;
+        gb.bus.timer.div_counter = 0x000C;
+        gb.cpu.step(&mut gb.bus).unwrap();
+        if also_vblank { gb.bus.interrupts.request(0x01); }
+        gb.cpu.handle_interrupts(&mut gb.bus);
+        gb
+    };
+    assert!(!halted_on_overflow(true).cpu.halted, "VBlank: awake at once");
+    let mut gb = halted_on_overflow(false);
+    assert!(gb.cpu.halted, "timer: not yet");
+    gb.cpu.step(&mut gb.bus).unwrap();
+    gb.cpu.handle_interrupts(&mut gb.bus);
+    assert!(!gb.cpu.halted, "timer: one M-cycle later");
+}

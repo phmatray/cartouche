@@ -177,13 +177,13 @@ listed, not hidden, in `gb-core/tests/expected-failures.txt`.
 | Homebrew smoke tests | Freely licensed GB and GBC games run without freezing | ✅ |
 | Link cable | Serial transfers between two consoles | ✅ |
 | Infrared (CGB) | Light between the two consoles of the link page | ✅ |
-| Mooneye acceptance | Timers, DMA, interrupts, PPU and instruction timing | 56/75 |
+| Mooneye acceptance | Timers, DMA, interrupts, PPU and instruction timing | 58/75 |
 | Mooneye emulator-only MBC | MBC1, MBC2 and MBC5 banking | 27/28 |
 | Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 2/51 |
-| SameSuite | APU, HDMA and interrupt edge cases (CGB) | 5/78 |
-| Age | PPU, STAT, OAM/VRAM access and double-speed timing | 3/51 |
-| gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 300/513 |
-| rtc3test | The MBC3 real-time clock | 0/6 |
+| SameSuite | APU, HDMA and interrupt edge cases (CGB) | 6/78 |
+| Age | PPU, STAT, OAM/VRAM access and double-speed timing | 4/51 |
+| gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 321/513 |
+| rtc3test | The MBC3 real-time clock | 6/6 |
 
 ¹ Test 7 runs inside the combined `oam_bug.gb`. Run on its own, that ROM
 overruns its 8 KB text log and overwrites its own code, so it cannot finish on
