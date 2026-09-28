@@ -198,7 +198,7 @@ impl MemoryBus {
             0xFF02 => self.serial.read(addr) | if self.cgb_mode { 0x7C } else { 0x7E },
             0xFF04..=0xFF07 => self.timer.read(addr),
             0xFF0F => self.interrupts.interrupt_flag | 0xE0, // bits 5-7 unused, read as 1
-            0xFF10..=0xFF3F => self.apu.read_register(addr),
+            0xFF10..=0xFF3F | 0xFF76 | 0xFF77 => self.apu.read_register(addr),
             0xFF46 => self.dma_source,
             0xFF40..=0xFF4B => self.ppu.read_register(addr),
             0xFF4D => {
@@ -258,8 +258,9 @@ impl MemoryBus {
             0xFF02 => self.serial.write(addr, if self.cgb_mode { value } else { value & !0x02 }),
             0xFF04..=0xFF07 => {
                 // An overflow requests the interrupt at once, a TIMA write cancelling the reload withdraws it (Timer::step).
-                let pending = self.timer.reload_pending;
+                let (pending, div) = (self.timer.reload_pending, self.timer.div_counter);
                 self.timer.write(addr, value);
+                self.div_apu_edge(div);
                 match (pending, self.timer.reload_pending) {
                     (false, true) => self.interrupts.request(TIMER_BIT),
                     (true, false) => self.interrupts.interrupt_flag &= !TIMER_BIT,
@@ -267,7 +268,14 @@ impl MemoryBus {
                 }
             }
             0xFF0F => self.interrupts.interrupt_flag = value & 0x1F,
-            0xFF10..=0xFF3F => self.apu.write_register(addr, value),
+            0xFF10..=0xFF3F => {
+                let was_on = self.apu.is_on();
+                self.apu.write_register(addr, value);
+                // Powered on while DIV's APU bit is set: the first DIV-APU event is skipped.
+                if !was_on && self.apu.is_on() && self.timer.div_counter & self.div_apu_bit() != 0 {
+                    self.apu.skip_first_div_event();
+                }
+            }
             0xFF40..=0xFF4B => {
                 if addr == 0xFF46 {
                     // A write during a transfer restarts it; the old one holds the bus meanwhile.
@@ -343,12 +351,29 @@ impl MemoryBus {
         if !self.cgb_mode || self.key1 & 0x01 == 0 {
             return false;
         }
+        // STOP's second M-cycle reads the byte after it; DIV resets at the end of the next one.
+        self.tick_components();
+        let earlier = self.timer.div_counter;
+        self.tick_components();
+        let div = self.timer.div_counter;
+        self.timer.speed_switch_div_reset(earlier);
+        self.div_apu_edge(div); // the reset can drop DIV's APU bit, in the old speed
         self.double_speed = !self.double_speed;
+        self.ppu.m_cycle_dots = if self.double_speed { 2 } else { 4 };
         self.key1 = 0;
-        // Pan Docs, "CGB Registers": DIV resets and the CPU waits 2050 M-cycles for the clock to settle.
-        self.timer.write(0xFF04, 0);
-        for _ in 0..2050 {
-            self.stop_tick();
+        // Then the CPU halts while the clock settles and everything else runs: $20000 DIV counts,
+        // so DIV is back at 0 when it resumes (Age spsw-div, spsw-tima). Like HALT, an interrupt
+        // ends it early (Age spsw-interrupts). Back in single speed the PPU comes out one dot
+        // behind (Age spsw-mode0: the LCD-to-CPU alignment shifts).
+        let mut behind = !self.double_speed;
+        for _ in 0..0x8000 {
+            self.tick_components();
+            // Taken back once the PPU is a dot into a mode, so no mode change is undone.
+            if behind && self.ppu.mode_clock > 0 {
+                self.ppu.mode_clock -= 1;
+                behind = false;
+            }
+            if self.interrupts.pending() & !self.late_interrupts() != 0 { break; }
         }
         true
     }
@@ -389,9 +414,11 @@ impl MemoryBus {
             self.hdma_step();
             self.dma_stall();
         }
+        let div = self.timer.div_counter;
         if self.timer.step(4) {
             self.interrupts.request(TIMER_BIT);
         }
+        self.div_apu_edge(div);
         if self.serial.tick(4) {
             self.interrupts.request(SERIAL_BIT);
         }
@@ -401,10 +428,23 @@ impl MemoryBus {
         if let Some((l, r)) = self.sgb.as_deref_mut().and_then(|s| s.audio.run(ppu_step)) {
             self.apu.mix_external(l, r);
         }
-        self.apu.step(ppu_step);
+        self.apu.step(ppu_step / 2); // 2 MHz ticks
         self.cycle_count += ppu_step;
 
         self.dma_tick();
+    }
+
+    /// The DIV-APU event: DIV bit 4 (bit 5 in double speed) fell since the counter read `old`,
+    /// whether it counted there or was reset by a write.
+    fn div_apu_edge(&mut self, old: u16) {
+        if old & !self.timer.div_counter & self.div_apu_bit() != 0 {
+            self.apu.div_event();
+        }
+    }
+
+    /// DIV bit 4 (bit 5 in double speed), in the timer's internal counter.
+    fn div_apu_bit(&self) -> u16 {
+        if self.double_speed { 0x2000 } else { 0x1000 }
     }
 
     /// One M-cycle of OAM DMA.
@@ -591,11 +631,28 @@ mod tests {
         assert_ne!(bus.read_byte(0xFF04), 0);
         bus.write_byte(0xFF4D, 0x01);
         assert_eq!(bus.read_byte(0xFF4D), 0x7F, "armed, normal speed");
+        bus.write_byte(0xFF07, 0x04); // TIMA at 4 KHz
+        bus.write_byte(0xFF05, 0x00);
         bus.cycle_count = 0;
         assert!(bus.try_speed_switch());
         assert_eq!(bus.read_byte(0xFF4D), 0xFE, "double speed, disarmed");
-        assert_eq!(bus.read_byte(0xFF04), 0, "DIV reset, and still while the clock settles");
-        assert_eq!(bus.cycle_count, 2050 * 2, "2050 M-cycles at the new speed");
+        assert_eq!(bus.read_byte(0xFF04), 0, "DIV reset, then $20000 counts: back at 0");
+        assert_eq!(bus.read_byte(0xFF05), 0x80, "the timer ran through the pause (Age spsw-tima)");
+        assert_eq!(bus.cycle_count, 2 * 4 + 0x8000 * 2, "STOP's 2 M-cycles, then $8000 at the new speed");
+    }
+
+    #[test]
+    fn an_interrupt_ends_the_speed_switch_pause() {
+        let mut bus = bus();
+        bus.cgb_mode = true;
+        bus.interrupts.interrupt_enable = TIMER_BIT;
+        bus.write_byte(0xFF07, 0x05); // TIMA at 262 KHz: overflows 16 x 256 counts in
+        bus.write_byte(0xFF4D, 0x01);
+        bus.cycle_count = 0;
+        assert!(bus.try_speed_switch());
+        assert_ne!(bus.interrupts.interrupt_flag & TIMER_BIT, 0);
+        assert!(bus.cycle_count < 0x8000 * 2, "woken by the timer, not after $8000 M-cycles");
+        assert_ne!(bus.read_byte(0xFF04), 0, "DIV has not wrapped");
     }
 
     #[test]

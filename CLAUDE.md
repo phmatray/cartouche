@@ -11,7 +11,7 @@ cartouche/
 │   │   ├── cpu.rs / registers.rs   # SM83 CPU
 │   │   ├── memory.rs         # Bus: region routing, DMA/HDMA, OAM-bug hooks
 │   │   ├── cartridge.rs      # ROM + MBC1/MBC2/MBC3(RTC)/MBC5
-│   │   ├── ppu.rs / apu.rs / timer.rs / interrupts.rs / joypad.rs / serial.rs
+│   │   ├── ppu.rs / fifo.rs / apu.rs / timer.rs / interrupts.rs / joypad.rs / serial.rs
 │   │   ├── camera.rs / printer.rs  # Pocket camera sensor + capture unit; Game Boy Printer on the serial port
 │   │   ├── sgb.rs            # Super Game Boy: command packets over P1, palettes/attributes, mask, *_TRN via the shown frame, border, MLT_REQ
 │   │   ├── trace.rs          # Opt-in per-frame layer trace (BG/window/OBJ planes, per-line registers) + exact motion vectors
@@ -52,7 +52,7 @@ must also be listed with their SHA-1 in `scripts/rom-allowlist.sha1` and credite
 | Opcode dispatch | Flat `match` on u8 | Compiles to jump table; most readable for auditing |
 | Framebuffer transfer | Zero-copy via `framebuffer_ptr()` | Avoids 92KB copy per frame |
 | Error boundary | Errors stored as `last_error: String` | wasm-bindgen can't serialize Rust enums; JS calls `get_error()` |
-| PPU accuracy | Scanline-based (not pixel FIFO) | Sufficient for most games; simpler to implement |
+| PPU accuracy | DMG: pixel FIFO (`fifo.rs`), CGB: scanline until #156 | Mid-line register writes take effect on DMG; mode-3 length from `Ppu::mode3_length` |
 | Timer | Simplified tick counting | Accurate falling-edge detection can be added later |
 | Tailwind | v4 with `@import "tailwindcss"` | CSS-native approach, no config file needed |
 
