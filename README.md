@@ -101,7 +101,7 @@ emulator prove itself; hide them in Settings if you'd rather not see them.
 ## Features
 
 **Play**
-- Game Boy and Game Boy Color games, with MBC1, MBC2, MBC3 (with clock), MBC5, HuC1 and HuC3 (with clock) cartridges and battery saves kept automatically.
+- Game Boy and Game Boy Color games, with MBC1, MBC2, MBC3 (with clock), MBC5, HuC1, HuC3 (with clock) and MBC7 (tilt, played by tilting your phone or with a gamepad stick or the keyboard) cartridges and battery saves kept automatically.
 - A resume point every time you leave, so **Continue** puts you back where you were.
 - Five save-state slots with thumbnails, per-game save profiles, rewind (hold <kbd>R</kbd>) and speed from ½× to 4×.
 - Keyboard with remappable keys, any standard gamepad, or touch controls on phones and tablets.
@@ -110,7 +110,6 @@ emulator prove itself; hide them in Settings if you'd rather not see them.
 - The Game Boy Printer sits on the link port: prints feed out of a tray, land in your album and export as PNG.
 - Rumble cartridges drive gamepad motors or phone vibration (Android; iPhone gives websites no vibration).
 - The screen stays awake while you play.
-- Not supported: MBC7 cartridges.
 
 **Library**
 - Drop ROMs, or a `.zip` of them, anywhere in the app; duplicates are caught before they're stored.
@@ -229,7 +228,6 @@ your dumps.
 ## Roadmap
 
 - **RetroAchievements hardcore**: unlocks are softcore for now; hardcore needs the emulator validated by RetroAchievements (eligible after six months public, from March 2027) and the hardcore rules in the player ([what is needed](docs/RETROACHIEVEMENTS.md)).
-- **MBC7** cartridge support.
 - **Super Game Boy sound**: the SNES side's music and effects.
 - **More hosted GB Studio games**, as authors choose licenses that allow it.
 - **Live translation of in-game text**: research only for now.
