@@ -91,7 +91,8 @@ cable (`run_frame_linked`, serial and infrared), and only the buttons cross the 
 2. Both browsers switch both consoles on the same way: plain `load_rom` (the game's own console, no start-up
    animation, no colourisation or Super Game Boy), the player's battery save as sent, the clock seed, cheat codes
    off. Player 1's console always runs first in the pair. The game restarts once, from its battery save, when the
-   mode is chosen (a toast says so).
+   mode is chosen (a toast says so). If one side can't (the partner's game doesn't load, or its SHA-1 differs), it
+   sends `boot {abort}` and both go back to the byte mode, each with a toast saying why.
 3. Every frame each side sends `i {f, b}`: its buttons, sampled now, for frame now + D. Frame n runs once both
    inputs for n are known; the first D frames run with no button. D = `clamp(ceil(rtt / 2 / 16.74) + 1, 2, 10)`,
    fixed for the session. Frames follow the Game Boy's pace from the start, so a frame a short wait held back is
@@ -104,8 +105,8 @@ cable (`run_frame_linked`, serial and infrared), and only the buttons cross the 
    (paused, lost, left); unplugging goes on alone from the current state.
 
 Every received message is checked for shape, types and ranges (`isLockMsg`, `isHashMsg`, `isRomsMsg` with at most
-4096 SHA-1s, `isBootMsg` with the save capped at 128 KiB + clock). A reload mid-session goes back to the byte
-mode for that page (no resume in this slice); rollback is the next slice (#151).
+4096 SHA-1s, `isBootMsg` with the save capped at 128 KiB + clock, and `abort` only alone). A reload mid-session
+goes back to the byte mode for that page (no resume in this slice); rollback is the next slice (#151).
 
 ## Measurements (localhost, two Chrome contexts; artificial one-way delay added on each side)
 

@@ -116,6 +116,8 @@ export default {
   },
   mode: {
     lockstep: 'Vous avez tous les deux les deux jeux : les deux consoles tournent désormais en phase, à pleine vitesse',
+    abort: 'Le mode en phase n’a pas pu démarrer ici (le jeu du joueur {p} ne s’est pas chargé) : retour au câble habituel',
+    partnerAbort: 'Le mode en phase n’a pas pu démarrer chez le joueur {p} : retour au câble habituel',
   },
   desync: {
     title: 'Désynchronisé',
