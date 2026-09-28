@@ -37,6 +37,7 @@ export default {
     afterDownload: 'The cartridge header is read from the ROM once you download it: mapper, ROM and save size, color support.',
   },
   album: 'Album',
+  patchedFrom: 'Patched from',
   shot: 'Screenshot, {ago}',
   print: 'Print, {ago}',
   noShots: 'No screenshots yet. Press <b>F12</b> while playing, or the camera button, to add one.',
