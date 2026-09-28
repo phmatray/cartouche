@@ -592,7 +592,7 @@ function Player({ game }: { game: GameEntry }) {
   }, [keybindings, input, editing]);
 
   /** Confirm, then start over with an undo (the Saves page and the pause card). */
-  const askStartOver = () => setConfirm({ title: t('player.restart.title'), body: t('player.restart.body'), ok: t('player.restart.ok'), run: startOver });
+  const askStartOver = () => setConfirm({ title: t('player.restart.title'), body: t('player.restart.body'), danger: true, ok: t('player.restart.ok'), run: startOver });
   const auto = saves.states[0];
   const [kind, label] = tagOf(game, savedIds);
   const status = needsRom ? label : savedJustNow ? t('player.savedNow') : auto ? t('player.resumeAgo', { ago: ago(auto.timestamp) }) : label;
@@ -718,7 +718,7 @@ function Player({ game }: { game: GameEntry }) {
           game={game} header={header} inColor={inColor} tab={tab} onTab={setTab} romLoaded={romLoaded && !storageError} isRunning={isRunning}
           states={saves.states} shots={album.shots} emu={emu}
           onSave={(i) => (saves.states[i + 1]
-            ? setConfirm({ title: t('player.overwrite.title', { n: String(i + 1) }), body: t('player.overwrite.body', { ago: ago(saves.states[i + 1]!.timestamp) }), ok: t('player.overwrite.ok'), run: () => saveSlot(i) })
+            ? setConfirm({ title: t('player.overwrite.title', { n: String(i + 1) }), body: t('player.overwrite.body', { ago: ago(saves.states[i + 1]!.timestamp) }), danger: true, ok: t('player.overwrite.ok'), run: () => saveSlot(i) })
             : saveSlot(i))}
           onLoad={load} onScreenshot={screenshot} online={online.on} running={running} onRestart={restart}
           onStartOver={askStartOver}
