@@ -8,6 +8,9 @@ pub struct Timer {
     pub reload_pending: bool,
     /// TMA was loaded into TIMA this M-cycle: a TIMA write is ignored, a TMA write lands in TIMA.
     reloading: bool,
+    /// M-cycles the divider stays stopped (a speed switch's oscillator restart, see
+    /// `MemoryBus::try_speed_switch`).
+    pub div_hold: u8,
 }
 
 impl Timer {
@@ -19,6 +22,7 @@ impl Timer {
             tac: 0,
             reload_pending: false,
             reloading: false,
+            div_hold: 0,
         }
     }
 
@@ -42,6 +46,10 @@ impl Timer {
         if self.reload_pending {
             self.tima = self.tma;
             self.reload_pending = false;
+        }
+        if self.div_hold > 0 {
+            self.div_hold -= 1;
+            return false;
         }
 
         for _ in 0..cycles {
