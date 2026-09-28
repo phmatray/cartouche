@@ -442,6 +442,7 @@ impl MemoryBus {
         self.cartridge.tick();
         self.cartridge.tick_clock(ppu_step as u64);
         self.apu.cgb_mode = self.cgb_mode || self.ppu.compat; // CGB hardware, whatever the mode
+        self.apu.double_speed = self.double_speed;
         if let Some((l, r)) = self.sgb.as_deref_mut().and_then(|s| s.audio.run(ppu_step)) {
             self.apu.mix_external(l, r);
         }
@@ -452,11 +453,16 @@ impl MemoryBus {
     }
 
     /// The DIV-APU event: DIV bit 4 (bit 5 in double speed) fell since the counter read `old`,
-    /// whether it counted there or was reset by a write.
+    /// whether it counted there or was reset by a write; its rise arms the envelopes.
     fn div_apu_edge(&mut self, old: u16) {
-        let fell = old & !self.timer.div_counter & self.div_apu_bit() != 0;
+        let (new, bit) = (self.timer.div_counter, self.div_apu_bit());
+        let fell = old & !new & bit != 0;
         if fell | self.apu_event_late {
             self.deliver_div_event(fell);
+        }
+        // The rise is not held back: only the falling edge is measured late (spsw-ch2-lc-delay).
+        if !old & new & bit != 0 {
+            self.apu.div_secondary_event();
         }
     }
 

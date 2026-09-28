@@ -49,17 +49,29 @@ export const fromB64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCode
 /** The input delay in frames for a round trip: half of it in Game Boy frames, plus one, from 2 to 10. */
 export const delayFor = (rttMs: number) => Math.min(10, Math.max(2, Math.ceil(rttMs / 2 / 16.74) + 1));
 
+/** Rollback: frames run on a guess of the partner's buttons at most; beyond, the frame waits (docs/ONLINE_LINK.md). */
+export const WINDOW = 4;
+/** With rollback, the input delay: 2 frames, plus what the window can't cover of the lockstep delay `d`. */
+export const rollbackDelay = (d: number) => Math.max(Math.min(d, 2), d - WINDOW);
+
+/** Rollback: inputs kept this many frames behind the one running (the rollback window is far smaller). */
+const KEEP = 64;
+
 export class Lockstep {
   private own = new Map<number, number>();
   private theirs = new Map<number, number>();
   private floor = 0; // frames below this have run: their inputs are gone
   private seat: 1 | 2;
   private delay: number;
+  private guessed = new Map<number, number>(); // rollback: the partner buttons a frame ran with before they arrived
+  private last = 0; // the partner's last known buttons
+  private conf: number;
 
   /** Both players use the same delay; the first `delay` frames run with no button held. */
   constructor(seat: 1 | 2, delay: number) {
     this.seat = seat;
     this.delay = delay;
+    this.conf = delay - 1;
     for (let f = 0; f < delay; f++) { this.own.set(f, 0); this.theirs.set(f, 0); }
   }
 
@@ -70,9 +82,36 @@ export class Lockstep {
     return m;
   }
 
-  /** The partner's input (a repeat or one for a frame already run is ignored). */
-  remote(m: LockMsg) {
-    if (m.f >= this.floor && !this.theirs.has(m.f)) this.theirs.set(m.f, m.b);
+  /**
+   * The partner's input (a repeat or one for a frame already run is ignored). Rollback: returns `m.f` when that frame
+   * ran on a guess (`predict`) that proved wrong, so it and every frame since must run again; else null.
+   */
+  remote(m: LockMsg): number | null {
+    if (m.f < this.floor || this.theirs.has(m.f)) return null;
+    this.theirs.set(m.f, m.b);
+    this.last = m.b; // the channel is ordered: the latest frame
+    while (this.theirs.has(this.conf + 1)) this.conf++;
+    const guess = this.guessed.get(m.f);
+    this.guessed.delete(m.f);
+    return guess !== undefined && guess !== m.b ? m.f : null;
+  }
+
+  /**
+   * Rollback: [player 1, player 2] buttons for `frame`, the partner's guessed (their last known buttons) when not here
+   * yet. Called again for a frame run again after a correction.
+   */
+  predict(frame: number): [number, number] {
+    for (; this.floor < frame - KEEP; this.floor++) { this.own.delete(this.floor); this.theirs.delete(this.floor); this.guessed.delete(this.floor); }
+    const a = this.own.get(frame) ?? 0;
+    let b = this.theirs.get(frame);
+    if (b === undefined) this.guessed.set(frame, b = this.last);
+    else this.guessed.delete(frame);
+    return this.seat === 1 ? [a, b] : [b, a];
+  }
+
+  /** The last frame whose partner input, and every one before it, is known: frames up to it never run again. */
+  confirmed() {
+    return this.conf;
   }
 
   /** [player 1, player 2] buttons for `frame` once both are known, else null. */
