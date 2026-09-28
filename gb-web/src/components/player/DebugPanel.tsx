@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { useEmulator } from '../../hooks/useEmulator';
 import { useT } from '../../i18n';
 import { Disassembly } from './debug/Disassembly';
+import { PpuViews } from './debug/PpuViews';
 
 function hex8(v: number): string {
   return v.toString(16).toUpperCase().padStart(2, '0');
@@ -11,71 +12,23 @@ function hex16(v: number): string {
   return v.toString(16).toUpperCase().padStart(4, '0');
 }
 
-// DMG palette as packed Uint32 (matches PALETTE_COLORS in gb-core/src/ppu.rs)
-const DMG_PALETTE_U32 = new Uint32Array(4);
-{
-  const buf = new ArrayBuffer(16);
-  const u8 = new Uint8Array(buf);
-  const RGBA: [number, number, number, number][] = [
-    [0xE0, 0xF8, 0xD0, 0xFF],
-    [0x88, 0xC0, 0x70, 0xFF],
-    [0x34, 0x68, 0x56, 0xFF],
-    [0x08, 0x18, 0x20, 0xFF],
-  ];
-  for (let i = 0; i < 4; i++) {
-    u8[i * 4] = RGBA[i][0];
-    u8[i * 4 + 1] = RGBA[i][1];
-    u8[i * 4 + 2] = RGBA[i][2];
-    u8[i * 4 + 3] = RGBA[i][3];
-  }
-  const u32 = new Uint32Array(buf);
-  for (let i = 0; i < 4; i++) DMG_PALETTE_U32[i] = u32[i];
-}
-
-function renderTiles(canvas: HTMLCanvasElement, vram: Uint8Array, bgp: number) {
-  const ctx = canvas.getContext('2d')!;
-  const imageData = ctx.createImageData(128, 192);
-  const pixels = new Uint32Array(imageData.data.buffer);
-
-  for (let tileIdx = 0; tileIdx < 384; tileIdx++) {
-    const tileX = (tileIdx % 16) * 8;
-    const tileY = Math.floor(tileIdx / 16) * 8;
-    const baseAddr = tileIdx * 16;
-
-    for (let row = 0; row < 8; row++) {
-      const lo = vram[baseAddr + row * 2];
-      const hi = vram[baseAddr + row * 2 + 1];
-      const rowOffset = (tileY + row) * 128 + tileX;
-      for (let col = 0; col < 8; col++) {
-        const bit = 7 - col;
-        const colorId = ((hi >> bit) & 1) << 1 | ((lo >> bit) & 1);
-        const shade = (bgp >> (colorId * 2)) & 0x03;
-        pixels[rowOffset + col] = DMG_PALETTE_U32[shade];
-      }
-    }
-  }
-  ctx.putImageData(imageData, 0, 0);
-}
-
-/** Development aid in the manual's Game page: CPU registers, memory, serial output, VRAM tiles. */
+/** Development aid in the manual's Game page: CPU registers, memory, serial output, and the PPU's tiles, maps, OAM and palettes. */
 export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmulator>; isRunning: boolean }) {
-  const { registers, readMemory, updateRegisters, getSerialOutput, clearSerialOutput, getVramData, getBgp,
+  const { registers, readMemory, updateRegisters, getSerialOutput, clearSerialOutput,
     setIsRunning, stepInstruction, stepFrame, stepOver, breakReason, breakpoints, addBreakpoint, removeBreakpoint } = emu;
   const [bpInput, setBpInput] = useState('');
-  const [tab, setTab] = useState<'cpu' | 'disasm' | 'serial' | 'tiles'>('cpu');
+  const [tab, setTab] = useState<'cpu' | 'disasm' | 'serial' | 'tiles' | 'maps' | 'oam' | 'palettes'>('cpu');
   const [memAddr, setMemAddr] = useState(0x0000);
   const [memView, setMemView] = useState<number[]>([]);
   const [serial, setSerial] = useState('');
-  const tileCanvasRef = useRef<HTMLCanvasElement>(null);
   const t = useT();
 
   const refresh = useCallback(() => {
     updateRegisters();
+    // A new array on every refresh, so the panel (and PpuViews with it) re-renders each time.
     setMemView(Array.from({ length: 256 }, (_, i) => readMemory((memAddr + i) & 0xffff)));
     setSerial(getSerialOutput());
-    const canvas = tileCanvasRef.current, vram = getVramData();
-    if (canvas && vram) renderTiles(canvas, vram, getBgp());
-  }, [updateRegisters, readMemory, memAddr, getSerialOutput, getVramData, getBgp]);
+  }, [updateRegisters, readMemory, memAddr, getSerialOutput]);
 
   // Live while running (twice a second), once when paused.
   useEffect(() => {
@@ -106,8 +59,11 @@ export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmula
   const mono = { font: '600 12px/1.5 ui-monospace,Menlo,monospace' };
   return (
     <div style={{ marginTop: 16 }}>
-      <div className="seg" role="group" aria-label={t('player.debug.view')} style={{ marginBottom: 14 }}>
-        {(['cpu', 'disasm', 'serial', 'tiles'] as const).map((v) => <button key={v} aria-pressed={tab === v} onClick={() => setTab(v)}>{t(`player.debug.${v}`)}</button>)}
+      {/* Seven views: the settings' wrapping segmented control (three columns in the narrow drawer). */}
+      <div className="row col" style={{ border: 0, padding: 0, marginBottom: 14 }}>
+        <div className="seg rows" role="group" aria-label={t('player.debug.view')}>
+          {(['cpu', 'disasm', 'serial', 'tiles', 'maps', 'oam', 'palettes'] as const).map((v) => <button key={v} aria-pressed={tab === v} onClick={() => setTab(v)}>{t(`player.debug.${v}`)}</button>)}
+        </div>
       </div>
       {tab === 'cpu' && (
         <div style={mono}>
@@ -159,7 +115,7 @@ export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmula
           <pre style={{ ...mono, whiteSpace: 'pre-wrap', wordBreak: 'break-all', maxHeight: 400, overflowY: 'auto' }}>{serial || t('player.debug.noOutput')}</pre>
         </>
       )}
-      {tab === 'tiles' && <canvas ref={tileCanvasRef} width={128} height={192} style={{ width: 256, height: 384, imageRendering: 'pixelated', background: '#0b0b0b' }} />}
+      {(tab === 'tiles' || tab === 'maps' || tab === 'oam' || tab === 'palettes') && <PpuViews emu={emu} view={tab} />}
     </div>
   );
 }

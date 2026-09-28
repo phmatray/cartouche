@@ -15,6 +15,7 @@ pub mod memory;
 pub mod ppu;
 pub mod printer;
 pub mod registers;
+pub mod sdsp;
 pub mod serial;
 pub mod sgb;
 pub mod spc700;
@@ -561,6 +562,27 @@ impl Emulator {
 
     pub fn get_bgp(&self) -> u8 {
         self.gb.as_ref().map_or(0, |gb| gb.bus.ppu.bgp)
+    }
+
+    /// The 160 bytes of OAM (40 entries of Y, X, tile, flags). Null without a ROM.
+    pub fn oam_ptr(&self) -> *const u8 {
+        self.gb.as_ref().map_or(std::ptr::null(), |gb| gb.bus.ppu.oam.as_ptr())
+    }
+
+    /// The 64 bytes of CGB background palette RAM (8 palettes × 4 RGB555 colors). Null without a ROM.
+    pub fn cram_bg_ptr(&self) -> *const u8 {
+        self.gb.as_ref().map_or(std::ptr::null(), |gb| gb.bus.ppu.bg_cram.as_ptr())
+    }
+
+    /// The 64 bytes of CGB object palette RAM. Null without a ROM.
+    pub fn cram_obj_ptr(&self) -> *const u8 {
+        self.gb.as_ref().map_or(std::ptr::null(), |gb| gb.bus.ppu.obj_cram.as_ptr())
+    }
+
+    /// LCDC, STAT, SCY, SCX, LY, LYC, BGP, OBP0, OBP1, WY, WX, VBK as the CPU reads them. Empty without a ROM.
+    pub fn get_lcd_regs(&self) -> Vec<u8> {
+        const REGS: [u16; 12] = [0xFF40, 0xFF41, 0xFF42, 0xFF43, 0xFF44, 0xFF45, 0xFF47, 0xFF48, 0xFF49, 0xFF4A, 0xFF4B, 0xFF4F];
+        self.gb.as_ref().map_or(Vec::new(), |gb| REGS.iter().map(|&a| gb.bus.read_byte(a)).collect())
     }
 
     // Layer trace (see trace.rs for every buffer's layout). Off by default; the pointers below
