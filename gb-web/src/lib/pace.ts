@@ -7,12 +7,21 @@ export const GB_FPS = 4194304 / 70224;
  * stall (a hidden tab, a slow frame) is dropped rather than caught up.
  */
 export function pacer(max = 4) {
-  let last = -1, acc = 0;
+  let last = -1, acc = 0, n = 0;
   return (now: number) => {
     acc += (last >= 0 ? Math.min(0.1, (now - last) / 1000) : 1 / GB_FPS) * GB_FPS;
     last = now;
-    const n = Math.min(max, Math.floor(acc));
-    acc = Math.min(1, acc - n);
+    [n, acc] = take(acc, max);
     return n;
   };
+}
+
+/**
+ * The frames to run now out of `acc` frames due (at most `max`), and what stays due: at most one frame. Frames over
+ * the cap are dropped, never owed: a device too slow for 4× would otherwise pile them up and pay them back later,
+ * racing through the game at up to `max` frames per display refresh once back at 1×.
+ */
+export function take(acc: number, max: number): [n: number, acc: number] {
+  const n = Math.min(max, Math.floor(acc));
+  return [n, Math.min(1, acc - n)];
 }
