@@ -447,7 +447,7 @@ impl GameBoy {
         self.bus.ppu.stat = read_u8!();
         self.bus.ppu.scy = read_u8!();
         self.bus.ppu.scx = read_u8!();
-        self.bus.ppu.ly = read_u8!();
+        self.bus.ppu.ly = read_u8!().min(153); // clamped, as the other damaged-state values below
         self.bus.ppu.lyc = read_u8!();
         self.bus.ppu.bgp = read_u8!();
         self.bus.ppu.obp0 = read_u8!();
@@ -460,7 +460,10 @@ impl GameBoy {
             2 => crate::ppu::PpuMode::OamScan,
             _ => crate::ppu::PpuMode::Drawing,
         };
-        self.bus.ppu.mode_clock = read_u32!();
+        // Lines 144-153 are VBlank's: in another mode such a line would never reach VBlank.
+        if self.bus.ppu.mode != crate::ppu::PpuMode::VBlank { self.bus.ppu.ly = self.bus.ppu.ly.min(143); }
+        // Below one line: a larger count would run a line per M-cycle until it drained.
+        self.bus.ppu.mode_clock = read_u32!().min(455);
         self.bus.ppu.window_line_counter = read_u8!();
         self.bus.ppu.frame_ready = read_u8!() != 0;
 
@@ -495,10 +498,11 @@ impl GameBoy {
 
         let mapper: &[u8; MAPPER_STATE_LEN] = read_bytes!(MAPPER_STATE_LEN).try_into().unwrap();
         self.bus.cartridge.import_state(mapper);
-        self.bus.hdma_source = read_u16!();
-        self.bus.hdma_dest = read_u16!();
-        self.bus.hdma_remaining = read_u8!();
-        self.bus.hdma_active = read_u8!() != 0;
+        self.bus.hdma_source = read_u16!() & 0xFFF0;
+        self.bus.hdma_dest = read_u16!() & 0x1FF0;
+        self.bus.hdma_remaining = read_u8!().min(0x80);
+        // An HBlank DMA with no block left would copy 255 more over VRAM.
+        self.bus.hdma_active = read_u8!() != 0 && self.bus.hdma_remaining > 0;
         self.bus.hdma5 = read_u8!();
         self.bus.key1 = read_u8!();
         self.bus.dma_active = read_u8!() != 0;
@@ -560,3 +564,31 @@ const SAVE_MAGIC: &[u8; 4] = b"GBSS";
 // v4 adds the console and palette bytes after the version (v3 states still load: see `state_console`).
 // v5 adds the start-up animation after them, so a state saved while it plays goes on with its own boot ROM.
 const SAVE_VERSION: u32 = 5;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A damaged state's PPU line, line clock and HBlank DMA are clamped to values the machine can
+    /// run from (release builds wrap instead of panicking: these ran a line per M-cycle for seconds,
+    /// or copied 255 stray HDMA blocks over VRAM).
+    #[test]
+    fn a_damaged_state_is_clamped_to_a_runnable_one() {
+        let mut rom = vec![0u8; 0x8000];
+        rom[0x100..0x102].copy_from_slice(&[0x18, 0xFE]);
+        rom[0x143] = 0xC0;
+        rom[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(rom[i]).wrapping_sub(1));
+        let mut gb = GameBoy::new(rom.clone()).unwrap();
+        gb.bus.ppu.mode = crate::ppu::PpuMode::HBlank;
+        gb.bus.ppu.ly = 200;
+        gb.bus.ppu.mode_clock = u32::MAX - 8;
+        (gb.bus.hdma_active, gb.bus.hdma_remaining, gb.bus.hdma_dest) = (true, 0, 0xFFFF);
+        let state = gb.save_state();
+        let mut g = GameBoy::new(rom).unwrap();
+        assert!(g.load_state(&state));
+        assert!(g.bus.ppu.ly <= 143 && g.bus.ppu.mode_clock < 456);
+        assert!(!g.bus.hdma_active);
+        assert_eq!(g.bus.hdma_dest, 0x1FF0);
+        g.run_frame().unwrap();
+    }
+}
