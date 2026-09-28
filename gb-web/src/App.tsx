@@ -19,10 +19,16 @@ const OnlineLinkPage = lazy(() => import('./components/netlink/OnlineLinkPage').
 const SettingsPage = lazy(() => import('./components/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const AddRomsPage = lazy(() => import('./components/add/AddRomsPage').then((m) => ({ default: m.AddRomsPage })));
 
-/** Last line of defence: a render error shows the "Nothing in this slot." page instead of a blank screen. */
-class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
+/**
+ * Last line of defence: a render error shows the "Nothing in this slot." page instead of a blank screen.
+ * `at` (the path): going to another page, or back, tries rendering again.
+ */
+class ErrorBoundary extends Component<{ children: ReactNode; at: string }, { failed: boolean; at: string }> {
+  state = { failed: false, at: this.props.at };
   static getDerivedStateFromError() { return { failed: true }; }
+  static getDerivedStateFromProps(props: { at: string }, state: { at: string }) {
+    return props.at === state.at ? null : { failed: false, at: props.at };
+  }
   render() {
     if (!this.state.failed) return this.props.children;
     return (
@@ -57,7 +63,7 @@ function Root() {
     return () => clearTimeout(t);
   }, []);
   return (
-    <ErrorBoundary>
+    <ErrorBoundary at={pathname}>
       <Suspense fallback={<div className="loading wrap" aria-busy="true" />}><Outlet /></Suspense>
       <ScrollRestoration />
     </ErrorBoundary>
