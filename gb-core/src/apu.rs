@@ -667,13 +667,7 @@ impl Apu {
 
     pub fn step(&mut self, cycles: u32) {
         if !self.enabled {
-            // Still accumulate silent samples so the buffer stays in sync
-            self.sample_counter += cycles as f64;
-            while self.sample_counter >= CYCLES_PER_SAMPLE {
-                self.sample_counter -= CYCLES_PER_SAMPLE;
-                self.push_sample(0.0, 0.0);
-            }
-            return;
+            return self.silence(cycles);
         }
 
         // Tick channels
@@ -694,6 +688,16 @@ impl Apu {
         while self.sample_counter >= CYCLES_PER_SAMPLE {
             self.sample_counter -= CYCLES_PER_SAMPLE;
             self.generate_sample();
+        }
+    }
+
+    /// Time passes with no sound (APU off, or the CPU in stop mode): silent samples keep the
+    /// host's audio buffer in sync.
+    pub fn silence(&mut self, cycles: u32) {
+        self.sample_counter += cycles as f64;
+        while self.sample_counter >= CYCLES_PER_SAMPLE {
+            self.sample_counter -= CYCLES_PER_SAMPLE;
+            self.push_sample(0.0, 0.0);
         }
     }
 
