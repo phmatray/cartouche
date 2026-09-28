@@ -108,6 +108,20 @@ fn step_over_runs_a_call_to_its_return() {
 }
 
 #[test]
+fn step_over_a_call_that_never_returns_stops_at_the_frame() {
+    // $0100: CALL $0110; $0110: JR -2 (forever).
+    let mut program = vec![0u8; 0x12];
+    program[..3].copy_from_slice(&[0xCD, 0x10, 0x01]);
+    program[0x10..].copy_from_slice(&[0x18, 0xFE]);
+    let mut gb = GameBoy::new(rom(&program)).unwrap();
+    gb.skip_boot_rom();
+    gb.step_over().unwrap();
+    assert_eq!(gb.cpu.regs.pc, 0x0110);
+    assert_eq!(gb.take_break(), Some(gb_core::debug::Break::Frame));
+    assert_eq!(gb.debugger_mut().temp_stop, None, "the one-shot stop does not outlive the step");
+}
+
+#[test]
 fn step_over_on_anything_else_is_one_step() {
     let mut gb = gameboy();
     let mut stepped = gameboy();
