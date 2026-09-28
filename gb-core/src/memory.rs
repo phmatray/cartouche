@@ -99,9 +99,9 @@ impl MemoryBus {
         }
     }
 
-    /// Whether the infrared LED is lit (CGB mode, RP bit 0).
+    /// Whether an infrared LED is lit: RP bit 0 in CGB mode, or a HuC1/HuC3 cartridge's own.
     pub fn ir_led(&self) -> bool {
-        self.cgb_mode && self.rp & 1 != 0
+        self.cgb_mode && self.rp & 1 != 0 || self.cartridge.ir_led()
     }
 
     fn wram_read(&self, addr: u16) -> u8 {
@@ -187,7 +187,7 @@ impl MemoryBus {
                 }
             }
             0x8000..=0x9FFF => self.ppu.read_vram(addr - 0x8000),
-            0xA000..=0xBFFF => self.cartridge.read_ram(addr - 0xA000),
+            0xA000..=0xBFFF => self.cartridge.read_ram_lit(addr - 0xA000, self.ir_light_in),
             0xC000..=0xDFFF => self.wram_read(addr),
             0xE000..=0xFDFF => self.wram_read(addr - 0x2000),
             0xFE00..=0xFE9F => self.ppu.read_oam(addr - 0xFE00),

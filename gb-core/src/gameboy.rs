@@ -867,9 +867,9 @@ mod tests {
 
         // The pre-change layout ends right after KEY0 (then the mapper block, the timing tail and RP).
         let end = state.len() - TIMING_TAIL_LEN - 1;
-        let extra = u16::from_le_bytes([state[end - 134], state[end - 133]]);
-        assert_eq!(extra, 132, "mode, address, result, opcode, 128 bytes of nibbles");
-        let old = &state[..end - 134];
+        let extra = u16::from_le_bytes([state[end - 135], state[end - 134]]);
+        assert_eq!(extra, 133, "mode, address, result, opcode, 128 bytes of nibbles, IR LED");
+        let old = &state[..end - 135];
         let mut g = GameBoy::new(rom).unwrap();
         assert!(g.load_state(old));
     }
