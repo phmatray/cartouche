@@ -30,9 +30,10 @@ cartouche/
 ```
 
 Test ROMs are downloaded by `scripts/fetch-test-roms.sh` into `gb-core/test-roms/` (gitignored).
-Never commit ROMs, boot ROM dumps (only Cartouche's own boot ROMs in `gb-core/boot/`, built from `gb-core/boot-src/` and allowlisted by hash), box art or Nintendo artwork (the one exception: the CC BY 4.0
-key art of the bundled Tobu Tobu Girl games in `gb-web/public/covers/`, credited in
-THIRD_PARTY_NOTICES.md); the only tracked ROMs are the
+Never commit ROMs, boot ROM dumps (only Cartouche's own boot ROMs in `gb-core/boot/`, built from `gb-core/boot-src/` and allowlisted by hash), box art or Nintendo artwork (the only exceptions, in `gb-web/public/covers/`: the CC BY 4.0
+key art of the bundled Tobu Tobu Girl games, and the title screens of the four hosted GB Studio games, rendered
+from their ROMs under their art licenses; each credited in THIRD_PARTY_NOTICES.md, the GB Studio ones also in
+their `LICENSES.txt`); the only tracked ROMs are the
 bundled ones in `gb-web/public/roms/`, each re-included by its own `.gitignore` line and listed
 with license and SHA-256 in THIRD_PARTY_NOTICES.md. The hosted GB Studio ROMs in `gb-web/public/roms/gbstudio/`
 must also be listed with their SHA-1 in `scripts/rom-allowlist.sha1` and credited in its `LICENSES.txt`

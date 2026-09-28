@@ -31,6 +31,13 @@ test('every hosted ROM has a license, a license link, its SHA-1 and an allowlist
     assert.equal(createHash('sha1').update(data).digest('hex'), g.sha1, `${g.id}: file differs from its SHA-1`);
     assert.equal(data.length, g.size, `${g.id}: size`);
   }
+  // Committed art only for hosted games (their title screens, under the art license), always credited.
+  for (const g of games.filter((g) => g.coverArt)) {
+    assert.ok(g.romUrl, `${g.id}: a committed cover for a game that isn't hosted`);
+    assert.equal(g.coverArt, `covers/${g.id}.webp`);
+    assert.ok(existsSync(join(ROOT, 'gb-web/public', g.coverArt)), `${g.id}: cover missing`);
+    assert.ok(g.coverCredit, `${g.id}: cover credit`);
+  }
   // Nothing allowlisted that the catalog doesn't host.
   assert.equal(allowlist.size, hosted.length);
 });
