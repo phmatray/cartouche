@@ -123,8 +123,17 @@ export function openRoom(code?: string): Promise<void> {
       const left = useNet.getState().peerLeft;
       set({ phase: left ? 'alone' : 'lost', ping: null, ...(left ? { peer: null } : {}) });
     };
+    let unreached = 0;
     heartbeat = () => {
       if (partner && !alive(partner)) drop();
+      // No relay reachable (a firewall, a network that blocks them): nobody can find the room. Said after a few
+      // tries rather than "waiting" forever, and taken back once one answers.
+      if (!partner) {
+        unreached = r.relays() ? 0 : unreached + 1;
+        const { error } = useNet.getState();
+        if (unreached >= RELAY_TRIES && !error) set({ error: 'relays' });
+        else if (!unreached && error === 'relays') set({ error: null });
+      }
       hello(); // doubles as the heartbeat
       measure();
     };
@@ -176,6 +185,8 @@ const alive = (id: string) => Date.now() - (heard.get(id) ?? 0) < SILENT_MS;
 /** Heard within the last heartbeat (every 2 s) and a half. */
 const talking = (id: string) => Date.now() - (heard.get(id) ?? 0) < 3000;
 let heartbeat = () => {};
+/** Heartbeats (2 s apart) without a single relay connected before the lobby says so. */
+const RELAY_TRIES = 4;
 
 function measure() {
   if (!room || !partner) return;
