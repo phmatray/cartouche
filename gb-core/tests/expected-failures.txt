@@ -1,5 +1,5 @@
 # Conformance ROMs that fail today (tests/conformance.rs), one per line: <suite root>/<ROM path>,
-# with `@dmg`/`@cgb`/`@<subtest>` when a ROM runs more than once, then `# <area>`.
+# plus `@<model or reference>` for screenshot runs (Mealybug, Age screenshots, rtc3test), then `# <area>`.
 # Every ROM here still runs; CI fails when one passes. Remove a line with the fix that makes it pass.
 # Areas: boot, cpu-timing, interrupt, timer, oam-dma, hdma, stat, ppu, ppu-mode3, double-speed,
 # apu, mbc, rtc, sgb, serial, other; no-verdict = a gbmicrotest ROM whose source never writes a verdict
