@@ -7,17 +7,33 @@ import { t } from '../i18n';
 /**
  * RetroAchievements unlocking for the game in the player (lib/ra-client), when the player signed in for it in
  * Settings › Achievements: starts at the first power-on, starts over at each restart, forgets hit counts at each
- * state load or rewind step (`jumped`). `frame` goes after every emulated frame.
+ * state load or rewind step (`jumped`). `frame` goes after every emulated frame. `cheatsOn`: a cheat code is on, which
+ * turns unlocking off until a power-on with every code off (switching them off, rewinding or loading a state isn't enough).
  */
-export function useRaSession(power: number, rom: () => Uint8Array | null, peek: (addr: number) => number, title: string) {
+export function useRaSession(power: number, rom: () => Uint8Array | null, peek: (addr: number) => number, title: string, cheatsOn = false) {
   const session = useRef<RaSession | null>(null);
   const started = useRef(false);
   const alive = useRef(true);
-  const args = useRef({ rom, peek, title });
-  useEffect(() => { args.current = { rom, peek, title }; });
+  const off = useRef(false); // a code was on since the last power-on
+  const gen = useRef(0); // a session asked for before unlocking went off never starts
+  const args = useRef({ rom, peek, title, cheatsOn });
+  useEffect(() => { args.current = { rom, peek, title, cheatsOn }; });
+
+  const stop = useCallback(() => {
+    if (off.current) return;
+    off.current = true;
+    gen.current++;
+    session.current?.end();
+    session.current = null;
+    started.current = false;
+    if (getPlay()) toast(t('ra.cheatsOff'), 'm');
+  }, []);
+  useEffect(() => { if (power && cheatsOn) stop(); }, [power, cheatsOn, stop]);
 
   useEffect(() => {
     if (!power) return;
+    if (args.current.cheatsOn) { stop(); return; }
+    off.current = false;
     if (started.current) { session.current?.reset(); return; }
     const data = args.current.rom();
     if (!data || !getPlay()) return;
@@ -33,12 +49,13 @@ export function useRaSession(power: number, rom: () => Uint8Array | null, peek: 
       else if (e.type === EV.DISCONNECTED) toast(t('ra.pending'), 'm');
       else if (e.type === EV.RECONNECTED) toast(t('ra.sent'), 'c');
     };
+    const g = gen.current;
     romHash(data).then((h) => play(h, (a) => args.current.peek(a), events)).then((s) => {
-      if (!alive.current) { s?.end(); return; }
+      if (!alive.current || g !== gen.current) { s?.end(); return; }
       session.current = s;
       if (s) toast(t('ra.session', { count: s.earned, total: s.total }), '');
     }).catch(() => { /* RetroAchievements unreachable: the game plays on, without */ });
-  }, [power]);
+  }, [power, stop]);
   useEffect(() => {
     alive.current = true;
     return () => { alive.current = false; session.current?.end(); session.current = null; };

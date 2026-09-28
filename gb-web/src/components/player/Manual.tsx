@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import type { GameEntry } from '../../types/game';
 import type { StoredSaveState, StoredScreenshot } from '../../lib/db';
@@ -19,14 +19,14 @@ import { SkinPicker } from './TouchSkins';
 import { date, headerSize, rich, useT, type Key } from '../../i18n';
 import { descOf } from '../../lib/catalog-utils';
 import { raShown } from '../../lib/retroachievements';
+import { activeCodes, normalizeCode, type Cheat } from '../../lib/cheats';
 
 const Achievements = lazy(() => import('../game/Achievements'));
 
 const PrintsSection = lazy(() => import('../../peripherals/PrintsSection'));
 
-export type Tab = 'controls' | 'saves' | 'screen' | 'album' | 'game';
-// The Codes page of the printed manual is left out until the core can apply cheat codes.
-const TABS: [Tab, Key][] = [['controls', 'player.tabs.controls'], ['saves', 'player.tabs.saves'], ['screen', 'player.tabs.screen'], ['album', 'player.tabs.album'], ['game', 'player.tabs.game']];
+export type Tab = 'controls' | 'saves' | 'screen' | 'album' | 'codes' | 'game';
+const TABS: [Tab, Key][] = [['controls', 'player.tabs.controls'], ['saves', 'player.tabs.saves'], ['screen', 'player.tabs.screen'], ['album', 'player.tabs.album'], ['codes', 'player.tabs.codes'], ['game', 'player.tabs.game']];
 
 interface ManualProps {
   game: GameEntry;
@@ -64,6 +64,7 @@ export function Manual(p: ManualProps) {
     screen: () => <ScreenPage live={p.isRunning} snapshot={p.emu.framebufferSnapshot} romLoaded={p.romLoaded} inColor={!!p.inColor} gameId={p.game.id}
       dmgCart={p.header?.cgbFlag === 'DMG Only'} sgb={sgbCartOf(p.header)} running={p.running} onRestart={p.onRestart} />,
     album: () => <AlbumPage {...p} />,
+    codes: () => <CodesPage gameId={p.game.id} setCheats={p.emu.setCheats} />,
     game: () => <GamePageTab {...p} />,
   };
   // The tab last focused by a click (Chrome, Firefox): forgotten when focus moves on, or when the click focused nothing (Safari).
@@ -265,6 +266,57 @@ function AlbumPage({ game, shots: all, romLoaded, onScreenshot }: ManualProps) {
         </div>
       ) : <div className="empty-inline">{t(touchOnly() ? 'player.album.emptyTouch' : 'player.album.empty')}</div>}
       {prints.length > 0 && <Suspense fallback={null}><PrintsSection prints={prints} title={game.title} /></Suspense>}
+    </>
+  );
+}
+
+/** The game's cheat codes: each with its name and switch; the core says when it can't use one. */
+function CodesPage({ gameId, setCheats }: { gameId: string; setCheats: (codes: string) => string | null }) {
+  const t = useT();
+  const list = useSettingsStore((s) => s.gameCheats[gameId]) ?? [];
+  const setGameCheats = useSettingsStore((s) => s.setGameCheats);
+  const [error, setError] = useState<string | null>(null);
+  /** Stores `next` once the core takes the codes it switches on (it keeps the ones before otherwise). */
+  const save = (next: Cheat[]) => {
+    const refused = setCheats(activeCodes(next));
+    if (refused !== null) { setError(t('player.codes.refused', { error: refused })); return false; }
+    setError(null);
+    setGameCheats(gameId, next);
+    return true;
+  };
+  const add = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const f = e.currentTarget, data = new FormData(f);
+    const n = normalizeCode(String(data.get('code') ?? ''));
+    if ('error' in n) { setError(t(n.error === 'format' ? 'player.codes.format' : 'player.codes.length')); return; }
+    if (save([...list, { code: n.code, name: String(data.get('name') ?? '').trim(), on: true }])) f.reset();
+  };
+  const change = (i: number, c: Partial<Cheat>) => save(list.map((x, j) => (j === i ? { ...x, ...c } : x)));
+  return (
+    <>
+      <h2>{t('player.tabs.codes')}</h2>
+      <p>{t('player.codes.intro')}</p>
+      {list.some((c) => c.on) && <div className="notice"><span className="ic">i</span><span>{t('player.codes.raOff')}</span></div>}
+      {list.length ? list.map((c, i) => (
+        <div className="row" key={`${i}-${c.code}`}>
+          <span>
+            <input className="field" defaultValue={c.name} placeholder={t('player.codes.optional')} aria-label={t('player.codes.name')}
+              onBlur={(e) => { if (e.target.value.trim() !== c.name) change(i, { name: e.target.value.trim() }); }} />
+            <small><code>{c.code}</code></small>
+          </span>
+          <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button className="switch" role="switch" aria-checked={c.on} aria-label={c.name || c.code} onClick={() => change(i, { on: !c.on })} />
+            <button className="sbtn" aria-label={`${t('player.codes.remove')} ${c.name || c.code}`} onClick={() => save(list.filter((_, j) => j !== i))}>{t('player.codes.remove')}</button>
+          </span>
+        </div>
+      )) : <div className="empty-inline">{t('player.codes.empty')}</div>}
+      <form onSubmit={add} style={{ marginTop: 18, display: 'grid', gap: 8 }}>
+        <label><span>{t('player.codes.code')}</span><input className="field" name="code" autoComplete="off" autoCapitalize="characters" spellCheck={false} required
+          aria-invalid={!!error} aria-describedby={error ? 'codes-error' : undefined} onChange={() => setError(null)} /></label>
+        <label><span>{t('player.codes.name')}</span><input className="field" name="name" autoComplete="off" placeholder={t('player.codes.optional')} /></label>
+        {error && <p id="codes-error" role="alert" style={{ color: 'var(--err)' }}>{error}</p>}
+        <p><button className="btn k" type="submit">{t('player.codes.add')}</button></p>
+      </form>
     </>
   );
 }

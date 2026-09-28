@@ -225,6 +225,7 @@ impl GameBoy {
     pub fn run_frame(&mut self) -> Result<(), EmulatorError> {
         if self.frame_cycles == 0 {
             self.bus.ppu.frame_ready = false;
+            self.apply_ram_cheats();
         }
         while self.frame_cycles < CYCLES_PER_FRAME {
             if self.bus.serial.stalled() {
@@ -243,6 +244,18 @@ impl GameBoy {
         }
         self.frame_cycles = 0;
         Ok(())
+    }
+
+    /// GameShark writes, once per frame like the real device at VBlank.
+    fn apply_ram_cheats(&mut self) {
+        for i in 0..self.bus.cheats.ram.len() {
+            if let crate::cheats::Cheat::Ram { addr, value, bank } = self.bus.cheats.ram[i] {
+                match bank {
+                    Some(b) => self.bus.wram[b as usize * 0x1000 + (addr - 0xD000) as usize] = value,
+                    None => self.bus.write_byte(addr, value),
+                }
+            }
+        }
     }
 
     /// Runs up to the next VBlank entry, so a traced frame is complete when it returns `true`.

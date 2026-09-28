@@ -111,7 +111,7 @@ export default {
   },
   touch: { label: 'Commandes tactiles', up: 'Haut', down: 'Bas', left: 'Gauche', right: 'Droite', rewind: 'Retour arrière, maintenir', ff: 'Avance rapide, maintenir',
     misfit: 'Votre disposition ne tient pas sur cet écran : celle du thème la remplace.', fix: 'Modifier' },
-  tabs: { controls: 'Commandes', saves: 'Parties', screen: 'Écran', album: 'Album', game: 'Jeu' },
+  tabs: { controls: 'Commandes', saves: 'Parties', screen: 'Écran', album: 'Album', codes: 'Codes', game: 'Jeu' },
   controls: {
     intro: 'Chaque touche se modifie dans les <a>Réglages</a>. Une manette branchée fonctionne tout de suite.',
     input: 'Entrée',
@@ -183,6 +183,19 @@ export default {
     share: 'Partager',
     empty: 'Rien pour l’instant. Appuyez sur F12 en jeu.',
     emptyTouch: 'Rien pour l’instant. Touchez Prendre une capture ci-dessus pendant une partie.',
+  },
+  codes: {
+    intro: 'Codes Game Genie (ABC-DEF ou ABC-DEF-GHI) et GameShark (01VVLLHH) pour ce jeu. Chacun a son interrupteur, et le jeu le suit aussitôt.',
+    code: 'Code',
+    name: 'Nom',
+    optional: 'Facultatif',
+    add: 'Ajouter le code',
+    remove: 'Supprimer',
+    empty: 'Aucun code pour ce jeu pour l’instant.',
+    format: 'Un code ne contient que les chiffres 0 à 9 et les lettres A à F.',
+    length: 'Un code Game Genie a 6 ou 9 caractères, un code GameShark 8.',
+    refused: 'Le jeu ne peut pas utiliser ce code. {error}',
+    raOff: 'Les succès ne se débloquent pas tant qu’un code est actif, et restent coupés jusqu’au redémarrage du jeu sans aucun code.',
   },
   game: {
     open: 'Ouvrir la page du jeu',
