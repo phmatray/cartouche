@@ -68,7 +68,9 @@ export async function readBackup(file: File): Promise<Backup> {
     }),
     // Save profiles; a backup from before profiles has one save per game, which becomes its "Main".
     saves: list<StoredSave>(b.saves, (r) => str(r.id) && r.sram instanceof Uint8Array).map(asProfile),
-    states: list<StoredSaveState>(b.states, (r) => str(r.id) && r.data instanceof Uint8Array && (r.profile === undefined || str(r.profile))),
+    // A state without its picture still loads (the storage page, sync and the slots all read one: an empty one).
+    states: list<StoredSaveState>(b.states, (r) => str(r.id) && r.data instanceof Uint8Array && (r.profile === undefined || str(r.profile)))
+      .map((r) => (r.thumbnail instanceof Uint8Array ? r : { ...r, thumbnail: new Uint8Array() })),
     meta: list<StoredGameMeta>(b.meta, (r) => str(r.id)),
     screenshots: list<StoredScreenshot>(b.screenshots, (r) => str(r.gameId) && r.png instanceof Blob),
   };
