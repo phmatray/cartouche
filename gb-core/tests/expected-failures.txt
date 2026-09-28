@@ -5,7 +5,6 @@
 # apu, mbc, rtc, sgb, serial, other; no-verdict = a gbmicrotest ROM whose source never writes a verdict
 # to $FF82 (a hardware probe, not a self-checking test), so it times out on every emulator.
 
-mooneye-test-suite/acceptance/add_sp_e_timing.gb  # cpu-timing
 mooneye-test-suite/acceptance/boot_div-S.gb  # boot
 mooneye-test-suite/acceptance/boot_div-dmg0.gb  # boot
 mooneye-test-suite/acceptance/boot_div-dmgABCmgb.gb  # boot
@@ -17,19 +16,7 @@ mooneye-test-suite/acceptance/boot_regs-dmg0.gb  # boot
 mooneye-test-suite/acceptance/boot_regs-mgb.gb  # boot
 mooneye-test-suite/acceptance/boot_regs-sgb.gb  # boot
 mooneye-test-suite/acceptance/boot_regs-sgb2.gb  # boot
-mooneye-test-suite/acceptance/call_cc_timing.gb  # cpu-timing
-mooneye-test-suite/acceptance/call_cc_timing2.gb  # cpu-timing
-mooneye-test-suite/acceptance/call_timing.gb  # cpu-timing
-mooneye-test-suite/acceptance/call_timing2.gb  # cpu-timing
 mooneye-test-suite/acceptance/interrupts/ie_push.gb  # interrupt
-mooneye-test-suite/acceptance/jp_cc_timing.gb  # cpu-timing
-mooneye-test-suite/acceptance/jp_timing.gb  # cpu-timing
-mooneye-test-suite/acceptance/ld_hl_sp_e_timing.gb  # cpu-timing
-mooneye-test-suite/acceptance/oam_dma/reg_read.gb  # oam-dma
-mooneye-test-suite/acceptance/oam_dma/sources-GS.gb  # oam-dma
-mooneye-test-suite/acceptance/oam_dma_restart.gb  # oam-dma
-mooneye-test-suite/acceptance/oam_dma_start.gb  # oam-dma
-mooneye-test-suite/acceptance/oam_dma_timing.gb  # oam-dma
 mooneye-test-suite/acceptance/ppu/hblank_ly_scx_timing-GS.gb  # stat
 mooneye-test-suite/acceptance/ppu/intr_2_mode0_timing.gb  # stat
 mooneye-test-suite/acceptance/ppu/intr_2_mode0_timing_sprites.gb  # stat
@@ -39,11 +26,6 @@ mooneye-test-suite/acceptance/ppu/lcdon_timing-GS.gb  # stat
 mooneye-test-suite/acceptance/ppu/lcdon_write_timing-GS.gb  # stat
 mooneye-test-suite/acceptance/ppu/stat_lyc_onoff.gb  # stat
 mooneye-test-suite/acceptance/ppu/vblank_stat_intr-GS.gb  # stat
-mooneye-test-suite/acceptance/push_timing.gb  # cpu-timing
-mooneye-test-suite/acceptance/ret_cc_timing.gb  # cpu-timing
-mooneye-test-suite/acceptance/ret_timing.gb  # cpu-timing
-mooneye-test-suite/acceptance/reti_timing.gb  # cpu-timing
-mooneye-test-suite/acceptance/rst_timing.gb  # cpu-timing
 mooneye-test-suite/acceptance/serial/boot_sclk_align-dmgABCmgb.gb  # boot
 mooneye-test-suite/emulator-only/mbc1/multicart_rom_8Mb.gb  # mbc
 same-suite/apu/channel_1/channel_1_align.gb  # apu
@@ -174,7 +156,6 @@ gbmicrotest/803-ppu-latch-bgdisplay.gb  # no-verdict
 gbmicrotest/audio_testbench.gb  # no-verdict
 gbmicrotest/cpu_bus_1.gb  # no-verdict
 gbmicrotest/dma_basic.gb  # oam-dma
-gbmicrotest/dma_timing_a.gb  # oam-dma
 gbmicrotest/flood_vram.gb  # no-verdict
 gbmicrotest/halt_bug.gb  # interrupt
 gbmicrotest/halt_op_dupe_delay.gb  # interrupt

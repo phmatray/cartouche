@@ -395,7 +395,7 @@ impl GameBoy {
         data.extend_from_slice(&b.hdma_source.to_le_bytes());
         data.extend_from_slice(&b.hdma_dest.to_le_bytes());
         data.extend_from_slice(&[b.hdma_remaining, b.hdma_active as u8, b.hdma5, b.key1]);
-        data.extend_from_slice(&[b.dma_active as u8, b.dma_cycles_remaining]);
+        data.extend_from_slice(&[b.dma_active as u8, 0xA0u8.saturating_sub(b.dma_index)]);
         data.extend_from_slice(&[b.ppu.window_was_active as u8, b.ppu.lcd_on_line0 as u8, b.ppu.stat_irq_line as u8]);
         data.extend_from_slice(&[self.cpu.ime_pending as u8, self.cpu.stopped as u8]);
         let sr = &self.bus.serial;
@@ -409,6 +409,8 @@ impl GameBoy {
         let extra = self.bus.cartridge.export_extra();
         data.extend_from_slice(&(extra.len() as u16).to_le_bytes());
         data.extend_from_slice(&extra);
+        // Then the sub-instruction timing (TIMING_TAIL_LEN bytes, absent from older states): TIMA reload, OAM DMA.
+        data.extend_from_slice(&[self.bus.timer.reload_pending as u8, b.dma_delay, b.dma_index, b.dma_source]);
 
         data
     }
@@ -576,7 +578,7 @@ impl GameBoy {
         self.bus.hdma5 = read_u8!();
         self.bus.key1 = read_u8!();
         self.bus.dma_active = read_u8!() != 0;
-        self.bus.dma_cycles_remaining = read_u8!();
+        pos += 1; // the bytes the transfer had left: older states copied them all on the $FF46 write
         self.bus.ppu.window_was_active = read_u8!() != 0;
         self.bus.ppu.lcd_on_line0 = read_u8!() != 0;
         self.bus.ppu.stat_irq_line = read_u8!() != 0;
@@ -607,6 +609,12 @@ impl GameBoy {
             _ => &[],
         };
         self.bus.cartridge.import_extra(extra);
+        let timing = data.get(pos + 4 + extra.len()..).unwrap_or(&[]);
+        let byte = |i: usize| timing.get(i).copied();
+        self.bus.timer.reload_pending = byte(0) == Some(1);
+        self.bus.dma_delay = byte(1).unwrap_or(0).min(2);
+        self.bus.dma_index = byte(2).unwrap_or(0xA0).min(0xA0); // older states: the transfer is done
+        if let Some(source) = byte(3) { self.bus.dma_source = source; }
         true
     }
 }
@@ -644,6 +652,8 @@ fn connect(master: &mut GameBoy, slave: &mut GameBoy) {
 }
 
 const SAVE_MAGIC: &[u8; 4] = b"GBSS";
+/// Bytes after the mapper block: TIMA reload, OAM DMA start-up/index/page.
+const TIMING_TAIL_LEN: usize = 4;
 // v3 (1.0.0) adds the mapper, HDMA/KEY1/OAM-DMA, serial, PPU/CPU latch and APU state; v2 states are
 // rejected because loading them into a freshly booted ROM maps the wrong banks.
 // v4 adds the console and palette bytes after the version (v3 states still load: see `state_console`).
@@ -717,10 +727,11 @@ mod tests {
         c.write_rom(0x0000, 0x0C);
         assert_eq!(c.read_ram(0), 0x97);
 
-        // The pre-change layout ends right after KEY0.
-        let extra = u16::from_le_bytes([state[state.len() - 134], state[state.len() - 133]]);
+        // The pre-change layout ends right after KEY0 (then the mapper block and the timing tail).
+        let end = state.len() - TIMING_TAIL_LEN;
+        let extra = u16::from_le_bytes([state[end - 134], state[end - 133]]);
         assert_eq!(extra, 132, "mode, address, result, opcode, 128 bytes of nibbles");
-        let old = &state[..state.len() - 134];
+        let old = &state[..end - 134];
         let mut g = GameBoy::new(rom).unwrap();
         assert!(g.load_state(old));
     }
