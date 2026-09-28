@@ -55,9 +55,6 @@ age-test-roms/stat-mode-window/stat-mode-window-dmgC.gb  # stat
 age-test-roms/stat-mode-window/stat-mode-window-ds-cgbBCE.gb  # double-speed
 age-test-roms/stat-mode-window/stat-mode-window-ncmBCE.gb  # stat
 age-test-roms/stat-mode/stat-mode-cgbE.gb  # stat
-age-test-roms/stat-mode/stat-mode-dmgC-cgbBC.gb  # stat
-age-test-roms/stat-mode/stat-mode-ds-cgbBCE.gb  # double-speed
-age-test-roms/stat-mode/stat-mode-ncmBC.gb  # stat
 age-test-roms/stat-mode/stat-mode-ncmE.gb  # stat
 age-test-roms/vram/vram-read-cgbBCE.gb  # ppu
 age-test-roms/vram/vram-read-dmgC.gb  # ppu
@@ -122,14 +119,11 @@ gbmicrotest/lcdon_to_oam_int_l1.gb  # ppu
 gbmicrotest/lcdon_to_oam_int_l2.gb  # ppu
 gbmicrotest/lcdon_to_oam_unlock_b.gb  # ppu
 gbmicrotest/lcdon_to_oam_unlock_c.gb  # ppu
-gbmicrotest/lcdon_to_stat1_d.gb  # stat
 gbmicrotest/lcdon_write_timing.gb  # no-verdict
 gbmicrotest/line_144_oam_int_b.gb  # ppu
 gbmicrotest/line_144_oam_int_c.gb  # ppu
 gbmicrotest/line_144_oam_int_d.gb  # ppu
 gbmicrotest/line_153_lyc0_int_inc_sled.gb  # stat
-gbmicrotest/line_153_lyc0_stat_timing_f.gb  # stat
-gbmicrotest/line_153_lyc153_stat_timing_e.gb  # stat
 gbmicrotest/ly_while_lcd_off.gb  # no-verdict
 gbmicrotest/lyc1_int_if_edge_a.gb  # stat
 gbmicrotest/lyc1_int_if_edge_c.gb  # stat
@@ -165,7 +159,6 @@ gbmicrotest/poweron_oam_121.gb  # boot
 gbmicrotest/poweron_oam_183.gb  # boot
 gbmicrotest/poweron_oam_234.gb  # boot
 gbmicrotest/poweron_oam_235.gb  # boot
-gbmicrotest/poweron_stat_006.gb  # boot
 gbmicrotest/poweron_vram_026.gb  # boot
 gbmicrotest/poweron_vram_069.gb  # boot
 gbmicrotest/poweron_vram_140.gb  # boot

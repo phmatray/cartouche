@@ -171,7 +171,9 @@ impl Ppu {
                     PpuMode::OamScan if self.lcd_on_line0 => 0,
                     PpuMode::Drawing if self.lcd_on_line0 && self.mode_clock < 4 => 0,
                     PpuMode::Drawing if self.mode_clock < m => 2,
-                    PpuMode::OamScan if self.mode_clock < m && self.ly != 0 => 0,
+                    // Line 0 after VBlank: 0 like the other lines in single speed, still 1 in double
+                    // speed (Age stat-mode, CGB B/C).
+                    PpuMode::OamScan if self.mode_clock < m => if self.ly == 0 && m == 2 { 1 } else { 0 },
                     PpuMode::VBlank if self.mode_clock < m && self.ly == 144 => 0,
                     mode => mode as u8,
                 };
@@ -920,6 +922,20 @@ mod tests {
                 assert_eq!(edges[0][0], edges[1][0] + shows_late, "{what}");
                 assert_eq!(edges[0][1], edges[1][1] + 2, "{what}");
             }
+        }
+    }
+
+    /// The first M-cycle of line 0 after VBlank reads mode 0 in single speed, still 1 in double
+    /// speed (Age stat-mode, CGB B/C).
+    #[test]
+    fn line_0_after_vblank_first_m_cycle() {
+        for (m_cycle_dots, mode) in [(4, 0), (2, 1)] {
+            let mut p = Ppu::new();
+            (p.lcdc, p.mode, p.ly, p.mode_clock, p.m_cycle_dots) = (0x81, PpuMode::VBlank, 153, 400, m_cycle_dots);
+            while p.mode == PpuMode::VBlank { p.step(1); }
+            assert_eq!(p.read_register(0xFF41) & 3, mode, "{m_cycle_dots} dots per M-cycle");
+            while p.mode_clock < m_cycle_dots { p.step(1); }
+            assert_eq!(p.read_register(0xFF41) & 3, 2);
         }
     }
 
