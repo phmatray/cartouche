@@ -53,6 +53,30 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+  # The release PR is pushed by github-actions[bot], and GitHub holds the CI run of such a PR for a
+  # maintainer's approval ("first-time contributor"); unapproved, it expired as a failed run on every
+  # release PR. The PR only carries release-please's own version bumps, so its CI is approved here.
+  approve-release-pr-ci:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BRANCH: release-please--branches--main--components--cartouche
+    steps:
+      - name: Approve the release PR's pending CI run
+        run: |
+          # The run appears a few seconds after release-please pushed the branch (none: nothing was pushed).
+          for _ in $(seq 1 12); do
+            ids=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=$BRANCH&status=action_required" --jq '.workflow_runs[].id')
+            [ -n "$ids" ] && break
+            sleep 5
+          done
+          for id in $ids; do gh api -X POST "repos/$GITHUB_REPOSITORY/actions/runs/$id/approve" && echo "approved run $id"; done
+
   # The whole suite (core tests with every test ROM, lint, build) runs again on the released commit
   # before anything is attached to the Release.
   ci:
