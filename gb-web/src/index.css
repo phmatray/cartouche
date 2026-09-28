@@ -1084,6 +1084,7 @@ body{font-family:var(--font)}
   .row.col .seg.rows button+button{border-left:0}
   .row.col .seg.rows button[aria-pressed=true]{background:var(--ink)}
   .row.col .seg.rows button:last-child:nth-child(3n+2){grid-column:span 2}
+  .row.col .seg.rows button:last-child:nth-child(3n+1){grid-column:span 3}
 }
 .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:8px}
 .swatch{border:2px solid var(--paper-3);background:#fff;padding:6px 6px 7px;text-align:left;font:700 var(--fs-s) var(--font);color:var(--ink)}
