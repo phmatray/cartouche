@@ -22,6 +22,8 @@ const FILTERS = {
 type Filter = keyof typeof FILTERS;
 const SORTS: [Sort, Key][] = [['name', 'library.sort.name'], ['recent', 'library.sort.recent'], ['most', 'library.sort.most'], ['year', 'library.sort.year']];
 const LETTERS = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+/** Boxes on the shelf rail: the rest are one tap away in the catalog (a rail of 5,000 is thousands of DOM nodes nobody scrolls to). */
+const SHELF_MAX = 24;
 
 const COMPARE: Record<Sort, (a: GameEntry, b: GameEntry) => number> = {
   name: byName,
@@ -148,7 +150,10 @@ export function LibraryPage() {
             {hasRoms && <button className="linkbtn end" onClick={() => pickFilter('mine', true)}>{t('library.onlyMine')} {I.next}</button>}
           </div>
           {shelf.length ? (
-            <div className="shelf rail">{shelf.map((g) => <Item key={g.id} game={g} saved={savedIds} />)}</div>
+            <div className="shelf rail">
+              {shelf.slice(0, SHELF_MAX).map((g) => <Item key={g.id} game={g} saved={savedIds} />)}
+              {shelf.length > SHELF_MAX && <button type="button" className="item more" onClick={() => { setSort('recent'); pickFilter('mine', true); }}>{I.next}{t('library.shelfAll', { count: shelf.length + 1 })}</button>}
+            </div>
           ) : (
             <>
               <div className="slotrow">

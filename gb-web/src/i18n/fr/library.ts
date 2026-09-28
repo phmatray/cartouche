@@ -4,6 +4,7 @@ export default {
   shelf: 'Mon étagère',
   shelfCount: { one: '{count} · les plus récents d’abord', other: '{count} · les plus récents d’abord' },
   shelfMore: { one: '{count} de plus · les plus récents d’abord', other: '{count} de plus · les plus récents d’abord' },
+  shelfAll: { one: 'Voir le jeu', other: 'Voir les {count}' },
   shelfEmpty: 'Rien pour l’instant',
   shelfHint: 'Les jeux ajoutés ou joués se rangent ici, du plus récent au plus ancien.',
   onlyMine: 'Mes jeux seulement',

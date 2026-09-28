@@ -3,6 +3,7 @@ export default {
   shelf: 'Your shelf',
   shelfCount: { one: '{count} · recently played first', other: '{count} · recently played first' },
   shelfMore: { one: '{count} more · recently played first', other: '{count} more · recently played first' },
+  shelfAll: { one: 'See all {count}', other: 'See all {count}' },
   shelfEmpty: 'Nothing here yet',
   shelfHint: 'Games you add or play stand here, most recent first.',
   onlyMine: 'Only mine',

@@ -4,6 +4,7 @@ export default {
   shelf: 'Tu estantería',
   shelfCount: { one: '{count} · primero lo último jugado', other: '{count} · primero lo último jugado' },
   shelfMore: { one: '{count} más · primero lo último jugado', other: '{count} más · primero lo último jugado' },
+  shelfAll: { one: 'Ver {count}', other: 'Ver los {count}' },
   shelfEmpty: 'Aún no hay nada',
   shelfHint: 'Los juegos que añades o juegas se colocan aquí, del más reciente al más antiguo.',
   onlyMine: 'Solo los míos',
