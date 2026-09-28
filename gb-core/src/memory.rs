@@ -198,7 +198,7 @@ impl MemoryBus {
             0xFF02 => self.serial.read(addr) | if self.cgb_mode { 0x7C } else { 0x7E },
             0xFF04..=0xFF07 => self.timer.read(addr),
             0xFF0F => self.interrupts.interrupt_flag | 0xE0, // bits 5-7 unused, read as 1
-            0xFF10..=0xFF3F => self.apu.read_register(addr),
+            0xFF10..=0xFF3F | 0xFF76 | 0xFF77 => self.apu.read_register(addr),
             0xFF46 => self.dma_source,
             0xFF40..=0xFF4B => self.ppu.read_register(addr),
             0xFF4D => {

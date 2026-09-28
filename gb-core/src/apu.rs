@@ -130,16 +130,16 @@ impl SquareChannel {
         }
     }
 
+    /// The digital output (0-15) while the channel plays.
+    fn digital(&self) -> u8 {
+        if DUTY_TABLE[self.duty as usize][self.duty_position as usize] != 0 { self.volume } else { 0 }
+    }
+
     pub fn output(&self) -> f32 {
         if !self.enabled || !self.dac_enabled {
             return 0.0;
         }
-        let sample = if DUTY_TABLE[self.duty as usize][self.duty_position as usize] != 0 {
-            self.volume
-        } else {
-            0
-        };
-        sample as f32 / 7.5 - 1.0
+        self.digital() as f32 / 7.5 - 1.0
     }
 
     pub fn clock_length(&mut self) {
@@ -356,22 +356,26 @@ impl WaveChannel {
         }
     }
 
-    pub fn output(&self) -> f32 {
-        if !self.enabled || !self.dac_enabled {
-            return 0.0;
-        }
+    /// The digital output (0-15) while the channel plays.
+    fn digital(&self) -> u8 {
         let sample = if self.sample_index & 1 == 0 {
             self.sample_byte >> 4
         } else {
             self.sample_byte & 0x0F
         };
-        let shifted = match self.volume_shift {
+        match self.volume_shift {
             1 => sample,
             2 => sample >> 1,
             3 => sample >> 2,
             _ => 0,
-        };
-        shifted as f32 / 7.5 - 1.0
+        }
+    }
+
+    pub fn output(&self) -> f32 {
+        if !self.enabled || !self.dac_enabled {
+            return 0.0;
+        }
+        self.digital() as f32 / 7.5 - 1.0
     }
 
     pub fn clock_length(&mut self) {
@@ -521,16 +525,16 @@ impl NoiseChannel {
         }
     }
 
+    /// The digital output (0-15) while the channel plays.
+    fn digital(&self) -> u8 {
+        if self.lfsr & 0x01 == 0 { self.volume } else { 0 }
+    }
+
     pub fn output(&self) -> f32 {
         if !self.enabled || !self.dac_enabled {
             return 0.0;
         }
-        let sample = if self.lfsr & 0x01 == 0 {
-            self.volume
-        } else {
-            0
-        };
-        sample as f32 / 7.5 - 1.0
+        self.digital() as f32 / 7.5 - 1.0
     }
 
     pub fn clock_length(&mut self) {
@@ -610,6 +614,11 @@ impl NoiseChannel {
     pub fn read_nr44(&self) -> u8 {
         self.length.read_bit() | 0xBF
     }
+}
+
+/// A channel's nibble in PCM12/PCM34: its output while it plays, else 0.
+fn pcm(playing: bool, sample: u8) -> u8 {
+    if playing { sample } else { 0 }
 }
 
 // -----------------------------------------------------------------------------
@@ -876,6 +885,11 @@ impl Apu {
 
             // Wave RAM
             0xFF30..=0xFF3F => self.ch3.read_wave_ram(addr - 0xFF30, self.cgb_mode),
+
+            // PCM12/PCM34 (CGB hardware): each playing channel's digital output, two per byte.
+            0xFF76 | 0xFF77 if !self.cgb_mode => 0xFF,
+            0xFF76 => pcm(self.ch2.enabled, self.ch2.digital()) << 4 | pcm(self.ch1.enabled, self.ch1.digital()),
+            0xFF77 => pcm(self.ch4.enabled, self.ch4.digital()) << 4 | pcm(self.ch3.enabled, self.ch3.digital()),
 
             // Write-only (NRx3, NR31, NR41...) and unused registers
             _ => 0xFF,
@@ -1234,5 +1248,27 @@ mod tests {
         }
         assert_eq!(other.ch1.frequency, 0x742);
         assert_eq!(other.ch3.wave_ram[5], 0xA5);
+    }
+
+    /// PCM12 reads channel 1's digital output in its low nibble and channel 2's in the high one
+    /// (PCM34: channels 3 and 4), on CGB hardware only.
+    #[test]
+    fn pcm12_reads_the_square_channels_digital_output() {
+        let mut apu = Apu::new();
+        apu.cgb_mode = true;
+        assert_eq!(apu.read_register(0xFF76), 0x00, "powered off: silence");
+        // CH1 volume 8, CH2 volume 3, both duty 75% at the highest frequencies.
+        for (reg, v) in [(0xFF26, 0x80), (0xFF11, 0xC0), (0xFF12, 0x80), (0xFF13, 0xFF), (0xFF14, 0x87),
+                         (0xFF16, 0xC0), (0xFF17, 0x30), (0xFF18, 0xFE), (0xFF19, 0x87)] {
+            apu.write_register(reg, v);
+        }
+        let seen: std::collections::BTreeSet<u8> = (0..64).map(|_| { apu.step(1); apu.read_register(0xFF76) }).collect();
+        assert!(seen.contains(&0x38), "both high: {seen:02X?}");
+        assert!(seen.iter().all(|v| [0x00, 0x08, 0x30, 0x38].contains(v)), "{seen:02X?}");
+        assert_eq!(apu.read_register(0xFF77), 0x00, "channels 3 and 4 are off");
+
+        apu.cgb_mode = false;
+        assert_eq!(apu.read_register(0xFF76), 0xFF, "no PCM registers on a DMG");
+        assert_eq!(apu.read_register(0xFF77), 0xFF);
     }
 }
