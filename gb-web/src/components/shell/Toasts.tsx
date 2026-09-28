@@ -28,8 +28,8 @@ export function Toasts() {
   return (
     <div className="toasts" role="status" aria-live="polite" onFocus={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) prev.current = e.relatedTarget; }}>
       {list.map((t) => (
-        <div key={t.id} data-id={t.id} className={`toast ${t.tone}`}>
-          <i /><span>{t.msg}</span>
+        <div key={t.id} data-id={t.id} className={`toast ${t.tone}${t.badge ? ' ach' : ''}`}>
+          {t.badge ? <img src={t.badge} alt="" width={44} height={44} /> : <i />}<span>{t.msg}</span>
           {t.action && <button onClick={() => act(t)}>{t.action.label}</button>}
         </div>
       ))}
