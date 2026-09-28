@@ -7,6 +7,7 @@ export default {
   github: 'Cartouche on GitHub',
   source: 'Source on GitHub',
   menu: 'Menu',
+  skip: 'Skip to content',
   closeMenu: 'Close menu',
   shortcuts: 'Keyboard shortcuts',
   legal: 'Legal',

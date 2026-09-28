@@ -8,6 +8,7 @@ export default {
   github: 'Cartouche en GitHub',
   source: 'Código fuente en GitHub',
   menu: 'Menú',
+  skip: 'Saltar al contenido',
   closeMenu: 'Cerrar el menú',
   shortcuts: 'Atajos de teclado',
   legal: 'Aviso legal',

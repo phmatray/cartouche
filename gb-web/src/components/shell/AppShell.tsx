@@ -101,6 +101,12 @@ export function AppShell() {
 
   return (
     <>
+      {/* First Tab stop: past the header to the page's heading, where a new page lands too. */}
+      <a className="skip" href="#main" onClick={(e) => {
+        e.preventDefault();
+        const h = document.querySelector<HTMLElement>('main h1') ?? document.getElementById('main');
+        if (h) { h.tabIndex = -1; h.focus(); }
+      }}>{t('shell.skip')}</a>
       {/* a link or button in the header also closes the menu (the dimmed page sits under the header) */}
       <header className="top" onClick={(e) => { if (menu && (e.target as Element).closest('a,button:not(.menu)')) closeMenu(false); }}>
         <div className="wrap">
@@ -132,7 +138,7 @@ export function AppShell() {
       </nav>
 
       {/* A new page remounts (fresh state); a settings section is the same page, so focus stays in its table of contents. */}
-      <div className="route" key={pathname.startsWith('/settings') ? '/settings' : pathname}><Outlet /></div>
+      <div className="route" id="main" key={pathname.startsWith('/settings') ? '/settings' : pathname}><Outlet /></div>
 
       <footer className="foot">
         {/* Three groups: what Cartouche promises, where to go next, then the small print (language, version, credits). */}
