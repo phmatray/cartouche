@@ -1,5 +1,5 @@
 import { Component, lazy, Suspense, useEffect, type ReactNode } from 'react';
-import { createBrowserRouter, Outlet, RouterProvider, ScrollRestoration, useLocation } from 'react-router';
+import { createBrowserRouter, Navigate, Outlet, RouterProvider, ScrollRestoration, useLocation } from 'react-router';
 import { committed, install } from './lib/transitions';
 import { warmAudio } from './audio/AudioEngine';
 import { useGamepadNav } from './hooks/useGamepadNav';
@@ -35,6 +35,11 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean
   }
 }
 
+function ToLibrary() {
+  const { search, hash } = useLocation();
+  return <Navigate to={{ pathname: '/', search, hash }} replace />;
+}
+
 /** Every route: error boundary, lazy-page suspense, scroll restoration, and the commit signal view transitions wait for. */
 function Root() {
   const { key, pathname } = useLocation();
@@ -68,6 +73,8 @@ const router = createBrowserRouter([{
       element: <AppShell />,
       children: [
         { path: '/', element: <LibraryPage /> },
+        // The server's own name for the page (a bookmark, a self-hosted copy): the library, not "Nothing in this slot".
+        { path: '/index.html', element: <ToLibrary /> },
         { path: '/add', element: <AddRomsPage /> },
         { path: '/link-cable', element: <LinkCablePage /> },
         { path: '/link-cable/online', element: <OnlineLinkPage /> },
