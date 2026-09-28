@@ -32,18 +32,24 @@ impl Cpu {
             self.halted = false;
         }
 
-        if !self.ime {
+        if !self.ime || bus.interrupts.pending() == 0 {
             return;
         }
 
-        if let Some(vector) = bus.interrupts.acknowledge() {
-            self.ime = false;
-            self.ime_pending = false; // the handler starts with interrupts off
-            bus.cycle_tick(); // M1: internal
-            self.push_u16(bus, self.regs.pc); // M2: SP-- ; M3+M4: push PC
-            self.regs.pc = vector;
-            bus.cycle_tick(); // M5: jump to vector
-        }
+        self.ime = false;
+        self.ime_pending = false; // the handler starts with interrupts off
+        let pc = self.regs.pc;
+        bus.cycle_tick(); // M1: internal
+        bus.cycle_idu(self.regs.sp); // M2: SP--
+        self.regs.sp = self.regs.sp.wrapping_sub(1);
+        bus.cycle_write(self.regs.sp, (pc >> 8) as u8); // M3: push PC high
+        // The vector is picked from IE & IF only now: a push that wrote IE ($FFFF) can
+        // redirect the dispatch, or cancel it to $0000 (Mooneye ie_push).
+        let vector = bus.interrupts.acknowledge().unwrap_or(0x0000);
+        self.regs.sp = self.regs.sp.wrapping_sub(1);
+        bus.cycle_write(self.regs.sp, pc as u8); // M4: push PC low
+        self.regs.pc = vector;
+        bus.cycle_tick(); // M5: jump to vector
     }
 
     /// Execute one instruction. Returns the number of T-cycles consumed.

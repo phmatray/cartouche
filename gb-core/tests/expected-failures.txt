@@ -16,7 +16,6 @@ mooneye-test-suite/acceptance/boot_regs-dmg0.gb  # boot
 mooneye-test-suite/acceptance/boot_regs-mgb.gb  # boot
 mooneye-test-suite/acceptance/boot_regs-sgb.gb  # boot
 mooneye-test-suite/acceptance/boot_regs-sgb2.gb  # boot
-mooneye-test-suite/acceptance/interrupts/ie_push.gb  # interrupt
 mooneye-test-suite/acceptance/ppu/hblank_ly_scx_timing-GS.gb  # stat
 mooneye-test-suite/acceptance/ppu/intr_2_mode0_timing_sprites.gb  # stat
 mooneye-test-suite/acceptance/ppu/intr_2_oam_ok_timing.gb  # stat

@@ -224,3 +224,26 @@ fn stop_with_a_button_held_does_not_stop() {
     assert!(!gb.cpu.stopped && gb.cpu.halted, "HALT instead, nothing pending");
     assert_ne!(gb.bus.read_byte(0xFF04), 0);
 }
+
+/// The dispatch picks its vector after pushing PC's high byte: when that push lands on IE ($FFFF)
+/// and disables the pending interrupt, the dispatch is cancelled and jumps to $0000 (Mooneye
+/// ie_push). The low-byte push comes after the choice, so it cannot cancel.
+#[test]
+fn an_ie_write_by_the_high_byte_push_cancels_the_dispatch() {
+    let dispatch = |sp: u16| {
+        let mut gb = boot(&[0x18, 0xFE], &[0x18, 0xFE]);
+        gb.cpu.regs.pc = 0x0200;
+        gb.cpu.regs.sp = sp;
+        gb.cpu.ime = true;
+        gb.bus.interrupts.interrupt_enable = 0x01;
+        gb.bus.interrupts.interrupt_flag = 0x01;
+        gb.cpu.handle_interrupts(&mut gb.bus);
+        gb
+    };
+    let gb = dispatch(0x0000); // high byte $02 goes to $FFFF: VBlank disabled
+    assert_eq!(gb.cpu.regs.pc, 0x0000, "cancelled");
+    assert_eq!(gb.bus.interrupts.interrupt_flag & 0x01, 0x01, "IF left as it was");
+    let gb = dispatch(0x0001); // low byte $00 goes to $FFFF, after the vector is chosen
+    assert_eq!(gb.cpu.regs.pc, 0x0040);
+    assert_eq!(gb.bus.interrupts.interrupt_flag & 0x01, 0);
+}
