@@ -8,7 +8,7 @@
 //! reaches its 13 digit registers with command 8 (write register `7` with the nibble in `4`) and
 //! A (read it into C). The alarm and buzzer are not emulated.
 
-use crate::cartridge::{unix_seconds, DOTS_PER_SECOND};
+use crate::cartridge::DOTS_PER_SECOND;
 
 /// The `.sav` footer: 13 clock digits as u32 LE, then the unix seconds they were taken at (u64 LE).
 pub const FOOTER_LEN: usize = 13 * 4 + 8;
@@ -111,17 +111,17 @@ impl Tama5 {
         }
     }
 
-    pub fn export_footer(&self) -> Vec<u8> {
+    pub fn export_footer(&self, now: u64) -> Vec<u8> {
         let mut out: Vec<u8> = digits(self.now()).iter().flat_map(|&d| (d as u32).to_le_bytes()).collect();
-        out.extend_from_slice(&unix_seconds().to_le_bytes());
+        out.extend_from_slice(&now.to_le_bytes());
         out
     }
 
     /// Restores the footer; the clock goes on by the wall time elapsed since it was written.
-    pub fn import_footer(&mut self, f: &[u8]) {
+    pub fn import_footer(&mut self, f: &[u8], now: u64) {
         let d: [u8; 13] = std::array::from_fn(|i| f[i * 4]);
         let saved_at = u64::from_le_bytes(f[52..60].try_into().unwrap());
-        self.dots = (seconds(&d) + unix_seconds().saturating_sub(saved_at)) * DOTS_PER_SECOND;
+        self.dots = (seconds(&d) + now.saturating_sub(saved_at)) * DOTS_PER_SECOND;
     }
 
     /// Register state for save states: selected register, the 16 nibbles, the byte read back.

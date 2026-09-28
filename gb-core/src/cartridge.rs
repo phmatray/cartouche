@@ -19,7 +19,7 @@ pub(crate) fn now_ms() -> f64 {
 /// one 4.19 MHz cycle at single speed; double speed does not speed the cartridge's crystal up).
 pub(crate) const DOTS_PER_SECOND: u64 = 1 << 22;
 
-/// Unix seconds now, for the `.sav` clock footers: the only place the cartridge clocks see the wall.
+/// Unix seconds now: the cartridge clocks see the wall only here, at power-on and when a `.sav` is loaded.
 pub(crate) fn unix_seconds() -> u64 {
     (now_ms() / 1000.0).max(0.0) as u64
 }
@@ -188,21 +188,21 @@ impl Huc3Rtc {
 
     /// Cartouche's own `.sav` footer: minutes of the day, days, alarm minutes, alarm days and alarm
     /// enabled as u32 LE, then the unix time (u64 LE, seconds) they were taken at.
-    fn export_footer(&self) -> [u8; HUC3_FOOTER_LEN] {
+    fn export_footer(&self, now: u64) -> [u8; HUC3_FOOTER_LEN] {
         let (minutes, days) = self.minutes_and_days();
         let words = [minutes as u32, days as u32, self.nibbles(0x58, 3), self.nibbles(0x5B, 4), self.nibbles(0x5F, 1) & 1];
         let mut out = [0; HUC3_FOOTER_LEN];
         for (i, w) in words.iter().enumerate() { out[i * 4..i * 4 + 4].copy_from_slice(&w.to_le_bytes()); }
-        out[20..].copy_from_slice(&unix_seconds().to_le_bytes());
+        out[20..].copy_from_slice(&now.to_le_bytes());
         out
     }
 
     /// Restores the footer; the clock goes on by the wall time elapsed since it was written.
-    fn import_footer(&mut self, f: &[u8]) {
+    fn import_footer(&mut self, f: &[u8], now: u64) {
         let word = |i: usize| u32::from_le_bytes(f[i * 4..i * 4 + 4].try_into().unwrap());
         let saved_at = u64::from_le_bytes(f[20..28].try_into().unwrap());
         let secs = (word(0) % 1440) as u64 * 60 + (word(1) % 4096) as u64 * 86400;
-        self.dots = (secs + unix_seconds().saturating_sub(saved_at)) * DOTS_PER_SECOND;
+        self.dots = (secs + now.saturating_sub(saved_at)) * DOTS_PER_SECOND;
         self.set_nibbles(0x58, 3, word(2));
         self.set_nibbles(0x5B, 4, word(3));
         self.set_nibbles(0x5F, 1, word(4) & 1);
@@ -297,6 +297,11 @@ pub struct Cartridge {
     mbc7: Option<Box<crate::mbc7::Mbc7>>,
     flash: Option<Box<crate::flash::Flash>>,
     tama5: Option<Box<crate::tama5::Tama5>>,
+    /// The wall instant (unix seconds) the cartridge clock was last in step with, and the emulated
+    /// dots since: the clock footers are stamped with `clock_now()`, so a clock that stood still
+    /// (a paused or closed tab) catches up the wall time it missed at the next `.sav` load.
+    clock_epoch: u64,
+    clock_dots: u64,
 }
 
 impl Cartridge {
@@ -417,6 +422,8 @@ impl Cartridge {
             mbc7: (cart_type == 0x22).then(|| Box::new(crate::mbc7::Mbc7::new())),
             flash: (cart_type == 0x20).then(|| Box::new(crate::flash::Flash::new())),
             tama5: (cart_type == 0xFD).then(|| Box::new(crate::tama5::Tama5::new())),
+            clock_epoch: unix_seconds(),
+            clock_dots: 0,
         })
     }
 
@@ -691,6 +698,7 @@ impl Cartridge {
     /// Advances the cartridge's clock (MBC3, HuC3, TAMA5) by `dots` of emulated real time: 4 per
     /// M-cycle at single speed, 2 at double speed, also while the CPU is stopped.
     pub fn tick_clock(&mut self, dots: u64) {
+        self.clock_dots += dots;
         if let Some(rtc) = &mut self.rtc { rtc.tick(dots); }
         if let Some(h) = &mut self.huc3 { h.dots += dots; }
         if let Some(t) = &mut self.tama5 { t.tick(dots); }
@@ -857,13 +865,13 @@ impl Cartridge {
             for b in rtc.regs.iter().chain(rtc.latched.iter()) {
                 data.extend_from_slice(&(*b as u32).to_le_bytes());
             }
-            data.extend_from_slice(&unix_seconds().to_le_bytes());
+            data.extend_from_slice(&self.clock_now().to_le_bytes());
         }
         if let Some(ref huc3) = self.huc3 {
-            data.extend_from_slice(&huc3.export_footer());
+            data.extend_from_slice(&huc3.export_footer(self.clock_now()));
         }
         if let Some(f) = &self.flash { data.extend_from_slice(&f.data); }
-        if let Some(t) = &self.tama5 { data.extend_from_slice(&t.export_footer()); }
+        if let Some(t) = &self.tama5 { data.extend_from_slice(&t.export_footer(self.clock_now())); }
         data
     }
 
@@ -964,8 +972,16 @@ impl Cartridge {
         }
     }
 
+    /// The wall instant the cartridge clock stands at: in step with the wall when the game runs at
+    /// full speed, behind it by the time the emulation stood still.
+    fn clock_now(&self) -> u64 {
+        self.clock_epoch + self.clock_dots / DOTS_PER_SECOND
+    }
+
     pub fn import_sram(&mut self, data: &[u8]) {
         let ram_len = self.ram.len();
+        let now = unix_seconds();
+        (self.clock_epoch, self.clock_dots) = (now, 0);
         // Standard clock footer (44 B with a u32 time, 48 B with a u64): ten u32 registers, all < 256.
         // The legacy Cartouche layout starts with an f64 ms timestamp, whose bytes 1-3 are never all 0.
         // Found from the end of the file, after a RAM part of any cartridge RAM size: other emulators
@@ -990,7 +1006,7 @@ impl Cartridge {
                 };
                 for (i, r) in rtc.regs.iter_mut().enumerate() { *r = word(i) as u8 & RTC_MASK[i]; }
                 for (i, l) in rtc.latched.iter_mut().enumerate() { *l = word(5 + i) as u8 & RTC_MASK[i]; }
-                rtc.advance(unix_seconds().saturating_sub(saved_at));
+                rtc.advance(now.saturating_sub(saved_at));
             } else if data.len() >= ram_len + 17 {
                 // Legacy Cartouche footer: wall ms at which the clock read 0, halted, seconds when halted.
                 let rtc_data = &data[ram_len..];
@@ -1005,12 +1021,12 @@ impl Cartridge {
         }
         if let Some(huc3) = &mut self.huc3 {
             if data.len() == ram_len + HUC3_FOOTER_LEN {
-                huc3.import_footer(&data[ram_len..]);
+                huc3.import_footer(&data[ram_len..], now);
             }
         }
         if let Some(t) = &mut self.tama5 {
             if data.len() == ram_len + crate::tama5::FOOTER_LEN {
-                t.import_footer(&data[ram_len..]);
+                t.import_footer(&data[ram_len..], now);
             }
         }
         // MBC6: RAM then the flash; a RAM-only file leaves the flash as it is.
@@ -1654,6 +1670,14 @@ mod tests {
         let r = read_clock(&mut d);
         assert_eq!((r[1], r[3]), (20, 2), "two days later");
         assert!((3..6).contains(&r[0]));
+
+        // The stamp follows the emulated clock: a clock that stood still (a paused tab) keeps its
+        // stamp, so it reads as no change and catches the pause up at the next load.
+        let stamp = |c: &Cartridge| { let s = c.export_sram(); u64::from_le_bytes(s[s.len() - 8..].try_into().unwrap()) };
+        let before = stamp(&d);
+        d.tick_clock(5 * DOTS_PER_SECOND);
+        assert_eq!(stamp(&d), before + 5);
+        assert_eq!(stamp(&d), before + 5, "no emulated time, no new stamp");
 
         // Out-of-range registers stamped at the epoch: decades to catch up, done in whole days.
         let mut sav = vec![0u8; 0x8000];
