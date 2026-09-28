@@ -4,6 +4,64 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.9.0](https://github.com/phmatray/cartouche/compare/v1.8.0...v1.9.0) (2026-09-28)
+
+
+### Added
+
+* **achievements:** what's left first, then what's earned, with progress ([#181](https://github.com/phmatray/cartouche/issues/181)) ([0d3167e](https://github.com/phmatray/cartouche/commit/0d3167e203593541050087468cf18d0b2cad5918))
+* **core+web:** MBC7 tilt cartridges ([#134](https://github.com/phmatray/cartouche/issues/134)) ([#167](https://github.com/phmatray/cartouche/issues/167)) ([4d2d095](https://github.com/phmatray/cartouche/commit/4d2d095e0c46603f2e681dcabd1296564d9a2eca))
+* **core:** cartridge clocks tick on emulated time ([#171](https://github.com/phmatray/cartouche/issues/171)) ([#182](https://github.com/phmatray/cartouche/issues/182)) ([6057fd6](https://github.com/phmatray/cartouche/commit/6057fd6e9add427c18331ad499506d7b323bdc4f))
+* **core:** CGB infrared port (RP, $FF56) between linked Color consoles ([#150](https://github.com/phmatray/cartouche/issues/150)) ([#180](https://github.com/phmatray/cartouche/issues/180)) ([83b83ad](https://github.com/phmatray/cartouche/commit/83b83ad76f4dfb9108d4b02ecc9095b735488c00))
+* **core:** CGB pixel FIFO, scanline renderer removed ([#156](https://github.com/phmatray/cartouche/issues/156)) ([#233](https://github.com/phmatray/cartouche/issues/233)) ([0a66058](https://github.com/phmatray/cartouche/commit/0a66058feb1032f312e187d344e19b7624a76926))
+* **core:** deterministic two-console link session ([#159](https://github.com/phmatray/cartouche/issues/159)) ([#191](https://github.com/phmatray/cartouche/issues/191)) ([d2d156f](https://github.com/phmatray/cartouche/commit/d2d156fe1447d2303f5efe304d01e7de3d305997))
+* **core:** DMG pixel FIFO ([#155](https://github.com/phmatray/cartouche/issues/155)) ([#199](https://github.com/phmatray/cartouche/issues/199)) ([92d91bb](https://github.com/phmatray/cartouche/commit/92d91bb0b662ab5c1d1a566be8cf9c739e6a6f3d))
+* **core:** HuC1 and HuC3 cartridge infrared on the link page ([#189](https://github.com/phmatray/cartouche/issues/189)) ([#195](https://github.com/phmatray/cartouche/issues/195)) ([940c66d](https://github.com/phmatray/cartouche/commit/940c66d2b4e50ee6e21b55cc1e4a644178b035d7))
+* **core:** MMM01, MBC6 with flash and TAMA5 cartridges ([#140](https://github.com/phmatray/cartouche/issues/140)) ([#176](https://github.com/phmatray/cartouche/issues/176)) ([1e2dbb1](https://github.com/phmatray/cartouche/commit/1e2dbb18bb70aa9dafcf2f2c14a0616e7d96fb3b))
+* **core:** variable mode-3 length from SCX, window and sprites ([#153](https://github.com/phmatray/cartouche/issues/153)) ([#192](https://github.com/phmatray/cartouche/issues/192)) ([1a09d1b](https://github.com/phmatray/cartouche/commit/1a09d1b901526556c307e960a81974df2887a33b))
+* **library:** apply IPS, BPS and UPS patches at import as linked entries ([#138](https://github.com/phmatray/cartouche/issues/138)) ([#177](https://github.com/phmatray/cartouche/issues/177)) ([22c50cb](https://github.com/phmatray/cartouche/commit/22c50cb834cd95b746b473d7d45c826025505f31))
+* **link:** bundled catalog games qualify for lockstep online play ([#201](https://github.com/phmatray/cartouche/issues/201)) ([#203](https://github.com/phmatray/cartouche/issues/203)) ([3b2ddce](https://github.com/phmatray/cartouche/commit/3b2ddcec6f76ac39e2ec51c85ce675d6fb217644))
+* **link:** input-delay lockstep online mode for same-cartridge pairs ([#161](https://github.com/phmatray/cartouche/issues/161)) ([#193](https://github.com/phmatray/cartouche/issues/193)) ([5a0718f](https://github.com/phmatray/cartouche/commit/5a0718f9d9b6d1a1e38bc4c19106b99696cb8b8f))
+* **link:** rollback on top of lockstep online play ([#164](https://github.com/phmatray/cartouche/issues/164)) ([#212](https://github.com/phmatray/cartouche/issues/212)) ([154940a](https://github.com/phmatray/cartouche/commit/154940a0adc5ef070cb46048708a0ef904f892b3))
+* **link:** tell the partner when lockstep can't start on this side ([#204](https://github.com/phmatray/cartouche/issues/204)) ([43ec187](https://github.com/phmatray/cartouche/commit/43ec18732ef076bf4e0825ba0c520918ad6c7825))
+* **player:** debugger watchpoints and run to scanline ([#145](https://github.com/phmatray/cartouche/issues/145)) ([#187](https://github.com/phmatray/cartouche/issues/187)) ([a4b7838](https://github.com/phmatray/cartouche/commit/a4b78382d2747a410d3c50f24cc0ef59b38c21f5))
+* **player:** Game Genie and GameShark cheat codes per game ([#137](https://github.com/phmatray/cartouche/issues/137)) ([#169](https://github.com/phmatray/cartouche/issues/169)) ([1a1c065](https://github.com/phmatray/cartouche/commit/1a1c06524bd297a285bdf325856649c887989287))
+* **player:** GBS music player, import .gbs files as music entries ([#148](https://github.com/phmatray/cartouche/issues/148)) ([#178](https://github.com/phmatray/cartouche/issues/178)) ([9da4c8f](https://github.com/phmatray/cartouche/commit/9da4c8fa5dd3aa4979e9df46f6aea1d01de6b3a8))
+* **player:** RGBDS .sym symbols in the debugger, breakpoints by label ([#147](https://github.com/phmatray/cartouche/issues/147)) ([#190](https://github.com/phmatray/cartouche/issues/190)) ([eb0000a](https://github.com/phmatray/cartouche/commit/eb0000a2ecb0728214d94ecfda9a8ea835aa4dbd))
+* **player:** SM83 disassembly around PC and step over ([#144](https://github.com/phmatray/cartouche/issues/144)) ([#168](https://github.com/phmatray/cartouche/issues/168)) ([2f37ae6](https://github.com/phmatray/cartouche/commit/2f37ae609b1819935d6e546fdb4681ec5111e03b))
+* **player:** tile, map, OAM and palette viewers in the debugger ([#143](https://github.com/phmatray/cartouche/issues/143)) ([#174](https://github.com/phmatray/cartouche/issues/174)) ([d80920b](https://github.com/phmatray/cartouche/commit/d80920bd462891b0a767802e6644d8fb41205216))
+* **sgb:** built-in sound effects survive save states ([#198](https://github.com/phmatray/cartouche/issues/198)) ([49ce2b8](https://github.com/phmatray/cartouche/commit/49ce2b85fe7d9540379fc43d26df3df8debd9a60))
+* **sgb:** built-in Super Game Boy sound effects, approximated ([#163](https://github.com/phmatray/cartouche/issues/163)) ([#188](https://github.com/phmatray/cartouche/issues/188)) ([064410d](https://github.com/phmatray/cartouche/commit/064410d1858a69055b786a7326fb4b403dd85550))
+* **sgb:** S-DSP with BRR voices, envelopes and echo ([#158](https://github.com/phmatray/cartouche/issues/158)) ([#170](https://github.com/phmatray/cartouche/issues/170)) ([e64ba72](https://github.com/phmatray/cartouche/commit/e64ba72d5d8811ea6ef323c45636ef4594877446))
+* **sgb:** SOU_TRN sound programs play on the Super Game Boy ([#160](https://github.com/phmatray/cartouche/issues/160)) ([#179](https://github.com/phmatray/cartouche/issues/179)) ([adfafb4](https://github.com/phmatray/cartouche/commit/adfafb48568af1c8ba24b64b91136be4102d265b))
+
+
+### Fixed
+
+* **core:** CGB LCDC.4 switch during a tile fetch ([#238](https://github.com/phmatray/cartouche/issues/238)) ([e050345](https://github.com/phmatray/cartouche/commit/e0503459ca02a49f9ae4dd99e6da994604e984a2))
+* **core:** CGB palette RAM locked during mode 3 ([#237](https://github.com/phmatray/cartouche/issues/237)) ([29e7d08](https://github.com/phmatray/cartouche/commit/29e7d08ed907721e693a3ef60b2ae3fdc4adf387))
+* **core:** CGB speed-switch pause and double-speed STAT timing ([#184](https://github.com/phmatray/cartouche/issues/184)) ([#200](https://github.com/phmatray/cartouche/issues/200)) ([766cfa7](https://github.com/phmatray/cartouche/commit/766cfa71a02ce2a74ab9ec1ba4390aa5df813898))
+* **core:** CH1 sweep calculates after its hardware delay ([#209](https://github.com/phmatray/cartouche/issues/209)) ([#221](https://github.com/phmatray/cartouche/issues/221)) ([14c19c3](https://github.com/phmatray/cartouche/commit/14c19c390ebe01bd31060feb20bdda52a244f211))
+* **core:** clock the APU frame sequencer from DIV and add PCM12/PCM34 ([#206](https://github.com/phmatray/cartouche/issues/206)) ([#211](https://github.com/phmatray/cartouche/issues/211)) ([93bd521](https://github.com/phmatray/cartouche/commit/93bd521fa6e421b2019a044e26f6fe00f07fcfb0))
+* **core:** DMG mode 3 ends where the pixel FIFO does ([#218](https://github.com/phmatray/cartouche/issues/218)) ([#220](https://github.com/phmatray/cartouche/issues/220)) ([e27727d](https://github.com/phmatray/cartouche/commit/e27727dc8bad282f7e9c8397b5a1605747708f9c))
+* **core:** hand-over state per model, serial clock from DIV, VRAM/OAM access lock ([#230](https://github.com/phmatray/cartouche/issues/230)) ([#231](https://github.com/phmatray/cartouche/issues/231)) ([1bd112c](https://github.com/phmatray/cartouche/commit/1bd112c0d8b93da56d821eeb59fb691a1cd7376c))
+* **core:** HuC3 and TAMA5 clocks go back with a save state in a lockstep session ([#225](https://github.com/phmatray/cartouche/issues/225)) ([9f38f74](https://github.com/phmatray/cartouche/commit/9f38f740b589107338c3f22965296158623517b0)), closes [#222](https://github.com/phmatray/cartouche/issues/222)
+* **core:** LCD-on line 0 and line-153 STAT mode timing ([#213](https://github.com/phmatray/cartouche/issues/213)) ([#232](https://github.com/phmatray/cartouche/issues/232)) ([0f40363](https://github.com/phmatray/cartouche/commit/0f403637a13af976179991b82945686eecd96fd9))
+* **core:** Mealybug DMG first tile, fine scroll latch and window restarts ([#217](https://github.com/phmatray/cartouche/issues/217)) ([#226](https://github.com/phmatray/cartouche/issues/226)) ([685a398](https://github.com/phmatray/cartouche/commit/685a398fea60da3212bd4aeb83fb9ee7f1d8d910))
+* **core:** noise channel counter and LFSR on the 2 MHz clock ([#210](https://github.com/phmatray/cartouche/issues/210)) ([#223](https://github.com/phmatray/cartouche/issues/223)) ([90b0fd6](https://github.com/phmatray/cartouche/commit/90b0fd6a1903aed0a4072c34f2269c38b037dc46))
+* **core:** OAM DMA bus-conflict reads and HDMA start timing ([#186](https://github.com/phmatray/cartouche/issues/186)) ([#197](https://github.com/phmatray/cartouche/issues/197)) ([dde71a9](https://github.com/phmatray/cartouche/commit/dde71a90156ae25a0a9509bf69aca4202bc97780))
+* **core:** speed switch with an interrupt pending, channel-2 length across a switch ([#214](https://github.com/phmatray/cartouche/issues/214)) ([#224](https://github.com/phmatray/cartouche/issues/224)) ([b31faae](https://github.com/phmatray/cartouche/commit/b31faae0fb710b8b62e7eeb087fbb9dbc8321cd0))
+* **core:** square channels start, step and fade as on hardware ([#207](https://github.com/phmatray/cartouche/issues/207)) ([#219](https://github.com/phmatray/cartouche/issues/219)) ([639ac63](https://github.com/phmatray/cartouche/commit/639ac632213ce80554042ba82731595cb347d223))
+* **core:** time HALT exit and interrupt dispatch within an M-cycle ([#185](https://github.com/phmatray/cartouche/issues/185)) ([#196](https://github.com/phmatray/cartouche/issues/196)) ([a952058](https://github.com/phmatray/cartouche/commit/a9520581d2eeaf36c130c9a0316feb23ce291148))
+* **core:** timer reload, OAM DMA, STAT and double-speed edge cases ([#135](https://github.com/phmatray/cartouche/issues/135)) ([#173](https://github.com/phmatray/cartouche/issues/173)) ([67e19e0](https://github.com/phmatray/cartouche/commit/67e19e0632279678d1569a9e2a3227331c9cb027))
+* **core:** WX written early in mode 3, and a WX re-match while the window runs ([#239](https://github.com/phmatray/cartouche/issues/239)) ([f08d507](https://github.com/phmatray/cartouche/commit/f08d507a3dc5e378b86d23c94354ac1eda4dfe9d))
+
+
+### Performance
+
+* **core:** frame-rate benchmark example for the PPU rewrite ([#152](https://github.com/phmatray/cartouche/issues/152)) ([#183](https://github.com/phmatray/cartouche/issues/183)) ([af6a037](https://github.com/phmatray/cartouche/commit/af6a037e89968c83c29675ac3c0f61c48bbea254))
+* **core:** inline the square channels' and sweep's per-M-cycle steps ([#227](https://github.com/phmatray/cartouche/issues/227)) ([72e6a9c](https://github.com/phmatray/cartouche/commit/72e6a9cf1e79838f9a65e85a65e9f2038ae73b00))
+
 ## [1.8.0](https://github.com/phmatray/cartouche/compare/v1.7.0...v1.8.0) (2026-09-28)
 
 
