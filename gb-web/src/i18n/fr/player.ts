@@ -54,7 +54,7 @@ export default {
     saveNewer: 'Votre sauvegarde est plus récente que le point de reprise. La partie repart de votre sauvegarde.',
     madeOnDmg: 'Cette sauvegarde a été faite sur Game Boy. Choisissez la console Game Boy pour la charger.',
     madeOnGbc: 'Cette sauvegarde a été faite sur Game Boy Color. Choisissez la console Game Boy Color pour la charger.',
-    snesMusic: 'Ce jeu joue sa musique Super Game Boy sur la puce son de la Super Nintendo, que Cartouche n’émule pas. Il démarre désormais sur Game Boy, avec le son.',
+    snesMusic: 'Ce jeu joue sa musique Super Game Boy avec le programme son intégré au Super Game Boy, que Cartouche n’inclut pas. Il démarre désormais sur Game Boy, avec le son.',
     snesFresh: 'Le point de reprise de ce jeu a été fait sur Super Game Boy, où sa musique est muette : il a redémarré sur Game Boy, avec le son.',
     resumeThere: 'Reprendre là',
     madeOnSgb: 'Cette sauvegarde a été faite sur Super Game Boy. Activez les cadres et couleurs Super Game Boy dans la page Écran pour la charger.',

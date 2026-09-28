@@ -50,6 +50,10 @@ pub struct MemoryBus {
     pub(crate) hdma_source: u16,
     pub(crate) hdma_dest: u16,
     pub(crate) hdma_remaining: u8,
+    /// RP ($FF56, CGB): bit 0 = LED on, bits 6-7 = read enable (both set: bit 1 shows the sensor).
+    pub(crate) rp: u8,
+    /// Whether the infrared sensor sees light (a linked partner's LED); never set when alone.
+    pub ir_light_in: bool,
     /// Active cheat codes (Game Genie ROM patches, GameShark RAM writes).
     pub cheats: crate::cheats::Cheats,
     /// Debugger watchpoints; `None` unless one is set, so the CPU accessors pay one check.
@@ -88,9 +92,16 @@ impl MemoryBus {
             hdma_source: 0,
             hdma_dest: 0,
             hdma_remaining: 0,
+            rp: 0,
+            ir_light_in: false,
             cheats: Default::default(),
             watch: None,
         }
+    }
+
+    /// Whether the infrared LED is lit (CGB mode, RP bit 0).
+    pub fn ir_led(&self) -> bool {
+        self.cgb_mode && self.rp & 1 != 0
     }
 
     fn wram_read(&self, addr: u16) -> u8 {
@@ -192,6 +203,15 @@ impl MemoryBus {
             0xFF55 => {
                 if self.cgb_mode { self.hdma5 } else { 0xFF }
             }
+            // RP: bits 2-5 read 1; bit 1 = 0 only when reading is enabled and light is seen.
+            0xFF56 => {
+                if self.cgb_mode {
+                    let dark = !(self.rp & 0xC0 == 0xC0 && self.ir_light_in);
+                    (self.rp & 0xC1) | 0x3C | (dark as u8) << 1
+                } else {
+                    0xFF
+                }
+            }
             0xFF68..=0xFF6B => {
                 if self.cgb_mode { self.ppu.read_register(addr) } else { 0xFF }
             }
@@ -278,6 +298,9 @@ impl MemoryBus {
             0xFF53 => self.hdma_dest = (self.hdma_dest & 0x00F0) | ((value as u16 & 0x1F) << 8),
             0xFF54 => self.hdma_dest = (self.hdma_dest & 0x1F00) | (value as u16 & 0xF0),
             0xFF55 => self.write_hdma5(value),
+            0xFF56 => {
+                if self.cgb_mode { self.rp = value & 0xC1; }
+            }
             0xFF68..=0xFF6B => {
                 if self.cgb_mode { self.ppu.write_register(addr, value); }
             }
@@ -329,6 +352,7 @@ impl MemoryBus {
     pub fn stop_tick(&mut self) {
         let t = if self.double_speed { 2 } else { 4 };
         self.apu.silence(t);
+        self.cartridge.tick_clock(t as u64);
         self.cycle_count += t;
     }
 
@@ -361,7 +385,11 @@ impl MemoryBus {
             self.interrupts.request(SERIAL_BIT);
         }
         self.cartridge.tick();
+        self.cartridge.tick_clock(ppu_step as u64);
         self.apu.cgb_mode = self.cgb_mode || self.ppu.compat; // CGB hardware, whatever the mode
+        if let Some((l, r)) = self.sgb.as_deref_mut().and_then(|s| s.audio.run(ppu_step)) {
+            self.apu.mix_external(l, r);
+        }
         self.apu.step(ppu_step);
         self.cycle_count += ppu_step;
 
