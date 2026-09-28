@@ -1,6 +1,6 @@
 import { t } from '../i18n';
 import { decode, jsonBlob, splitJson } from './backup-json';
-import { backupRom, mergeMeta, mover, placeRom } from './backup-merge';
+import { backupRom, mergeMeta, mover, placeRom, versionProblem } from './backup-merge';
 import { computeSha1 } from './rom-utils';
 import { asProfile, getAllFrom, getAllGameMeta, getRom, getRomIds, putInto, STORES, type StoredGameMeta, type StoredRom, type StoredSave, type StoredSaveState, type StoredScreenshot } from './db';
 import { cleanSetting } from './settings-clean';
@@ -67,7 +67,8 @@ export async function readBackup(file: File): Promise<Backup> {
   };
   // 'cartshelf': backups exported before the app was renamed.
   if (!b || (b.app !== APP && b.app !== 'cartshelf')) throw notBackup();
-  if (b.version !== VERSION) throw new Error(t('settings.storage.newer'));
+  const bad = versionProblem(b.version, VERSION);
+  if (bad) throw new Error(bad === 'newer' ? t('settings.storage.newer') : t('settings.storage.unknownVersion', { file: file.name }));
   const list = <T,>(x: unknown, ok: (r: T) => boolean) => (Array.isArray(x) ? (x as T[]).filter((r) => r && typeof r === 'object' && ok(r)) : []);
   return {
     app: APP, version: VERSION, exported: String(b.exported ?? ''),

@@ -220,6 +220,7 @@ export default {
     restoreFull: 'Stockage plein : la restauration s’est arrêtée après {roms}, {saves}, {shots}. Libérez de l’espace, puis restaurez de nouveau le même fichier (ce qui est déjà ici est ignoré).',
     restoreFailed: 'Impossible d’enregistrer dans le stockage de ce navigateur : la restauration s’est arrêtée après {roms}, {saves}, {shots}.',
     newer: 'Cette copie a été créée par une version plus récente de Cartouche',
+    unknownVersion: '{file} n’est pas une copie de sauvegarde Cartouche valide : sa version n’est pas reconnue',
     perGame: 'Par jeu',
     startOver: 'Repartir de zéro',
     wipe: 'Tout effacer',

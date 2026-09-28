@@ -220,6 +220,7 @@ export default {
     restoreFull: 'Almacenamiento lleno: la restauración se detuvo tras {roms}, {saves}, {shots}. Libera espacio y vuelve a restaurar el mismo archivo (lo que ya está aquí se omite).',
     restoreFailed: 'No se pudo guardar en el almacenamiento de este navegador: la restauración se detuvo tras {roms}, {saves}, {shots}.',
     newer: 'Esta copia se hizo con una versión más reciente de Cartouche',
+    unknownVersion: '{file} no es una copia de Cartouche válida: no se reconoce su versión',
     perGame: 'Por juego',
     startOver: 'Empezar de cero',
     wipe: 'Borrar todo',
