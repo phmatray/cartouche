@@ -17,7 +17,7 @@ export default {
   looking: 'Looking this cartridge up on RetroAchievements…',
   none: 'RetroAchievements has no achievements for this version of the cartridge.',
   earned: { one: '{count} of {total} earned', other: '{count} of {total} earned' },
-  points: '{earned} of {total} points',
+  points: { one: '{count} of {total} points', other: '{count} of {total} points' },
   pts: { one: 'point', other: 'points' },
   hardcore: 'Hardcore',
   locked: 'Not earned yet',

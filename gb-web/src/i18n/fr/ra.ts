@@ -18,7 +18,7 @@ export default {
   looking: 'Recherche de cette cartouche sur RetroAchievements…',
   none: 'RetroAchievements n’a aucun succès pour cette version de la cartouche.',
   earned: { one: '{count} sur {total} obtenu', other: '{count} sur {total} obtenus' },
-  points: '{earned} points sur {total}',
+  points: { one: '{count} point sur {total}', other: '{count} points sur {total}' },
   pts: { one: 'point', other: 'points' },
   hardcore: 'Hardcore',
   locked: 'Pas encore obtenu',
