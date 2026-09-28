@@ -213,6 +213,11 @@ impl Emulator {
         self.gb.as_ref().map_or(0, |gb| gb.bus.read_byte(addr))
     }
 
+    /// A byte at a RetroAchievements address (see `MemoryBus::read_ra`).
+    pub fn read_memory_ra(&self, addr: u32) -> u8 {
+        self.gb.as_ref().map_or(0, |gb| gb.bus.read_ra(addr))
+    }
+
     pub fn is_rom_loaded(&self) -> bool {
         self.gb.is_some()
     }

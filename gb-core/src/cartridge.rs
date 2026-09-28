@@ -541,6 +541,11 @@ impl Cartridge {
 
     /// SRAM, plus on MBC3+TIMER the 48-byte clock footer used by VBA-M, BGB, mGBA and SameBoy:
     /// live s/m/h/DL/DH and latched s/m/h/DL/DH as u32 LE, then the unix time (u64 LE) they were taken at.
+    /// Byte `i` of the cartridge RAM, whatever bank is paged in or whether it is enabled (RetroAchievements reads).
+    pub fn ram_byte(&self, i: usize) -> Option<u8> {
+        self.ram.get(i).copied()
+    }
+
     pub fn export_sram(&self) -> Vec<u8> {
         let mut data = self.ram.clone();
         if let Some(ref rtc) = self.rtc {

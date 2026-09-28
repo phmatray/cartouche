@@ -173,3 +173,24 @@ fn save_state_restores_mbc5_banks() {
     };
     assert_state_roundtrip(&rom);
 }
+
+#[test]
+fn retroachievements_memory_map_reads_every_bank() {
+    let mut gb = cgb(); // MBC5, 32 KB of cartridge RAM (4 banks)
+    gb.bus.write_byte(0xFF70, 3); // work RAM bank 3 paged in at $D000
+    gb.bus.write_byte(0xD000, 0x33);
+    gb.bus.write_byte(0xFF70, 1);
+    gb.bus.write_byte(0xD000, 0x11);
+    gb.bus.write_byte(0x0000, 0x0A); // cartridge RAM on
+    gb.bus.write_byte(0x4000, 2);
+    gb.bus.write_byte(0xA005, 0x22);
+    gb.bus.write_byte(0x4000, 0);
+    gb.bus.write_byte(0xA005, 0x20);
+    gb.bus.write_byte(0x4000, 2); // bank 2 paged in: $A000 still reads bank 0
+    gb.bus.write_byte(0xFF70, 3);
+    assert_eq!(gb.bus.read_ra(0xD000), 0x11, "$D000 is bank 1 whatever is paged in");
+    assert_eq!(gb.bus.read_ra(0x10000 + 0x1000), 0x33, "bank 3 at $11000");
+    assert_eq!(gb.bus.read_ra(0xA005), 0x20, "$A000 is cartridge RAM bank 0");
+    assert_eq!(gb.bus.read_ra(0x16000 + 0x2000 + 5), 0x22, "cartridge bank 2 at $18000");
+    assert_eq!(gb.bus.read_ra(0x40000), 0);
+}
