@@ -101,7 +101,7 @@ emulator prove itself; hide them in Settings if you'd rather not see them.
 ## Features
 
 **Play**
-- Game Boy and Game Boy Color games, with MBC1, MBC2, MBC3 (with clock), MBC5, HuC1, HuC3 (with clock) and MBC7 (tilt, played by tilting your phone or with a gamepad stick or the keyboard) cartridges and battery saves kept automatically.
+- Game Boy and Game Boy Color games, with MBC1, MBC2, MBC3 (with clock), MBC5, HuC1, HuC3 (with clock), MBC7 (tilt, played by tilting your phone or with a gamepad stick or the keyboard), MMM01 multi-game, MBC6 (with flash) and Bandai TAMA5 (with clock) cartridges and battery saves kept automatically.
 - A resume point every time you leave, so **Continue** puts you back where you were.
 - Five save-state slots with thumbnails, per-game save profiles, rewind (hold <kbd>R</kbd>) and speed from ½× to 4×.
 - Keyboard with remappable keys, any standard gamepad, or touch controls on phones and tablets.

@@ -96,7 +96,7 @@ async function loadLibrary() {
   const withMeta = (g: GameEntry): GameEntry => {
     const meta = metaMap.get(g.id);
     if (!meta) return g;
-    return { ...g, isFavorite: meta.isFavorite, lastPlayed: meta.lastPlayed, totalPlayTime: meta.totalPlayTime, sessions: meta.sessions, importedAt: meta.importedAt };
+    return { ...g, isFavorite: meta.isFavorite, lastPlayed: meta.lastPlayed, totalPlayTime: meta.totalPlayTime, sessions: meta.sessions, importedAt: meta.importedAt, patchedFrom: meta.patchedFrom };
   };
   // First load: the shelf shows now, the GB Studio collection joins it when its chunk lands (a cold visit on a slow
   // network). `loading` stays on until then: game pages, search and imports wait for the whole catalog.
@@ -154,6 +154,7 @@ if (channel) channel.onmessage = () => {
 export const reloadLibrary = () => { changed(); return (loadPromise = loadLibrary()); };
 
 export const isRomFile = (name: string) => /\.(gb|gbc|rom|bin)$/i.test(name);
+export { isPatchFile } from '../lib/patch';
 
 /** The biggest Game Boy ROM: 8 MB (header size byte 8). */
 export const MAX_ROM_SIZE = 0x8000 << 8;
@@ -163,8 +164,9 @@ export const MAX_ROM_SIZE = 0x8000 << 8;
  * A dump already on the shelf is reported as 'dup' unless `force` stores it again as a second copy.
  * Storage errors (a full disk: QuotaExceededError) are thrown; nothing is half-stored.
  * `id`: the id to store it under when free (sync: the one its saves are already kept under here).
+ * `from`: a ROM made by a patch, linked to its base (`name`: the patch's name as a .gb file, the title when GameDB doesn't know it).
  */
-export async function importRom(name: string, data: Uint8Array, force = false, id?: string): Promise<ImportOutcome> {
+export async function importRom(name: string, data: Uint8Array, force = false, id?: string, from?: GameEntry['patchedFrom']): Promise<ImportOutcome> {
   data = withoutCopierHeader(data);
   if (!isRomFile(name) || !isGameBoyRom(data)) return { status: 'bad' };
   await (loadPromise ??= loadLibrary());
@@ -178,9 +180,9 @@ export async function importRom(name: string, data: Uint8Array, force = false, i
   const summary = { title, genre, sha1, head: data.slice(0, 0x150), size: data.length };
   const cat = catalogMatch(useLibraryStore.getState().games, localEntry('', title, genre, data, sha1, dbEntry));
   // A catalog game keeps its id (and its page's address) once its file is here.
-  const stored = await addRom(cat?.id ?? id ?? (slugify(title) || 'rom'), { title, genre, data }, { importedAt, rom: summary });
+  const stored = await addRom(cat?.id ?? id ?? (slugify(title) || 'rom'), { title, genre, data }, { importedAt, rom: summary, patchedFrom: from });
   changed();
-  const entry = localEntry(stored, title, genre, data, sha1, dbEntry, importedAt);
+  const entry = { ...localEntry(stored, title, genre, data, sha1, dbEntry, importedAt), patchedFrom: from };
   const added = withLocal(cat ? [cat] : [], entry).at(-1)!; // as it will show on the shelf
   pending.push(entry);
   flushTimer ??= setTimeout(flushPending, 400);
