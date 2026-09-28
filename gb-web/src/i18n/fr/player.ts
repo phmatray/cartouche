@@ -231,6 +231,13 @@ export default {
     breakpoints: 'Point d’arrêt',
     addBreakpoint: 'Ajouter',
     removeBreakpoint: 'Retirer le point d’arrêt {addr}',
+    watchpoints: 'Point de surveillance',
+    watchKind: 'Surveiller',
+    watchRead: 'Lecture',
+    watchWrite: 'Écriture',
+    watchAccess: 'Accès',
+    removeWatchpoint: 'Retirer la surveillance {kind} {addr}',
+    runToLine: 'Aller à la ligne',
     stoppedAt: 'Arrêté : {reason}',
   },
   music: {

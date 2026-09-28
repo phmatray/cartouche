@@ -29,6 +29,9 @@ export function useEmulator() {
   /** Debugger steps taken while paused, so the player can redraw the picture after each. */
   const [steps, setSteps] = useState(0);
   const bpRef = useRef<number[]>([]); // the same list, for loadRom (which must not change with it)
+  /** Memory watchpoints: kind 1 read, 2 write, 3 access. */
+  const [watchpoints, setWatchpoints] = useState<{ addr: number; kind: number }[]>([]);
+  const wpRef = useRef<{ addr: number; kind: number }[]>([]);
   const cheatsRef = useRef(''); // the cheat codes on, one per line: each load builds a new console that needs them again
   const stopped = useRef(false); // no frame runs past a break, even the rest of this animation frame's batch
   const setIsRunning = useCallback((on: boolean) => {
@@ -98,6 +101,7 @@ export function useEmulator() {
       stopped.current = false;
       setBreakReason(null);
       bpRef.current.forEach((a) => emu.debug_add_breakpoint(a)); // each load builds a new console
+      wpRef.current.forEach((w) => emu.debug_add_watchpoint(w.addr, w.kind));
       if (cheatsRef.current) emu.set_cheats(cheatsRef.current);
       setIsCgb(emu.is_cgb());
       setErrors([]);
@@ -213,6 +217,18 @@ export function useEmulator() {
     setSteps((n) => n + 1);
   }, [addError]);
 
+  /** Runs until LY reaches `ly` (at most to the end of the next frame); the player stays paused. */
+  const runToScanline = useCallback((ly: number) => {
+    const emu = emulatorRef.current;
+    if (!emu) return;
+    if (emu.debug_run_to_scanline(ly)) setBreakReason(emu.debug_break_reason() ?? null);
+    else {
+      const err = emu.get_error();
+      if (err) addError(t('player.error.crashed'), err);
+    }
+    setSteps((n) => n + 1);
+  }, [addError]);
+
   /** `count` instructions from `addr` (the core's `ADDR|BYTES|TEXT` lines, parsed). */
   const disassemble = useCallback((addr: number, count: number): { addr: number; bytes: string; text: string }[] => {
     const out = emulatorRef.current?.disassemble(addr, count);
@@ -239,9 +255,28 @@ export function useEmulator() {
   const removeBreakpoint = useCallback((addr: number) => {
     const emu = emulatorRef.current;
     const rest = bpRef.current.filter((a) => a !== addr);
-    if (rest.length) emu?.debug_remove_breakpoint(addr);
-    else emu?.debug_clear(); // no breakpoint left: the core runs at full speed again
+    if (rest.length || wpRef.current.length) emu?.debug_remove_breakpoint(addr);
+    else emu?.debug_clear(); // nothing left to stop on: the core runs at full speed again
     setBreakpoints(bpRef.current = rest);
+  }, []);
+
+  const addWatchpoint = useCallback((addr: number, kind: number) => {
+    emulatorRef.current?.debug_add_watchpoint(addr, kind);
+    if (!wpRef.current.some((w) => w.addr === addr && w.kind === kind)) {
+      setWatchpoints(wpRef.current = [...wpRef.current, { addr, kind }].sort((a, b) => a.addr - b.addr || a.kind - b.kind));
+    }
+  }, []);
+
+  const removeWatchpoint = useCallback((addr: number, kind: number) => {
+    const emu = emulatorRef.current;
+    const rest = wpRef.current.filter((w) => w.addr !== addr || w.kind !== kind);
+    if (!rest.length && !bpRef.current.length) emu?.debug_clear();
+    else {
+      // The core keeps one set of kinds per address: put back what the other entries there still watch.
+      emu?.debug_remove_watchpoint(addr, kind);
+      rest.filter((w) => w.addr === addr).forEach((w) => emu?.debug_add_watchpoint(w.addr, w.kind));
+    }
+    setWatchpoints(wpRef.current = rest);
   }, []);
 
   const updateRegisters = useCallback(() => {
@@ -450,6 +485,10 @@ export function useEmulator() {
     breakpoints,
     addBreakpoint,
     removeBreakpoint,
+    watchpoints,
+    addWatchpoint,
+    removeWatchpoint,
+    runToScanline,
     setCheats,
     registers,
     updateRegisters,
