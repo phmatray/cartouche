@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import { encode } from 'uqr';
-import { engine, setDevice, useSync, IDLE, type Device, type LinkState, type Note, type Pairing } from '../../lib/sync/status';
+import { deviceName, engine, nameToStore, setDevice, useSync, IDLE, type Device, type LinkState, type Note, type Pairing } from '../../lib/sync/status';
 import { CODE_PREFIX, groupCode } from '../../lib/sync/crypto';
 import { getAllGameMeta, getRomIds } from '../../lib/db';
 import { useGameLibrary } from '../../hooks/useGameLibrary';
@@ -23,7 +23,8 @@ const CODE_SHAPE = 'XXXXXX XXXXXX XXXXXX …';
 /** Settings › Sync: pair devices, see them, sync them. */
 export function SyncTab() {
   const t = useT();
-  const { me, devices, auto, roms, links, pairing } = useSync();
+  const { me: my, devices, auto, roms, links, pairing } = useSync();
+  const me = { ...my, name: deviceName(my) }; // the default follows the language (useT re-renders on a switch)
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [local, setLocal] = useState<{ count: number; bytes: number } | null>(null);
   const online = useOnline();
@@ -59,7 +60,7 @@ export function SyncTab() {
       <h2>{t('settings.tabs.sync')}</h2>
       <p className="intro">{t('sync.intro')}</p>
       {!online && <p className="sy-off" role="alert">{t('common.offlineNet')}</p>}
-      <NameRow name={me.name} />
+      <NameRow key={me.name} name={me.name} />
 
       {devices.length > 0 && (
         <>
@@ -108,7 +109,7 @@ export function SyncTab() {
 function NameRow({ name }: { name: string }) {
   const t = useT();
   const [v, setV] = useState(name);
-  const save = () => { const n = v.trim().slice(0, 30); if (n && n !== name) { useSync.setState((s) => ({ me: { ...s.me, name: n } })); toast(t('sync.name.saved'), 'c'); } else setV(name); };
+  const save = () => { const n = v.trim().slice(0, 30); if (n && n !== name) { useSync.setState((s) => ({ me: { ...s.me, name: nameToStore(n) } })); toast(t('sync.name.saved'), 'c'); } else setV(name); };
   return (
     <Row label={t('sync.name.label')} sub={t('sync.name.sub')}>
       <input className="field sy-name" value={v} maxLength={30} aria-label={t('sync.name.aria')} onChange={(e) => setV(e.target.value)}

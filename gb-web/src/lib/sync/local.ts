@@ -10,7 +10,7 @@ import { useSettingsStore, type SettingsValues } from '../../store/settingsStore
 import type { DisplayConfig } from '../../shaders/filters';
 import { digest, pack, unpack } from './crypto';
 import { loadGone, markGone, saveGone } from './gone';
-import { useSync } from './status';
+import { deviceName, useSync } from './status';
 import { copyName, gamesOf, gcGone, kindOf, type Entry, type Games, type Manifest, type Play } from './manifest';
 
 /** Settings that follow the player from device to device. Screen size, touch controls, volume, keys, smooth motion
@@ -142,7 +142,7 @@ export async function readLocal(me: { id: string; name: string }, roms: boolean)
     gone[k] = Math.max(gone[k] ?? 0, t);
   }
   saveGone(kept);
-  return { manifest: { dev: me.id, name: me.name, roms, games: shas, entries, gone }, games, romBytes, romCount };
+  return { manifest: { dev: me.id, name: deviceName(me), roms, games: shas, entries, gone }, games, romBytes, romCount };
 }
 
 /* ---------- one record ---------- */
