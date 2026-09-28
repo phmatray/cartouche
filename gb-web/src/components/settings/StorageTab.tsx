@@ -221,7 +221,7 @@ export function StorageTab() {
       <Row label={t('settings.storage.restoreLabel')} sub={t('settings.storage.restoreSub')}>
         <label className="btn line" style={{ color: 'var(--ink)', ...(reading && { opacity: 0.6, cursor: 'progress' }) }} tabIndex={0} aria-disabled={reading || undefined}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.currentTarget.querySelector('input')?.click(); } }}>
-          <span role="status">{t(reading ? 'settings.storage.reading' : 'settings.storage.import')}</span>
+          <span aria-live="polite">{t(reading ? 'settings.storage.reading' : 'settings.storage.import')}</span>
           <input type="file" accept={fileAccept('.cartouche,.cartshelf,application/json')} className="sr" tabIndex={-1} disabled={reading}
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) doImport(f); }} />
         </label>
