@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chooseMode, delayFor, fromB64, isBootMsg, isLockMsg, isRomsMsg, Lockstep, toB64, type LockMsg } from './lockstep.ts';
+import { chooseMode, delayFor, fromB64, isBootMsg, isLockMsg, isRomsMsg, Lockstep, rollbackDelay, toB64, type LockMsg } from './lockstep.ts';
 
 // Literal input scripts: what each player holds when their console is about to run frame n.
 const P1 = (n: number) => (n * 7) & 0xff;
@@ -54,6 +54,10 @@ test('delayFor: half the round trip in frames, plus one, 2 to 10', () => {
   assert.equal(delayFor(150), 6);
   assert.equal(delayFor(0), 2);
   assert.equal(delayFor(1000), 10);
+});
+
+test('rollbackDelay: 2 frames, and what the 4-frame window leaves of a long line', () => {
+  assert.deepEqual([2, 3, 6, 7, 10].map(rollbackDelay), [2, 2, 2, 3, 6]);
 });
 
 test('isLockMsg rejects bad frames and buttons', () => {

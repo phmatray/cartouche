@@ -49,6 +49,11 @@ export const fromB64 = (s: string) => Uint8Array.from(atob(s), (c) => c.charCode
 /** The input delay in frames for a round trip: half of it in Game Boy frames, plus one, from 2 to 10. */
 export const delayFor = (rttMs: number) => Math.min(10, Math.max(2, Math.ceil(rttMs / 2 / 16.74) + 1));
 
+/** Rollback: frames run on a guess of the partner's buttons at most; beyond, the frame waits (docs/ONLINE_LINK.md). */
+export const WINDOW = 4;
+/** With rollback, the input delay: 2 frames, plus what the window can't cover of the lockstep delay `d`. */
+export const rollbackDelay = (d: number) => Math.max(Math.min(d, 2), d - WINDOW);
+
 /** Rollback: inputs kept this many frames behind the one running (the rollback window is far smaller). */
 const KEEP = 64;
 
