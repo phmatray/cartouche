@@ -143,6 +143,19 @@ fn selecting_a_group_with_a_held_button_requests_the_joypad_interrupt() {
     assert_eq!(gb.bus.interrupts.interrupt_flag & 0x10, 0x10);
 }
 
+/// SC ($FF02): bits 2-6 read 1, and the fast clock (bit 1) is a Color-mode feature: a DMG ignores
+/// it, reads it as 1, and shifts at 8192 Hz (8 x 512 cycles a byte), not 32 times faster.
+#[test]
+fn a_dmg_has_no_fast_serial_clock_and_sc_reads_its_unused_bits_as_1() {
+    let mut gb = boot(&[0x18, 0xFE], &[]);
+    gb.bus.write_byte(0xFF02, 0x83);
+    assert_eq!(gb.bus.read_byte(0xFF02), 0xFF);
+    for _ in 0..(8 * 16 / 4) { gb.bus.cycle_tick(); }
+    assert_eq!(gb.bus.read_byte(0xFF02) & 0x80, 0x80, "still shifting after 128 cycles");
+    for _ in 0..(8 * 512 / 4) { gb.bus.cycle_tick(); }
+    assert_eq!(gb.bus.read_byte(0xFF02), 0x7F, "done after 4096");
+}
+
 fn run_to_line(gb: &mut GameBoy, ly: u8) {
     while gb.bus.ppu.ly != ly { gb.step_instruction().unwrap(); }
 }

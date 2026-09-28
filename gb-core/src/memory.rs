@@ -138,7 +138,9 @@ impl MemoryBus {
             0xFE00..=0xFE9F => self.ppu.read_oam(addr - 0xFE00),
             0xFEA0..=0xFEFF => 0xFF,
             0xFF00 => self.sgb.as_ref().and_then(|s| s.read_p1(self.joypad.select)).unwrap_or_else(|| self.joypad.read()),
-            0xFF01 | 0xFF02 => self.serial.read(addr),
+            0xFF01 => self.serial.read(addr),
+            // SC: unused bits read 1, and bit 1 (the fast clock) exists in Color mode only.
+            0xFF02 => self.serial.read(addr) | if self.cgb_mode { 0x7C } else { 0x7E },
             0xFF04..=0xFF07 => self.timer.read(addr),
             0xFF0F => self.interrupts.interrupt_flag | 0xE0, // bits 5-7 unused, read as 1
             0xFF10..=0xFF3F => self.apu.read_register(addr),
@@ -184,7 +186,8 @@ impl MemoryBus {
                 if before & !self.joypad.read() & 0x0F != 0 { self.interrupts.request(JOYPAD_BIT); }
                 if let Some(s) = self.sgb.as_deref_mut() { s.write_p1(value); }
             }
-            0xFF01 | 0xFF02 => self.serial.write(addr, value),
+            0xFF01 => self.serial.write(addr, value),
+            0xFF02 => self.serial.write(addr, if self.cgb_mode { value } else { value & !0x02 }),
             0xFF04..=0xFF07 => {
                 if self.timer.write(addr, value) { self.interrupts.request(TIMER_BIT); }
             }
