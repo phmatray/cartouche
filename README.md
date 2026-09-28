@@ -181,7 +181,7 @@ listed, not hidden, in `gb-core/tests/expected-failures.txt`.
 | Mooneye emulator-only MBC | MBC1, MBC2 and MBC5 banking | 27/28 |
 | Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 21/51 |
 | SameSuite | APU, HDMA and interrupt edge cases (CGB) | 69/78 |
-| Age | PPU, STAT, OAM/VRAM access and double-speed timing | 17/51 |
+| Age | PPU, STAT, OAM/VRAM access and double-speed timing | 19/51 |
 | gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 413/513 |
 | rtc3test | The MBC3 real-time clock | 6/6 |
 
