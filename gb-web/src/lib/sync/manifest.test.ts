@@ -104,6 +104,7 @@ test('copy names and game keys', () => {
   assert.equal(gameOfKey('sram:abc~x1'), 'abc');
   assert.equal(gameOfKey('state:@tobu#slot-3'), '@tobu');
   assert.equal(gameOfKey('set:gameDisplay/abc'), 'abc');
+  assert.equal(gameOfKey('set:gameCheats/abc'), 'abc');
   assert.equal(gameOfKey('set:defaultSpeed'), '');
 });
 
