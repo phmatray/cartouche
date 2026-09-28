@@ -268,7 +268,10 @@ impl Ppu {
             0xFF48 => self.obp0 = value,
             0xFF49 => self.obp1 = value,
             0xFF4A => self.wy = value,
-            0xFF4B => self.wx = value,
+            0xFF4B => {
+                (self.line.wx_old, self.line.wx_dot) = (self.wx, self.line.dot + 1); // see `wx_seen`
+                self.wx = value;
+            }
             0xFF4F => self.vram_bank = value & 0x01,
             0xFF68 => self.bcps = value,
             0xFF69 => {
@@ -897,6 +900,18 @@ mod tests {
     fn mid_line_wx_write_moves_the_window() {
         let s = shades(&run_line10(window_setup, |p, d| if d == 20 { p.write_register(0xFF4B, 100) }), 10);
         assert_eq!(s.iter().position(|&v| v == 3), Some(93));
+    }
+
+    /// WX matched again while the window runs: between two window tiles the LCD gets one colour-0
+    /// pixel and the window goes on a pixel later; inside a tile nothing shows. The window compares
+    /// WX one dot late, so a write lands one dot after the FIFO would first see it.
+    #[test]
+    fn wx_rematch_while_window_runs() {
+        let at = |wx: u8| shades(&run_line10(window_setup, |p, d| if d == 64 { p.write_register(0xFF4B, wx) }), 10);
+        let s = at(58); // x = 51: the window's second tile
+        assert!(s[43..51].iter().all(|&v| v == 3) && s[51] == 0 && s[52..].iter().all(|&v| v == 3), "{s:?}");
+        let s = at(61); // x = 54: inside it
+        assert!(s[43..].iter().all(|&v| v == 3), "{s:?}");
     }
 
     /// Pan Docs' "Mode 3 length" of the current line with the registers as they are: 172, plus the
