@@ -76,4 +76,8 @@ export default {
     bundled: '{title} est fourni avec l’app',
     free: 'Homebrew libre',
   },
+  music: {
+    shelf: 'Musique',
+    tracks: { one: '{count} piste', other: '{count} pistes' },
+  },
 } satisfies Messages['library'];
