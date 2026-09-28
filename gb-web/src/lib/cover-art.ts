@@ -226,7 +226,11 @@ export async function sampleInk(url: string): Promise<string | null> {
   c.width = c.height = 32;
   const ctx = c.getContext('2d', { willReadFrequently: true })!;
   ctx.drawImage(img, 0, 0, 32, 32);
-  const d = ctx.getImageData(0, 0, 32, 32).data;
+  let d: Uint8ClampedArray;
+  try { d = ctx.getImageData(0, 0, 32, 32).data; } catch {
+    inkCache.set(url, null); // a cross-origin cover without CORS (itch.io) taints the canvas: the fallback ink it is
+    return null;
+  }
   const BINS = 24;
   const weight = new Float64Array(BINS);
   const hueSum = new Float64Array(BINS);

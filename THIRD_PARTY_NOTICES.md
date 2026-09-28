@@ -392,9 +392,21 @@ and are not part of the published build.
 - Those requests go to GitHub, which receives the player's IP address and
   browser details; see the
   [GitHub General Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).
-  No other server is contacted for box art: fonts are served with the app.
+  No other server is contacted for box art (except itch.io for the covers of
+  GB Studio games, below): fonts are served with the app.
 - The file names used to build those URLs come from `gamedb.json` (see above;
   factual data, no images).
+
+### itch.io (covers of GB Studio games)
+
+- For the GB Studio games Cartouche doesn't host, `gb-web/src/data/gbstudio.json` stores only the address
+  (`remoteCover`) of the cover image on the author's itch.io page, its `og:image`, read by
+  `scripts/gbstudio-covers.mjs`, which downloads no image.
+- The images belong to their authors. Cartouche does **not** copy, host or redistribute any of them: the
+  player's browser loads one directly from `img.itch.zone`, only after the player agreed in the
+  "Show box art?" dialog (the same consent as box art above), and keeps it only in its ordinary HTTP cache.
+- Those requests go to itch.io, which receives the player's IP address and browser details; see the
+  [itch.io privacy policy](https://itch.io/docs/legal/privacy-policy).
 
 ### RetroAchievements (achievement lists and badges)
 

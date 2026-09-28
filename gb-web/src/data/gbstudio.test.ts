@@ -38,6 +38,11 @@ test('every hosted ROM has a license, a license link, its SHA-1 and an allowlist
     assert.ok(existsSync(join(ROOT, 'gb-web/public', g.coverArt)), `${g.id}: cover missing`);
     assert.ok(g.coverCredit, `${g.id}: cover credit`);
   }
+  // A link-out game's cover stays on itch.io: only its URL is stored, loaded at runtime with box-art consent.
+  for (const g of games.filter((g) => g.remoteCover)) {
+    assert.ok(!g.romUrl && !g.coverArt, `${g.id}: remoteCover on a hosted game`);
+    assert.match(g.remoteCover!, /^https:\/\/img\.itch\.zone\/[\w%+=./-]+$/, `${g.id}: remoteCover`);
+  }
   // Nothing allowlisted that the catalog doesn't host.
   assert.equal(allowlist.size, hosted.length);
 });

@@ -76,7 +76,13 @@ export const LEGAL_ES: LegalSection[] = [
       'vuelve a preguntar si activas las carátulas después de haber dicho que no, o después de «Borrar todo». Con ' +
       '«Continuar sin ellas» (o Escape), la app no hace ninguna petición a libretro-thumbnails. ' +
       'Ajustes > Almacenamiento muestra el espacio que ocupan las carátulas, las elimina («Eliminar las carátulas descargadas», ' +
-      'que también desactiva las carátulas) y las vuelve a descargar para tu biblioteca.',
+      'que también desactiva las carátulas) y las vuelve a descargar para tu biblioteca.\n\n' +
+      'Juegos de GB Studio. Los cuatro que Cartouche aloja muestran su propia pantalla de título como carátula, archivos ' +
+      'de esta app con las licencias de sus gráficos (consulta roms/gbstudio/LICENSES.txt). Para todos los demás, solo se ' +
+      'guarda la dirección de la imagen de portada de la página de itch.io de su autor. Con las carátulas permitidas, tu ' +
+      'navegador carga esa imagen directamente de itch.io (img.itch.zone), que recibe tu dirección IP y los datos de tu ' +
+      'navegador (https://itch.io/docs/legal/privacy-policy), y la guarda solo en su caché normal. Con las carátulas desactivadas, ' +
+      'no se hace ninguna petición a itch.io.',
   },
   {
     title: 'Metadatos de los juegos',
@@ -96,9 +102,9 @@ export const LEGAL_ES: LegalSection[] = [
       'Tus ROM, partidas guardadas, estados guardados, ajustes, favoritos y tiempo de juego se guardan solo en este ' +
       'navegador (IndexedDB y localStorage) y nunca salen de tu dispositivo, salvo si activas la sincronización entre dispositivos (ver más abajo). Borra los datos de este sitio en ' +
       'los ajustes de tu navegador para eliminarlo todo.\n\n' +
-      'Solo GitHub recibe peticiones, salvo si conectas RetroAchievements, juegas en línea o activas la sincronización entre dispositivos (ver más abajo). GitHub Pages sirve la app y sus fuentes. Las carátulas están desactivadas de forma ' +
+      'Solo GitHub recibe peticiones, salvo si permites las carátulas, conectas RetroAchievements, juegas en línea o activas la sincronización entre dispositivos (ver más abajo). GitHub Pages sirve la app y sus fuentes. Las carátulas están desactivadas de forma ' +
       'predeterminada y necesitan tu aceptación (cuadro de diálogo del primer inicio o Ajustes > Almacenamiento); solo entonces el ' +
-      'navegador carga también las carátulas de las ROM reconocidas que añadiste desde raw.githubusercontent.com. Como cualquier ' +
+      'navegador carga también las carátulas de las ROM reconocidas que añadiste desde raw.githubusercontent.com, y las de los juegos de GB Studio desde itch.io (img.itch.zone, ver Carátulas). Como cualquier ' +
       'servidor web, GitHub recibe ' +
       'tu dirección IP y los datos de tu navegador; consulta la declaración general de privacidad de GitHub ' +
       '(https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).\n\n' +

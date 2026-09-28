@@ -79,7 +79,12 @@ export const LEGAL_SECTIONS: LegalSection[] = [
       'asked again only if you turn box art on after saying no, or after "Erase everything". With ' +
       '"Continue without" (or Escape), the app makes no request to libretro-thumbnails at all. ' +
       'Settings > Storage shows the space the covers use, deletes them ("Delete downloaded box art", ' +
-      'which also turns box art off) and downloads them again for your library.',
+      'which also turns box art off) and downloads them again for your library.\n\n' +
+      'GB Studio games: the four that Cartouche hosts show their own title screens as covers, files of this app under ' +
+      'the licenses of their artwork (see roms/gbstudio/LICENSES.txt). For every other one, only the address of the ' +
+      'cover image on its author\'s itch.io page is stored. With box art allowed, your browser loads that image directly ' +
+      'from itch.io (img.itch.zone), which receives your IP address and browser details (https://itch.io/docs/legal/privacy-policy), ' +
+      'and keeps it only in its ordinary cache. With box art off, no request goes to itch.io.',
   },
   {
     title: 'Game metadata',
@@ -99,10 +104,10 @@ export const LEGAL_SECTIONS: LegalSection[] = [
       'Your ROMs, saves, save states, settings, favorites and play time are stored only in this ' +
       'browser (IndexedDB and localStorage) and never leave your device, unless you turn on device sync ' +
       '(see below). Clear this site\'s data in your browser settings to delete everything.\n\n' +
-      'Only GitHub receives requests, unless you connect RetroAchievements, play online or turn on device ' +
+      'Only GitHub receives requests, unless you allow box art, connect RetroAchievements, play online or turn on device ' +
       'sync (see below). GitHub Pages serves the app and its fonts. Box art is off by ' +
       'default and needs your yes (first-launch dialog or Settings > Storage); only then does the ' +
-      'browser also load covers of recognized ROMs you added from raw.githubusercontent.com. Like any ' +
+      'browser also load covers of recognized ROMs you added from raw.githubusercontent.com, and covers of GB Studio games from itch.io (img.itch.zone, see Box art). Like any ' +
       'web server, GitHub receives ' +
       'your IP address and browser details; see the GitHub General Privacy Statement ' +
       '(https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).\n\n' +

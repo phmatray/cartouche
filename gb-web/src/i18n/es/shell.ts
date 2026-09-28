@@ -17,7 +17,7 @@ export default {
     stays: '<b>Todo se queda en este navegador.</b> Las ROM, las partidas guardadas y el tiempo de juego viven en tu dispositivo. Sin cuenta, sin subir nada.',
     backup: 'Haz una copia de tus datos',
     version: 'Versión {v}: novedades',
-    art: 'Carátulas: libretro-thumbnails · Arte de Tobu Tobu Girl: Tangram Games (CC BY 4.0)',
+    art: 'Carátulas: libretro-thumbnails, itch.io (GB Studio) · Arte de Tobu Tobu Girl: Tangram Games (CC BY 4.0)',
   },
   drop: 'Suelta para añadir',
   dropSub: 'Tus archivos se leen en este navegador y nunca se suben a un servidor.',
@@ -39,7 +39,7 @@ export default {
   art: {
     title: '¿Mostrar carátulas?',
     p1: 'Las carátulas tienen derechos de autor de las editoras de los juegos. Cartouche no aloja ni incluye ninguna (solo las carátulas con licencia libre de sus juegos incluidos).',
-    p2: 'Si aceptas, tu navegador descarga las carátulas de los juegos reconocidos que añadas directamente del proyecto libretro-thumbnails en GitHub, así que GitHub ve tu dirección IP y los datos de tu navegador (consulta <a>la declaración de privacidad de GitHub</a>). Tu navegador las guarda en su almacenamiento local. No compartimos nada. Puedes eliminarlas cuando quieras en Ajustes › Almacenamiento.',
+    p2: 'Si aceptas, tu navegador descarga las carátulas de los juegos reconocidos que añadas directamente del proyecto libretro-thumbnails en GitHub, y las de los juegos de GB Studio desde las páginas de itch.io de sus autores, así que GitHub e itch.io ven tu dirección IP y los datos de tu navegador (consulta <a>la declaración de privacidad de GitHub</a>). Tu navegador las guarda en su almacenamiento local. No compartimos nada. Puedes eliminarlas cuando quieras en Ajustes › Almacenamiento.',
     no: 'Continuar sin ellas',
     yes: 'Descargar carátulas',
     ready: { one: 'Carátula lista para {count} juego', other: 'Carátulas listas para {count} juegos' },

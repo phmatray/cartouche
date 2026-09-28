@@ -77,7 +77,13 @@ export const LEGAL_FR: LegalSection[] = [
       'n’est reposée que si les jaquettes sont activées après un refus, ou après « Tout effacer ». Avec ' +
       '« Continuer sans » (ou Esc), l’app ne fait aucune requête à libretro-thumbnails. ' +
       'Réglages > Stockage indique l’espace utilisé par les jaquettes, les supprime (« Supprimer les jaquettes téléchargées », ' +
-      'qui désactive aussi les jaquettes) et les télécharge à nouveau pour la bibliothèque.',
+      'qui désactive aussi les jaquettes) et les télécharge à nouveau pour la bibliothèque.\n\n' +
+      'Jeux GB Studio. Les quatre que Cartouche héberge affichent leur propre écran titre comme jaquette, des fichiers de ' +
+      'cette app sous les licences de leurs graphismes (voir roms/gbstudio/LICENSES.txt). Pour tous les autres, seule ' +
+      'l’adresse de l’image de couverture de la page itch.io de l’auteur est conservée. Si les jaquettes sont autorisées, ' +
+      'le navigateur charge cette image directement depuis itch.io (img.itch.zone), qui reçoit l’adresse IP et les ' +
+      'informations du navigateur (https://itch.io/docs/legal/privacy-policy), et la garde seulement dans son cache ordinaire. Jaquettes ' +
+      'désactivées, aucune requête n’est envoyée à itch.io.',
   },
   {
     title: 'Métadonnées des jeux',
@@ -97,9 +103,9 @@ export const LEGAL_FR: LegalSection[] = [
       'Les ROM, sauvegardes, sauvegardes instantanées, réglages, favoris et temps de jeu sont stockés uniquement dans ce ' +
       'navigateur (IndexedDB et localStorage) et ne quittent jamais l’appareil, sauf si la synchronisation entre appareils est activée (voir plus bas). Effacer les données de ce site dans ' +
       'les réglages du navigateur supprime tout.\n\n' +
-      'Seul GitHub reçoit des requêtes, sauf en cas de connexion à RetroAchievements, de jeu en ligne ou de synchronisation entre appareils (voir plus bas). GitHub Pages sert l’app et ses polices. Les jaquettes sont désactivées par ' +
+      'Seul GitHub reçoit des requêtes, sauf si les jaquettes sont autorisées, en cas de connexion à RetroAchievements, de jeu en ligne ou de synchronisation entre appareils (voir plus bas). GitHub Pages sert l’app et ses polices. Les jaquettes sont désactivées par ' +
       'défaut et nécessitent un accord (boîte de dialogue du premier lancement ou Réglages > Stockage) ; seulement alors le ' +
-      'navigateur charge aussi les jaquettes des ROM reconnues ajoutées depuis raw.githubusercontent.com. Comme tout ' +
+      'navigateur charge aussi les jaquettes des ROM reconnues ajoutées depuis raw.githubusercontent.com, et celles des jeux GB Studio depuis itch.io (img.itch.zone, voir Jaquettes). Comme tout ' +
       'serveur web, GitHub reçoit ' +
       'l’adresse IP et les informations du navigateur ; voir la déclaration générale de confidentialité de GitHub ' +
       '(https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement).\n\n' +

@@ -201,7 +201,7 @@ export function buildIndex(games: GameEntry[], ctx: IndexContext): SearchIndex {
     is.push(owned(g) ? 'now' : 'need');
     if (!g.lastPlayed) is.push('unplayed');
     else if (now - g.lastPlayed < RECENT_MS) is.push('recent');
-    if (g.coverArt || (ctx.art && g.libretroName)) is.push('art'); // ponytail: "has box art" = could show one, not "the download succeeded"
+    if (g.coverArt || (ctx.art && (g.libretroName || g.remoteCover))) is.push('art'); // ponytail: "has box art" = could show one, not "the download succeeded"
     if (g.isLocal) is.push('mine');
     if (isHomebrew(g)) is.push('homebrew');
     const genre = genresOf(g.genre, genres);

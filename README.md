@@ -193,7 +193,8 @@ cd gb-core && cargo test --release --no-fail-fast
   Nothing is uploaded to a server.
 - Only GitHub is contacted (unless you connect RetroAchievements, play online or turn on device sync, below). GitHub Pages serves the app. Box art is off until
   you agree in the "Show box art?" dialog; after that, covers of recognized
-  games come from `raw.githubusercontent.com`. Like any web server, GitHub sees
+  games come from `raw.githubusercontent.com`, and covers of GB Studio games
+  from itch.io (`img.itch.zone`). Like any web server, GitHub (or itch.io) sees
   your IP address
   ([GitHub privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)).
 - Settings › Storage shows what is stored and deletes it, box art included.
