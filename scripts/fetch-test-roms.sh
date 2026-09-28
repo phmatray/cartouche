@@ -44,4 +44,15 @@ unzip -o -q "$HB/shock-lobster.zip" -d "$HB/shock-lobster"
 echo "fe5d1e8ba8144431200bee34b71f3889a84c5a256442a4b1cf2a57f7e6c057f5  $HB/shock-lobster/shocklobster.gb" \
   | shasum -a 256 -c --quiet -
 
+echo "Fetching conformance suites..."
+# c-sp/game-boy-test-roms v7.0: prebuilt Mooneye, Mealybug Tearoom, SameSuite, Age, gbmicrotest and
+# rtc3test with their reference screenshots, for tests/conformance.rs. One pinned archive, SHA-256
+# checked; the suites keep the archive's own directory names.
+CONF="$DEST/conformance"
+ZIP="$DEST/game-boy-test-roms-v7.0.zip"
+curl -fsSL -o "$ZIP" https://github.com/c-sp/game-boy-test-roms/releases/download/v7.0/game-boy-test-roms-v7.0.zip
+echo "b9a9d7a1075aa35a3d07c07c34974048672d8520dca9e07a50178f5860c3832c  $ZIP" | shasum -a 256 -c --quiet -
+rm -rf "$CONF"
+unzip -o -q "$ZIP" -d "$CONF"
+
 echo "Test ROMs ready in $DEST"

@@ -500,6 +500,22 @@ The test suite checks the bundled copies too.)
 - dmg-acid2 and cgb-acid2 (Matt Currie), MIT License,
   https://github.com/mattcurrie/dmg-acid2 and https://github.com/mattcurrie/cgb-acid2
 
+### Conformance suites (not distributed)
+
+`gb-core/tests/conformance.rs` runs these suites from `gb-core/test-roms/conformance/` (git-ignored).
+`scripts/fetch-test-roms.sh` downloads them prebuilt, with their reference screenshots, as one
+archive pinned by SHA-256: c-sp/game-boy-test-roms v7.0 (Christoph Sprenger, MIT),
+https://github.com/c-sp/game-boy-test-roms. They are downloaded for testing only and never distributed.
+
+| Suite | Author | License | Upstream |
+|-------|--------|---------|----------|
+| Mooneye Test Suite | Joonas Javanainen (Gekkio) | MIT | https://github.com/Gekkio/mooneye-test-suite |
+| Mealybug Tearoom Tests | Matt Currie | MIT | https://github.com/mattcurrie/mealybug-tearoom-tests |
+| SameSuite | Lior Halphon (LIJI32) | X11 (MIT) | https://github.com/LIJI32/SameSuite |
+| Age test ROMs | Christoph Sprenger | MIT | https://github.com/c-sp/age-test-roms |
+| GBMicrotest | Austin Appleby | MIT | https://github.com/aappleby/GBMicrotest |
+| rtc3test | aaaaaa123456789 | The Unlicense | https://github.com/aaaaaa123456789/rtc3test |
+
 ### Homebrew smoke-test ROMs (not distributed)
 
 `gb-core/tests/homebrew.rs` runs these freely licensed homebrew games from
