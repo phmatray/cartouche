@@ -145,6 +145,12 @@ pub enum MbcType {
         rom_bank: u8,
         ram_bank: u8,
     },
+    /// Hudson HuC1: `0000-1FFF` picks RAM or the IR port (`0x0E`), no separate RAM enable.
+    Huc1 {
+        ir_mode: bool,
+        rom_bank: u8,
+        ram_bank: u8,
+    },
 }
 
 pub struct Cartridge {
@@ -218,6 +224,7 @@ impl Cartridge {
                 rom_bank: 1,
                 ram_bank: 0,
             },
+            0xFF => MbcType::Huc1 { ir_mode: false, rom_bank: 1, ram_bank: 0 },
             _ => return Err(CartridgeError::UnsupportedType { cart_type }),
         };
 
@@ -305,7 +312,7 @@ impl Cartridge {
                 _ => 0xFF,
             },
 
-            MbcType::Camera { rom_bank, .. } => match addr {
+            MbcType::Camera { rom_bank, .. } | MbcType::Huc1 { rom_bank, .. } => match addr {
                 0x0000..=0x3FFF => self.rom.get(addr as usize).copied().unwrap_or(0xFF),
                 0x4000..=0x7FFF => {
                     let bank = (*rom_bank as usize) % self.rom_bank_count.max(1);
@@ -425,6 +432,14 @@ impl Cartridge {
                 0x4000..=0x5FFF => *ram_bank = value & 0x1F,
                 _ => {}
             },
+
+            // Unlike MBC1, a written 0 maps bank 0 (Pan Docs HuC1).
+            MbcType::Huc1 { ir_mode, rom_bank, ram_bank } => match addr {
+                0x0000..=0x1FFF => *ir_mode = value & 0x0F == 0x0E,
+                0x2000..=0x3FFF => *rom_bank = value & 0x3F,
+                0x4000..=0x5FFF => *ram_bank = value & 0x03,
+                _ => {}
+            },
         }
     }
 
@@ -520,6 +535,13 @@ impl Cartridge {
                 let addr = self.ram_index((*ram_bank & 0x0F) as usize, offset);
                 self.ram.get(addr).copied().unwrap_or(0xFF)
             }
+
+            // ponytail: no infrared link, so the IR receiver never sees light.
+            MbcType::Huc1 { ir_mode: true, .. } => 0xC0,
+            MbcType::Huc1 { ram_bank, .. } => {
+                if self.ram.is_empty() { return 0xFF; }
+                self.ram[self.ram_index(*ram_bank as usize, offset)]
+            }
         }
     }
 
@@ -569,6 +591,7 @@ impl Cartridge {
             MbcType::Mbc3 { ram_enabled, rom_bank, ram_bank } => (rom_bank as u16, ram_bank, ram_enabled, false),
             MbcType::Mbc5 { ram_enabled, rom_bank, ram_bank } => (rom_bank, ram_bank, ram_enabled, false),
             MbcType::Camera { ram_enabled, rom_bank, ram_bank } => (rom_bank as u16, ram_bank, ram_enabled, false),
+            MbcType::Huc1 { ir_mode, rom_bank, ram_bank } => (rom_bank as u16, ram_bank, false, ir_mode),
         };
         let (sel, latch) = self.rtc.as_ref().map_or((0, false), |r| (r.selected_register.unwrap_or(0), r.latch_ready));
         let [lo, hi] = rom_bank.to_le_bytes();
@@ -587,6 +610,7 @@ impl Cartridge {
             MbcType::Mbc3 { ram_enabled, rom_bank, ram_bank } => (*ram_enabled, *rom_bank, *ram_bank) = (en, rb as u8, rab),
             MbcType::Mbc5 { ram_enabled, rom_bank, ram_bank } => (*ram_enabled, *rom_bank, *ram_bank) = (en, rb, rab),
             MbcType::Camera { ram_enabled, rom_bank, ram_bank } => (*ram_enabled, *rom_bank, *ram_bank) = (en, rb as u8, rab),
+            MbcType::Huc1 { ir_mode, rom_bank, ram_bank } => (*ir_mode, *rom_bank, *ram_bank) = (md, rb as u8, rab),
         }
         if let Some(rtc) = &mut self.rtc {
             rtc.selected_register = (s[5] != 0).then_some(s[5]);
@@ -715,6 +739,13 @@ impl Cartridge {
                     *byte = value;
                 }
             }
+            &MbcType::Huc1 { ir_mode: false, ram_bank, .. } => {
+                let addr = self.ram_index(ram_bank as usize, offset);
+                if let Some(byte) = self.ram.get_mut(addr) {
+                    *byte = value;
+                }
+            }
+            MbcType::Huc1 { .. } => {}
         }
     }
 }
@@ -772,6 +803,45 @@ mod tests {
         let c = Cartridge::from_rom(dump).expect("header found past the 512-byte copier header");
         assert_eq!(c.read_rom(0x134), b'T');
         assert_eq!(c.read_rom(0x4000), 0x42, "banks line up");
+    }
+
+    #[test]
+    fn huc1_banks_rom_and_ram_and_ir_reads_no_light() {
+        let mut rom = vec![0u8; 0x8000 * 4];
+        rom[0x147] = 0xFF;
+        rom[0x148] = 0x02;
+        rom[0x149] = 0x03;
+        rom[0x14D] = (0x134..=0x14C).fold(0u8, |c, a| c.wrapping_sub(rom[a]).wrapping_sub(1));
+        rom[5 * 0x4000] = 0x55;
+        let mut c = Cartridge::from_rom(rom).expect("HuC1 loads");
+        assert!(c.has_battery());
+        c.write_rom(0x2000, 5);
+        assert_eq!(c.read_rom(0x4000), 0x55);
+        c.write_rom(0x2000, 0);
+        assert_eq!(c.read_rom(0x4147), 0xFF, "bank 0 is mapped as is, not bumped to 1");
+        c.write_rom(0x2000, 5);
+
+        c.write_rom(0x0000, 0x0A);
+        c.write_rom(0x4000, 2);
+        c.write_ram(0, 0x11);
+        assert_eq!(c.read_ram(0), 0x11);
+        c.write_rom(0x4000, 0);
+        assert_eq!(c.read_ram(0), 0x00, "bank 0 is another bank");
+        c.write_rom(0x4000, 2);
+
+        c.write_rom(0x0000, 0x0E);
+        assert_eq!(c.read_ram(0), 0xC0, "IR: no light");
+        c.write_ram(0, 0x99);
+        c.write_rom(0x0000, 0x0A);
+        assert_eq!(c.read_ram(0), 0x11, "an IR write does not reach RAM");
+
+        c.write_rom(0x0000, 0x0E);
+        let state = c.export_state();
+        let mut fresh = cart(0xFF, 0x03);
+        fresh.import_state(&state);
+        assert_eq!(fresh.read_ram(0), 0xC0, "IR mode survives");
+        assert_eq!(fresh.export_state(), state, "ROM bank 5 and RAM bank 2 survive");
+        assert_eq!(state[..3], [5, 0, 2]);
     }
 
     #[test]
