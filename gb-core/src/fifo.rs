@@ -12,7 +12,7 @@
 //! in HBlank. Mode 3's end is not known when it starts: once 152 pixels are out (and again after a
 //! mid-line write to LCDC, SCX, WY or WX), the rest of the line is run ahead on a copy
 //! (`predict_len`), so HBlank starts where the FIFO ends. Both delays are measured with Mealybug
-//! Tearoom's DMG ROMs (`m3_bgp_change`, `m3_scx_high_5_bits`).
+//! Tearoom's DMG and CGB ROMs (`m3_bgp_change`, `m3_scx_high_5_bits`).
 //!
 //! An OBJ whose X is reached stops the pixels: the fetcher finishes its current tile, then the OBJ
 //! row is fetched (6 dots) and merged into the OBJ FIFO, where the pixels already there (lower X,
@@ -23,15 +23,18 @@
 //!
 //! CGB mode: the fetcher also reads the tile's attributes from VRAM bank 1 (palette, bank, flips,
 //! BG-to-OBJ priority), LCDC bit 0 is the BG/window master priority instead of the BG enable,
-//! and OBJs overlap by OAM index unless OPRI bit 0 asks for the DMG's X order.
+//! and OBJs overlap by OAM index unless OPRI bit 0 asks for the DMG's X order. A CGB (in both
+//! modes) also latches the tile row with the tile number, as a CGB D does, shows a BGP write
+//! without the DMG's mixed pixel, and LCDC bit 0 one dot later.
 
 use crate::ppu::{Ppu, Sprite, SCREEN_WIDTH};
 use crate::trace::{LAYER_BG, LAYER_OBJ, LAYER_WIN, NO_OBJ};
 
-/// Dots the fetcher runs behind mode 3 as the CPU sees it.
-const FIFO_LAG: u32 = 8;
-/// Dots from a pixel leaving the BG FIFO to the LCD.
-const OUT_DELAY: u32 = 1;
+/// Dots the fetcher runs behind mode 3 as the CPU sees it, and from a pixel leaving the BG FIFO
+/// to the LCD: (DMG, CGB). A CGB fetches 2 dots earlier and shows the pixel at the same time
+/// (Mealybug's CGB ROMs: `m3_scx_high_5_bits`, `m3_scy_change`, `m3_lcdc_obj_size_change`).
+const FIFO_LAG: [u32; 2] = [8, 6];
+const OUT_DELAY: [u32; 2] = [1, 3];
 /// Dots left of the 6-dot OBJ fetch when it reads its row's low, then high byte (Mealybug
 /// `m3_lcdc_obj_size_change`: each read uses the OBJ size of its dot).
 const OBJ_LO_AT: u8 = 2;
@@ -58,6 +61,9 @@ pub(crate) struct Fetcher {
     pub hi: u8,
     /// CGB: the tile's attributes (bank 1 of the map).
     pub attr: u8,
+    /// CGB: the tile row, latched with the tile number (a CGB D; Mealybug `m3_scy_change`).
+    /// A DMG reads SCY again for each data byte.
+    pub row: u8,
     pub window: bool,
 }
 
@@ -100,6 +106,9 @@ pub(crate) struct LineState {
     pub dot: u32,
     /// Dots this line runs ahead of the others.
     pub lead: u32,
+    /// `FIFO_LAG` and `OUT_DELAY` of the model.
+    pub lag: u32,
+    pub out_delay: u32,
     /// Mode 3's length as the FIFO measures it: the dot x reached 160.
     pub len: u32,
     /// `Ppu::mode3_len` holds this line's length (`predict_len`), no longer a bound.
@@ -143,8 +152,8 @@ pub(crate) struct LineState {
     pub out: [Option<(Pixel, Pixel, bool)>; 4],
     /// Next screen x the LCD shows.
     pub out_x: u8,
-    /// LCDC as it was on the previous dot.
-    pub lcdc_prev: u8,
+    /// LCDC as it was on the previous dot (low byte) and the one before (high byte).
+    pub lcdc_prev: u16,
     /// BGP before a write: the next pixel shown mixes both (DMG).
     pub bgp_old: Option<(u8, u32)>,
     /// A register that sets mode 3's length (LCDC, SCX, WY, WX) was written: `measure_len` asks the FIFO again.
@@ -161,7 +170,7 @@ impl Ppu {
         for &(x, ..) in &sprites[..nsprites] { obj_xs[x as usize >> 6] |= 1 << (x & 63); }
         self.line = LineState {
             active: true,
-            lcdc_prev: self.lcdc,
+            lcdc_prev: self.lcdc as u16 * 0x101,
             fine,
             discard: fine,
             hit_x: 8 - fine,
@@ -169,6 +178,8 @@ impl Ppu {
             sprites,
             nsprites,
             obj_xs,
+            lag: FIFO_LAG[(self.cgb_mode || self.compat) as usize],
+            out_delay: OUT_DELAY[(self.cgb_mode || self.compat) as usize],
             // Line 0 draws one M-cycle earlier after the mode 2 interrupt than the other lines
             // (Mealybug's DMG ROMs make up for it by waiting one M-cycle less on line 0).
             lead: if self.ly == 0 && !self.lcd_on_line0 { 4 } else { 0 },
@@ -184,7 +195,7 @@ impl Ppu {
 
     /// Runs the line up to `dot` (mode 3's dot count, `MODE0_EARLY` ahead of `mode_clock`).
     pub(crate) fn run_line(&mut self, dot: u32) {
-        while self.line.out_x < SCREEN_WIDTH as u8 && self.line.dot + FIFO_LAG < dot + self.line.lead {
+        while self.line.out_x < SCREEN_WIDTH as u8 && self.line.dot + self.line.lag < dot + self.line.lead {
             self.dot();
         }
         if self.line.out_x == SCREEN_WIDTH as u8 { self.end_line(); }
@@ -271,7 +282,7 @@ impl Ppu {
     #[inline]
     fn fetch_addr(&self) -> usize {
         let f = &self.line.fetcher;
-        let row = self.bg_row();
+        let row = if self.cgb_mode || self.compat { f.row } else { self.bg_row() };
         let row = if f.attr & 0x40 != 0 { 7 - row } else { row };
         self.fetch_tile_row(f.tile) + row as usize * 2 + if f.attr & 0x08 != 0 { 0x2000 } else { 0 }
     }
@@ -304,6 +315,7 @@ impl Ppu {
                     let at = base + row as usize * 32 + col as usize;
                     self.line.fetcher.tile = self.vram[at];
                     if self.cgb_mode { self.line.fetcher.attr = self.vram[0x2000 + at]; }
+                    self.line.fetcher.row = self.bg_row();
                 }
                 self.line.fetcher.step = FetchStep::DataLo;
             }
@@ -435,10 +447,10 @@ impl Ppu {
     pub(crate) fn dot(&mut self) {
         self.line.dot += 1;
         if self.line.x < SCREEN_WIDTH as u8 { self.fifo_dot(); }
-        if let Some((bg, obj, window)) = self.line.out[self.line.dot.wrapping_sub(OUT_DELAY) as usize & 3].take() {
+        if let Some((bg, obj, window)) = self.line.out[self.line.dot.wrapping_sub(self.line.out_delay) as usize & 3].take() {
             self.output_pixel(bg, obj, window);
         }
-        self.line.lcdc_prev = self.lcdc;
+        self.line.lcdc_prev = self.line.lcdc_prev << 8 | self.lcdc as u16;
     }
 
     #[inline]
@@ -538,12 +550,15 @@ impl Ppu {
             obj_color = obj_on.then(|| self.get_obj_cram_color(obj.palette, obj.color));
             bg_color = self.get_bg_cram_color(bg.palette, bg_id);
         } else {
+            // A DMG shows the dot of a BGP write with both values mixed, a CGB (compatibility mode)
+            // the new one (Mealybug `m3_bgp_change`).
             let bgp = match self.line.bgp_old.take() {
-                Some((old, dot)) if dot + 1 >= self.line.dot => self.bgp | old, // the dot of the write
+                Some((old, dot)) if dot + 1 >= self.line.dot && !self.compat => self.bgp | old,
                 _ => self.bgp,
             };
-            // BG enable reaches the LCD one dot after BGP does.
-            bg_id = if self.line.lcdc_prev & 0x01 != 0 { bg.color } else { 0 };
+            // BG enable reaches the LCD one dot after BGP does, two on a CGB (`m3_lcdc_bg_en_change`).
+            let lcdc = if self.compat { self.line.lcdc_prev >> 8 } else { self.line.lcdc_prev };
+            bg_id = if lcdc & 0x01 != 0 { bg.color } else { 0 };
             shown = obj_on && !(obj.bg_priority && bg_id != 0);
             obj_color = obj_on.then(|| self.apply_palette(if obj.palette != 0 { self.obp1 } else { self.obp0 }, obj.color, 1 + obj.palette));
             bg_color = self.apply_palette(bgp, bg_id, 0);
