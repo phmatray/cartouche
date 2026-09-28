@@ -12,6 +12,7 @@ import { ConfirmDialog, type ConfirmRequest } from '../shell/ConfirmDialog';
 import { Item, ListRow } from './GameItem';
 import { size, t as tNow, useT, type Key } from '../../i18n';
 import { useSettingsStore } from '../../store/settingsStore';
+import { useMusicLibrary } from '../../hooks/useMusicLibrary';
 
 type Sort = 'name' | 'recent' | 'most' | 'year';
 // Shortcuts into the search model (the same filters as `is:mine`, `region:us`… in the search overlay).
@@ -190,6 +191,8 @@ export function LibraryPage() {
           </section>
         )}
 
+        <MusicShelf />
+
         {gbs.length > 0 && (
           <section className="sec" aria-labelledby="h-gbs">
             <div className="sec-h">
@@ -302,5 +305,26 @@ export function StorageNotice() {
       <span className="ic">i</span>
       <span>{t('library.storageBlocked')}</span>
     </div>
+  );
+}
+
+/** The GBS music files (not games: their own store and page). Hidden while there are none. */
+function MusicShelf() {
+  const { music } = useMusicLibrary();
+  const t = useT();
+  if (!music.length) return null;
+  return (
+    <section className="sec" aria-labelledby="h-music">
+      <div className="sec-h"><h2 id="h-music">{t('library.music.shelf')}</h2><span className="count">{music.length}</span></div>
+      <div className="shelf rail">
+        {music.map((m) => (
+          <Link key={m.id} className="item" to={paths.music(m.id)}>
+            <div className="art"><div className="cv"><div className="noart"><div><b>{m.title}</b></div><div><small>{m.author}</small><span className="bar"><i /><i /><i /></span></div></div></div></div>
+            <h3>{m.title}</h3>
+            <div className="sub">{t('library.music.tracks', { count: m.songs })}</div>
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }
