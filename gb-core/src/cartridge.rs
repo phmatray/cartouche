@@ -15,102 +15,104 @@ pub(crate) fn now_ms() -> f64 {
     }
 }
 
+/// Real-time dots in one second: the cartridge clocks count emulated time in these units (a dot is
+/// one 4.19 MHz cycle at single speed; double speed does not speed the cartridge's crystal up).
+pub(crate) const DOTS_PER_SECOND: u64 = 1 << 22;
+
+/// Unix seconds now, for the `.sav` clock footers: the only place the cartridge clocks see the wall.
+pub(crate) fn unix_seconds() -> u64 {
+    (now_ms() / 1000.0).max(0.0) as u64
+}
+
+/// Valid bits of S, M, H, DL, DH: the rest are not stored and read back as 0.
+const RTC_MASK: [u8; 5] = [0x3F, 0x3F, 0x1F, 0xFF, 0xC1];
+
+/// The MBC3 clock: five counters (S, M, H, DL, DH) and a sub-second counter, advanced by emulated
+/// time. Out-of-range values count up to the register's width and wrap to 0 without carrying.
 pub struct Rtc {
-    /// Base timestamp (ms since epoch) when RTC was last synchronized
-    base_timestamp: f64,
-    /// Latched register values (frozen on latch)
-    latched: [u8; 5], // seconds, minutes, hours, days_low, days_high
+    /// Live S, M, H, DL, DH.
+    regs: [u8; 5],
+    /// Register values frozen by the last latch; what the game reads.
+    latched: [u8; 5],
+    /// Dots into the current second.
+    sub: u64,
     /// Whether the latch sequence is in progress (wrote 0x00, waiting for 0x01)
     latch_ready: bool,
-    /// Halt flag — when true, RTC does not advance
-    halted: bool,
-    /// The elapsed seconds at the time halt was engaged
-    halted_elapsed: f64,
     /// Currently selected RTC register (0x08-0x0C), or None if RAM bank selected
     selected_register: Option<u8>,
 }
 
 impl Rtc {
     fn new() -> Self {
-        Self {
-            base_timestamp: now_ms(),
-            latched: [0; 5],
-            latch_ready: false,
-            halted: false,
-            halted_elapsed: 0.0,
-            selected_register: None,
+        Self { regs: [0; 5], latched: [0; 5], sub: 0, latch_ready: false, selected_register: None }
+    }
+
+    fn halted(&self) -> bool {
+        self.regs[4] & 0x40 != 0
+    }
+
+    fn tick(&mut self, dots: u64) {
+        if self.halted() { return; }
+        self.sub += dots;
+        while self.sub >= DOTS_PER_SECOND {
+            self.sub -= DOTS_PER_SECOND;
+            self.second();
         }
     }
 
-    fn elapsed_seconds(&self) -> f64 {
-        if self.halted {
-            self.halted_elapsed
-        } else {
-            (now_ms() - self.base_timestamp) / 1000.0
+    fn second(&mut self) {
+        let r = &mut self.regs;
+        for (i, limit) in [(0, 60), (1, 60), (2, 24)] {
+            r[i] = (r[i] + 1) & RTC_MASK[i];
+            if r[i] != limit { return; }
+            r[i] = 0;
         }
+        self.day();
+    }
+
+    fn day(&mut self) {
+        let r = &mut self.regs;
+        r[3] = r[3].wrapping_add(1);
+        if r[3] == 0 {
+            if r[4] & 1 != 0 { r[4] |= 0x80; } // day counter overflow: sticky until a DH write
+            r[4] ^= 1;
+        }
+    }
+
+    /// Catches up `secs` seconds of wall time (between sessions), unless halted.
+    fn advance(&mut self, secs: u64) {
+        if self.halted() { return; }
+        let valid = self.regs[0] < 60 && self.regs[1] < 60 && self.regs[2] < 24;
+        let days = if valid { secs / 86400 } else { 0 };
+        // Past 1024 days the counter has overflowed (sticky) and wrapped twice: the rest changes nothing.
+        for _ in 0..days.min(1024) { self.day(); }
+        for _ in 0..secs - days * 86400 { self.second(); }
+    }
+
+    /// Sets the live registers from a total number of seconds (the legacy Cartouche footer).
+    fn set_total(&mut self, total: u64, halted: bool) {
+        let days = total / 86400;
+        self.regs = [(total % 60) as u8, (total / 60 % 60) as u8, (total / 3600 % 24) as u8, days as u8, (days >> 8 & 1) as u8];
+        if days >= 512 { self.regs[4] |= 0x80; }
+        if halted { self.regs[4] |= 0x40; }
     }
 
     fn latch(&mut self) {
-        let total_secs = self.elapsed_seconds().max(0.0) as u64;
-        let secs = (total_secs % 60) as u8;
-        let mins = ((total_secs / 60) % 60) as u8;
-        let hours = ((total_secs / 3600) % 24) as u8;
-        let days = (total_secs / 86400) as u16;
-
-        self.latched[0] = secs;
-        self.latched[1] = mins;
-        self.latched[2] = hours;
-        self.latched[3] = (days & 0xFF) as u8;
-        let mut high = ((days >> 8) & 0x01) as u8;
-        if self.halted { high |= 0x40; }
-        if days > 511 { high |= 0x80; } // day counter overflow
-        self.latched[4] = high;
+        self.latched = self.regs;
     }
 
     fn read(&self, reg: u8) -> u8 {
         match reg {
-            0x08 => self.latched[0],
-            0x09 => self.latched[1],
-            0x0A => self.latched[2],
-            0x0B => self.latched[3],
-            0x0C => self.latched[4],
+            0x08..=0x0C => self.latched[reg as usize - 8],
             _ => 0xFF,
         }
     }
 
     fn write(&mut self, reg: u8, value: u8) {
-        let total_secs = self.elapsed_seconds().max(0.0) as u64;
-        let mut secs = (total_secs % 60) as u64;
-        let mut mins = ((total_secs / 60) % 60) as u64;
-        let mut hours = ((total_secs / 3600) % 24) as u64;
-        // The 9-bit day counter, and its carry (DH bit 7): sticky, only a DH write sets or clears it.
-        let mut days = (total_secs / 86400) % 512;
-        let mut carry = total_secs / 86400 >= 512;
-
-        match reg {
-            0x08 => secs = (value % 60) as u64,
-            0x09 => mins = (value % 60) as u64,
-            0x0A => hours = (value % 24) as u64,
-            0x0B => days = (days & 0x100) | value as u64,
-            0x0C => {
-                days = (days & 0xFF) | (((value & 0x01) as u64) << 8);
-                carry = value & 0x80 != 0;
-                let new_halt = value & 0x40 != 0;
-                if new_halt && !self.halted {
-                    self.halted_elapsed = self.elapsed_seconds();
-                } else if !new_halt && self.halted {
-                    self.base_timestamp = now_ms() - self.halted_elapsed * 1000.0;
-                }
-                self.halted = new_halt;
-            }
-            _ => return,
-        }
-
-        let new_total = secs + mins * 60 + hours * 3600 + (days + if carry { 512 } else { 0 }) * 86400;
-        if self.halted {
-            self.halted_elapsed = new_total as f64;
-        } else {
-            self.base_timestamp = now_ms() - (new_total as f64) * 1000.0;
+        if let 0x08..=0x0C = reg {
+            let i = reg as usize - 8;
+            self.regs[i] = value & RTC_MASK[i];
+            if i == 0 { self.sub = 0; } // a seconds write restarts the second
         }
     }
 }
@@ -682,6 +684,12 @@ impl Cartridge {
         }
     }
 
+    /// Advances the cartridge's clock (MBC3) by `dots` of emulated real time: 4 per
+    /// M-cycle at single speed, 2 at double speed, also while the CPU is stopped.
+    pub fn tick_clock(&mut self, dots: u64) {
+        if let Some(rtc) = &mut self.rtc { rtc.tick(dots); }
+    }
+
     /// Whether the cartridge has a rumble motor (types 0x1C-0x1E).
     pub fn has_rumble(&self) -> bool {
         self.rumble
@@ -840,12 +848,10 @@ impl Cartridge {
     pub fn export_sram(&self) -> Vec<u8> {
         let mut data = self.ram.clone();
         if let Some(ref rtc) = self.rtc {
-            let mut live = Rtc { latched: [0; 5], ..*rtc };
-            live.latch();
-            for b in live.latched.iter().chain(rtc.latched.iter()) {
+            for b in rtc.regs.iter().chain(rtc.latched.iter()) {
                 data.extend_from_slice(&(*b as u32).to_le_bytes());
             }
-            data.extend_from_slice(&((now_ms() / 1000.0) as u64).to_le_bytes());
+            data.extend_from_slice(&unix_seconds().to_le_bytes());
         }
         if let Some(ref huc3) = self.huc3 {
             data.extend_from_slice(&huc3.export_footer());
@@ -966,31 +972,26 @@ impl Cartridge {
         let len = (data.len() - footer.map_or(0, |f| f.len())).min(ram_len);
         self.ram[..len].copy_from_slice(&data[..len]);
 
-        // Restore RTC state if present
+        // Restore RTC state if present: the registers as saved, then the wall time since the save.
         if let Some(ref mut rtc) = self.rtc {
+            rtc.sub = 0;
             if let Some(footer) = footer {
                 let word = |i: usize| word(footer, i);
                 let saved_at = if footer.len() == 48 {
-                    u64::from_le_bytes(footer[40..48].try_into().unwrap()) as f64
+                    u64::from_le_bytes(footer[40..48].try_into().unwrap())
                 } else {
-                    word(10) as f64
+                    word(10) as u64
                 };
-                let dh = word(4) as u8;
-                let days = (word(3) & 0xFF) as u64 | ((dh as u64 & 1) << 8) | if dh & 0x80 != 0 { 512 } else { 0 };
-                let total = (word(0) % 60 + (word(1) % 60) * 60 + (word(2) % 24) * 3600) as u64 + days * 86400;
-                rtc.halted = dh & 0x40 != 0;
-                rtc.halted_elapsed = total as f64;
-                rtc.base_timestamp = (saved_at - total as f64) * 1000.0;
-                for (i, l) in rtc.latched.iter_mut().enumerate() { *l = word(5 + i) as u8; }
+                for (i, r) in rtc.regs.iter_mut().enumerate() { *r = word(i) as u8 & RTC_MASK[i]; }
+                for (i, l) in rtc.latched.iter_mut().enumerate() { *l = word(5 + i) as u8 & RTC_MASK[i]; }
+                rtc.advance(unix_seconds().saturating_sub(saved_at));
             } else if data.len() >= ram_len + 17 {
+                // Legacy Cartouche footer: wall ms at which the clock read 0, halted, seconds when halted.
                 let rtc_data = &data[ram_len..];
-                rtc.base_timestamp = f64::from_le_bytes(
-                    rtc_data[0..8].try_into().unwrap_or([0; 8]),
-                );
-                rtc.halted = rtc_data[8] != 0;
-                rtc.halted_elapsed = f64::from_le_bytes(
-                    rtc_data[9..17].try_into().unwrap_or([0; 8]),
-                );
+                let f64_at = |i: usize| f64::from_le_bytes(rtc_data[i..i + 8].try_into().unwrap_or([0; 8]));
+                let halted = rtc_data[8] != 0;
+                let total = if halted { f64_at(9) } else { (now_ms() - f64_at(0)) / 1000.0 };
+                rtc.set_total(total.max(0.0) as u64, halted);
                 if rtc_data.len() >= 22 {
                     rtc.latched.copy_from_slice(&rtc_data[17..22]);
                 }
@@ -1531,9 +1532,11 @@ mod tests {
         }
         // A RAM-only file (no footer) whose last bytes happen to be zero is not read as a clock.
         let mut c = cart(0x10, 0x03);
-        let before = c.rtc.as_ref().unwrap().base_timestamp;
+        c.write_rom(0x0000, 0x0A);
+        c.write_rom(0x4000, 0x09);
+        c.write_ram(0, 42);
         c.import_sram(&[0u8; 0x8000]);
-        assert_eq!(c.rtc.as_ref().unwrap().base_timestamp, before);
+        assert_eq!(read_clock(&mut c)[1], 42);
     }
 
     #[test]
@@ -1593,6 +1596,58 @@ mod tests {
         sav.extend_from_slice(&[0; 26]);
         c.import_sram(&sav);
         assert_eq!(read_clock(&mut c), [2, 1, 0, 3, 0x40]);
+    }
+
+    fn rtc_set(c: &mut Cartridge, reg: u8, v: u8) {
+        c.write_rom(0x0000, 0x0A);
+        c.write_rom(0x4000, reg);
+        c.write_ram(0, v);
+    }
+
+    #[test]
+    fn rtc_ticks_on_emulated_time_and_stops_when_halted() {
+        let mut c = cart(0x10, 0x03);
+        c.tick_clock(61 * DOTS_PER_SECOND - 4);
+        assert_eq!(read_clock(&mut c), [0, 1, 0, 0, 0], "not yet 1:01");
+        c.tick_clock(4);
+        assert_eq!(read_clock(&mut c), [1, 1, 0, 0, 0]);
+        rtc_set(&mut c, 0x0C, 0x40);
+        c.tick_clock(5 * DOTS_PER_SECOND);
+        assert_eq!(read_clock(&mut c), [1, 1, 0, 0, 0x40], "halted");
+    }
+
+    #[test]
+    fn rtc_out_of_range_values_wrap_without_carry_and_seconds_writes_restart_the_second() {
+        let mut c = cart(0x10, 0x03);
+        rtc_set(&mut c, 0x08, 63);
+        rtc_set(&mut c, 0x0A, 31);
+        c.tick_clock(DOTS_PER_SECOND);
+        assert_eq!(read_clock(&mut c), [0, 0, 31, 0, 0], "63 s wraps to 0, no minute");
+        rtc_set(&mut c, 0x08, 0xFF);
+        assert_eq!(read_clock(&mut c)[0], 0x3F, "only 6 bits are kept");
+
+        rtc_set(&mut c, 0x08, 5);
+        c.tick_clock(DOTS_PER_SECOND / 2);
+        rtc_set(&mut c, 0x08, 5);
+        c.tick_clock(DOTS_PER_SECOND * 6 / 10);
+        assert_eq!(read_clock(&mut c)[0], 5, "the write restarted the second");
+        c.tick_clock(DOTS_PER_SECOND - DOTS_PER_SECOND * 6 / 10);
+        assert_eq!(read_clock(&mut c)[0], 6);
+    }
+
+    #[test]
+    fn rtc_catches_up_the_wall_time_between_sessions() {
+        let mut c = cart(0x10, 0x03);
+        rtc_set(&mut c, 0x09, 20);
+        let mut sav = c.export_sram();
+        let at = sav.len() - 8;
+        let t = u64::from_le_bytes(sav[at..].try_into().unwrap()) - 2 * 86400 - 3;
+        sav[at..].copy_from_slice(&t.to_le_bytes());
+        let mut d = cart(0x10, 0x03);
+        d.import_sram(&sav);
+        let r = read_clock(&mut d);
+        assert_eq!((r[1], r[3]), (20, 2), "two days later");
+        assert!((3..6).contains(&r[0]));
     }
 
     #[test]

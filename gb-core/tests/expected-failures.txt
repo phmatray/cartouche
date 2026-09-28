@@ -473,9 +473,3 @@ age-test-roms/m3-bg-scx/m3-bg-scx-ds.gb@cgbBCE  # double-speed
 age-test-roms/m3-bg-scx/m3-bg-scx-nocgb.gb@ncmBCE  # ppu-mode3
 age-test-roms/m3-bg-scx/m3-bg-scx.gb@cgbBCE  # ppu-mode3
 age-test-roms/m3-bg-scx/m3-bg-scx.gb@dmgC  # ppu-mode3
-rtc3test/rtc3test.gb@basic-tests-cgb  # rtc
-rtc3test/rtc3test.gb@basic-tests-dmg  # rtc
-rtc3test/rtc3test.gb@range-tests-cgb  # rtc
-rtc3test/rtc3test.gb@range-tests-dmg  # rtc
-rtc3test/rtc3test.gb@sub-second-writes-cgb  # rtc
-rtc3test/rtc3test.gb@sub-second-writes-dmg  # rtc
