@@ -6,7 +6,7 @@ import type { FrameTrace } from '../neural/trace';
 // These will be dynamically imported from the WASM module
 let wasmMemory: WebAssembly.Memory | null = null;
 const textDecoder = new TextDecoder();
-const VRAM_SIZE = 0x2000; // 8192 bytes
+const VRAM_SIZE = 0x4000; // both CGB banks, 8 KiB each
 const START = 3; // JoypadButton.Start
 
 /** `sgb`: a Super Game Boy (only for a cartridge with its functions; `colorize` and `palette` then do not apply). */
@@ -374,6 +374,27 @@ export function useEmulator() {
     return meta && final && bg && win && obj && info ? { meta, final, bg, win, obj, info } : null;
   }, []);
 
+  /** A view of core memory at `ptr`, or null without a ROM. Valid until the WASM memory grows. */
+  const coreView = (ptr: number, len: number): Uint8Array | null =>
+    ptr && wasmMemory ? new Uint8Array(wasmMemory.buffer, ptr, len) : null;
+
+  const getOam = useCallback((): Uint8Array | null => {
+    const emu = emulatorRef.current;
+    return emu ? coreView(emu.oam_ptr(), 0xA0) : null;
+  }, []);
+
+  const getCram = useCallback((): { bg: Uint8Array; obj: Uint8Array } | null => {
+    const emu = emulatorRef.current;
+    const bg = emu && coreView(emu.cram_bg_ptr(), 64), obj = emu && coreView(emu.cram_obj_ptr(), 64);
+    return bg && obj ? { bg, obj } : null;
+  }, []);
+
+  /** LCDC, STAT, SCY, SCX, LY, LYC, BGP, OBP0, OBP1, WY, WX, VBK. */
+  const getLcdRegs = useCallback((): Uint8Array | null => {
+    const regs = emulatorRef.current?.get_lcd_regs();
+    return regs && regs.length ? regs : null;
+  }, []);
+
   const getBgp = useCallback((): number => {
     const emu = emulatorRef.current;
     return emu ? emu.get_bgp() : 0;
@@ -427,6 +448,9 @@ export function useEmulator() {
     getSerialOutput,
     clearSerialOutput,
     getVramData,
+    getOam,
+    getCram,
+    getLcdRegs,
     getBgp,
     setChannelMuted,
     setTraceEnabled,
