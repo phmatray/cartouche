@@ -18,7 +18,7 @@ pub struct Tama5 {
     regs: [u8; 16],
     out: u8,
     /// Emulated time since the clock read 2000-01-01 00:00:00, in dots (`DOTS_PER_SECOND`).
-    dots: u64,
+    pub(crate) dots: u64,
 }
 
 const DAY: u64 = 86400;
