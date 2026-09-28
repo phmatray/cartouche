@@ -20,8 +20,10 @@ export default {
   earned: { one: '{count} sur {total} obtenu', other: '{count} sur {total} obtenus' },
   points: { one: '{count} point sur {total}', other: '{count} points sur {total}' },
   pts: { one: 'point', other: 'points' },
+  next: { one: 'À obtenir · {count}', other: 'À obtenir · {count}' },
+  done: { one: 'Obtenu · {count}', other: 'Obtenus · {count}' },
+  missable: 'Ratable',
   hardcore: 'Hardcore',
-  locked: 'Pas encore obtenu',
   on: 'Obtenu le {date}',
   site: 'Voir sur RetroAchievements',
   readOnly: 'Pour les débloquer en jouant, identifiez-vous dans Réglages › Succès.',
@@ -40,4 +42,5 @@ export default {
   serverError: 'RetroAchievements : {error}',
   pending: 'RetroAchievements est injoignable : vos succès seront envoyés dès son retour.',
   sent: 'Succès en attente envoyés à RetroAchievements.',
+  cheatsOff: 'Les succès sont coupés tant que des codes sont actifs. Redémarrez le jeu sans aucun code pour les débloquer à nouveau.',
 } satisfies Messages['ra'];

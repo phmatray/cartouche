@@ -38,6 +38,7 @@ import { TouchControls } from './TouchControls';
 import { useMedia } from './touch-dom';
 import { fileAccept } from '../../lib/pwa';
 import { holdGame } from '../../lib/play-lock';
+import { activeCodes } from '../../lib/cheats';
 import { useRaSession } from '../../hooks/useRaSession';
 import { t as tNow, useT } from '../../i18n';
 import { usePeripherals } from '../../peripherals/usePeripherals';
@@ -45,6 +46,7 @@ import { usePeripherals } from '../../peripherals/usePeripherals';
 // Cartridge peripherals load only when a cartridge uses them.
 const CameraDock = lazy(() => import('../../peripherals/CameraDock'));
 const PrinterTray = lazy(() => import('../../peripherals/PrinterTray'));
+const TiltDock = lazy(() => import('../../peripherals/TiltDock'));
 import { useOnlineLink } from '../../lib/netlink/useOnlineLink';
 import { LinkCap, LinkWait } from '../netlink/LinkHud';
 
@@ -170,7 +172,15 @@ function Player({ game }: { game: GameEntry }) {
   }, [loadRom, syncBorder]);
   const { coreRef } = emu;
   const peekRa = useCallback((a: number) => coreRef.current?.read_memory_ra(a) ?? 0, [coreRef]);
-  const ra = useRaSession(power, () => romData.current, peekRa, game.title);
+  // Cheat codes: the core gets the ones on at once, and unlocking goes off while any is.
+  const codes = useSettingsStore((s) => activeCodes(s.gameCheats[game.id] ?? []));
+  const { setCheats } = emu;
+  // setCheats changes at each power-on, so codes stored with no game running are checked by the core then.
+  useEffect(() => {
+    const refused = setCheats(codes);
+    if (refused !== null) toast(tNow('player.codes.refused', { error: refused }), 'm', { label: tNow('player.tabs.codes'), target: '#mt-codes', run: () => { setTab('codes'); setManual(true); } });
+  }, [codes, setCheats]);
+  const ra = useRaSession(power, () => romData.current, peekRa, game.title, codes !== '');
   const raJumped = ra.jumped, raFrame = ra.frame;
 
   // Every state load (slot, resume point, rewind step) draws its picture at once, paused or not, with no ghosting from before the jump.
@@ -718,10 +728,11 @@ function Player({ game }: { game: GameEntry }) {
               ))}
             </div>
           </div>
-          {(periph.camera || periph.paper) && (
+          {(periph.camera || periph.tilt || periph.paper) && (
             <div className="periph">
               <Suspense fallback={null}>
                 {periph.camera && <CameraDock feed={periph.feedCamera} running={isRunning} />}
+                {periph.tilt && <TiltDock onMotion={periph.tiltMotion} recenter={periph.recenter} source={periph.tiltSource} />}
                 {periph.paper && <PrinterTray paper={periph.paper} gameId={game.id} title={game.title} onClose={periph.dismiss} />}
               </Suspense>
             </div>

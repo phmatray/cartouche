@@ -19,8 +19,10 @@ export default {
   earned: { one: '{count} of {total} earned', other: '{count} of {total} earned' },
   points: { one: '{count} of {total} points', other: '{count} of {total} points' },
   pts: { one: 'point', other: 'points' },
+  next: { one: 'To earn · {count}', other: 'To earn · {count}' },
+  done: { one: 'Earned · {count}', other: 'Earned · {count}' },
+  missable: 'Missable',
   hardcore: 'Hardcore',
-  locked: 'Not earned yet',
   on: 'Earned {date}',
   site: 'See it on RetroAchievements',
   readOnly: 'To unlock them as you play, sign in under Settings › Achievements.',
@@ -39,4 +41,5 @@ export default {
   serverError: 'RetroAchievements: {error}',
   pending: 'RetroAchievements can’t be reached: your unlocks will be sent once it’s back.',
   sent: 'Waiting unlocks sent to RetroAchievements.',
+  cheatsOff: 'Achievements are off while codes are on. Restart the game with every code off to unlock again.',
 };

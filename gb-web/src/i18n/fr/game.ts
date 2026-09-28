@@ -38,6 +38,7 @@ export default {
     afterDownload: 'L’en-tête de la cartouche est lu dans la ROM une fois téléchargée : mapper, taille de la ROM et de la sauvegarde, prise en charge de la couleur.',
   },
   album: 'Album',
+  patchedFrom: 'Patché depuis',
   shot: 'Capture d’écran, {ago}',
   print: 'Tirage, {ago}',
   noShots: 'Aucune capture pour l’instant. Appuyez sur <b>F12</b> en jeu, ou sur le bouton appareil photo, pour en ajouter une.',

@@ -16,7 +16,7 @@ export default {
   unreadable: 'no se pudo leer',
   mismatch: 'no es el archivo esperado (su SHA-1 no coincide)',
   anyway: 'Importar igualmente',
-  st: { work: 'Comprobando…', ok: 'Añadido', dup: 'Ya en la biblioteca', unk: 'Añadido, no reconocido', bad: 'Omitido', stop: 'No importado' },
+  st: { work: 'Comprobando…', ok: 'Añadido', dup: 'Ya en la biblioteca', unk: 'Añadido, no reconocido', bad: 'Omitido', stop: 'No importado', base: 'Esperando su ROM' },
   sum: {
     added: { one: '<b>{count}</b> añadido', other: '<b>{count}</b> añadidos' },
     dup: { one: '<b>{count}</b> duplicado', other: '<b>{count}</b> duplicados' },
@@ -40,6 +40,14 @@ export default {
     keep: 'Conservar almacenamiento',
     kept: 'Almacenamiento conservado: el navegador no lo borrará',
     refused: 'El navegador no lo permitió',
+  },
+  patch: {
+    chooseBase: 'Elegir la ROM base',
+    pickBody: 'El juego para el que se hizo este parche. El juego parcheado se añade aparte; este queda como está.',
+    none: 'Aún no hay juegos en tu biblioteca: añade primero la ROM para la que se hizo este parche.',
+    unverified: 'sin verificar: un parche IPS no tiene suma de control',
+    wrongBase: 'este parche es para otra versión del juego',
+    broken: 'parche dañado o ilegible',
   },
   rename: {
     title: 'Pon nombre a esta ROM',

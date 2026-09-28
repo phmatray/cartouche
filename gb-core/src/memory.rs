@@ -50,6 +50,8 @@ pub struct MemoryBus {
     pub(crate) hdma_source: u16,
     pub(crate) hdma_dest: u16,
     pub(crate) hdma_remaining: u8,
+    /// Active cheat codes (Game Genie ROM patches, GameShark RAM writes).
+    pub cheats: crate::cheats::Cheats,
 }
 
 impl MemoryBus {
@@ -84,6 +86,7 @@ impl MemoryBus {
             hdma_source: 0,
             hdma_dest: 0,
             hdma_remaining: 0,
+            cheats: Default::default(),
         }
     }
 
@@ -152,8 +155,10 @@ impl MemoryBus {
             0x0000..=0x7FFF => {
                 if self.boot_rom_active && (addr < 0x100 || (0x200..self.boot_rom.len()).contains(&(addr as usize))) {
                     self.boot_rom[addr as usize]
-                } else {
+                } else if self.cheats.rom_is_empty() {
                     self.cartridge.read_rom(addr)
+                } else {
+                    self.cheats.patch_rom(addr, self.cartridge.read_rom(addr))
                 }
             }
             0x8000..=0x9FFF => self.ppu.read_vram(addr - 0x8000),

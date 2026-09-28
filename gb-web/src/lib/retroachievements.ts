@@ -12,7 +12,8 @@ const WEEK = 7 * 864e5;
 const CONSOLES = [4, 6];
 
 export interface RaCreds { user: string; key: string }
-export interface RaAchievement { id: number; title: string; description: string; points: number; badge: string; earned?: string; earnedHardcore?: string; order: number }
+/** `missable`: set by the set's author when it can be missed for good (RetroAchievements' achievement type). */
+export interface RaAchievement { id: number; title: string; description: string; points: number; badge: string; earned?: string; earnedHardcore?: string; order: number; missable?: boolean }
 export interface RaGame { id: number; title: string; achievements: RaAchievement[] }
 
 const store = () => { try { return localStorage; } catch { return null; } }; // blocked storage: signed out
@@ -61,15 +62,28 @@ export async function gameIdOf(md5: string, c: RaCreds): Promise<number | null> 
   return map[md5] ?? null;
 }
 
-interface ApiAchievement { ID: number; Title: string; Description: string; Points: number; BadgeName: string; DisplayOrder: number; DateEarned?: string; DateEarnedHardcore?: string }
+interface ApiAchievement { ID: number; Title: string; Description: string; Points: number; BadgeName: string; DisplayOrder: number; DateEarned?: string; DateEarnedHardcore?: string; type?: string | null }
 /** The game's achievements and which ones the player has earned (softcore or hardcore). */
 export async function progressOf(id: number, c: RaCreds): Promise<RaGame> {
   const g = await call<{ ID: number; Title: string; Achievements?: Record<string, ApiAchievement> }>('API_GetGameInfoAndUserProgress', { u: c.user, g: id }, c);
   const achievements = Object.values(g.Achievements ?? {}).map((a) => ({
     id: a.ID, title: a.Title, description: a.Description, points: a.Points, badge: a.BadgeName, order: a.DisplayOrder,
-    earned: a.DateEarned, earnedHardcore: a.DateEarnedHardcore,
+    earned: a.DateEarned, earnedHardcore: a.DateEarnedHardcore, missable: a.type === 'missable',
   })).sort((a, b) => a.order - b.order || a.id - b.id);
   return { id: g.ID, title: g.Title, achievements };
+}
+
+/**
+ * The list as a player mid-game wants it: what is left to earn first, in the set's own order (its author's, usually
+ * the game's progression, which also keeps later ones from spoiling earlier ones), then what is earned, latest first.
+ */
+export function inPlayOrder(list: RaAchievement[]): { next: RaAchievement[]; earned: RaAchievement[] } {
+  const byOrder = (a: RaAchievement, b: RaAchievement) => a.order - b.order || a.id - b.id;
+  return {
+    next: list.filter((a) => !a.earned).sort(byOrder),
+    // The dates are "YYYY-MM-DD hh:mm:ss": they sort as text.
+    earned: list.filter((a) => a.earned).sort((a, b) => (b.earned ?? '').localeCompare(a.earned ?? '') || byOrder(a, b)),
+  };
 }
 
 /** The game with this achievement earned now, in RetroAchievements' UTC format; the same object when nothing changes. */

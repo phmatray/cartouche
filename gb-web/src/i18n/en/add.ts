@@ -15,7 +15,7 @@ export default {
   unreadable: 'couldn’t be read',
   mismatch: 'not the expected file (its SHA-1 differs)',
   anyway: 'Import anyway',
-  st: { work: 'Checking…', ok: 'Added', dup: 'Already in library', unk: 'Added, not recognized', bad: 'Skipped', stop: 'Not imported' },
+  st: { work: 'Checking…', ok: 'Added', dup: 'Already in library', unk: 'Added, not recognized', bad: 'Skipped', stop: 'Not imported', base: 'Waiting for its ROM' },
   sum: {
     added: { one: '<b>{count}</b> added', other: '<b>{count}</b> added' },
     dup: { one: '<b>{count}</b> duplicate', other: '<b>{count}</b> duplicates' },
@@ -39,6 +39,14 @@ export default {
     keep: 'Keep storage',
     kept: 'Storage kept: the browser won’t clear it',
     refused: 'The browser didn’t allow it',
+  },
+  patch: {
+    chooseBase: 'Choose the base ROM',
+    pickBody: 'The game this patch was made for. The patched game is added as its own entry; this one stays as it is.',
+    none: 'No game in your library yet: add the ROM this patch was made for first.',
+    unverified: 'unverified: an IPS patch has no checksum',
+    wrongBase: 'this patch is for a different version of the game',
+    broken: 'damaged or unreadable patch',
   },
   rename: {
     title: 'Name this ROM',

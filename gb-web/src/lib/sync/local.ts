@@ -5,6 +5,7 @@
  */
 import { deleteSave, deleteSaveState, eraseGames, gameOfSave, neutralName, getAllFrom, getAllGameMeta, getGameMeta, getRom, getRomIds, getSaveState, getSram, saveSaveState, saveSram, setGameMeta, STORES, type StoredSave, type StoredSaveState } from '../db';
 import { importRom } from '../../hooks/useGameLibrary';
+import { cleanCheats } from '../cheats';
 import { computeSha1 } from '../rom-utils';
 import { useSettingsStore, type SettingsValues } from '../../store/settingsStore';
 import type { DisplayConfig } from '../../shaders/filters';
@@ -32,7 +33,7 @@ export const localGames = async () => gamesOf(await getAllGameMeta(), loadAlias(
 const STATE_ID = /^(.*)-(auto|slot-\d+)$/;
 export function localId(k: string, games: Games): string | null {
   const rest = k.slice(k.indexOf(':') + 1);
-  const [g, tail] = kindOf(k) === 'state' ? rest.split('#') : kindOf(k) === 'sram' ? [rest.split('~')[0], rest.split('~')[1]] : [rest.replace(/^gameDisplay\//, ''), undefined];
+  const [g, tail] = kindOf(k) === 'state' ? rest.split('#') : kindOf(k) === 'sram' ? [rest.split('~')[0], rest.split('~')[1]] : [rest.replace(/^game(Display|Cheats)\//, ''), undefined];
   const id = games.id(g);
   if (id === null) return null;
   if (kindOf(k) === 'state') return `${id}-${tail}`;
@@ -105,6 +106,7 @@ export async function readLocal(me: { id: string; name: string }, roms: boolean)
   const defaults = useSettingsStore.getInitialState();
   for (const k of SYNCED_SETTINGS) small.push([`set:${k}`, settings[k], stable(settings[k]) === stable(defaults[k])]);
   for (const [id, cfg] of Object.entries(settings.gameDisplay ?? {})) small.push([`set:gameDisplay/${games.key(id)}`, cfg, false]);
+  for (const [id, list] of Object.entries(settings.gameCheats ?? {})) small.push([`set:gameCheats/${games.key(id)}`, list, false]);
   for (const m of metas) {
     const g = games.key(m.id);
     if (m.isFavorite !== undefined) small.push([`fav:${g}`, !!m.isFavorite, !m.isFavorite]);
@@ -127,7 +129,7 @@ export async function readLocal(me: { id: string; name: string }, roms: boolean)
   // A game's own screen settings removed here ("back to the default"): a deletion the other device should follow.
   for (const [k, [h]] of Object.entries(seen)) {
     if (present.has(k)) continue;
-    if (!k.startsWith('set:gameDisplay/')) { delete seen[k]; continue; }
+    if (!/^set:game(Display|Cheats)\//.test(k)) { delete seen[k]; continue; }
     if (h) seen[k] = ['', now];
     entries.push({ k, h: '', t: seen[k][1] });
   }
@@ -252,6 +254,9 @@ export async function writeSmall(k: string, v: unknown, t: number, games: Games)
   if (k.startsWith('set:gameDisplay/')) {
     const id = localId(k, games);
     if (id) useSettingsStore.getState().setGameDisplay(id, v && typeof v === 'object' ? v as DisplayConfig : null);
+  } else if (k.startsWith('set:gameCheats/')) {
+    const id = localId(k, games);
+    if (id) useSettingsStore.getState().setGameCheats(id, cleanCheats(v) ?? null);
   } else if (k.startsWith('set:')) {
     const cur = useSettingsStore.getState() as unknown as Record<string, unknown>;
     // Only a known setting holding the same kind of value as here (like a backup's).

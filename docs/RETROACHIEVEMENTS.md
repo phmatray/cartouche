@@ -109,7 +109,9 @@ Don't edit `gb-web/src/vendor/rcheevos.js` by hand.
 4. **Build the hardcore rules into the player**: in hardcore, no save-state loading,
    rewind, slow motion (0.5×), frame advance, cheats or memory viewer (the debug drawer's
    memory view counts); switching into hardcore needs a reset; the hardcore state must be
-   visible; hardcore on by default.
+   visible; hardcore on by default. Cheats already turn unlocking off, in softcore too: while
+   any cheat code is on, no session runs, and unlocking stays off until the game restarts
+   with every code off (`useRaSession`'s `cheatsOn`).
 
 ## Sources
 

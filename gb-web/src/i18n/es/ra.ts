@@ -20,8 +20,10 @@ export default {
   earned: { one: '{count} de {total} conseguido', other: '{count} de {total} conseguidos' },
   points: { one: '{count} de {total} puntos', other: '{count} de {total} puntos' },
   pts: { one: 'punto', other: 'puntos' },
+  next: { one: 'Por conseguir · {count}', other: 'Por conseguir · {count}' },
+  done: { one: 'Conseguido · {count}', other: 'Conseguidos · {count}' },
+  missable: 'Perdible',
   hardcore: 'Hardcore',
-  locked: 'Aún sin conseguir',
   on: 'Conseguido el {date}',
   site: 'Ver en RetroAchievements',
   readOnly: 'Para desbloquearlos mientras juegas, inicia sesión en Ajustes › Logros.',
@@ -40,4 +42,5 @@ export default {
   serverError: 'RetroAchievements: {error}',
   pending: 'No se puede contactar con RetroAchievements: tus logros se enviarán cuando vuelva.',
   sent: 'Logros pendientes enviados a RetroAchievements.',
+  cheatsOff: 'Los logros están desactivados mientras haya códigos activos. Reinicia el juego sin ningún código para volver a desbloquearlos.',
 } satisfies Messages['ra'];

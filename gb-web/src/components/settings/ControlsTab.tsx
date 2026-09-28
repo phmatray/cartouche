@@ -8,6 +8,7 @@ import { toast } from '../shell/actions';
 import { Row, Seg, SwitchRow } from './parts';
 import { t as tNow, useT, type Key } from '../../i18n';
 import { RumbleRows } from '../../peripherals/RumbleRows';
+import { TiltRows } from '../../peripherals/TiltRows';
 import { bindable, isKey } from '../../utils/keybindings';
 import { useKeyLayout } from '../../hooks/useKeyLayout';
 
@@ -114,6 +115,7 @@ export function ControlsTab() {
       <ControlsFileRows />
 
       <RumbleRows />
+      <TiltRows />
     </>
   );
 }
