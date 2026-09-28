@@ -66,7 +66,7 @@ function GameDetails({ game }: { game: GameEntry }) {
 
   // New game: a power-on from the battery save, the resume point left alone until the new game writes over it.
   const newGame = () => setConfirm({
-    title: t('player.restart.title'), ok: t('player.restart.ok'), body: t('player.restart.body'),
+    title: t('player.restart.title'), danger: true, ok: t('player.restart.ok'), body: t('player.restart.body'),
     run: () => navigate(paths.play(game.id, '?new=1')),
   });
   /** Delete the resume point (null) or a slot, after asking. */
