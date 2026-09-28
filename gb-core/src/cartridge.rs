@@ -738,6 +738,30 @@ impl Cartridge {
         }
     }
 
+    /// Mapper state beyond the fixed `export_state` block, for the save state's length-prefixed
+    /// mapper block. Empty for every mapper but HuC3: mode, address, last result, last opcode, then
+    /// its 256 memory nibbles packed two per byte (low nibble first).
+    pub fn export_extra(&self) -> Vec<u8> {
+        let (MbcType::Huc3 { mode, .. }, Some(h)) = (&self.mbc, &self.huc3) else { return Vec::new() };
+        let mut out = vec![*mode, h.address, h.result, h.last_opcode];
+        out.extend(h.memory.chunks(2).map(|p| p[0] & 0xF | p[1] << 4));
+        out
+    }
+
+    /// Restores `export_extra`. Anything shorter (a state saved before the block existed) puts the
+    /// registers back to power-on; the HuC3 memory is left as the battery save restored it.
+    pub fn import_extra(&mut self, data: &[u8]) {
+        let (MbcType::Huc3 { mode, .. }, Some(h)) = (&mut self.mbc, &mut self.huc3) else { return };
+        let Some((regs, packed)) = data.split_first_chunk::<4>().filter(|(_, p)| p.len() >= 128) else {
+            (*mode, h.address, h.result, h.last_opcode) = (0, 0, 0, 0);
+            return;
+        };
+        (*mode, h.address, h.result, h.last_opcode) = (regs[0] & 0x0F, regs[1], regs[2] & 0x0F, regs[3] & 0x07);
+        for (i, b) in packed[..128].iter().enumerate() {
+            (h.memory[2 * i], h.memory[2 * i + 1]) = (b & 0xF, b >> 4);
+        }
+    }
+
     pub fn import_sram(&mut self, data: &[u8]) {
         let ram_len = self.ram.len();
         // Standard clock footer (44 B with a u32 time, 48 B with a u64): ten u32 registers, all < 256.
