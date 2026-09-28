@@ -139,7 +139,7 @@ function Player({ game }: { game: GameEntry }) {
   const [bordered, setBordered] = useState(false);
   const snesTold = useRef(false);
   const syncBorder = useCallback(() => {
-    // Its music on the SNES sound chip, which isn't emulated: unless the player chose the Super Game Boy, the game
+    // Its music from the SGB's built-in sound program, which isn't included: unless the player chose the Super Game Boy, the game
     // starts on the Game Boy from now on, with its sound (the Screen page offers the restart).
     if (!snesTold.current && sgbSnesMusic()) {
       snesTold.current = true;

@@ -127,7 +127,7 @@ emulator prove itself; hide them in Settings if you'd rather not see them.
 - Smooth motion (opt-in) draws in-between frames for 120 Hz screens from the emulator's exact scroll and sprite positions.
 - Three start-up animations (Registration, Insert, Shelf pick) or none, previewed live in Settings; <kbd>Start</kbd> skips them.
 - Original Game Boy games can run on the Game Boy Color with its automatic colours or any of its 12 button-combination palettes.
-- Super Game Boy games play with their border and colours by default. The SNES side's own sound is not emulated; a game that plays its music there is switched back to the Game Boy, with a notice.
+- Super Game Boy games play with their border and colours by default. SNES-side music and effects play when the game brings its own sound program; games relying on the Super Game Boy's built-in music still switch to the Game Boy, with a notice.
 - Screenshots with <kbd>F12</kbd>, kept per game, exported as PNG or shared from the album.
 
 **Play together**
@@ -237,7 +237,7 @@ your dumps.
 ## Roadmap
 
 - **RetroAchievements hardcore**: unlocks are softcore for now; hardcore needs the emulator validated by RetroAchievements (eligible after six months public, from March 2027) and the hardcore rules in the player ([what is needed](docs/RETROACHIEVEMENTS.md)).
-- **Super Game Boy sound**: the SNES side's music and effects.
+- **Super Game Boy sound effects**: the built-in effects games ask for without bringing a sound program (games that bring their own already play it).
 - **More hosted GB Studio games**, as authors choose licenses that allow it.
 - **Live translation of in-game text**: research only for now.
 
