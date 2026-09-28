@@ -238,7 +238,8 @@ export function LinkCablePage() {
     if (!state.isRunning) return;
     const held: Record<LinkPlayer, number> = { 1: 0, 2: 0 };
     const on = (down: boolean) => (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || document.querySelector('dialog[open]')) return;
+      // A key let go always counts (Ctrl pressed meanwhile, or a dialog opened, would leave it held).
+      if (down && (e.ctrlKey || e.metaKey || e.altKey || document.querySelector('dialog[open]'))) return;
       for (const p of [1, 2] as LinkPlayer[]) {
         const b = KEYS[p][e.code];
         if (b === undefined) continue;
