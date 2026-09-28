@@ -8,6 +8,7 @@ import { parseRegion } from '../lib/catalog-utils';
 import { assetUrl, TEST_CATEGORY } from '../lib/ui';
 import { boxArtAllowed, getCoverArtUrl, needsDownload } from '../lib/cover-art';
 import { indexFor } from '../lib/search';
+import { inUse } from '../lib/play-lock';
 import { useSettingsStore } from '../store/settingsStore';
 import { t } from '../i18n';
 import catalogData from '../data/catalog.json';
@@ -301,8 +302,11 @@ export function useGameLibrary() {
   /**
    * Erase games' cartridge saves, resume points, slots and albums; the user ROMs among them are removed too, the others
    * stay on the shelf. Any number of games in one pass (one transaction, one library update).
+   * false: nothing erased, one of them is open in another tab (its player would write its saves back).
    */
   const removeGames = useCallback(async (list: Pick<GameEntry, 'id' | 'isLocal'>[]) => {
+    const { games: open } = await inUse();
+    if (list.some((g) => open.includes(g.id))) return false;
     const roms = new Set(list.filter((g) => g.isLocal).map((g) => g.id));
     await eraseGames(list.map((g) => g.id), [...roms]);
     // A catalog game (a downloaded GB Studio ROM keeps the catalog id) goes back to its catalog entry, "on the server".
@@ -313,6 +317,7 @@ export function useGameLibrary() {
       return cat ? [{ ...cat, isFavorite: g.isFavorite, lastPlayed: g.lastPlayed, totalPlayTime: g.totalPlayTime, sessions: g.sessions, importedAt: g.importedAt }] : [];
     }));
     await refreshSavedIds();
+    return true;
   }, []);
   /** Erase a game's cartridge save, resume point, slots and album; the game stays on the shelf. */
   const eraseSaves = useCallback((gameId: string) => removeGames([{ id: gameId, isLocal: false }]), [removeGames]);

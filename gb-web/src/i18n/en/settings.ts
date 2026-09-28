@@ -238,6 +238,7 @@ export default {
     kept: { one: '{count} bundled game stays in the library, without its saves.', other: '{count} bundled games stay in the library, without their saves.' },
     frees: 'Frees about <b>{size}</b>. This can’t be undone: export a backup first if you might want them back.',
     deleted: 'Deleted {games} · {size} freed',
+    openElsewhere: 'One of these games is open in another tab: close it there first, or it would write its saves back. Nothing was deleted.',
     measuring: 'Measuring…',
     none: 'No ROMs or saves stored yet.',
     games: 'Games',

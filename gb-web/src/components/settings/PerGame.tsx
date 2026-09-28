@@ -90,7 +90,8 @@ export function PerGame({ usage, onChanged, confirm }: { usage: Map<string, Game
         </>
       ),
       run: async () => {
-        await Promise.all([removeGames(list.map((l) => l.game)), ...list.map((l) => forgetBoxArt(l.game))]);
+        if (!(await removeGames(list.map((l) => l.game)))) { toast(tNow(list.length > 1 ? 'settings.pergame.openElsewhere' : 'game.openElsewhere'), 'm'); return; }
+        await Promise.all(list.map((l) => forgetBoxArt(l.game)));
         setPicked(new Set());
         if (list.some((l) => l.game.id === open)) setOpen(null);
         await onChanged();

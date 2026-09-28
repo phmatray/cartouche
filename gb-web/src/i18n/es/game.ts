@@ -82,6 +82,7 @@ export default {
   bundledErase: 'Incluido con la app. Sus partidas guardadas se pueden borrar.',
   removed: '{title} eliminado',
   erased: 'Partidas guardadas borradas',
+  openElsewhere: 'Este juego está abierto en otra pestaña: ciérralo allí primero, o volvería a escribir sus partidas.',
   remove: {
     title: '¿Eliminar esta ROM?',
     ok: 'Eliminar ROM y partidas',

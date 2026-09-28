@@ -81,6 +81,7 @@ export default {
   bundledErase: 'Bundled with the app. Its saves can be erased.',
   removed: '{title} removed',
   erased: 'Saves erased',
+  openElsewhere: 'This game is open in another tab: close it there first, or it would write its saves back.',
   remove: {
     title: 'Remove this ROM?',
     ok: 'Remove ROM & saves',

@@ -239,6 +239,7 @@ export default {
     kept: { one: '{count} juego incluido se queda en la biblioteca, sin sus partidas.', other: '{count} juegos incluidos se quedan en la biblioteca, sin sus partidas.' },
     frees: 'Libera unos <b>{size}</b>. No se puede deshacer: exporta antes una copia por si quieres recuperarlos.',
     deleted: 'Eliminado: {games} · {size} liberados',
+    openElsewhere: 'Uno de estos juegos está abierto en otra pestaña: ciérralo allí primero, o volvería a escribir sus partidas. No se eliminó nada.',
     measuring: 'Midiendo…',
     none: 'Aún no hay ROM ni partidas guardadas.',
     games: 'Juegos',
