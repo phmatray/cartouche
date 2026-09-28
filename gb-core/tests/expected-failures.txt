@@ -264,7 +264,6 @@ gbmicrotest/vram_write_l1_b.gb  # ppu
 gbmicrotest/vram_write_l1_c.gb  # ppu
 gbmicrotest/wave_write_to_0xC003.gb  # no-verdict
 mealybug-tearoom-tests/ppu/m3_bgp_change.gb@cgb  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_bgp_change.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_bgp_change_sprites.gb@cgb  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_bgp_change_sprites.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_lcdc_bg_en_change.gb@cgb  # ppu-mode3
@@ -296,15 +295,12 @@ mealybug-tearoom-tests/ppu/m3_lcdc_win_map_change2.gb@cgb  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_obp0_change.gb@cgb  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_obp0_change.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_scx_high_5_bits.gb@cgb  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_scx_high_5_bits.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_scx_high_5_bits_change2.gb@cgb  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_scx_low_3_bits.gb@cgb  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_scx_low_3_bits.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_scy_change.gb@cgb  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_scy_change.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_scy_change2.gb@cgb  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_window_timing.gb@cgb  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_window_timing.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_window_timing_wx_0.gb@cgb  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_window_timing_wx_0.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_wx_4_change.gb@dmg  # ppu-mode3
@@ -318,7 +314,6 @@ age-test-roms/m3-bg-bgp/m3-bg-bgp.gb@ncmE  # ppu-mode3
 age-test-roms/m3-bg-lcdc/m3-bg-lcdc-ds.gb@cgbBCE  # double-speed
 age-test-roms/m3-bg-lcdc/m3-bg-lcdc-nocgb.gb@ncmBCE  # ppu-mode3
 age-test-roms/m3-bg-lcdc/m3-bg-lcdc.gb@cgbBCE  # ppu-mode3
-age-test-roms/m3-bg-lcdc/m3-bg-lcdc.gb@dmgC  # ppu-mode3
 age-test-roms/m3-bg-scx/m3-bg-scx-ds.gb@cgbBCE  # double-speed
 age-test-roms/m3-bg-scx/m3-bg-scx-nocgb.gb@ncmBCE  # ppu-mode3
 age-test-roms/m3-bg-scx/m3-bg-scx.gb@cgbBCE  # ppu-mode3
