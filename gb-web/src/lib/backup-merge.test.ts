@@ -1,7 +1,7 @@
 // node --test: a backup's game that shares an id with a different game here gets its own id, and its saves follow it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { backupRom, mergeMeta, mover, placeRom } from './backup-merge.ts';
+import { backupRom, mergeMeta, mover, placeRom, versionProblem } from './backup-merge.ts';
 
 test('backup ROMs are matched by SHA-1, and a taken id moves the game and its saves', () => {
   const here = new Map([['rom', 'aaa'], ['puzzle', 'ccc'], ['x', 'fff'], ['x-2', 'fff']]);
@@ -42,4 +42,10 @@ test('a restored game keeps the solo save picked here, else takes the backup’s
     { id: 'g', isFavorite: true, totalPlayTime: 50, sessions: 2, lastPlayed: 20, importedAt: undefined, activeSave: 'g~lea' });
   assert.equal(mergeMeta({ id: 'g', activeSave: 'g~mine' }, backup).activeSave, 'g~mine');
   assert.deepEqual(mergeMeta(undefined, { ...backup, rom: { title: 't', genre: 'x', sha1: 's', head: new Uint8Array() } }), { ...backup, rom: undefined });
+});
+
+test('only a higher version number is from a newer Cartouche; a missing or unknown one is not a valid backup', () => {
+  assert.equal(versionProblem(1, 1), null);
+  assert.equal(versionProblem(2, 1), 'newer');
+  for (const v of [undefined, null, 'abc', '2', 0, 1.5, NaN, {}]) assert.equal(versionProblem(v, 1), 'unknown', String(v));
 });

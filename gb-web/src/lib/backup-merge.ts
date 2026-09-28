@@ -62,3 +62,9 @@ export function backupRom(r: unknown): { id: string; title: string; genre: strin
   const text = (x: unknown, or: string) => (typeof x === 'string' && x.trim() ? x : or);
   return { id, title: text(title, id), genre: text(genre, 'Unknown'), data };
 }
+
+/** Why a backup's `version` can't be read here: 'newer' only for a higher version number; a missing or unknown one isn't a valid backup. */
+export function versionProblem(v: unknown, current: number): 'newer' | 'unknown' | null {
+  if (v === current) return null;
+  return typeof v === 'number' && Number.isInteger(v) && v > current ? 'newer' : 'unknown';
+}

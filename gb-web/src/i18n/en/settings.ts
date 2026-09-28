@@ -219,6 +219,7 @@ export default {
     restoreFull: 'Storage is full: the restore stopped after {roms}, {saves}, {shots}. Free up space, then restore the same file again (what is already here is skipped).',
     restoreFailed: 'Couldn’t save to this browser’s storage: the restore stopped after {roms}, {saves}, {shots}.',
     newer: 'This backup was made by a newer version of Cartouche',
+    unknownVersion: '{file} isn’t a valid Cartouche backup: its version isn’t recognised',
     perGame: 'Per game',
     startOver: 'Start over',
     wipe: 'Erase everything',
