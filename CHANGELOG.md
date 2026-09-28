@@ -4,6 +4,37 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.8.0](https://github.com/phmatray/cartouche/compare/v1.7.0...v1.8.0) (2026-09-28)
+
+
+### Added
+
+* **core:** HuC1 and HuC3 cartridges ([#132](https://github.com/phmatray/cartouche/issues/132)) ([#149](https://github.com/phmatray/cartouche/issues/149)) ([09dbb05](https://github.com/phmatray/cartouche/commit/09dbb0585a816cb8b73e657295d7efcb5ffb92b7))
+* **display:** GBC/GBA LCD colour correction with SameBoy curves and frame blending ([#139](https://github.com/phmatray/cartouche/issues/139)) ([#146](https://github.com/phmatray/cartouche/issues/146)) ([a75f722](https://github.com/phmatray/cartouche/commit/a75f722a6d304798731f69aeb6516f6492d897b9))
+* **library:** no empty shelf, one-row A–Z and 44 px controls on phones ([#126](https://github.com/phmatray/cartouche/issues/126)) ([6c0ab13](https://github.com/phmatray/cartouche/commit/6c0ab1370bf28179a29cde627b6c6e5233ec8d28))
+* **player:** PC breakpoints, pause, step instruction and step frame ([#142](https://github.com/phmatray/cartouche/issues/142)) ([#162](https://github.com/phmatray/cartouche/issues/162)) ([78cc30c](https://github.com/phmatray/cartouche/commit/78cc30c19cbbd44d78c2da7d5c40c1eab20f2bd2))
+* **settings:** let players turn the interface's animations down (or on) ([#123](https://github.com/phmatray/cartouche/issues/123)) ([f2fa0d5](https://github.com/phmatray/cartouche/commit/f2fa0d5222f3dcc82ebae01963a38b0d5c5b9cd8))
+* **sgb:** SPC700 CPU core with audio RAM and timers ([#157](https://github.com/phmatray/cartouche/issues/157)) ([#165](https://github.com/phmatray/cartouche/issues/165)) ([43db632](https://github.com/phmatray/cartouche/commit/43db63208c9f4de50269ad62cfc7c2ea43876294))
+* **web:** turn the settings manual's pages, slide the header's tab ([#122](https://github.com/phmatray/cartouche/issues/122)) ([031a11f](https://github.com/phmatray/cartouche/commit/031a11f283a2871c6f1fff1f0162a3d2f37aa7ab))
+
+
+### Fixed
+
+* **achievements:** show an unlock in the list without leaving the game ([#120](https://github.com/phmatray/cartouche/issues/120)) ([3625063](https://github.com/phmatray/cartouche/commit/36250632c1174485e3b594bac66d568c257b6996))
+* **settings:** switches that read off, one meaning per control ([#128](https://github.com/phmatray/cartouche/issues/128)) ([c12f95b](https://github.com/phmatray/cartouche/commit/c12f95bb4745c0c9c794cdbc62239cff4a158598))
+* **web:** keep the header while a page loads, one yellow per screen ([#131](https://github.com/phmatray/cartouche/issues/131)) ([20cf680](https://github.com/phmatray/cartouche/commit/20cf680f97eaf50eab5fbb491e0404f48ecf48aa))
+* **web:** say state once: no Play-now chip, empty stats or empty slots ([#127](https://github.com/phmatray/cartouche/issues/127)) ([bab51a5](https://github.com/phmatray/cartouche/commit/bab51a5986567b1d4483a91ca8b5f0114c5d13e5))
+
+
+### Changed
+
+* **web:** one type scale and two trackings, no manual page numbers ([#125](https://github.com/phmatray/cartouche/issues/125)) ([b388286](https://github.com/phmatray/cartouche/commit/b3882862d46177f4aabb6c5773844ab4e35d6d3e))
+
+
+### Reverted
+
+* **web:** drop the settings manual's page turn ([#124](https://github.com/phmatray/cartouche/issues/124)) ([bcea016](https://github.com/phmatray/cartouche/commit/bcea016cdd4da33e5ab8e9f6496e6f3544782fc5))
+
 ## [1.7.0](https://github.com/phmatray/cartouche/compare/v1.6.0...v1.7.0) (2026-09-28)
 
 

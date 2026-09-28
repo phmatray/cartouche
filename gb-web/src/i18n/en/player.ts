@@ -199,13 +199,16 @@ export default {
   game: {
     open: 'Open game page',
     debug: 'Debug',
-    debugSub: 'Registers, memory, serial output and tiles, for development',
+    debugSub: 'Registers, code, memory, serial output and tiles, for development',
   },
   debug: {
     view: 'Debug view',
     cpu: 'cpu',
     serial: 'serial',
     tiles: 'tiles',
+    disasm: 'code',
+    stepOver: 'Step over',
+    toggleBreakpoint: 'Breakpoint at {addr}',
     flags: 'Flags',
     noRom: 'No ROM',
     address: 'Address',

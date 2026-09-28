@@ -87,3 +87,58 @@ fn emulator_reports_a_breakpoint_once_and_clears() {
     assert!(emu.debug_step_frame());
     assert_eq!(emu.debug_break_reason().as_deref(), Some("frame"));
 }
+
+/// $0100: CALL $0110; $0103: NOP ... $0110: INC B; RET.
+fn call_rom() -> Vec<u8> {
+    let mut program = vec![0u8; 0x12];
+    program[..4].copy_from_slice(&[0xCD, 0x10, 0x01, 0x00]);
+    program[0x10..].copy_from_slice(&[0x04, 0xC9]);
+    rom(&program)
+}
+
+#[test]
+fn step_over_runs_a_call_to_its_return() {
+    let mut gb = GameBoy::new(call_rom()).unwrap();
+    gb.skip_boot_rom();
+    let b = gb.cpu.regs.b;
+    gb.step_over().unwrap();
+    assert_eq!(gb.cpu.regs.pc, 0x0103);
+    assert_eq!(gb.cpu.regs.b, b.wrapping_add(1), "the callee ran");
+    assert!(gb.take_break().is_none(), "returned, not stopped by the frame");
+}
+
+#[test]
+fn step_over_a_call_that_never_returns_stops_at_the_frame() {
+    // $0100: CALL $0110; $0110: JR -2 (forever).
+    let mut program = vec![0u8; 0x12];
+    program[..3].copy_from_slice(&[0xCD, 0x10, 0x01]);
+    program[0x10..].copy_from_slice(&[0x18, 0xFE]);
+    let mut gb = GameBoy::new(rom(&program)).unwrap();
+    gb.skip_boot_rom();
+    gb.step_over().unwrap();
+    assert_eq!(gb.cpu.regs.pc, 0x0110);
+    assert_eq!(gb.take_break(), Some(gb_core::debug::Break::Frame));
+    assert_eq!(gb.debugger_mut().temp_stop, None, "the one-shot stop does not outlive the step");
+}
+
+#[test]
+fn step_over_on_anything_else_is_one_step() {
+    let mut gb = gameboy();
+    let mut stepped = gameboy();
+    gb.step_over().unwrap();
+    stepped.step_instruction().unwrap();
+    assert_eq!(gb.cpu.regs.pc, 0x0101);
+    assert_eq!(gb.save_state(), stepped.save_state());
+}
+
+#[test]
+fn emulator_disassembles_and_steps_over_without_side_effects() {
+    let mut emu = gb_core::Emulator::new();
+    assert!(emu.load_rom(&call_rom()));
+    let before = emu.save_state();
+    let text = emu.disassemble(0x0100, 2);
+    assert!(text.starts_with("0100|CD 10 01|CALL $0110\n0103|00|NOP"), "{text}");
+    assert_eq!(emu.save_state(), before, "disassembling touches nothing");
+    assert!(emu.debug_step_over());
+    assert_eq!(emu.get_pc(), 0x0103);
+}

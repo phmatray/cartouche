@@ -22,6 +22,8 @@ export function useEmulator() {
   /** Why the core stopped mid-game ("breakpoint $0150", "frame"): the player is paused there until it runs again. */
   const [breakReason, setBreakReason] = useState<string | null>(null);
   const [breakpoints, setBreakpoints] = useState<number[]>([]);
+  /** Debugger steps taken while paused, so the player can redraw the picture after each. */
+  const [steps, setSteps] = useState(0);
   const bpRef = useRef<number[]>([]); // the same list, for loadRom (which must not change with it)
   const cheatsRef = useRef(''); // the cheat codes on, one per line: each load builds a new console that needs them again
   const stopped = useRef(false); // no frame runs past a break, even the rest of this animation frame's batch
@@ -166,6 +168,7 @@ export function useEmulator() {
       const err = emu.get_error();
       if (err) addError(t('player.error.crashed'), err);
     }
+    setSteps((n) => n + 1);
     return cycles;
   }, [addError]);
 
@@ -178,7 +181,30 @@ export function useEmulator() {
       const err = emu.get_error();
       if (err) addError(t('player.error.crashed'), err);
     }
+    setSteps((n) => n + 1);
   }, [addError]);
+
+  /** Runs a CALL/RST to its return (at most to the end of the frame), otherwise one step. */
+  const stepOver = useCallback(() => {
+    const emu = emulatorRef.current;
+    if (!emu) return;
+    if (emu.debug_step_over()) setBreakReason(emu.debug_break_reason() ?? null);
+    else {
+      const err = emu.get_error();
+      if (err) addError(t('player.error.crashed'), err);
+    }
+    setSteps((n) => n + 1);
+  }, [addError]);
+
+  /** `count` instructions from `addr` (the core's `ADDR|BYTES|TEXT` lines, parsed). */
+  const disassemble = useCallback((addr: number, count: number): { addr: number; bytes: string; text: string }[] => {
+    const out = emulatorRef.current?.disassemble(addr, count);
+    if (!out) return [];
+    return out.split('\n').map((line) => {
+      const [a, bytes, text] = line.split('|');
+      return { addr: parseInt(a, 16), bytes, text };
+    });
+  }, []);
 
   const addBreakpoint = useCallback((addr: number) => {
     emulatorRef.current?.debug_add_breakpoint(addr);
@@ -382,6 +408,9 @@ export function useEmulator() {
     getAudioSamples,
     stepInstruction,
     stepFrame,
+    stepOver,
+    steps,
+    disassemble,
     breakReason,
     breakpoints,
     addBreakpoint,

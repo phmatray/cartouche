@@ -298,6 +298,28 @@ impl GameBoy {
         Ok(())
     }
 
+    /// Runs a `CALL`/`CALL cc`/`RST` to the instruction after it (or to a breakpoint, or to the
+    /// end of this frame, reported as `Break::Frame`); anything else is one step.
+    pub fn step_over(&mut self) -> Result<(), EmulatorError> {
+        let pc = self.cpu.regs.pc;
+        let (text, len) = crate::disasm::disassemble_one(&self.bus, pc);
+        if !(text.starts_with("CALL") || text.starts_with("RST")) {
+            self.step_instruction()?;
+            self.resume_here();
+            return Ok(());
+        }
+        let d = self.debugger_mut();
+        d.hit = None;
+        d.resume_pc = Some(pc);
+        d.temp_stop = Some(pc.wrapping_add(len as u16));
+        self.run_frame()?;
+        let d = self.debugger_mut();
+        if d.temp_stop.take().is_some() && d.hit.is_none() {
+            d.hit = Some(Break::Frame);
+        }
+        Ok(())
+    }
+
     pub fn step_instruction(&mut self) -> Result<u32, EmulatorError> {
         self.bus.cycle_count = 0;
         self.cpu.handle_interrupts(&mut self.bus);
