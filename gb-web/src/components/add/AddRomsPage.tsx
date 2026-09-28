@@ -12,7 +12,7 @@ import { startInstall, toast } from '../shell/actions';
 import { FileButton } from '../shell/FileButton';
 import { rich, size, t as tNow, useT, type Key } from '../../i18n';
 
-const LABEL: Record<RowState, Key> = { work: 'add.st.work', ok: 'add.st.ok', dup: 'add.st.dup', unk: 'add.st.unk', bad: 'add.st.bad', stop: 'add.st.stop' };
+const LABEL: Record<RowState, Key> = { work: 'add.st.work', ok: 'add.st.ok', dup: 'add.st.dup', unk: 'add.st.unk', bad: 'add.st.bad', stop: 'add.st.stop', base: 'add.st.base' };
 
 export function AddRomsPage() {
   const { games, storageError } = useGameLibrary();

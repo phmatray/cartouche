@@ -65,6 +65,8 @@ export interface GameEntry {
   saveType?: string;
   platform?: 'gb' | 'gbc';
   coverTitle?: string;
+  /** A ROM made by applying a patch at import: the base ROM's SHA-1 and the patch's file name. */
+  patchedFrom?: { sha1: string; patch: string };
 }
 
 export interface LocalGameEntry extends GameEntry {

@@ -16,7 +16,7 @@ export default {
   unreadable: 'no se pudo leer',
   mismatch: 'no es el archivo esperado (su SHA-1 no coincide)',
   anyway: 'Importar igualmente',
-  st: { work: 'Comprobando…', ok: 'Añadido', dup: 'Ya en la biblioteca', unk: 'Añadido, no reconocido', bad: 'Omitido', stop: 'No importado' },
+  st: { work: 'Comprobando…', ok: 'Añadido', dup: 'Ya en la biblioteca', unk: 'Añadido, no reconocido', bad: 'Omitido', stop: 'No importado', base: 'Esperando su ROM' },
   sum: {
     added: { one: '<b>{count}</b> añadido', other: '<b>{count}</b> añadidos' },
     dup: { one: '<b>{count}</b> duplicado', other: '<b>{count}</b> duplicados' },

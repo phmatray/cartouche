@@ -15,7 +15,7 @@ export default {
   unreadable: 'couldn’t be read',
   mismatch: 'not the expected file (its SHA-1 differs)',
   anyway: 'Import anyway',
-  st: { work: 'Checking…', ok: 'Added', dup: 'Already in library', unk: 'Added, not recognized', bad: 'Skipped', stop: 'Not imported' },
+  st: { work: 'Checking…', ok: 'Added', dup: 'Already in library', unk: 'Added, not recognized', bad: 'Skipped', stop: 'Not imported', base: 'Waiting for its ROM' },
   sum: {
     added: { one: '<b>{count}</b> added', other: '<b>{count}</b> added' },
     dup: { one: '<b>{count}</b> duplicate', other: '<b>{count}</b> duplicates' },

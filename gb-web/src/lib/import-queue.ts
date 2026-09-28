@@ -2,7 +2,10 @@ import { create } from 'zustand';
 import { FetchError, fetchHosted, importRom, isRomFile, MAX_ROM_SIZE, type ImportOutcome, type ImportStatus } from '../hooks/useGameLibrary';
 import type { GameEntry } from '../types/game';
 import { toast } from '../components/shell/actions';
-import { listZip, readEntry, ZipError } from './zip';
+import { crc32, listZip, readEntry, ZipError } from './zip';
+import { applyPatch, PatchError, patchKind, patchSource, type PatchKind } from './patch';
+import { getAllGameMeta, getRom } from './db';
+import { computeSha1 } from './rom-utils';
 import { t } from '../i18n';
 
 /**
@@ -10,11 +13,14 @@ import { t } from '../i18n';
  * .zip archives, checked and stored one at a time. It lives outside the page, so an import keeps going
  * (and the header shows its progress) while the player browses the library.
  */
-export type RowState = ImportStatus | 'work' | 'stop';
+/** base: a patch waiting for the ROM it applies to. */
+export type RowState = ImportStatus | 'work' | 'stop' | 'base';
 export interface ImportRow {
   key: string; name: string; size: number; st: RowState;
   /** The archive it comes from. */
   from?: string;
+  /** A patch file (IPS, BPS, UPS), and the library game it was applied to. */
+  patch?: PatchKind; base?: string;
   note?: string; id?: string; title?: string; sha1?: string;
   read?: () => Promise<Uint8Array>;
 }
@@ -62,12 +68,12 @@ async function expand(files: File[]): Promise<{ rows: ImportRow[]; ignored: numb
         try { await zip(new Blob([await readEntry(z, e) as BlobPart]), `${label} › ${name}`, true); } catch (err) { bad(name, e.size, err, label); }
         continue;
       }
-      rows.push({ key: String(++seq), name, size: e.size, from: label, st: 'work', read: () => readEntry(z, e) });
+      rows.push({ key: String(++seq), name, size: e.size, from: label, st: 'work', patch: patchKind(name) ?? undefined, read: () => readEntry(z, e) });
     }
   };
   for (const f of files) {
     if (!/\.zip$/i.test(f.name)) {
-      rows.push({ key: String(++seq), name: f.name, size: f.size, st: 'work', read: async () => new Uint8Array(await f.arrayBuffer()) });
+      rows.push({ key: String(++seq), name: f.name, size: f.size, st: 'work', patch: patchKind(f.name) ?? undefined, read: async () => new Uint8Array(await f.arrayBuffer()) });
       continue;
     }
     const before = rows.length;
@@ -84,7 +90,7 @@ let chain = Promise.resolve();
 let queued = 0;
 /** The row being stored right now: Stop lets it finish. */
 let current: string | null = null;
-const stopWaiting = () => useImports.setState((s) => ({ rows: s.rows.map((r) => (r.st === 'work' && r.key !== current ? { ...r, st: 'stop' } : r)) }));
+const stopWaiting = () => useImports.setState((s) => ({ rows: s.rows.map((r) => ((r.st === 'work' || r.st === 'base') && r.key !== current ? { ...r, st: 'stop' } : r)) }));
 
 export function queueImport(files: File[]) {
   if (files.length) run(() => expand(files));
@@ -111,21 +117,25 @@ function run(list: () => Promise<{ rows: ImportRow[]; ignored: number }>) {
       ? { rows: [...s.rows, ...fresh], ignored: s.ignored + ignored }
       : { rows: fresh, ignored, full: null }));
     let added = 0;
-    for (const r of fresh) {
+    /** The library ids of this batch's ROMs: where its patches look for their base first. */
+    const batch: string[] = [];
+    // Patches after the ROMs, so a patch dropped with its ROM finds it.
+    for (const r of [...fresh.filter((f) => !f.patch), ...fresh.filter((f) => f.patch)]) {
       if (my !== gen) break;
       if (r.st !== 'work') continue;
       current = r.key;
       let out: Partial<ImportRow>;
       let data: Uint8Array | undefined;
       try {
-        if (isRomFile(r.name) && r.size <= MAX_ROM_SIZE) data = await r.read!();
+        if ((isRomFile(r.name) || r.patch) && r.size <= MAX_ROM_SIZE * (r.patch ? 2 : 1)) data = await r.read!();
         out = { st: 'bad' };
       } catch (e) {
         out = { st: 'bad', note: e instanceof ZipError ? e.message.toLowerCase() : e instanceof FetchError ? e.message : t('add.unreadable') };
       }
       if (data) {
         // A file that was read but couldn't be stored: the storage is failing, so every next ROM would too.
-        try { out = asRow(await importRom(r.name, data)); } catch (e) { await storageFull(e); break; }
+        try { out = r.patch ? await patched(r, data, batch) : asRow(await importRom(r.name, data)); } catch (e) { await storageFull(e); break; }
+        if (!r.patch && out.id && out.st !== 'bad') batch.push(out.id);
       }
       if (out.st === 'ok' || out.st === 'unk') added++;
       patchRow(r.key, out, my !== gen); // stopped meanwhile: show it at once
@@ -135,6 +145,36 @@ function run(list: () => Promise<{ rows: ImportRow[]; ignored: number }>) {
     if (my !== gen) stopWaiting(); // stopped while this batch was being listed
     if (added) toast(t('add.toast.added', { count: added }), 'c');
   }).catch(() => {}).finally(() => { queued--; });
+}
+
+/** A patch row: applied at once when its base is here (BPS/UPS name it by size and CRC32), else it waits for one to be chosen. */
+async function patched(r: ImportRow, p: Uint8Array, batch: string[]): Promise<Partial<ImportRow>> {
+  const src = patchSource(p);
+  const base = src && await findBase(src.size, src.crc32, batch);
+  return base ? applyTo(r, p, base) : { st: 'base' };
+}
+
+/** The library ROM of that size and CRC32: this batch's first, then the others (only ROMs of that size are read). */
+async function findBase(size: number, crc: number, batch: string[]): Promise<string | undefined> {
+  const ids = (await getAllGameMeta()).filter((m) => m.rom?.size === size).map((m) => m.id);
+  // ponytail: every stored ROM of that size is read for its CRC32; keep the CRC in the ROM summary if big libraries crawl.
+  for (const id of [...batch.filter((i) => ids.includes(i)), ...ids.filter((i) => !batch.includes(i))]) {
+    const rom = await getRom(id);
+    if (rom && crc32(rom.data) === crc) return id;
+  }
+}
+
+/** Apply a patch to the library game `baseId` and store the result as its own game, linked to it (`force`: a second copy). */
+async function applyTo(r: ImportRow, p: Uint8Array, baseId: string, force = false): Promise<Partial<ImportRow>> {
+  const rom = await getRom(baseId);
+  if (!rom) return { st: 'bad' };
+  let res;
+  try { res = applyPatch(rom.data, p); } catch (e) {
+    if (e instanceof PatchError) return { st: 'bad' };
+    throw e;
+  }
+  const o = asRow(await importRom(r.name.replace(/\.[^.]+$/, '.gb'), res.data, force, undefined, { sha1: await computeSha1(rom.data), patch: r.name }));
+  return { ...o, base: baseId };
 }
 
 /** Stop: what is being stored finishes, nothing after it starts. */
@@ -158,7 +198,7 @@ export async function importAnyway(r: ImportRow) {
   const data = await r.read().catch(() => null);
   if (!data) { patchRow(r.key, { st: 'dup' }, true); toast(t('add.toast.reread'), 'm'); return; }
   try {
-    patchRow(r.key, asRow(await importRom(r.name, data, true)), true);
+    patchRow(r.key, r.patch && r.base ? await applyTo(r, data, r.base, true) : asRow(await importRom(r.name, data, true)), true);
     toast(t('add.toast.copy'), 'c');
   } catch (e) {
     patchRow(r.key, { st: 'dup' }, true);

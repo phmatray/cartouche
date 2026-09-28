@@ -23,6 +23,7 @@ export function patchKind(name: string): PatchKind | null {
   const m = /\.(ips|bps|ups)$/i.exec(name);
   return m ? (m[1].toLowerCase() as PatchKind) : null;
 }
+export const isPatchFile = (name: string) => patchKind(name) !== null;
 
 const magic = (p: Uint8Array, m: string) => p.length >= m.length && [...m].every((c, i) => p[i] === c.charCodeAt(0));
 const u32 = (p: Uint8Array, o: number) => (p[o] | (p[o + 1] << 8) | (p[o + 2] << 16) | (p[o + 3] << 24)) >>> 0;

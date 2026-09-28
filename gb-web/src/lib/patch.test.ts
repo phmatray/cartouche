@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { crc32 } from './zip.ts';
-import { applyPatch, patchSource, PatchError } from './patch.ts';
+import { applyPatch, isPatchFile, patchKind, patchSource, PatchError } from './patch.ts';
 
 const ascii = (s: string) => [...s].map((c) => c.charCodeAt(0));
 const le32 = (n: number) => [n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, n >>> 24];
@@ -74,4 +74,13 @@ test('a corrupted byte, the wrong base or a truncated file is refused with its r
 test('an IPS output past the largest ROM is refused as too big', () => {
   const far = new Uint8Array([...ascii('PATCH'), 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, ...ascii('EOF')]);
   assert.throws(() => applyPatch(BASE, far), refused('size'));
+});
+
+test('patchKind and isPatchFile go by the extension, whatever its case', () => {
+  assert.equal(patchKind('Hack v1.2.BPS'), 'bps');
+  assert.equal(patchKind('fix.ips'), 'ips');
+  assert.equal(patchKind('tr.Ups'), 'ups');
+  assert.equal(patchKind('game.gb'), null);
+  assert.equal(isPatchFile('Hack v1.2.BPS'), true);
+  assert.equal(isPatchFile('game.gb'), false);
 });
