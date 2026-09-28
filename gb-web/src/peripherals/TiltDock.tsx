@@ -59,7 +59,7 @@ export default function TiltDock({ onMotion, recenter, source }: { onMotion: (m:
 
   const status = state === 'asking' ? t('periph.tilt.waiting') : t(`periph.tilt.source.${source}`);
   return (
-    <section className={`cdock${open ? ' open' : ''}${state === 'live' ? ' lit' : ''}`} aria-label={t('periph.tilt.label')}>
+    <section className={`cdock tdock${open ? ' open' : ''}${state === 'live' ? ' lit' : ''}`} aria-label={t('periph.tilt.label')}>
       <button className="cd-head" aria-expanded={open} onClick={() => setOpen(!open)}>
         <span className="cd-t"><b>{t('periph.tilt.name')}</b><small>{status}</small></span>
         <i className="cd-led" aria-hidden="true" />

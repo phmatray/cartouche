@@ -98,7 +98,7 @@ impl Mbc7 {
             COMMAND => {
                 self.shift = self.shift << 1 | di;
                 self.bits += 1;
-                if self.bits == 10 { self.command(ram); }
+                if self.bits >= 10 { self.command(ram); }
             }
             READ => {
                 self.data_out = self.shift & 0x8000 != 0;
@@ -107,7 +107,7 @@ impl Mbc7 {
             DATA => {
                 self.shift = self.shift << 1 | di;
                 self.bits += 1;
-                if self.bits == 16 {
+                if self.bits >= 16 {
                     let word = self.shift;
                     if self.target == ALL {
                         (0..128).for_each(|a| self.program(ram, a, word));

@@ -109,7 +109,8 @@ export function usePeripherals(core: () => Emulator | null, power: number, gameI
       ti.last = now;
       ti.keyTilt = keysToTilt(ti.keys, ti.keyTilt, dt);
       const stick = rightStick();
-      const src = pickSource({ motion: !!ti.motion && now - ti.at < MOTION_STALE_MS, pad: !!stick });
+      // A held tilt key beats a pad lying idle on the desk.
+      const src = pickSource({ motion: !!ti.motion && now - ti.at < MOTION_STALE_MS, pad: !!stick && !ti.keys.size });
       const off = ti.offset ?? { x: 0, y: 0 };
       // A sensor gone quiet holds its last value until the pad or keys move.
       const raw = src === 'motion' ? { x: ti.motion!.x - off.x, y: ti.motion!.y - off.y } : src === 'pad' ? stickToTilt(...stick!) : ti.keyTilt;
