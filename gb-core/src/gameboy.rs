@@ -690,6 +690,32 @@ mod tests {
         g.run_frame().unwrap();
     }
 
+    /// A TIMA reload and an OAM DMA caught mid-way go on after a load; a state without the
+    /// timing tail loads with neither pending.
+    #[test]
+    fn save_state_round_trips_timing_fields() {
+        let mut rom = vec![0u8; 0x8000];
+        rom[0x100..0x102].copy_from_slice(&[0x18, 0xFE]);
+        rom[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(rom[i]).wrapping_sub(1));
+        let mut gb = GameBoy::new(rom.clone()).unwrap();
+        gb.skip_boot_rom();
+        gb.bus.write_byte(0xFF46, 0xC1);
+        for _ in 0..12 { gb.bus.cycle_tick(); }
+        gb.bus.timer.reload_pending = true;
+        let state = gb.save_state();
+
+        let mut g = GameBoy::new(rom.clone()).unwrap();
+        assert!(g.load_state(&state));
+        assert!(g.bus.timer.reload_pending);
+        assert_eq!((g.bus.dma_active, g.bus.dma_delay, g.bus.dma_index, g.bus.read_byte(0xFF46)), (true, 0, 11, 0xC1));
+        assert_eq!(g.save_state(), state);
+
+        let mut g = GameBoy::new(rom).unwrap();
+        assert!(g.load_state(&state[..state.len() - TIMING_TAIL_LEN]));
+        assert!(!g.bus.timer.reload_pending);
+        assert_eq!(g.bus.dma_index, 0xA0, "an older state's transfer is already in OAM");
+    }
+
     /// KEY0 set by the CGB boot ROM (DMG compatibility) goes with a state saved before it unmaps.
     #[test]
     fn a_state_keeps_key0_until_the_boot_rom_unmaps() {

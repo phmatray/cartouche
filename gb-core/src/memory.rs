@@ -303,6 +303,11 @@ impl MemoryBus {
         }
         self.double_speed = !self.double_speed;
         self.key1 = 0;
+        // Pan Docs, "CGB Registers": DIV resets and the CPU waits 2050 M-cycles for the clock to settle.
+        self.timer.write(0xFF04, 0);
+        for _ in 0..2050 {
+            self.stop_tick();
+        }
         true
     }
 
@@ -504,6 +509,21 @@ mod tests {
         assert_eq!(bus.read_byte(0xFE00), 0xFF, "the M-cycle of the last byte is still blocked");
         bus.cycle_tick();
         assert_eq!(bus.read_byte(0xFE00), 0x01, "done");
+    }
+
+    #[test]
+    fn speed_switch_resets_div_and_pauses() {
+        let mut bus = bus();
+        bus.cgb_mode = true;
+        for _ in 0..100 { bus.cycle_tick(); }
+        assert_ne!(bus.read_byte(0xFF04), 0);
+        bus.write_byte(0xFF4D, 0x01);
+        assert_eq!(bus.read_byte(0xFF4D), 0x7F, "armed, normal speed");
+        bus.cycle_count = 0;
+        assert!(bus.try_speed_switch());
+        assert_eq!(bus.read_byte(0xFF4D), 0xFE, "double speed, disarmed");
+        assert_eq!(bus.read_byte(0xFF04), 0, "DIV reset, and still while the clock settles");
+        assert_eq!(bus.cycle_count, 2050 * 2, "2050 M-cycles at the new speed");
     }
 
     #[test]

@@ -115,7 +115,6 @@ age-test-roms/oam/oam-write-ncmBCE.gb  # ppu
 age-test-roms/speed-switch/caution/spsw-interrupts-cgbBC.gb  # double-speed
 age-test-roms/speed-switch/caution/spsw-interrupts-cgbE.gb  # double-speed
 age-test-roms/speed-switch/spsw-ch2-lc-delay-cgbBCE.gb  # double-speed
-age-test-roms/speed-switch/spsw-div-cgbBCE.gb  # double-speed
 age-test-roms/speed-switch/spsw-mode0-cgbBCE.gb  # double-speed
 age-test-roms/speed-switch/spsw-stop-prefetch-cgbBCE.gb  # double-speed
 age-test-roms/speed-switch/spsw-tima-cgbBC.gb  # double-speed
