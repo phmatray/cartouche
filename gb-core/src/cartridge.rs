@@ -935,7 +935,7 @@ impl Cartridge {
             }
             MbcType::Huc3 { .. } => {}
             MbcType::Mbc7 { ram_enable_1: true, ram_enable_2: true, .. } if offset < 0x1000 => {
-                if let Some(m) = &mut self.mbc7 { m.write_reg(offset, value); }
+                if let Some(m) = &mut self.mbc7 { m.write_reg(&mut self.ram, offset, value); }
             }
             MbcType::Mbc7 { .. } => {}
         }
@@ -1166,6 +1166,79 @@ mod tests {
         c.write_rom(0x2000, 0x03);
         c.rom[3 * 0x4000] = 0x77;
         assert_eq!(c.read_rom(0x4000), 0x77);
+    }
+
+    /// Clocks bits into the MBC7 EEPROM the way games do: DI set, CLK up, CLK down, CS held high.
+    fn clock_in(c: &mut Cartridge, bits: &[u8]) {
+        for &b in bits {
+            let di = b << 1;
+            for v in [0x80 | di, 0xC0 | di, 0x80 | di] { c.write_ram(0x080, v); }
+        }
+    }
+
+    /// Start bit, 2-bit opcode, 8 address bits (the top one unused), MSB first.
+    fn eeprom_cmd(op: u8, addr: u8) -> Vec<u8> {
+        let mut v = vec![1, op >> 1 & 1, op & 1];
+        v.extend((0..8).rev().map(|i| addr >> i & 1));
+        v
+    }
+
+    fn word_bits(w: u16) -> Vec<u8> {
+        (0..16).rev().map(|i| (w >> i & 1) as u8).collect()
+    }
+
+    fn eeprom_end(c: &mut Cartridge) {
+        c.write_ram(0x080, 0x00);
+        c.write_ram(0x080, 0x80);
+    }
+
+    /// Clocks 16 bits out on DO.
+    fn clock_out(c: &mut Cartridge) -> u16 {
+        (0..16).fold(0, |w, _| {
+            c.write_ram(0x080, 0x80);
+            c.write_ram(0x080, 0xC0);
+            w << 1 | (c.read_ram(0x080) & 1) as u16
+        })
+    }
+
+    fn mbc7_enabled() -> Cartridge {
+        let mut c = cart(0x22, 0x00);
+        c.write_rom(0x0000, 0x0A);
+        c.write_rom(0x4000, 0x40);
+        c
+    }
+
+    #[test]
+    fn mbc7_eeprom_writes_after_ewen_and_reads_back() {
+        let mut c = mbc7_enabled();
+        let write = [eeprom_cmd(0b01, 5), word_bits(0x1234)].concat();
+        clock_in(&mut c, &write);
+        eeprom_end(&mut c);
+        assert_eq!(c.export_sram()[10..12], [0, 0], "power-on is write-disabled");
+
+        clock_in(&mut c, &eeprom_cmd(0b00, 0xC0)); // EWEN
+        eeprom_end(&mut c);
+        clock_in(&mut c, &write);
+        eeprom_end(&mut c);
+        assert_eq!(c.read_ram(0x080) & 1, 1, "DO reads ready after the write");
+        assert_eq!(c.export_sram()[10..12], [0x34, 0x12]);
+
+        clock_in(&mut c, &eeprom_cmd(0b10, 5)); // READ
+        assert_eq!(c.read_ram(0x080) & 1, 0, "dummy 0 before the data");
+        assert_eq!(clock_out(&mut c), 0x1234);
+        eeprom_end(&mut c);
+
+        clock_in(&mut c, &eeprom_cmd(0b11, 5)); // ERASE
+        eeprom_end(&mut c);
+        assert_eq!(c.export_sram()[10..12], [0xFF, 0xFF]);
+        clock_in(&mut c, &[eeprom_cmd(0b00, 0x40), word_bits(0xBEEF)].concat()); // WRAL
+        eeprom_end(&mut c);
+        assert!(c.export_sram().chunks(2).all(|w| w == [0xEF, 0xBE]));
+        clock_in(&mut c, &eeprom_cmd(0b00, 0x00)); // EWDS
+        eeprom_end(&mut c);
+        clock_in(&mut c, &eeprom_cmd(0b00, 0x80)); // ERAL, refused
+        eeprom_end(&mut c);
+        assert_eq!(c.export_sram()[0..2], [0xEF, 0xBE]);
     }
 
     #[test]

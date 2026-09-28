@@ -12,11 +12,39 @@ pub struct Mbc7 {
     latched: (u16, u16),
     /// `0x55` was written to Ax0x: the next `0xAA` to Ax1x latches.
     erased: bool,
+    /// EEPROM pins as last written (CS 0x80, CLK 0x40, DI 0x02) and the DO line.
+    pins: u8,
+    data_out: bool,
+    /// Serial state: IDLE (waiting for a start bit), COMMAND (2-bit opcode + 8 address bits),
+    /// READ (shifting `shift` out on DO) or DATA (shifting 16 bits in for `target`).
+    phase: u8,
+    shift: u16,
+    bits: u8,
+    /// Word the DATA phase programs, or `ALL` for WRAL.
+    target: u16,
+    write_enabled: bool,
 }
+
+const IDLE: u8 = 0;
+const COMMAND: u8 = 1;
+const READ: u8 = 2;
+const DATA: u8 = 3;
+const ALL: u16 = 0x100;
 
 impl Mbc7 {
     pub fn new() -> Self {
-        Mbc7 { tilt: (0.0, 0.0), latched: (0x8000, 0x8000), erased: false }
+        Mbc7 {
+            tilt: (0.0, 0.0),
+            latched: (0x8000, 0x8000),
+            erased: false,
+            pins: 0,
+            data_out: true,
+            phase: IDLE,
+            shift: 0,
+            bits: 0,
+            target: 0,
+            write_enabled: false,
+        }
     }
 
     pub fn set_tilt(&mut self, x: f32, y: f32) {
@@ -32,11 +60,13 @@ impl Mbc7 {
             0x4 => self.latched.1 as u8,
             0x5 => (self.latched.1 >> 8) as u8,
             0x6 => 0x00,
+            0x8 => self.pins | self.data_out as u8,
             _ => 0xFF,
         }
     }
 
-    pub fn write_reg(&mut self, offset: u16, value: u8) {
+    /// Write of A000-AFFF; `ram` is the EEPROM (128 little-endian words).
+    pub fn write_reg(&mut self, ram: &mut [u8], offset: u16, value: u8) {
         match (offset >> 4) & 0x0F {
             0x0 if value == 0x55 => {
                 self.latched = (0x8000, 0x8000);
@@ -48,7 +78,74 @@ impl Mbc7 {
                 self.latched = (axis(-self.tilt.0), axis(self.tilt.1));
                 self.erased = false;
             }
+            0x8 => self.eeprom_write(ram, value),
             _ => {}
+        }
+    }
+
+    /// 93LC56 in 16-bit organisation: bits are taken on CLK rising edges while CS is high.
+    fn eeprom_write(&mut self, ram: &mut [u8], value: u8) {
+        let rising = value & 0x40 != 0 && self.pins & 0x40 == 0;
+        let di = (value >> 1) as u16 & 1;
+        self.pins = value & 0xC2;
+        if value & 0x80 == 0 {
+            (self.phase, self.data_out) = (IDLE, true);
+            return;
+        }
+        if !rising { return; }
+        match self.phase {
+            IDLE if di == 1 => (self.phase, self.shift, self.bits) = (COMMAND, 0, 0),
+            COMMAND => {
+                self.shift = self.shift << 1 | di;
+                self.bits += 1;
+                if self.bits == 10 { self.command(ram); }
+            }
+            READ => {
+                self.data_out = self.shift & 0x8000 != 0;
+                self.shift <<= 1;
+            }
+            DATA => {
+                self.shift = self.shift << 1 | di;
+                self.bits += 1;
+                if self.bits == 16 {
+                    let word = self.shift;
+                    if self.target == ALL {
+                        (0..128).for_each(|a| self.program(ram, a, word));
+                    } else {
+                        self.program(ram, self.target, word);
+                    }
+                    (self.phase, self.data_out) = (IDLE, true);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn command(&mut self, ram: &mut [u8]) {
+        let addr = self.shift & 0x7F;
+        (self.phase, self.data_out) = (IDLE, true);
+        match (self.shift >> 8 & 3, self.shift >> 6 & 3) {
+            // READ: a dummy 0, then the word MSB first, one bit per clock.
+            (0b10, _) => {
+                let i = addr as usize * 2;
+                self.shift = u16::from_le_bytes([ram.get(i).copied().unwrap_or(0xFF), ram.get(i + 1).copied().unwrap_or(0xFF)]);
+                (self.phase, self.data_out) = (READ, false);
+            }
+            (0b01, _) => (self.phase, self.shift, self.bits, self.target) = (DATA, 0, 0, addr),
+            (0b11, _) => self.program(ram, addr, 0xFFFF),
+            (0b00, 0b11) => self.write_enabled = true,
+            (0b00, 0b00) => self.write_enabled = false,
+            (0b00, 0b10) => (0..128).for_each(|a| self.program(ram, a, 0xFFFF)),
+            (0b00, _) => (self.phase, self.shift, self.bits, self.target) = (DATA, 0, 0, ALL),
+            _ => {}
+        }
+    }
+
+    /// Programs one word; refused until EWEN (power-on is write-disabled).
+    fn program(&self, ram: &mut [u8], addr: u16, word: u16) {
+        let i = addr as usize * 2;
+        if let (true, Some(dst)) = (self.write_enabled, ram.get_mut(i..i + 2)) {
+            dst.copy_from_slice(&word.to_le_bytes());
         }
     }
 }
