@@ -20,6 +20,7 @@ pub mod registers;
 pub mod sdsp;
 pub mod serial;
 pub mod sgb;
+pub mod sgb_fx;
 pub mod spc700;
 pub mod tama5;
 pub mod timer;
@@ -277,6 +278,11 @@ impl Emulator {
         self.gb.as_ref().map_or(0, |gb| gb.cpu.regs.pc)
     }
 
+    /// The ROM bank mapped at $4000-$7FFF now (1 with no ROM), so banked symbols resolve.
+    pub fn rom_bank(&self) -> u16 {
+        self.gb.as_ref().map_or(1, |gb| gb.bus.cartridge.current_rom_bank())
+    }
+
     pub fn get_sp(&self) -> u16 {
         self.gb.as_ref().map_or(0, |gb| gb.cpu.regs.sp)
     }
@@ -397,6 +403,17 @@ impl Emulator {
 
     pub fn save_state(&self) -> Vec<u8> {
         self.gb.as_ref().map_or(Vec::new(), |gb| gb.save_state())
+    }
+
+    /// A deterministic session (lockstep link): the cartridge clock starts at `epoch_seconds` (unix
+    /// time) and only advances with emulated time. Nothing without a ROM.
+    pub fn set_emulated_clock(&mut self, epoch_seconds: f64) {
+        if let Some(gb) = &mut self.gb { gb.set_emulated_clock(epoch_seconds); }
+    }
+
+    /// FNV-1a hash of `save_state()`: two consoles in step have the same one. 0 without a ROM.
+    pub fn state_hash(&self) -> u32 {
+        self.gb.as_ref().map_or(0, |gb| gb.state_hash())
     }
 
     pub fn load_state(&mut self, data: &[u8]) -> bool {
