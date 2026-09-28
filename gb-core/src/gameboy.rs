@@ -225,6 +225,7 @@ impl GameBoy {
     pub fn run_frame(&mut self) -> Result<(), EmulatorError> {
         if self.frame_cycles == 0 {
             self.bus.ppu.frame_ready = false;
+            self.apply_ram_cheats();
         }
         while self.frame_cycles < CYCLES_PER_FRAME {
             if self.bus.serial.stalled() {
@@ -243,6 +244,18 @@ impl GameBoy {
         }
         self.frame_cycles = 0;
         Ok(())
+    }
+
+    /// GameShark writes, once per frame like the real device at VBlank.
+    fn apply_ram_cheats(&mut self) {
+        for i in 0..self.bus.cheats.ram.len() {
+            if let crate::cheats::Cheat::Ram { addr, value, bank } = self.bus.cheats.ram[i] {
+                match bank {
+                    Some(b) => self.bus.wram[b as usize * 0x1000 + (addr - 0xD000) as usize] = value,
+                    None => self.bus.write_byte(addr, value),
+                }
+            }
+        }
     }
 
     /// Runs up to the next VBlank entry, so a traced frame is complete when it returns `true`.
@@ -723,5 +736,42 @@ mod tests {
         let old = &state[..state.len() - 134];
         let mut g = GameBoy::new(rom).unwrap();
         assert!(g.load_state(old));
+    }
+
+    /// An MBC7 saved mid-READ (address clocked in, data not yet out) sends the word after a load.
+    #[test]
+    fn an_mbc7_state_resumes_an_eeprom_read() {
+        let mut rom = vec![0u8; 0x8000];
+        rom[0x100..0x102].copy_from_slice(&[0x18, 0xFE]);
+        rom[0x147] = 0x22;
+        rom[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(rom[i]).wrapping_sub(1));
+        let clock = |c: &mut crate::cartridge::Cartridge, bits: &[u8]| {
+            for &b in bits {
+                for v in [0x80 | b << 1, 0xC0 | b << 1, 0x80 | b << 1] { c.write_ram(0x080, v); }
+            }
+        };
+        let end = |c: &mut crate::cartridge::Cartridge| [0x00, 0x80].into_iter().for_each(|v| c.write_ram(0x080, v));
+        let mut gb = GameBoy::new(rom.clone()).unwrap();
+        let c = &mut gb.bus.cartridge;
+        (c.write_rom(0x0000, 0x0A), c.write_rom(0x4000, 0x40));
+        clock(c, &[1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0]); // EWEN
+        end(c);
+        clock(c, &[1, 0, 1, 0, 0, 0, 0, 0, 1, 0, 1]); // WRITE word 5
+        clock(c, &[0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 0, 0, 1, 1]); // 0x5AC3
+        end(c);
+        clock(c, &[1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1]); // READ word 5
+        c.set_tilt(0.5, 0.0);
+        (c.write_ram(0x000, 0x55), c.write_ram(0x010, 0xAA));
+        let state = gb.save_state();
+
+        let mut g = GameBoy::new(rom).unwrap();
+        assert!(g.load_state(&state));
+        let c = &mut g.bus.cartridge;
+        let word = (0..16).fold(0u16, |w, _| {
+            (c.write_ram(0x080, 0x80), c.write_ram(0x080, 0xC0));
+            w << 1 | (c.read_ram(0x080) & 1) as u16
+        });
+        assert_eq!(word, 0x5AC3);
+        assert_eq!((c.read_ram(0x020), c.read_ram(0x030)), (0x98, 0x81), "the latch survives too");
     }
 }

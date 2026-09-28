@@ -2,6 +2,7 @@ pub mod apu;
 pub mod boot_rom;
 pub mod camera;
 pub mod cartridge;
+pub mod cheats;
 pub mod cpu;
 pub mod debug;
 pub mod disasm;
@@ -9,6 +10,7 @@ pub mod error;
 pub mod gameboy;
 pub mod interrupts;
 pub mod joypad;
+pub mod mbc7;
 pub mod memory;
 pub mod ppu;
 pub mod printer;
@@ -448,6 +450,34 @@ impl Emulator {
         }
     }
 
+    /// Replaces the active cheat codes (Game Genie / GameShark, one per line; "" clears them).
+    /// All or nothing: on the first bad code nothing changes and `get_error()` says `"<code>: <reason>"`.
+    pub fn set_cheats(&mut self, codes: &str) -> bool {
+        let Some(gb) = &mut self.gb else {
+            self.last_error = Some("No ROM loaded".to_string());
+            return false;
+        };
+        let mut list = Vec::new();
+        for code in codes.lines().map(str::trim).filter(|c| !c.is_empty()) {
+            let parsed = crate::cheats::parse(code).and_then(|c| match c {
+                crate::cheats::Cheat::Ram { bank: Some(_), .. } if !gb.bus.cgb_mode => {
+                    Err("bank codes need a Game Boy Color game".to_string())
+                }
+                c => Ok(c),
+            });
+            match parsed {
+                Ok(c) => list.push(c),
+                Err(e) => {
+                    self.last_error = Some(format!("{code}: {e}"));
+                    return false;
+                }
+            }
+        }
+        gb.bus.cheats.set(list);
+        self.last_error = None;
+        true
+    }
+
     /// Plug a Game Boy Printer into the serial port (solo play; never on a linked console).
     pub fn set_printer_connected(&mut self, on: bool) {
         if let Some(gb) = &mut self.gb {
@@ -474,6 +504,17 @@ impl Emulator {
     /// Share of the emulated time the motor ran since the last call, 0 to 1.
     pub fn take_rumble(&mut self) -> f32 {
         self.gb.as_mut().map_or(0.0, |gb| gb.bus.cartridge.take_rumble())
+    }
+
+    /// True when the cartridge has an MBC7 accelerometer (type 0x22): feed it with `set_tilt`.
+    pub fn has_tilt(&self) -> bool {
+        self.gb.as_ref().map_or(false, |gb| gb.bus.cartridge.has_tilt())
+    }
+
+    /// Tilt in g (x > 0 = right side down, y > 0 = top side down), clamped to ±2 and held until the
+    /// next call. A no-op without a game or on other cartridges.
+    pub fn set_tilt(&mut self, x: f32, y: f32) {
+        if let Some(gb) = self.gb.as_mut() { gb.bus.cartridge.set_tilt(x, y); }
     }
 
     // Remote link cable (the partner is on another machine; see serial.rs). While a transfer this

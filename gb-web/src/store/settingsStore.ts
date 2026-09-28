@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Lang } from '../i18n/core';
+import type { Cheat } from '../lib/cheats';
 import type { Layout, Shell, Skin } from '../lib/touch-layout';
 import type { Motion, Startup } from '../lib/settings-clean';
 import { DEFAULT_DISPLAY, normalizeDisplay, presetOf, sameFilters, type DisplayConfig, type Filters, type PresetName, type ScreenKind } from '../shaders/filters';
@@ -58,6 +59,8 @@ export interface SettingsState {
   display: Record<ScreenKind, DisplayConfig>;
   /** "Use these settings for this game only", by game id. */
   gameDisplay: Record<string, DisplayConfig>;
+  /** Cheat codes, by game id. */
+  gameCheats: Record<string, Cheat[]>;
   /** Player screen size: fit the stage, or a fixed integer scale. */
   screenSize: ScreenSize;
   /** Smooth motion: in-between frames on displays over 60 Hz (or on any display when forced). */
@@ -98,6 +101,8 @@ export interface SettingsState {
   rumble: boolean;
   rumbleIntensity: number;
   rumbleShake: boolean;
+  /** MBC7 tilt cartridges: scales the tilt input, in % (real sensors read off; the player tunes it). */
+  tiltSensitivity: number;
 
   // Library
   /** Fetch box art from libretro-thumbnails (only for recognized ROMs the user added). When off, no request is ever made. */
@@ -113,6 +118,8 @@ export interface SettingsState {
   setDisplay: (kind: ScreenKind, gameId: string | undefined, cfg: DisplayConfig) => void;
   /** Give a game its own screen config, or (null) back to the default. */
   setGameDisplay: (gameId: string, cfg: DisplayConfig | null) => void;
+  /** A game's cheat codes, or (null) none. */
+  setGameCheats: (gameId: string, list: Cheat[] | null) => void;
   setScreenSize: (size: ScreenSize) => void;
   setMasterVolume: (vol: number) => void;
   toggleChannelMute: (channel: keyof ChannelMutes) => void;
@@ -146,6 +153,7 @@ const DEFAULT_STATE = {
   keybindings: DEFAULT_KEYBINDINGS,
   display: DEFAULT_DISPLAY,
   gameDisplay: {} as Record<string, DisplayConfig>,
+  gameCheats: {} as Record<string, Cheat[]>,
   screenSize: 'fit' as ScreenSize,
   smoothMotion: false,
   smoothMotionForce: false,
@@ -174,6 +182,7 @@ const DEFAULT_STATE = {
   rumble: true,
   rumbleIntensity: 80,
   rumbleShake: true,
+  tiltSensitivity: 100,
 };
 export type SettingsValues = typeof DEFAULT_STATE;
 /** Keys saved in a backup and in localStorage. */
@@ -198,6 +207,12 @@ export const useSettingsStore = create<SettingsState>()(
           const gameDisplay = { ...s.gameDisplay };
           if (cfg) gameDisplay[gameId] = cfg; else delete gameDisplay[gameId];
           return { gameDisplay };
+        }),
+      setGameCheats: (gameId, list) =>
+        set((s) => {
+          const gameCheats = { ...s.gameCheats };
+          if (list?.length) gameCheats[gameId] = list; else delete gameCheats[gameId];
+          return { gameCheats };
         }),
       setScreenSize: (screenSize) => set({ screenSize }),
       setMasterVolume: (vol) => set({ masterVolume: vol }),
