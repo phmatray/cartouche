@@ -455,7 +455,7 @@ impl MemoryBus {
     /// whether it counted there or was reset by a write.
     fn div_apu_edge(&mut self, old: u16) {
         let fell = old & !self.timer.div_counter & self.div_apu_bit() != 0;
-        if fell || self.apu_event_late {
+        if fell | self.apu_event_late {
             self.deliver_div_event(fell);
         }
     }
