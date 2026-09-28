@@ -5,7 +5,7 @@ import { fetchRom, refreshSavedIds, useGameLibrary } from '../hooks/useGameLibra
 import { importSav, readRomFile, useRomHeader } from '../hooks/useGameExtras';
 import { createProfile, getActiveProfileId, getGameSaveStates, getSaveState, getSram, listProfiles, newProfileId, resumeStateId, slotStateId, uniqueName, type StoredSave, type StoredSaveState } from '../lib/db';
 import { useSettingsStore } from '../store/settingsStore';
-import { ago, bytes, linkReady as isLinkReady, owned, PLATFORM, sortTitle, TEST_CATEGORY } from '../lib/ui';
+import { ago, bytes, keyLabel, linkReady as isLinkReady, owned, PLATFORM, sortTitle, TEST_CATEGORY } from '../lib/ui';
 import type { GameEntry } from '../types/game';
 import { CartridgePicker } from './CartridgePicker';
 import { Item } from './library/GameItem';
@@ -32,7 +32,7 @@ const LEGEND: Record<LinkPlayer, string[][]> = {
 };
 type LayoutMap = { get(code: string): string | undefined };
 const keyName = (code: string, layout: LayoutMap | null) =>
-  code.startsWith('Key') ? (layout?.get(code) ?? code.slice(3)).toUpperCase() : code;
+  code.startsWith('Key') ? (layout?.get(code) ?? code.slice(3)).toUpperCase() : keyLabel(code);
 const FILE = '__file';
 
 /**
