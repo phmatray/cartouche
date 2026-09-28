@@ -701,7 +701,7 @@ impl GameBoy {
         self.bus.serial.incoming = read_u8!();
         // A transfer lasts at most 8 x 512 cycles: a larger count would hold SC busy for minutes.
         self.bus.serial.remaining = read_u32!().min(8 * 512);
-        if !self.bus.apu.import_state(data, &mut pos) { return false; }
+        if !self.bus.apu.import_state(data, &mut pos, version) { return false; }
         if let Some(s) = self.bus.sgb.as_deref_mut() {
             // A Game Boy state has no SGB side (but may have the tail): that side starts fresh.
             let mut p = if saved == Console::Sgb { pos } else { data.len() };
@@ -781,7 +781,9 @@ const TIMING_TAIL_LEN: usize = 4;
 // v5 adds the start-up animation after them, so a state saved while it plays goes on with its own boot ROM.
 // v6 adds the Super Game Boy's SNES sound side after the SGB block (v5 states load with it idle).
 // v7 adds the built-in SGB sound effects playing, after the SNES sound side (v6 states load with none).
-const SAVE_VERSION: u32 = 7;
+// v8 gives the APU block a length, a layout byte and its registers, and clocks the frame sequencer
+// from DIV (v3-v7 APU fields still load: `Apu::import_state`).
+const SAVE_VERSION: u32 = 8;
 
 #[cfg(test)]
 mod tests {

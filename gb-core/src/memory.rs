@@ -198,7 +198,7 @@ impl MemoryBus {
             0xFF02 => self.serial.read(addr) | if self.cgb_mode { 0x7C } else { 0x7E },
             0xFF04..=0xFF07 => self.timer.read(addr),
             0xFF0F => self.interrupts.interrupt_flag | 0xE0, // bits 5-7 unused, read as 1
-            0xFF10..=0xFF3F => self.apu.read_register(addr),
+            0xFF10..=0xFF3F | 0xFF76 | 0xFF77 => self.apu.read_register(addr),
             0xFF46 => self.dma_source,
             0xFF40..=0xFF4B => self.ppu.read_register(addr),
             0xFF4D => {
@@ -258,8 +258,9 @@ impl MemoryBus {
             0xFF02 => self.serial.write(addr, if self.cgb_mode { value } else { value & !0x02 }),
             0xFF04..=0xFF07 => {
                 // An overflow requests the interrupt at once, a TIMA write cancelling the reload withdraws it (Timer::step).
-                let pending = self.timer.reload_pending;
+                let (pending, div) = (self.timer.reload_pending, self.timer.div_counter);
                 self.timer.write(addr, value);
+                self.div_apu_edge(div);
                 match (pending, self.timer.reload_pending) {
                     (false, true) => self.interrupts.request(TIMER_BIT),
                     (true, false) => self.interrupts.interrupt_flag &= !TIMER_BIT,
@@ -267,7 +268,14 @@ impl MemoryBus {
                 }
             }
             0xFF0F => self.interrupts.interrupt_flag = value & 0x1F,
-            0xFF10..=0xFF3F => self.apu.write_register(addr, value),
+            0xFF10..=0xFF3F => {
+                let was_on = self.apu.is_on();
+                self.apu.write_register(addr, value);
+                // Powered on while DIV's APU bit is set: the first DIV-APU event is skipped.
+                if !was_on && self.apu.is_on() && self.timer.div_counter & self.div_apu_bit() != 0 {
+                    self.apu.skip_first_div_event();
+                }
+            }
             0xFF40..=0xFF4B => {
                 if addr == 0xFF46 {
                     // A write during a transfer restarts it; the old one holds the bus meanwhile.
@@ -347,7 +355,9 @@ impl MemoryBus {
         self.tick_components();
         let earlier = self.timer.div_counter;
         self.tick_components();
+        let div = self.timer.div_counter;
         self.timer.speed_switch_div_reset(earlier);
+        self.div_apu_edge(div); // the reset can drop DIV's APU bit, in the old speed
         self.double_speed = !self.double_speed;
         self.ppu.m_cycle_dots = if self.double_speed { 2 } else { 4 };
         self.key1 = 0;
@@ -404,9 +414,11 @@ impl MemoryBus {
             self.hdma_step();
             self.dma_stall();
         }
+        let div = self.timer.div_counter;
         if self.timer.step(4) {
             self.interrupts.request(TIMER_BIT);
         }
+        self.div_apu_edge(div);
         if self.serial.tick(4) {
             self.interrupts.request(SERIAL_BIT);
         }
@@ -416,10 +428,23 @@ impl MemoryBus {
         if let Some((l, r)) = self.sgb.as_deref_mut().and_then(|s| s.audio.run(ppu_step)) {
             self.apu.mix_external(l, r);
         }
-        self.apu.step(ppu_step);
+        self.apu.step(ppu_step / 2); // 2 MHz ticks
         self.cycle_count += ppu_step;
 
         self.dma_tick();
+    }
+
+    /// The DIV-APU event: DIV bit 4 (bit 5 in double speed) fell since the counter read `old`,
+    /// whether it counted there or was reset by a write.
+    fn div_apu_edge(&mut self, old: u16) {
+        if old & !self.timer.div_counter & self.div_apu_bit() != 0 {
+            self.apu.div_event();
+        }
+    }
+
+    /// DIV bit 4 (bit 5 in double speed), in the timer's internal counter.
+    fn div_apu_bit(&self) -> u16 {
+        if self.double_speed { 0x2000 } else { 0x1000 }
     }
 
     /// One M-cycle of OAM DMA.

@@ -530,11 +530,43 @@ fn a_state_keeps_the_snes_sound_playing() {
     assert!(snes(&fresh).covered());
 
     // Version 5 has no SNES block, which an idle SNES side saves as a single 0.
-    let v6 = previous(&sgb().save_state(), 7);
+    let v6 = previous(&v7(&sgb().save_state()), 7);
     let v5 = previous(&v6, 6);
     assert!(gb.load_state(&v5), "a version 5 state loads");
     let rms = frame_rms(&mut gb);
     assert!(rms < 0.01 && !snes(&gb).covered(), "with the SNES side idle: RMS {rms}");
+}
+
+/// A version 8 `state` as version 7 saved it: the APU block without its length, layout byte and
+/// registers, and the frame sequencer as an 8192-cycle counter and a step. Found as the one
+/// candidate block (a plausible length, then layout 1) whose v7 form saves back as `state` does
+/// after a load, but for the written registers, which version 7 did not keep.
+fn v7(state: &[u8]) -> Vec<u8> {
+    assert_eq!(state[4], 8, "this layout is version 8");
+    let mut reloaded = sgb();
+    assert!(reloaded.load_state(state));
+    let resaved = reloaded.save_state();
+    const REGS: usize = 0x16 + 1 + 16;
+    (0..state.len() - 3).find_map(|i| {
+        let len = u16::from_le_bytes([state[i], state[i + 1]]) as usize;
+        if !(64..256).contains(&len) || state[i + 2] != 1 || i + 2 + len > state.len() { return None; }
+        let fields = &state[i + 3 + REGS..i + 2 + len];
+        let mut old = state[..i].to_vec();
+        old.extend_from_slice(&fields[..3]); // power, NR50, NR51
+        old.extend_from_slice(&[0; 4]); // the 8192-cycle counter
+        old.push(fields[3]); // the next step: the DIV-APU count
+        old.extend_from_slice(&fields[5..]);
+        old.extend_from_slice(&state[i + 2 + len..]);
+        old[4] = 7;
+        let mut probe = sgb();
+        if !probe.load_state(&old) { return None; }
+        let (mut a, mut b) = (probe.save_state(), resaved.clone());
+        let regs = i + 3..i + 3 + 0x16;
+        if a.len() != b.len() { return None; }
+        a[regs.clone()].fill(0);
+        b[regs].fill(0);
+        (a == b).then_some(old)
+    }).expect("a version 7 state round-trips to this one")
 }
 
 /// The idle SGB `state` of `version` as the version before it saved it: the same layout less one
@@ -677,7 +709,7 @@ fn a_state_from_before_effects_were_saved_loads_with_them_idle() {
     let mut gb = sgb();
     sound(&mut gb, 0x00, 0x04, 0x00);
     // Nothing playing costs one byte: the version 6 layout is this state less one byte.
-    let v6 = previous(&sgb().save_state(), 7);
+    let v6 = previous(&v7(&sgb().save_state()), 7);
     assert!(gb.load_state(&v6), "a version 6 state loads");
     let rms = frame_rms(&mut gb);
     assert!(rms < 0.01, "with the effects idle: RMS {rms}");
