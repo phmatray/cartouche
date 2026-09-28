@@ -471,10 +471,11 @@ impl MemoryBus {
             return;
         }
         if self.hdma_active && value & 0x80 == 0 {
-            // Writing bit 7 = 0 during an HBlank DMA cancels it; HDMA5 then reads bit 7 = 1
-            // with the remaining length. (Writing bit 7 = 1 restarts it with the new length.)
+            // Writing bit 7 = 0 during an HBlank DMA cancels it; HDMA5 then reads bit 7 = 1 with
+            // the length bits just written, not the remaining length Pan Docs describes (SameSuite
+            // hdma_lcd_off/hdma_mode0, checked on hardware). Writing bit 7 = 1 restarts it.
             self.hdma_active = false;
-            self.hdma5 = 0x80 | (self.hdma_remaining.wrapping_sub(1) & 0x7F);
+            self.hdma5 = 0x80 | (value & 0x7F);
             return;
         }
         self.hdma_remaining = (value & 0x7F) + 1;

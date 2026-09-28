@@ -93,8 +93,6 @@ same-suite/apu/div_write_trigger.gb  # apu
 same-suite/apu/div_write_trigger_10.gb  # apu
 same-suite/apu/div_write_trigger_volume.gb  # apu
 same-suite/apu/div_write_trigger_volume_10.gb  # apu
-same-suite/dma/hdma_lcd_off.gb  # hdma
-same-suite/dma/hdma_mode0.gb  # hdma
 same-suite/interrupt/ei_delay_halt.gb  # interrupt
 same-suite/sgb/command_mlt_req.gb  # sgb
 same-suite/sgb/command_mlt_req_1_incrementing.gb  # sgb
