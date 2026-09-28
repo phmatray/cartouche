@@ -1628,7 +1628,7 @@ mod tests {
 
     /// `banks` 16 KiB banks, each starting with the marker `0xC0 + n`; an MBC1 header in bank 0 and a
     /// header of type `menu_type` in the last 32 KiB (where an MMM01 menu lives).
-    pub(crate) fn multicart(menu_type: u8, ram_size: u8, banks: usize) -> Vec<u8> {
+    fn multicart(menu_type: u8, ram_size: u8, banks: usize) -> Vec<u8> {
         let mut rom = vec![0u8; banks * 0x4000];
         for n in 0..banks { rom[n * 0x4000] = 0xC0 + n as u8; }
         header(&mut rom, 0, 0x01, 0x00);
@@ -1663,7 +1663,8 @@ mod tests {
         assert_eq!(c.read_ram(0x0010), 0xFF, "RAM disabled");
     }
 
-    /// Window A's flash bank `bank`: the command sequence's 2:5555 and 1:2AAA go through it too.
+    /// Sends a flash command through window A, as Pan Docs addresses it: 2:5555 (bank 2, 5555) and
+    /// 1:4AAA (bank 1, flash offset 2AAA).
     fn flash_cmd(c: &mut Cartridge, cmd: &[u8]) {
         for (i, &v) in cmd.iter().enumerate() {
             let (bank, at) = if i % 3 == 1 { (1, 0x4AAA) } else { (2, 0x5555) };
