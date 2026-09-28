@@ -56,13 +56,13 @@ export function useSaveStates(
   }, [gameId, idOf, saveState, framebufferSnapshot, reload, profileRef]);
 
   /**
-   * `atBoot`: the game starting from its resume point ("Continue"). A resume point older than its profile's battery
-   * save (written since by a link cable session, online play, a sync) is not loaded: 'older', the game starts from that save.
+   * Load a state (stored, or kept aside: the game as it was before New game), switching the battery save to the profile
+   * it was taken in. `atBoot`: the game starting from its resume point ("Continue"). A resume point older than its
+   * profile's battery save (written since by a link cable session, online play, a sync) is not loaded: 'older', the game
+   * starts from that save.
    */
-  const load = useCallback(async (k: SlotKey, atBoot = false): Promise<boolean | 'older'> => {
+  const loadEntry = useCallback(async (entry: Pick<StoredSaveState, 'data' | 'timestamp' | 'profile'> & { thumbnail?: Uint8Array }, k: SlotKey, atBoot = false): Promise<boolean | 'older'> => {
     if (!gameId) return false;
-    const entry = await getSaveState(idOf(k));
-    if (!entry) return false;
     // Look the profile up before loading: once the state is in, a battery write must already go to the right profile.
     const owner = entry.profile ?? gameId; // states from before profiles belong to Main
     if (atBoot && k === 'auto' && resumeOlderThan(entry.timestamp, await getSram(owner).catch(() => undefined))) return 'older';
@@ -88,7 +88,11 @@ export function useSaveStates(
       profileRef.current = null; // storage failed: write nowhere rather than over another save
     }
     return true;
-  }, [gameId, idOf, loadState, exportSram, profileRef]);
+  }, [gameId, loadState, exportSram, profileRef]);
+  const load = useCallback(async (k: SlotKey, atBoot = false): Promise<boolean | 'older'> => {
+    const entry = gameId ? await getSaveState(idOf(k)) : undefined;
+    return entry ? loadEntry(entry, k, atBoot) : false;
+  }, [gameId, idOf, loadEntry]);
 
   /** Put a stored state back as it was (undoing a save over it). */
   const put = useCallback(async (entry: StoredSaveState) => {
@@ -102,5 +106,5 @@ export function useSaveStates(
     return true;
   }, [reload]);
 
-  return { states, save, load, put };
+  return { states, save, load, loadEntry, put };
 }

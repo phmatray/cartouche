@@ -17,7 +17,7 @@ import { parseRomHeader, sgbCartOf } from '../../lib/rom-utils';
 import { presetOf } from '../../shaders/filters';
 import { BUTTON_NUMBERS, chord } from '../../utils/keybindings';
 import { dpadAt, slide } from '../../lib/touch-slide';
-import { getActiveProfileId, getSaveState, getSram, resumeStateId } from '../../lib/db';
+import { getActiveProfileId, getSaveState, getSram, resumeStateId, type StoredSaveState } from '../../lib/db';
 import { bootFrom, skipSilentResume } from '../../lib/boot-from';
 import { STARTUP } from '../../lib/settings-clean';
 import { ago, owned, paths, tagOf, touchOnly } from '../../lib/ui';
@@ -188,19 +188,21 @@ function Player({ game }: { game: GameEntry }) {
     const fb = restores && framebufferSnapshot();
     if (fb) renderFrame(new Uint8ClampedArray(fb.buffer, fb.byteOffset, fb.length), true);
   }, [restores, framebufferSnapshot, renderFrame]);
+  const saves = useSaveStates(game.id, { ...emu, loadState: loadAndShow }, saveTo);
   /**
    * New game (from the game page, or the Saves page of the Manual): a moment to change one's mind and go back to the
-   * game as it was, before the fresh start gets written over the resume point.
+   * game as it was, before the fresh start gets written over the resume point. The battery save goes back to the one
+   * that game was played in (the resume point may be another profile's than the one now used for solo).
    */
-  const offerUndo = useCallback((data: Uint8Array, frame?: Uint8Array) => {
-    toast(tNow('player.restart.done'), 'm', { label: tNow('player.restart.undo'), run: () => {
+  const { loadEntry } = saves;
+  const offerUndo = useCallback((was: Pick<StoredSaveState, 'data' | 'timestamp' | 'profile'> & { thumbnail?: Uint8Array }) => {
+    toast(tNow('player.restart.done'), 'm', { label: tNow('player.restart.undo'), run: async () => {
       switchOk.current = true;
-      const ok = loadAndShow(data, frame);
+      const ok = await loadEntry(was, 'auto');
       switchOk.current = false;
-      if (ok) toast(tNow('player.restart.undone'), 'c');
+      if (ok === true) toast(tNow('player.restart.undone'), 'c');
     } });
-  }, [loadAndShow]);
-  const saves = useSaveStates(game.id, { ...emu, loadState: loadAndShow }, saveTo);
+  }, [loadEntry]);
   // Rewinding stops quietly at a restart onto another console.
   const rewindLoad = useCallback((data: Uint8Array, frame?: Uint8ClampedArray) => stateConsole(data) === consoleNow() && loadAndShow(data, frame), [stateConsole, consoleNow, loadAndShow]);
   const { isRewinding, startRewind, stopRewind, wrapRunFrame, bufferFill } = useRewind({ saveState, loadState: rewindLoad });
@@ -315,7 +317,7 @@ function Player({ game }: { game: GameEntry }) {
       else if (r === 'older') toast(tNow('player.toast.saveNewer'), 'm');
       else if (!refused.current) toast(ok ? (from === 'auto' ? tNow('player.toast.resumed') : tNow('player.toast.loadedSlot', { n: String(+from + 1) })) : tNow('player.toast.gone'), ok ? 'c' : 'm');
     }
-    if (fresh && resume) offerUndo(resume.data, resume.thumbnail);
+    if (fresh && resume) offerUndo(resume);
     // Opened on a page of the Manual on a phone (Save slots from the library, say): the game waits until it closes.
     if (manualRef.current && sheetCovers()) heldBySheet.current = true;
     else setIsRunning(q.get('edit') !== 'controls');
@@ -469,8 +471,9 @@ function Player({ game }: { game: GameEntry }) {
     // Copies: the power-on reuses the WASM memory these view.
     const was = romLoaded ? saveState() : null, fb = romLoaded ? framebufferSnapshot() : null;
     const data = was && new Uint8Array(was), frame = fb ? new Uint8Array(fb) : undefined;
+    const profile = saveTo.current ?? undefined;
     restart();
-    if (data) offerUndo(data, frame);
+    if (data) offerUndo({ data, thumbnail: frame, timestamp: Date.now(), profile });
   }, [romLoaded, saveState, framebufferSnapshot, restart, offerUndo]);
   const saveSlot = useCallback(async (i: number) => {
     const was = saves.states[i + 1]; // F5 and the deck's Save write over slot 1 without asking: one tap puts it back
