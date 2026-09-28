@@ -1,7 +1,7 @@
 // node --test: the link cable and the library's live screen run at the Game Boy's 59.7 frames/s whatever the display rate.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GB_FPS, pacer } from './pace.ts';
+import { GB_FPS, pacer, take } from './pace.ts';
 
 /** Frames run per second on a display refreshing `hz` times a second. */
 const perSecond = (hz: number) => {
@@ -20,4 +20,13 @@ test('a stall is dropped, not caught up', () => {
   due(0);
   assert.equal(due(5000), 4);
   assert.ok(due(5016) <= 2);
+});
+
+test('frames over the cap are dropped, not owed: back at 1× the game runs at 1×', () => {
+  // The player's loop: 4× on a device slow enough for 10 frames/s, then 1× at 60 Hz.
+  let acc = 0, n: number;
+  for (let i = 0; i < 50; i++) { acc += 0.1 * GB_FPS * 4; [n, acc] = take(acc, 8); assert.equal(n, 8); }
+  let ran = 0;
+  for (let i = 0; i < 60; i++) { acc += GB_FPS / 60; [n, acc] = take(acc, 8); ran += n; }
+  assert.ok(Math.abs(ran - GB_FPS) <= 1, `${ran} frames in the first second at 1×`);
 });

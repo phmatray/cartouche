@@ -22,6 +22,7 @@ import { bootFrom, skipSilentResume } from '../../lib/boot-from';
 import { STARTUP } from '../../lib/settings-clean';
 import { ago, owned, paths, tagOf, touchOnly } from '../../lib/ui';
 import { settled } from '../../lib/transitions';
+import { take } from '../../lib/pace';
 import { I } from '../icons';
 import { Title } from '../library/Cover';
 import { useInk } from '../../hooks/useInk';
@@ -355,8 +356,8 @@ function Player({ game }: { game: GameEntry }) {
     if (p.last) { refresh.current.push(dt); if (refresh.current.length > 31) refresh.current.shift(); }
     p.last = now;
     p.acc += dt * FPS * speedRef.current;
-    let n = Math.min(8, Math.floor(p.acc));
-    p.acc -= n;
+    let n: number;
+    [n, p.acc] = take(p.acc, 8);
     if (isRewinding) n = 1; // rewind runs at its own pace, whatever the speed
     // Smooth motion only where it makes sense: a display faster than the Game Boy (or forced), normal speed, no rewind.
     const hz = refresh.current.length >= 15 ? 1 / [...refresh.current].sort((a, b) => a - b)[refresh.current.length >> 1] : 60;
