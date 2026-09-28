@@ -516,6 +516,10 @@ impl GameBoy {
         data.push(self.bus.rp);
         // Then the current line's mode-3 length (u32 LE; absent from older states: 172 dots).
         data.extend_from_slice(&self.bus.ppu.mode3_len.to_le_bytes());
+        // Then the speed-switch aftermath (absent from older states: none): the DIV-APU event's
+        // lag and the divider's hold.
+        let due = self.bus.apu_event_due.map_or(0, |write| 2 | (write as u8) << 2);
+        data.push(self.bus.apu_event_late as u8 | due | self.bus.timer.div_hold.min(3) << 3);
 
         data
     }
@@ -739,6 +743,10 @@ impl GameBoy {
         // Clamped to what a line can hold: 172 to 172 + 7 + 6 + 10 x 11 dots.
         self.bus.ppu.mode3_len = timing.get(TIMING_TAIL_LEN + 1..TIMING_TAIL_LEN + 5)
             .map_or(172, |b| u32::from_le_bytes(b.try_into().unwrap()).clamp(172, 295));
+        let spsw = byte(TIMING_TAIL_LEN + 5).unwrap_or(0);
+        self.bus.apu_event_late = spsw & 1 != 0;
+        self.bus.apu_event_due = (spsw & 2 != 0).then_some(spsw & 4 != 0);
+        self.bus.timer.div_hold = (spsw >> 3) & 3;
         true
     }
 }
@@ -832,16 +840,18 @@ mod tests {
         gb.bus.write_byte(0xFF46, 0xC1);
         for _ in 0..12 { gb.bus.cycle_tick(); }
         gb.bus.timer.reload_pending = true;
+        (gb.bus.apu_event_late, gb.bus.apu_event_due, gb.bus.timer.div_hold) = (true, Some(true), 2);
         let state = gb.save_state();
 
         let mut g = GameBoy::new(rom.clone()).unwrap();
         assert!(g.load_state(&state));
         assert!(g.bus.timer.reload_pending);
+        assert_eq!((g.bus.apu_event_late, g.bus.apu_event_due, g.bus.timer.div_hold), (true, Some(true), 2));
         assert_eq!((g.bus.dma_active, g.bus.dma_delay, g.bus.dma_index, g.bus.read_byte(0xFF46)), (true, 0, 11, 0xC1));
         assert_eq!(g.save_state(), state);
 
         let mut g = GameBoy::new(rom).unwrap();
-        assert!(g.load_state(&state[..state.len() - TIMING_TAIL_LEN - 5])); // - 5: RP, mode-3 length
+        assert!(g.load_state(&state[..state.len() - TIMING_TAIL_LEN - 6])); // - 6: RP, mode-3 length, speed switch
         assert!(!g.bus.timer.reload_pending);
         assert_eq!(g.bus.dma_index, 0xA0, "an older state's transfer is already in OAM");
     }
@@ -884,7 +894,7 @@ mod tests {
 
         let mut g = GameBoy::new(rom).unwrap();
         g.bus.ppu.mode3_len = 200;
-        assert!(g.load_state(&state[..state.len() - 4]));
+        assert!(g.load_state(&state[..state.len() - 5])); // without the mode-3 length and speed switch
         assert_eq!(g.bus.ppu.mode3_len, 172);
     }
 
@@ -910,8 +920,8 @@ mod tests {
         assert_eq!(c.read_ram(0), 0x97);
 
         // The pre-change layout ends right after KEY0 (then the mapper block, the timing tail, RP
-        // and the mode-3 length).
-        let end = state.len() - TIMING_TAIL_LEN - 5;
+        // the mode-3 length and the speed-switch byte).
+        let end = state.len() - TIMING_TAIL_LEN - 6;
         let extra = u16::from_le_bytes([state[end - 151], state[end - 150]]);
         assert_eq!(extra, 149, "mode, address, result, opcode, 128 bytes of nibbles, IR LED, clock tail");
         let old = &state[..end - 151];
@@ -978,7 +988,7 @@ mod tests {
     /// state cut right after KEY0 (before the mapper block existed) still loads.
     fn reload(gb: &GameBoy, rom: &[u8]) -> GameBoy {
         let state = gb.save_state();
-        let cut = state.len() - 5 - TIMING_TAIL_LEN - 2 - gb.bus.cartridge.export_extra().len(); // 5: RP, mode-3 length
+        let cut = state.len() - 6 - TIMING_TAIL_LEN - 2 - gb.bus.cartridge.export_extra().len(); // 6: RP, mode-3 length, speed switch
         assert_eq!(state[cut..cut + 2], (gb.bus.cartridge.export_extra().len() as u16).to_le_bytes());
         let mut old = GameBoy::new(rom.to_vec()).unwrap();
         assert!(old.load_state(&state[..cut]), "a state without the mapper block");
