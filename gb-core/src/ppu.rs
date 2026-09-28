@@ -317,7 +317,8 @@ impl Ppu {
         let vblank = self.mode == PpuMode::VBlank  && self.stat & 0x10 != 0;
         // Line 144 starts with the mode 2 source too, for one M-cycle.
         let oam    = (self.mode == PpuMode::OamScan && !self.lcd_on_line0 || self.mode == PpuMode::VBlank && self.ly == 144 && self.mode_clock < 4) && self.stat & 0x20 != 0;
-        // Interrupts are requested one M-cycle ahead of the line (the CPU samples IF before its fetch).
+        // No comparator blank at a line start: the interrupt is requested one M-cycle ahead of the
+        // line (the CPU samples IF before its opcode fetch).
         let lyc    = self.ly_compare(true) == Some(self.lyc) && self.stat & 0x40 != 0;
         hblank || vblank || oam || lyc
     }
