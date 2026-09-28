@@ -5,15 +5,9 @@
 # apu, mbc, rtc, sgb, serial, other; no-verdict = a gbmicrotest ROM whose source never writes a verdict
 # to $FF82 (a hardware probe, not a self-checking test), so it times out on every emulator.
 
-mooneye-test-suite/acceptance/boot_div-S.gb  # boot
 mooneye-test-suite/acceptance/boot_div-dmg0.gb  # boot
-mooneye-test-suite/acceptance/boot_div2-S.gb  # boot
-mooneye-test-suite/acceptance/boot_hwio-S.gb  # boot
 mooneye-test-suite/acceptance/boot_hwio-dmg0.gb  # boot
 mooneye-test-suite/acceptance/boot_regs-dmg0.gb  # boot
-mooneye-test-suite/acceptance/boot_regs-mgb.gb  # boot
-mooneye-test-suite/acceptance/boot_regs-sgb.gb  # boot
-mooneye-test-suite/acceptance/boot_regs-sgb2.gb  # boot
 mooneye-test-suite/acceptance/ppu/hblank_ly_scx_timing-GS.gb  # stat
 mooneye-test-suite/acceptance/ppu/intr_2_oam_ok_timing.gb  # stat
 mooneye-test-suite/acceptance/ppu/lcdon_timing-GS.gb  # stat
