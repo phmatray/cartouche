@@ -232,8 +232,10 @@ ENDC
     ldh [rOBP1], a
     ld a, %11_11_11_00
     ldh [rBGP], a
+IF !DEF(CGB)
     ld a, $91 ; LCD on, BG on, tiles at $8000
     ldh [rLCDC], a
+ENDC
 
 IF DEF(CGB)
     call GetInputPaletteIndex
@@ -275,6 +277,9 @@ IF DEF(CGB)
     ldh [c], a
     dec b
     jr nz, .objLoop
+; LCD on only now: palette RAM is locked while the PPU draws (mode 3), and these writes must land
+    ld a, $91 ; LCD on, BG on, tiles at $8000
+    ldh [rLCDC], a
 
     call Preboot
     jp BootGame

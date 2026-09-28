@@ -153,14 +153,14 @@ impl Ppu {
         self.oam[offset as usize] = value;
     }
 
-    /// The CPU cannot reach OAM in modes 2 and 3 nor VRAM in mode 3 (reads $FF, writes are
-    /// dropped). A read is blocked from the M-cycle before STAT shows the mode (the internal mode)
+    /// The CPU cannot reach OAM in modes 2 and 3 nor VRAM and CGB palette RAM (BCPD/OCPD) in
+    /// mode 3 (reads $FF, writes are dropped; Pan Docs "LCD Color Palettes"). A read is blocked from the M-cycle before STAT shows the mode (the internal mode)
     /// until STAT shows mode 0; a write only while STAT shows it, except in the M-cycle mode 3
     /// has begun but STAT still shows mode 2, which lets a write through. The line after the LCD
     /// turns on has no OAM scan and no lead.
     /// (gbmicrotest `poweron_oam_*`, `poweron_vram_*`, `oam_*_l0/l1_*`, `vram_*_l0/l1_*`.)
     pub fn cpu_locked(&self, addr: u16, write: bool) -> bool {
-        if self.lcdc & 0x80 == 0 || !matches!(addr, 0x8000..=0x9FFF | 0xFE00..=0xFE9F) {
+        if self.lcdc & 0x80 == 0 || !matches!(addr, 0x8000..=0x9FFF | 0xFE00..=0xFE9F | 0xFF69 | 0xFF6B) {
             return false;
         }
         let shown = match self.read_register(0xFF41) & 3 {
@@ -172,7 +172,7 @@ impl Ppu {
             PpuMode::Drawing if !self.lcd_on_line0 => 3,
             _ => 0,
         };
-        let from = if addr >= 0xFE00 { 2 } else { 3 };
+        let from = if (0xFE00..=0xFE9F).contains(&addr) { 2 } else { 3 };
         if write {
             shown >= from && !(shown == 2 && self.mode == PpuMode::Drawing)
         } else {
@@ -270,24 +270,25 @@ impl Ppu {
             0xFF4F => self.vram_bank = value & 0x01,
             0xFF68 => self.bcps = value,
             0xFF69 => {
-                let idx = (self.bcps & 0x3F) as usize;
-                self.bg_cram[idx] = value;
-                if self.bcps & 0x80 != 0 {
-                    let new_idx = ((self.bcps & 0x3F) + 1) & 0x3F;
-                    self.bcps = (self.bcps & 0x80) | new_idx;
-                }
+                self.bg_cram[(self.bcps & 0x3F) as usize] = value;
+                self.palette_index_step(addr);
             }
             0xFF6A => self.ocps = value,
             0xFF6B => {
-                let idx = (self.ocps & 0x3F) as usize;
-                self.obj_cram[idx] = value;
-                if self.ocps & 0x80 != 0 {
-                    let new_idx = ((self.ocps & 0x3F) + 1) & 0x3F;
-                    self.ocps = (self.ocps & 0x80) | new_idx;
-                }
+                self.obj_cram[(self.ocps & 0x3F) as usize] = value;
+                self.palette_index_step(addr);
             }
             0xFF6C => self.opri = value & 1,
             _ => {}
+        }
+    }
+
+    /// BCPS/OCPS auto-increment after a BCPD/OCPD write. It also runs when a mode-3 lock drops
+    /// the write (Pan Docs "LCD Color Palettes": the index still increments; SameBoy agrees).
+    pub fn palette_index_step(&mut self, addr: u16) {
+        let ps = if addr == 0xFF69 { &mut self.bcps } else { &mut self.ocps };
+        if *ps & 0x80 != 0 {
+            *ps = 0x80 | (ps.wrapping_add(1) & 0x3F);
         }
     }
 
