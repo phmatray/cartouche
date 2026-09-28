@@ -198,6 +198,7 @@ export default {
     exportSub: 'ROMs, saves, save states, screenshots, favorites, play time and settings in one .cartouche file',
     export: 'Export backup',
     exported: 'Backup exported',
+    exportFailed: 'The backup couldn’t be made: this browser’s storage couldn’t be read.',
     restoreLabel: 'Restore from a backup',
     restoreSub: 'Merges into this library; nothing is overwritten without asking',
     import: 'Import backup',
