@@ -158,9 +158,20 @@ impl MemoryBus {
 
     pub fn read_byte(&self, addr: u16) -> u8 {
         if self.dma_active && self.dma_conflict(addr) {
-            return 0xFF;
+            // On a Game Boy the CPU sees the byte the DMA reads this M-cycle; OAM itself, and
+            // every conflict on Color hardware (as SameBoy), read $FF.
+            if addr >= 0xFE00 || self.cgb_mode || self.ppu.compat {
+                return 0xFF;
+            }
+            return self.peek(self.dma_src(self.dma_index.saturating_sub(1)));
         }
         self.peek(addr)
+    }
+
+    /// The address the OAM DMA reads byte `i` from; pages $E0-$FF read work RAM, like echo RAM.
+    fn dma_src(&self, i: u8) -> u16 {
+        let src = (self.dma_source as u16) << 8 | i as u16;
+        if src >= 0xE000 { src - 0x2000 } else { src }
     }
 
     /// The byte at `addr`, ignoring a running OAM DMA.
@@ -332,12 +343,27 @@ impl MemoryBus {
         if !self.cgb_mode || self.key1 & 0x01 == 0 {
             return false;
         }
+        // STOP's second M-cycle reads the byte after it; DIV resets at the end of the next one.
+        self.tick_components();
+        let earlier = self.timer.div_counter;
+        self.tick_components();
+        self.timer.speed_switch_div_reset(earlier);
         self.double_speed = !self.double_speed;
+        self.ppu.m_cycle_dots = if self.double_speed { 2 } else { 4 };
         self.key1 = 0;
-        // Pan Docs, "CGB Registers": DIV resets and the CPU waits 2050 M-cycles for the clock to settle.
-        self.timer.write(0xFF04, 0);
-        for _ in 0..2050 {
-            self.stop_tick();
+        // Then the CPU halts while the clock settles and everything else runs: $20000 DIV counts,
+        // so DIV is back at 0 when it resumes (Age spsw-div, spsw-tima). Like HALT, an interrupt
+        // ends it early (Age spsw-interrupts). Back in single speed the PPU comes out one dot
+        // behind (Age spsw-mode0: the LCD-to-CPU alignment shifts).
+        let mut behind = !self.double_speed;
+        for _ in 0..0x8000 {
+            self.tick_components();
+            // Taken back once the PPU is a dot into a mode, so no mode change is undone.
+            if behind && self.ppu.mode_clock > 0 {
+                self.ppu.mode_clock -= 1;
+                behind = false;
+            }
+            if self.interrupts.pending() & !self.late_interrupts() != 0 { break; }
         }
         true
     }
@@ -413,11 +439,17 @@ impl MemoryBus {
             self.dma_active = false;
             return;
         }
-        // Pages $E0-$FF read work RAM, like echo RAM.
-        let src = (self.dma_source as u16) << 8 | self.dma_index as u16;
-        let byte = self.peek(if src >= 0xE000 { src - 0x2000 } else { src });
+        let byte = self.peek(self.dma_src(self.dma_index));
         self.ppu.write_oam(self.dma_index as u16, byte);
         self.dma_index += 1;
+    }
+
+    /// IF bits whose line rises only at the end of this M-cycle. A halted CPU samples IF
+    /// mid-cycle, so these wake it one M-cycle later. The timer raises IF.2 with the TIMA reload,
+    /// at the next M-cycle boundary; the bus requests it one M-cycle ahead (see `Timer::step`),
+    /// which a running CPU's fetch-time sample needs but a halted one must not see yet.
+    pub fn late_interrupts(&self) -> u8 {
+        if self.timer.reload_pending { TIMER_BIT } else { 0 }
     }
 
     pub fn cycle_tick(&mut self) {
@@ -462,10 +494,11 @@ impl MemoryBus {
             return;
         }
         if self.hdma_active && value & 0x80 == 0 {
-            // Writing bit 7 = 0 during an HBlank DMA cancels it; HDMA5 then reads bit 7 = 1
-            // with the remaining length. (Writing bit 7 = 1 restarts it with the new length.)
+            // Writing bit 7 = 0 during an HBlank DMA cancels it; HDMA5 then reads bit 7 = 1 with
+            // the length bits just written, not the remaining length Pan Docs describes (SameSuite
+            // hdma_lcd_off/hdma_mode0, checked on hardware). Writing bit 7 = 1 restarts it.
             self.hdma_active = false;
-            self.hdma5 = 0x80 | (self.hdma_remaining.wrapping_sub(1) & 0x7F);
+            self.hdma5 = 0x80 | (value & 0x7F);
             return;
         }
         self.hdma_remaining = (value & 0x7F) + 1;
@@ -553,6 +586,19 @@ mod tests {
     }
 
     #[test]
+    fn oam_dma_conflicting_read_sees_the_dma_byte() {
+        let mut bus = bus();
+        bus.write_byte(0xFF46, 0xC0); // from WRAM, on the external bus with ROM
+        for _ in 0..2 { bus.cycle_tick(); }
+        assert_eq!(bus.read_byte(0x0100), 0x01, "a ROM read sees the byte the DMA reads");
+        assert_eq!(bus.read_byte(0xD123), 0x01);
+        bus.cycle_tick();
+        assert_eq!(bus.read_byte(0x0100), 0x02);
+        assert_eq!(bus.read_byte(0xFE00), 0xFF, "OAM itself still reads $FF");
+        assert_eq!(bus.read_byte(0x8000), 0x00, "VRAM is on the other bus");
+    }
+
+    #[test]
     fn speed_switch_resets_div_and_pauses() {
         let mut bus = bus();
         bus.cgb_mode = true;
@@ -560,11 +606,28 @@ mod tests {
         assert_ne!(bus.read_byte(0xFF04), 0);
         bus.write_byte(0xFF4D, 0x01);
         assert_eq!(bus.read_byte(0xFF4D), 0x7F, "armed, normal speed");
+        bus.write_byte(0xFF07, 0x04); // TIMA at 4 KHz
+        bus.write_byte(0xFF05, 0x00);
         bus.cycle_count = 0;
         assert!(bus.try_speed_switch());
         assert_eq!(bus.read_byte(0xFF4D), 0xFE, "double speed, disarmed");
-        assert_eq!(bus.read_byte(0xFF04), 0, "DIV reset, and still while the clock settles");
-        assert_eq!(bus.cycle_count, 2050 * 2, "2050 M-cycles at the new speed");
+        assert_eq!(bus.read_byte(0xFF04), 0, "DIV reset, then $20000 counts: back at 0");
+        assert_eq!(bus.read_byte(0xFF05), 0x80, "the timer ran through the pause (Age spsw-tima)");
+        assert_eq!(bus.cycle_count, 2 * 4 + 0x8000 * 2, "STOP's 2 M-cycles, then $8000 at the new speed");
+    }
+
+    #[test]
+    fn an_interrupt_ends_the_speed_switch_pause() {
+        let mut bus = bus();
+        bus.cgb_mode = true;
+        bus.interrupts.interrupt_enable = TIMER_BIT;
+        bus.write_byte(0xFF07, 0x05); // TIMA at 262 KHz: overflows 16 x 256 counts in
+        bus.write_byte(0xFF4D, 0x01);
+        bus.cycle_count = 0;
+        assert!(bus.try_speed_switch());
+        assert_ne!(bus.interrupts.interrupt_flag & TIMER_BIT, 0);
+        assert!(bus.cycle_count < 0x8000 * 2, "woken by the timer, not after $8000 M-cycles");
+        assert_ne!(bus.read_byte(0xFF04), 0, "DIV has not wrapped");
     }
 
     #[test]

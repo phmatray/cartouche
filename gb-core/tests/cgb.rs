@@ -51,7 +51,7 @@ fn hdma_cancel_then_restart_resumes_from_counters() {
     bus.write_byte(0xFF55, 0x83); // HBlank DMA, 4 blocks: first block goes at once (mode 0)
     assert_eq!(bus.read_byte(0xFF55), 0x02, "active: bit 7 clear, 3 blocks left -> 2");
     bus.write_byte(0xFF55, 0x00); // cancel
-    assert_eq!(bus.read_byte(0xFF55), 0x82, "cancelled: bit 7 set, remaining length kept");
+    assert_eq!(bus.read_byte(0xFF55), 0x80, "cancelled: bit 7 set, the length bits are the written ones (SameSuite hdma_lcd_off)");
 
     bus.write_byte(0xFF55, 0x02); // GDMA 3 blocks, HDMA1-4 NOT rewritten: must continue at $C010
     assert_eq!(bus.read_byte(0xFF55), 0xFF);

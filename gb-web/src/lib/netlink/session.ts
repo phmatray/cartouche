@@ -6,6 +6,9 @@ import { create } from 'zustand';
 import { joinRoom, type P2PRoom } from '../p2p/room';
 import { makeCode } from '../p2p/code';
 import { isLinkMsg, SerialBridge, type LinkCore, type LinkMsg } from './bridge';
+import { toast } from '../../components/shell/actions';
+import { t } from '../../i18n';
+import { chooseMode, delayFor, isBootMsg, isHashMsg, isLockMsg, isRomsMsg, type BootMsg, type HashMsg, type LockMsg, type RomsMsg } from './lockstep';
 
 /** What each player tells the other about themselves. */
 export type Seat = {
@@ -17,7 +20,8 @@ export type Seat = {
   /** Paused or in the background: its console isn't running, so the other one may wait. */
   paused: boolean;
 };
-type Msg = { t: 'hi'; v: 1; seat: Seat } | { t: 'bye' } | { t: 'full' } | LinkMsg;
+type Echo = { t: 'e'; n: number; r?: true };
+type Msg = { t: 'hi'; v: 1; seat: Seat } | { t: 'bye' } | { t: 'full' } | LinkMsg | RomsMsg | BootMsg | LockMsg | HashMsg | Echo;
 
 /** idle: no room · joining · alone: waiting for the other player · linked · lost: the connection dropped, coming back · full */
 export type Phase = 'idle' | 'joining' | 'alone' | 'linked' | 'lost' | 'full';
@@ -32,13 +36,18 @@ export interface NetState {
   /** The other player left on purpose (closed the room). */
   peerLeft: boolean;
   ping: number | null;
+  /** bytes: each console in its own browser, the serial bytes cross (always works) · lockstep: both players hold both
+   *  games, each browser runs both consoles and only the buttons cross (real-time link games at full speed). */
+  mode: 'bytes' | 'lockstep';
+  /** The round trip measured for lockstep's input delay (the host's; null on the guest). */
+  rtt: number | null;
 }
 
 const APP = 'cartouche-link-v1';
 /** The host is Player 1: the other player's number. */
 export const other = (host: boolean) => (host ? 2 : 1);
 const seat = (host = false): Seat => ({ host, game: null, ready: false, playing: false, paused: false });
-const idle = (): NetState => ({ code: null, phase: 'idle', error: null, me: seat(), peer: null, peerLeft: false, ping: null });
+const idle = (): NetState => ({ code: null, phase: 'idle', error: null, me: seat(), peer: null, peerLeft: false, ping: null, mode: 'bytes', rtt: null });
 export const useNet = create<NetState>(idle);
 const set = (s: Partial<NetState>) => useNet.setState(s);
 
@@ -136,6 +145,7 @@ export function openRoom(code?: string): Promise<void> {
       }
       hello(); // doubles as the heartbeat
       measure();
+      offerAgain();
     };
     r.onError = (error) => set({ error });
     r.onMessage = (raw, from) => {
@@ -158,10 +168,10 @@ export function openRoom(code?: string): Promise<void> {
         partner = null;
         set({ phase: 'alone', peer: null, peerLeft: true, ping: null });
       }
-      else {
+      else if (m.t === 'x' || m.t === 'r') {
         bridge?.receive(m);
         if (m.t === 'r') resume?.();
-      }
+      } else lockstepMsg(m);
     };
     pinger = window.setInterval(() => heartbeat(), 2000);
   }).catch(() => set({ phase: 'idle', error: 'relays' }))
@@ -175,7 +185,8 @@ function valid(raw: unknown): Msg | null {
   const m = raw as { t?: unknown; seat?: unknown };
   if (m.t === 'bye' || m.t === 'full') return m as Msg;
   if (m.t === 'hi') { const seat = seatOf(m.seat); return seat && { t: 'hi', v: 1, seat }; }
-  return isLinkMsg(m) ? m : null;
+  if (m.t === 'e') { const e = raw as Echo; return Number.isSafeInteger(e.n) ? { t: 'e', n: e.n, ...(e.r === true ? { r: true } : {}) } : null; }
+  return isLinkMsg(m) || isLockMsg(m) || isHashMsg(m) || isRomsMsg(m) || isBootMsg(m) ? m : null;
 }
 
 /** Last message from each peer (the heartbeat keeps it fresh); silent this long, a peer counts as gone. */
@@ -203,6 +214,7 @@ export function closeRoom() {
   heard.clear();
   room = null;
   partner = null;
+  endLockstep();
   set(idle());
 }
 
@@ -243,4 +255,111 @@ export function plug(core: LinkCore, onReply: () => void) {
     pump: () => b.pump(),
     unplug: () => { if (bridge === b) { bridge = null; resume = null; } },
   };
+}
+
+// ---- lockstep (see lockstep.ts): chosen when each player holds the other's game ----
+
+/** What both browsers start the two consoles with: Player 1's and Player 2's game (SHA-1) and battery save. */
+export interface LockBoot { seed: number; delay: number; games: [string, string]; saves: [string | undefined, string | undefined] }
+let offer: { g: string; s: string[]; save?: string } | null = null;
+let theirs: RomsMsg | null = null;
+let hostBoot: BootMsg | null = null; // the host's boot message (sent by us, or received)
+let boot: LockBoot | null = null;
+let lockSink: ((m: LockMsg | HashMsg) => void) | null = null;
+let early: (LockMsg | HashMsg)[] = []; // from a partner that started first, kept until our consoles run
+const echoes = new Map<number, () => void>();
+
+/** The player page offers lockstep: our game, the games we hold (SHA-1s) and our battery save (base64). */
+export function offerLockstep(game: string, have: string[], save?: string) {
+  offer = { g: game, s: have, save };
+  offerAgain();
+  decide();
+}
+/** Until the partner's list is here (a lost message, a partner still loading), ours goes again every heartbeat; so does the
+ *  host's boot until answered. `k`: we have theirs (else they answer with theirs). */
+function offerAgain() {
+  if (!offer || boot) return;
+  if (!theirs) toPartner({ t: 'roms', g: offer.g, s: offer.s });
+  if (hostBoot && useNet.getState().me.host) toPartner(hostBoot);
+}
+/** Both consoles' start, once the handshake is done (`mode` is then 'lockstep'). */
+export const lockstepBoot = () => boot;
+/** The page runs the lockstep: inputs and hashes from the partner go to `onMsg`; returns the sender. */
+export function lockstepLink(onMsg: ((m: LockMsg | HashMsg) => void) | null) {
+  lockSink = onMsg;
+  if (onMsg) early.splice(0).forEach(onMsg);
+  return (m: LockMsg | HashMsg) => toPartner(m);
+}
+/** Back to the byte mode (the player page left, or the room closed): the next game negotiates again. */
+export function endLockstep() {
+  offer = theirs = hostBoot = boot = null;
+  lockSink = null;
+  early = [];
+  set({ mode: 'bytes', rtt: null });
+}
+
+/** Lockstep couldn't start here (the partner's game didn't load): tell the partner, and both go back to the byte mode. */
+export function abortLockstep() {
+  toPartner({ t: 'boot', abort: true });
+  endLockstep();
+}
+
+const both = () => !!offer && !!theirs && chooseMode(offer.s, theirs.s, offer.g, theirs.g) === 'lockstep';
+let deciding = false;
+function lockstepMsg(m: RomsMsg | BootMsg | LockMsg | HashMsg | Echo) {
+  if (m.t === 'e') {
+    if (m.r) echoes.get(m.n)?.();
+    else toPartner({ t: 'e', n: m.n, r: true });
+  } else if (m.t === 'i' || m.t === 'h') {
+    if (lockSink) lockSink(m);
+    else if (boot && early.length < 4096) early.push(m);
+  }
+  else if (m.t === 'boot' && m.abort) { // lockstep couldn't start on their side
+    const was = !!(boot || hostBoot);
+    endLockstep();
+    if (was) toast(t('online.mode.partnerAbort', { p: other(useNet.getState().me.host) }));
+  } else if (m.t === 'roms') {
+    if (boot) return; // already running (a reloaded partner starts over in the byte mode: no resume in this slice)
+    theirs = { t: 'roms', g: m.g, s: m.s };
+    if (!m.k && offer) toPartner({ t: 'roms', g: offer.g, s: offer.s, k: true });
+    decide();
+  } else if (m.seed !== undefined) { // the host's boot, on the guest
+    if (useNet.getState().me.host || !offer || !theirs || !both()) return;
+    toPartner({ t: 'boot', ...(offer.save ? { save: offer.save } : {}) });
+    if (boot) return;
+    boot = { seed: m.seed, delay: m.d!, games: [theirs.g, offer.g], saves: [m.save, offer.save] };
+    set({ mode: 'lockstep' });
+  } else if (useNet.getState().me.host && hostBoot && offer && theirs && !boot) { // the guest's answer
+    boot = { seed: hostBoot.seed!, delay: hostBoot.d!, games: [offer.g, theirs.g], saves: [offer.save, m.save] };
+    set({ mode: 'lockstep' });
+  }
+}
+
+/** The host decides: measures the line (the input delay fits the round trip) and sends the clock seed. */
+function decide() {
+  if (!both() || !useNet.getState().me.host || hostBoot || deciding) return;
+  deciding = true;
+  roundTrip().then((rtt) => {
+    deciding = false;
+    if (!offer || !both() || hostBoot) return;
+    hostBoot = { t: 'boot', seed: Math.floor(Date.now() / 1000), d: delayFor(rtt), ...(offer.save ? { save: offer.save } : {}) };
+    set({ rtt: Math.round(rtt) });
+    toPartner(hostBoot);
+  });
+}
+
+/** Median of 5 round trips through the room, with this browser's test delay (the lobby's ping ignores it). */
+async function roundTrip() {
+  const got: number[] = [];
+  for (let k = 0; k < 5; k++) {
+    const n = Math.floor(Math.random() * 1e9), t0 = performance.now();
+    const ms = await new Promise<number | null>((res) => {
+      const timer = setTimeout(() => { echoes.delete(n); res(null); }, 2000);
+      echoes.set(n, () => { clearTimeout(timer); echoes.delete(n); res(performance.now() - t0); });
+      toPartner({ t: 'e', n });
+    });
+    if (ms !== null) got.push(ms);
+  }
+  got.sort((a, b) => a - b);
+  return got.length ? got[got.length >> 1] : 150;
 }

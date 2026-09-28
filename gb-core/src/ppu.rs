@@ -56,6 +56,8 @@ pub struct Ppu {
     pub(crate) lcd_on_line0: bool,
     /// Dots mode 3 lasts on the current line (`mode3_length`, set as it starts); HBlank gets the rest.
     pub mode3_len: u32,
+    /// Dots per CPU M-cycle: 4, or 2 in CGB double speed (set by the bus when the speed changes).
+    pub m_cycle_dots: u32,
 
     /// The line-by-line picture being drawn.
     pub framebuffer: [u8; FRAMEBUFFER_SIZE],
@@ -111,6 +113,7 @@ impl Ppu {
             window_was_active: false,
             lcd_on_line0: false,
             mode3_len: 172,
+            m_cycle_dots: 4,
             framebuffer: [0; FRAMEBUFFER_SIZE],
             front: vec![0; FRAMEBUFFER_SIZE],
             frame_ready: false,
@@ -158,12 +161,14 @@ impl Ppu {
             0xFF41 => {
                 // A new mode reads one M-cycle late: its STAT interrupt is requested one M-cycle
                 // ahead of the hardware line, since the CPU samples IF before its opcode fetch.
+                // An M-cycle is 4 dots, 2 in double speed.
+                let m = self.m_cycle_dots;
                 let mode_bits = match self.mode {
                     _ if self.lcdc & 0x80 == 0 => 0,
-                    PpuMode::HBlank if self.mode_clock < 3 => 3, // see MODE0_EARLY
-                    PpuMode::Drawing if self.mode_clock < 4 => 2,
-                    PpuMode::OamScan if self.mode_clock < 4 && self.ly != 0 => 0,
-                    PpuMode::VBlank if self.mode_clock < 4 && self.ly == 144 => 0,
+                    PpuMode::HBlank if self.mode_clock < 5 - m / 2 => 3, // see MODE0_EARLY
+                    PpuMode::Drawing if self.mode_clock < m => 2,
+                    PpuMode::OamScan if self.mode_clock < m && self.ly != 0 => 0,
+                    PpuMode::VBlank if self.mode_clock < m && self.ly == 144 => 0,
                     _ if self.lcd_on_line0 => 0,
                     mode => mode as u8,
                 };
@@ -870,6 +875,25 @@ mod tests {
         while p.ly == 0 {
             let fired = p.step(4).1;
             assert_eq!(fired, p.ly == 1, "line 0 after LCD on skips the OAM scan; line 1 has one");
+        }
+    }
+
+    /// STAT reads mode 3 for a few dots after mode 3 runs out (see MODE0_EARLY): 3 in single
+    /// speed, 4 (two M-cycles) in double speed (Age stat-mode-ds, spsw-mode0).
+    #[test]
+    fn stat_reads_mode_0_later_in_double_speed() {
+        for (m_cycle_dots, lag) in [(4, 3), (2, 4)] {
+            let mut p = Ppu::new();
+            p.lcdc = 0x81;
+            p.ly = 10;
+            p.m_cycle_dots = m_cycle_dots;
+            while !p.step(1).2 {}
+            let mut dots = 0;
+            while p.read_register(0xFF41) & 3 == 3 {
+                p.step(1);
+                dots += 1;
+            }
+            assert_eq!(dots, lag, "{m_cycle_dots} dots per M-cycle");
         }
     }
 

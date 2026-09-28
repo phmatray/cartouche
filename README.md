@@ -132,7 +132,7 @@ emulator prove itself; hide them in Settings if you'd rather not see them.
 
 **Play together**
 - Link cable on one screen: two consoles side by side, real serial data between them, and infrared between two Color consoles (Mystery Gift and the like) or HuC1 and HuC3 cartridges, which carry their own.
-- Link cable online: two browsers joined by a room code, invite link or QR code, peer to peer over WebRTC ([how it works](docs/ONLINE_LINK.md)). Best for turn-based exchanges; real-time link games stutter once the round trip passes a few tens of milliseconds.
+- Link cable online: two browsers joined by a room code, invite link or QR code, peer to peer over WebRTC ([how it works](docs/ONLINE_LINK.md)). When both players have both games, each browser runs both consoles in lockstep and only the buttons cross: real-time link games play at full speed (with a short input delay), infrared included. Otherwise only the cable's bytes cross: fine for turn-based exchanges, while real-time link games stutter once the round trip passes a few tens of milliseconds.
 - Super Game Boy multiplayer: up to four players with several gamepads.
 
 **Your data**
@@ -177,12 +177,12 @@ listed, not hidden, in `gb-core/tests/expected-failures.txt`.
 | Homebrew smoke tests | Freely licensed GB and GBC games run without freezing | ✅ |
 | Link cable | Serial transfers between two consoles | ✅ |
 | Infrared (CGB, HuC1, HuC3) | Light between the two consoles of the link page | ✅ |
-| Mooneye acceptance | Timers, DMA, interrupts, PPU and instruction timing | 57/75 |
+| Mooneye acceptance | Timers, DMA, interrupts, PPU and instruction timing | 59/75 |
 | Mooneye emulator-only MBC | MBC1, MBC2 and MBC5 banking | 27/28 |
 | Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 6/51 |
-| SameSuite | APU, HDMA and interrupt edge cases (CGB) | 5/78 |
-| Age | PPU, STAT, OAM/VRAM access and double-speed timing | 4/51 |
-| gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 354/513 |
+| SameSuite | APU, HDMA and interrupt edge cases (CGB) | 8/78 |
+| Age | PPU, STAT, OAM/VRAM access and double-speed timing | 8/51 |
+| gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 375/513 |
 | rtc3test | The MBC3 real-time clock | 6/6 |
 
 ¹ Test 7 runs inside the combined `oam_bug.gb`. Run on its own, that ROM
