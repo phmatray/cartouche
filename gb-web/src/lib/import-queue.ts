@@ -70,7 +70,10 @@ async function expand(files: File[]): Promise<{ rows: ImportRow[]; ignored: numb
       rows.push({ key: String(++seq), name: f.name, size: f.size, st: 'work', read: async () => new Uint8Array(await f.arrayBuffer()) });
       continue;
     }
+    const before = rows.length;
     try { await zip(f, f.name, false); } catch (err) { bad(f.name, f.size, err); }
+    // Nothing in it to try (only folders and system files): said, not a drop that shows nothing at all.
+    if (rows.length === before) bad(f.name, f.size, new ZipError(t('add.zip.empty')));
   }
   return { rows, ignored };
 }
