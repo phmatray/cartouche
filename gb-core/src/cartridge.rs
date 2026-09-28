@@ -287,6 +287,7 @@ pub struct Cartridge {
     motor_total: u32,
     pub camera: Option<Box<crate::camera::Camera>>,
     mbc7: Option<Box<crate::mbc7::Mbc7>>,
+    flash: Option<Box<crate::flash::Flash>>,
 }
 
 impl Cartridge {
@@ -403,6 +404,7 @@ impl Cartridge {
             motor_total: 0,
             camera: (cart_type == 0xFC).then(|| Box::new(crate::camera::Camera::new())),
             mbc7: (cart_type == 0x22).then(|| Box::new(crate::mbc7::Mbc7::new())),
+            flash: (cart_type == 0x20).then(|| Box::new(crate::flash::Flash::new())),
         })
     }
 
@@ -472,15 +474,17 @@ impl Cartridge {
                 self.rom.get(offset).copied().unwrap_or(0xFF)
             }
 
-            MbcType::Mbc6 { rom_banks, .. } => {
-                let offset = match addr {
-                    0x4000..=0x7FFF => {
-                        let w = (addr >> 13 & 1) as usize;
-                        rom_banks[w] as usize * 0x2000 % (self.rom_bank_count * 0x4000) + (addr as usize & 0x1FFF)
-                    }
-                    _ => addr as usize,
-                };
-                self.rom.get(offset).copied().unwrap_or(0xFF)
+            MbcType::Mbc6 { rom_banks, in_flash, flash_enabled, .. } => {
+                let w = (addr >> 13 & 1) as usize;
+                let at = rom_banks[w] as usize * 0x2000 + (addr as usize & 0x1FFF);
+                match addr {
+                    0x4000..=0x7FFF if in_flash[w] => match &self.flash {
+                        Some(f) if *flash_enabled => f.read(at),
+                        _ => 0xFF,
+                    },
+                    0x4000..=0x7FFF => self.rom.get(at % (self.rom_bank_count * 0x4000)).copied().unwrap_or(0xFF),
+                    _ => self.rom.get(addr as usize).copied().unwrap_or(0xFF),
+                }
             }
 
             MbcType::Mbc5 { rom_bank, .. } => match addr {
@@ -630,6 +634,12 @@ impl Cartridge {
                 0x2000..=0x3FFF => {
                     let w = (addr >> 12 & 1) as usize;
                     if addr & 0x0800 == 0 { rom_banks[w] = value & 0x7F } else { in_flash[w] = value & 0x08 != 0 }
+                }
+                0x4000..=0x7FFF => {
+                    let w = (addr >> 13 & 1) as usize;
+                    if let (true, true, Some(f)) = (in_flash[w], *flash_enabled, &mut self.flash) {
+                        f.write(rom_banks[w] as usize * 0x2000 + (addr as usize & 0x1FFF), value, *flash_write);
+                    }
                 }
                 _ => {}
             },
@@ -825,6 +835,7 @@ impl Cartridge {
         if let Some(ref huc3) = self.huc3 {
             data.extend_from_slice(&huc3.export_footer());
         }
+        if let Some(f) = &self.flash { data.extend_from_slice(&f.data); }
         data
     }
 
@@ -874,11 +885,19 @@ impl Cartridge {
 
     /// Mapper state beyond the fixed `export_state` block, for the save state's length-prefixed
     /// mapper block. MBC7: its serial and sensor state (`Mbc7::export`). MMM01: its four registers.
+    /// MBC6: RAM enable, RAM banks A/B, ROM banks A/B, flash selects A/B, flash enable and write
+    /// enable, then the flash's command state (the flash itself goes with the RAM).
     /// Empty for every other mapper but HuC3: mode, address, last result, last opcode, then
     /// its 256 memory nibbles packed two per byte (low nibble first).
     pub fn export_extra(&self) -> Vec<u8> {
         if let Some(m) = &self.mbc7 { return m.export(); }
         if let MbcType::Mmm01 { regs } = &self.mbc { return regs.to_vec(); }
+        if let (MbcType::Mbc6 { ram_enabled, ram_banks, rom_banks, in_flash, flash_enabled, flash_write }, Some(f)) = (&self.mbc, &self.flash) {
+            let mut out = vec![*ram_enabled as u8, ram_banks[0], ram_banks[1], rom_banks[0], rom_banks[1]];
+            out.extend([in_flash[0], in_flash[1], *flash_enabled, *flash_write].map(u8::from));
+            out.extend(f.export_state());
+            return out;
+        }
         let (MbcType::Huc3 { mode, .. }, Some(h)) = (&self.mbc, &self.huc3) else { return Vec::new() };
         let mut out = vec![*mode, h.address, h.result, h.last_opcode];
         out.extend(h.memory.chunks(2).map(|p| p[0] & 0xF | p[1] << 4));
@@ -891,6 +910,16 @@ impl Cartridge {
         if let Some(m) = &mut self.mbc7 { return m.import(data); }
         if let MbcType::Mmm01 { regs } = &mut self.mbc {
             *regs = data.first_chunk::<4>().map_or([0; 4], |r| r.map(|b| b & 0x7F));
+            return;
+        }
+        if let (MbcType::Mbc6 { ram_enabled, ram_banks, rom_banks, in_flash, flash_enabled, flash_write }, Some(f)) = (&mut self.mbc, &mut self.flash) {
+            let d = data.first_chunk::<12>().copied().unwrap_or([0; 12]);
+            *ram_enabled = d[0] != 0;
+            *ram_banks = [d[1] & 7, d[2] & 7];
+            *rom_banks = [d[3] & 0x7F, d[4] & 0x7F];
+            *in_flash = [d[5] != 0, d[6] != 0];
+            (*flash_enabled, *flash_write) = (d[7] != 0, d[8] != 0);
+            f.import_state(&d[9..]);
             return;
         }
         let (MbcType::Huc3 { mode, .. }, Some(h)) = (&mut self.mbc, &mut self.huc3) else { return };
@@ -952,6 +981,10 @@ impl Cartridge {
             if data.len() == ram_len + HUC3_FOOTER_LEN {
                 huc3.import_footer(&data[ram_len..]);
             }
+        }
+        // MBC6: RAM then the flash; a RAM-only file leaves the flash as it is.
+        if let (Some(f), Some(saved)) = (&mut self.flash, data.get(ram_len..ram_len + crate::flash::FLASH_LEN)) {
+            f.data.copy_from_slice(saved);
         }
     }
 
@@ -1598,10 +1631,69 @@ mod tests {
         c.write_ram(0x1010, 0x66); // B000: RAM bank B
         assert_eq!((c.read_ram(0x0010), c.read_ram(0x1010)), (0x11, 0x66));
         let sram = c.export_sram();
-        assert_eq!(sram.len(), 0x8000, "32 KiB of RAM");
         assert_eq!((sram[0x1010], sram[0x6010]), (0x11, 0x66), "4 KiB banks 1 and 6");
         c.write_rom(0x0000, 0x00);
         assert_eq!(c.read_ram(0x0010), 0xFF, "RAM disabled");
+    }
+
+    /// Window A's flash bank `bank`: the command sequence's 2:5555 and 1:2AAA go through it too.
+    fn flash_cmd(c: &mut Cartridge, cmd: &[u8]) {
+        for (i, &v) in cmd.iter().enumerate() {
+            let (bank, at) = if i % 3 == 1 { (1, 0x4AAA) } else { (2, 0x5555) };
+            c.write_rom(0x2000, bank);
+            c.write_rom(at, v);
+        }
+    }
+
+    /// Enables the flash (and its write enable), maps it in window A and programs `v` at the start
+    /// of flash bank 3.
+    fn flash_program(c: &mut Cartridge, write_enable: u8, v: u8) {
+        c.write_rom(0x0C00, 1);
+        c.write_rom(0x1000, write_enable);
+        c.write_rom(0x2800, 0x08);
+        flash_cmd(c, &[0xAA, 0x55, 0xA0]);
+        c.write_rom(0x2000, 3);
+        c.write_rom(0x4000, v);
+        assert_eq!(c.read_rom(0x4000) & 0x80, 0x80, "status: done");
+        c.write_rom(0x4000, 0xF0);
+    }
+
+    #[test]
+    fn mbc6_flash_programs_and_persists() {
+        let mut c = mbc6();
+        flash_program(&mut c, 1, 0x5A);
+        assert_eq!(c.read_rom(0x4000), 0x5A);
+        c.write_rom(0x2800, 0x00);
+        assert_eq!(c.read_rom(0x4000), 0xD3, "window A back on ROM");
+        let sram = c.export_sram();
+        assert_eq!(sram.len(), 0x8000 + 0x10_0000, "RAM, then the flash");
+        assert_eq!(sram[0x8000 + 3 * 0x2000], 0x5A);
+
+        let mut d = mbc6();
+        d.import_sram(&sram);
+        (d.write_rom(0x0C00, 1), d.write_rom(0x2800, 0x08), d.write_rom(0x2000, 3));
+        assert_eq!(d.read_rom(0x4000), 0x5A, "the flash comes back from the .sav");
+        d.import_sram(&[0u8; 0x8000]);
+        assert_eq!(d.read_rom(0x4000), 0x5A, "a RAM-only .sav leaves the flash alone");
+
+        // Sector erase: the last byte goes anywhere in sector 0.
+        flash_cmd(&mut d, &[0xAA, 0x55, 0x80, 0xAA, 0x55]);
+        d.write_rom(0x2000, 3);
+        d.write_rom(0x4000, 0x30);
+        d.write_rom(0x4000, 0xF0);
+        assert_eq!(d.read_rom(0x4000), 0x5A, "sector 0 is write-protected");
+        d.write_rom(0x1000, 1);
+        flash_cmd(&mut d, &[0xAA, 0x55, 0x80, 0xAA, 0x55]);
+        d.write_rom(0x2000, 3);
+        d.write_rom(0x4000, 0x30);
+        d.write_rom(0x4000, 0xF0);
+        assert_eq!(d.read_rom(0x4000), 0xFF, "erased");
+
+        let mut e = mbc6();
+        flash_program(&mut e, 0, 0x5A);
+        assert_eq!(e.read_rom(0x4000), 0xFF, "Flash Write Enable off: sector 0 is not programmed");
+        e.write_rom(0x0C00, 0);
+        assert_eq!(e.read_rom(0x4000), 0xFF, "flash disabled");
     }
 
     #[test]

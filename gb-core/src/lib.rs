@@ -6,6 +6,7 @@ pub mod cpu;
 pub mod debug;
 pub mod disasm;
 pub mod error;
+pub mod flash;
 pub mod gameboy;
 pub mod interrupts;
 pub mod joypad;
