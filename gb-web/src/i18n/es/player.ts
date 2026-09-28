@@ -105,6 +105,7 @@ export default {
     photo: 'Foto',
     muteM: 'Silenciar, M',
     fullF: 'Pantalla completa, F',
+    leaveFullF: 'Salir de pantalla completa, F',
     immF: 'Vista inmersiva, F',
     leaveImmF: 'Salir de la vista inmersiva, F',
   },
