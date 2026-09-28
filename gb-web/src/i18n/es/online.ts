@@ -97,6 +97,7 @@ export default {
     joining: 'Entrando en la sala',
     waiting: 'Esperando al jugador {p}',
     bytes: { one: '{count} byte', other: '{count} bytes' },
+    inStep: 'en sincronía',
   },
   wait: {
     lostT: 'Conexión perdida',
@@ -111,5 +112,13 @@ export default {
     wait: 'Cada byte del cable hace un viaje de ida y vuelta por internet.',
     unplug: 'Desconectar el cable',
     gaveUp: 'Sin respuesta del jugador {p} durante 20 s: el juego ha visto el cable desconectado',
+    inStep: 'Los dos juegos corren en sincronía aquí: este espera los botones del jugador {p}.',
+  },
+  mode: {
+    lockstep: 'Los dos tenéis los dos juegos: las dos consolas corren ahora en sincronía, a toda velocidad',
+  },
+  desync: {
+    title: 'Desincronizado',
+    body: 'Las dos partidas ya no coinciden. Desconecta el cable para seguir jugando solo.',
   },
 } satisfies Messages['online'];
