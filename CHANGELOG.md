@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.7.0](https://github.com/phmatray/cartouche/compare/v1.6.0...v1.7.0) (2026-09-28)
+
+
+### Added
+
+* **achievements:** stamp the unlocked achievement's badge into its toast ([f566e67](https://github.com/phmatray/cartouche/commit/f566e67fec1e1c95d122df27d0d50f390de7f6c3))
+
+
+### Fixed
+
+* **a11y:** keep state fades under reduced motion, only stop movement ([74e7f51](https://github.com/phmatray/cartouche/commit/74e7f51004b405c243281d343617f2a26208ad73))
+* **ci:** approve only the release PR's head run ([004acbf](https://github.com/phmatray/cartouche/commit/004acbfd9d78db9310be54b28fbfa4740d82cd3c))
+* **ci:** approve the release PR's CI instead of letting it expire ([55dca5d](https://github.com/phmatray/cartouche/commit/55dca5df81739da953b615d89d72b4e82f75892f))
+* **ci:** stop a release from cancelling main's CI run ([78c3ca7](https://github.com/phmatray/cartouche/commit/78c3ca72ea3998dc68147bcaec5a16c428b477fd))
+* **library:** say "nothing else yet" when the only game played is in the hero ([6dd5396](https://github.com/phmatray/cartouche/commit/6dd5396edf73bd72d029842bfbb566f3d967dbca))
+* **player:** keep a long achievements list from scrolling the page ([07ec15d](https://github.com/phmatray/cartouche/commit/07ec15d888673554a9be452a96e6465cb582045e))
+* **player:** show one toast at a time over the touch controls ([044dea2](https://github.com/phmatray/cartouche/commit/044dea2b1d10a3e4f244c34baa830d7ab0b11044))
+
 ## [1.6.0](https://github.com/phmatray/cartouche/compare/v1.5.0...v1.6.0) (2026-09-28)
 
 
