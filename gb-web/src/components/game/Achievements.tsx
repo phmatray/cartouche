@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { GameEntry } from '../../types/game';
 import { fetchRom } from '../../hooks/useGameLibrary';
-import { BADGES, gameIdOf, getCreds, progressOf, RaError, romHash, type RaFail, type RaGame } from '../../lib/retroachievements';
+import { BADGES, earnedNow, gameIdOf, getCreds, onUnlock, progressOf, RaError, romHash, type RaFail, type RaGame } from '../../lib/retroachievements';
 import { getPlay } from '../../lib/ra-client';
 import { date, useT } from '../../i18n';
 
@@ -23,6 +23,8 @@ function load(game: GameEntry): Promise<State> {
   }
   return p;
 }
+// Achievement ids are unique across games: mark it in whichever cached game has it.
+onUnlock((id) => seen.forEach((p, k) => seen.set(k, p.then((s) => (s && typeof s === 'object' ? earnedNow(s, id) : s)))));
 
 /** RetroAchievements' "2022-08-23 22:56:38" (UTC). */
 const utc = (s: string) => Date.parse(`${s.replace(' ', 'T')}Z`);
@@ -33,8 +35,10 @@ export default function Achievements({ game }: { game: GameEntry }) {
   const [s, setS] = useState<State | undefined>();
   useEffect(() => {
     let cancelled = false;
-    load(game).then((r) => { if (!cancelled) setS(r); });
-    return () => { cancelled = true; };
+    const show = () => load(game).then((r) => { if (!cancelled) setS(r); });
+    show();
+    const off = onUnlock(show); // registered after the cache's own listener, so it reads the updated list
+    return () => { cancelled = true; off(); };
   }, [game]);
   const head = <h3>{t('ra.title')}</h3>;
   if (s === undefined) return <>{head}<div className="empty-inline" aria-busy="true"><span>{t('ra.looking')}</span></div></>;
