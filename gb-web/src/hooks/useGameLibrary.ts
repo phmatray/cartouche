@@ -325,6 +325,9 @@ export function useGameLibrary() {
     if (list.some((g) => open.includes(g.id))) return false;
     const roms = new Set(list.filter((g) => g.isLocal).map((g) => g.id));
     await eraseGames(list.map((g) => g.id), [...roms]);
+    // A removed ROM's own screen settings go with it (they'd linger in the settings, the backups and sync otherwise).
+    const { gameDisplay, setGameDisplay } = useSettingsStore.getState();
+    for (const id of roms) if (gameDisplay?.[id]) setGameDisplay(id, null);
     if (roms.size) changed();
     // A catalog game (a downloaded GB Studio ROM keeps the catalog id) goes back to its catalog entry, "on the server".
     // ponytail: a ROM that replaced a catalog entry under another id (same title) brings it back on the next load only.
