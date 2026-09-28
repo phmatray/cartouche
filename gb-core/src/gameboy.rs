@@ -13,6 +13,12 @@ pub enum Model {
     Auto,
     /// DMG even for CGB-compatible ($80) carts, like a real DMG would run them.
     Dmg,
+    /// Game Boy Pocket / Light: a DMG whose boot ROM hands over with A = $FF.
+    Mgb,
+    /// Super Game Boy, whatever the header says (`with_sgb` checks it first).
+    Sgb,
+    /// Super Game Boy 2: an SGB whose boot ROM hands over with A = $FF.
+    Sgb2,
 }
 
 /// The machine a save state belongs to: a state from one never loads into another.
@@ -34,12 +40,22 @@ pub struct GameBoy {
     /// Cycles already run of a frame cut short by a stalled remote-link transfer.
     frame_cycles: u32,
     pub console: Console,
+    /// The model it was created as (`with_model`); only the post-boot state reads it.
+    pub model: Model,
     /// The palette a colourised DMG cartridge was switched on with (`with_boot`), else 0.
     pub palette: u8,
     /// The start-up animation its boot ROM plays (`with_boot`), 0 none.
     pub boot: u8,
     /// Breakpoints, `None` until the first is set (never part of a save state).
     pub debugger: Option<Box<Debugger>>,
+}
+
+/// DIV at the hand-over from the Super Game Boy boot ROM. It sends the header ($0104-$014F) to
+/// the SNES bit by bit, and a 0 bit takes one M-cycle longer than a 1, so the boot's length (and
+/// DIV) follow the header, global checksum included (Mooneye boot_div-S, boot_div2-S).
+fn sgb_boot_div(cart: &Cartridge) -> u16 {
+    let zeros: u32 = (0x104..0x150).map(|a| cart.read_rom(a).count_zeros()).sum();
+    (0xD304 + 4 * zeros) as u16
 }
 
 impl GameBoy {
@@ -66,6 +82,7 @@ impl GameBoy {
             double_speed: false,
             frame_cycles: 0,
             console: if cgb_cart { Console::Cgb } else if cgb { Console::Compat } else { Console::Dmg },
+            model: Model::Auto,
             palette: 0,
             boot: animation,
             debugger: None,
@@ -91,9 +108,7 @@ impl GameBoy {
         if rom_data.get(0x146) != Some(&0x03) || rom_data.get(0x14B) != Some(&0x33) {
             return Self::with_boot(rom_data, false, 0, animation);
         }
-        let mut gb = Self::with_model(rom_data, Model::Dmg)?;
-        gb.console = Console::Sgb;
-        gb.bus.sgb = Some(Box::default());
+        let mut gb = Self::with_model(rom_data, Model::Sgb)?;
         gb.boot = animation;
         gb.bus.boot_rom = crate::boot_rom::image(Console::Sgb, animation);
         if animation == 0 {
@@ -151,8 +166,12 @@ impl GameBoy {
         let cgb_mode = cartridge.cgb_mode() && model == Model::Auto;
         let bus = MemoryBus::new(cartridge, cgb_mode);
         let cpu = Cpu::new();
-        let console = if cgb_mode { Console::Cgb } else { Console::Dmg };
-        let mut gb = GameBoy { cpu, bus, cgb_mode, double_speed: false, frame_cycles: 0, console, palette: 0, boot: 0, debugger: None };
+        let sgb = matches!(model, Model::Sgb | Model::Sgb2);
+        let console = if cgb_mode { Console::Cgb } else if sgb { Console::Sgb } else { Console::Dmg };
+        let mut gb = GameBoy { cpu, bus, cgb_mode, double_speed: false, frame_cycles: 0, console, model, palette: 0, boot: 0, debugger: None };
+        if sgb {
+            gb.bus.sgb = Some(Box::default());
+        }
         // The built-in boot ROM is a DMG one: it hands over with A=$01, which CGB software reads
         // as "running on a DMG" (CGB-only titles then show their "GBC only" screen, dual-mode
         // titles fall back to monochrome). CGB carts therefore start from the CGB post-boot state.
@@ -173,7 +192,7 @@ impl GameBoy {
             self.cpu.regs.h = 0x00;
             self.cpu.regs.l = 0x0D;
         } else if self.console == Console::Sgb {
-            self.cpu.regs.a = 0x01;
+            self.cpu.regs.a = if self.model == Model::Sgb2 { 0xFF } else { 0x01 };
             self.cpu.regs.f = 0x00;
             self.cpu.regs.b = 0x00;
             self.cpu.regs.c = 0x14;
@@ -182,7 +201,7 @@ impl GameBoy {
             self.cpu.regs.h = 0xC0;
             self.cpu.regs.l = 0x60;
         } else {
-            self.cpu.regs.a = 0x01;
+            self.cpu.regs.a = if self.model == Model::Mgb { 0xFF } else { 0x01 };
             self.cpu.regs.f = 0xB0;
             self.cpu.regs.b = 0x00;
             self.cpu.regs.c = 0x13;
@@ -195,7 +214,11 @@ impl GameBoy {
         self.cpu.regs.pc = 0x0100;
 
         self.bus.boot_rom_active = false;
-        self.bus.timer.div_counter = 0xABC8;
+        let sgb = self.console == Console::Sgb;
+        // The DMG boot ROM never writes P1, which powers on with both groups selected; the SGB one
+        // leaves both deselected after its packets.
+        self.bus.joypad.select = if sgb { 0x30 } else { 0x00 };
+        self.bus.timer.div_counter = if sgb { sgb_boot_div(&self.bus.cartridge) } else { 0xABC8 };
         self.bus.interrupts.interrupt_flag = 0xE1;
         self.bus.ppu.lcdc = 0x91;
         self.bus.ppu.bgp = 0xFC;
@@ -205,9 +228,14 @@ impl GameBoy {
         self.bus.ppu.mode = crate::ppu::PpuMode::VBlank;
         self.bus.ppu.mode_clock = 396;
 
+        // The boot sound's channel 1 registers; on a DMG it is still on (silent, its envelope
+        // has run down), the SGB boot ROM plays no sound.
         self.bus.apu.write_register(0xFF26, 0x80);
+        self.bus.apu.write_register(0xFF11, 0x80);
+        self.bus.apu.write_register(0xFF12, 0xF3);
         self.bus.apu.write_register(0xFF24, 0x77);
-        self.bus.apu.write_register(0xFF25, 0xFF);
+        self.bus.apu.write_register(0xFF25, 0xF3);
+        self.bus.apu.ch1.enabled = !sgb;
 
         if self.cgb_mode {
             self.bus.wram_bank = 1;

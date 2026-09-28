@@ -5,22 +5,12 @@
 # apu, mbc, rtc, sgb, serial, other; no-verdict = a gbmicrotest ROM whose source never writes a verdict
 # to $FF82 (a hardware probe, not a self-checking test), so it times out on every emulator.
 
-mooneye-test-suite/acceptance/boot_div-S.gb  # boot
-mooneye-test-suite/acceptance/boot_div-dmg0.gb  # boot
-mooneye-test-suite/acceptance/boot_div2-S.gb  # boot
-mooneye-test-suite/acceptance/boot_hwio-S.gb  # boot
-mooneye-test-suite/acceptance/boot_hwio-dmg0.gb  # boot
-mooneye-test-suite/acceptance/boot_hwio-dmgABCmgb.gb  # boot
-mooneye-test-suite/acceptance/boot_regs-dmg0.gb  # boot
-mooneye-test-suite/acceptance/boot_regs-mgb.gb  # boot
-mooneye-test-suite/acceptance/boot_regs-sgb.gb  # boot
-mooneye-test-suite/acceptance/boot_regs-sgb2.gb  # boot
+mooneye-test-suite/acceptance/boot_div-dmg0.gb  # boot: DMG-CPU 0 (the first DMG revision) is not emulated
+mooneye-test-suite/acceptance/boot_hwio-dmg0.gb  # boot: DMG-CPU 0 (the first DMG revision) is not emulated
+mooneye-test-suite/acceptance/boot_regs-dmg0.gb  # boot: DMG-CPU 0 (the first DMG revision) is not emulated
 mooneye-test-suite/acceptance/ppu/hblank_ly_scx_timing-GS.gb  # stat
-mooneye-test-suite/acceptance/ppu/intr_2_oam_ok_timing.gb  # stat
 mooneye-test-suite/acceptance/ppu/lcdon_timing-GS.gb  # stat
-mooneye-test-suite/acceptance/ppu/lcdon_write_timing-GS.gb  # stat
 mooneye-test-suite/acceptance/ppu/stat_lyc_onoff.gb  # stat
-mooneye-test-suite/acceptance/serial/boot_sclk_align-dmgABCmgb.gb  # boot
 mooneye-test-suite/emulator-only/mbc1/multicart_rom_8Mb.gb  # mbc
 same-suite/apu/channel_1/channel_1_extra_length_clocking-cgb0B.gb  # apu
 same-suite/apu/channel_1/channel_1_freq_change_timing-A.gb  # apu
@@ -120,17 +110,12 @@ gbmicrotest/int_oam_nops.gb  # ppu
 gbmicrotest/lcdon_to_oam_int_l0.gb  # ppu
 gbmicrotest/lcdon_to_oam_int_l1.gb  # ppu
 gbmicrotest/lcdon_to_oam_int_l2.gb  # ppu
-gbmicrotest/lcdon_to_oam_unlock_b.gb  # ppu
-gbmicrotest/lcdon_to_oam_unlock_c.gb  # ppu
-gbmicrotest/lcdon_to_stat1_d.gb  # stat
 gbmicrotest/lcdon_to_stat3_a.gb  # stat
 gbmicrotest/lcdon_write_timing.gb  # no-verdict
 gbmicrotest/line_144_oam_int_b.gb  # ppu
 gbmicrotest/line_144_oam_int_c.gb  # ppu
 gbmicrotest/line_144_oam_int_d.gb  # ppu
 gbmicrotest/line_153_lyc0_int_inc_sled.gb  # stat
-gbmicrotest/line_153_lyc0_stat_timing_f.gb  # stat
-gbmicrotest/line_153_lyc153_stat_timing_e.gb  # stat
 gbmicrotest/ly_while_lcd_off.gb  # no-verdict
 gbmicrotest/lyc1_int_if_edge_a.gb  # stat
 gbmicrotest/lyc1_int_if_edge_c.gb  # stat
@@ -144,33 +129,8 @@ gbmicrotest/oam_int_if_level_d.gb  # ppu
 gbmicrotest/oam_int_inc_sled.gb  # ppu
 gbmicrotest/oam_int_nops_a.gb  # ppu
 gbmicrotest/oam_int_nops_b.gb  # ppu
-gbmicrotest/oam_read_l0_b.gb  # ppu
-gbmicrotest/oam_read_l0_c.gb  # ppu
-gbmicrotest/oam_read_l1_a.gb  # ppu
-gbmicrotest/oam_read_l1_b.gb  # ppu
-gbmicrotest/oam_read_l1_c.gb  # ppu
-gbmicrotest/oam_read_l1_f.gb  # ppu
 gbmicrotest/oam_sprite_trashing.gb  # no-verdict
-gbmicrotest/oam_write_l0_b.gb  # ppu
-gbmicrotest/oam_write_l0_c.gb  # ppu
-gbmicrotest/oam_write_l1_a.gb  # ppu
-gbmicrotest/oam_write_l1_b.gb  # ppu
-gbmicrotest/oam_write_l1_d.gb  # ppu
-gbmicrotest/oam_write_l1_e.gb  # ppu
 gbmicrotest/poweron.gb  # no-verdict
-gbmicrotest/poweron_joy_000.gb  # boot
-gbmicrotest/poweron_oam_006.gb  # boot
-gbmicrotest/poweron_oam_069.gb  # boot
-gbmicrotest/poweron_oam_120.gb  # boot
-gbmicrotest/poweron_oam_121.gb  # boot
-gbmicrotest/poweron_oam_183.gb  # boot
-gbmicrotest/poweron_oam_234.gb  # boot
-gbmicrotest/poweron_oam_235.gb  # boot
-gbmicrotest/poweron_stat_006.gb  # boot
-gbmicrotest/poweron_vram_026.gb  # boot
-gbmicrotest/poweron_vram_069.gb  # boot
-gbmicrotest/poweron_vram_140.gb  # boot
-gbmicrotest/poweron_vram_183.gb  # boot
 gbmicrotest/ppu_scx_vs_bgp.gb  # no-verdict
 gbmicrotest/ppu_sprite_testbench.gb  # no-verdict
 gbmicrotest/ppu_spritex_vs_scx.gb  # no-verdict
@@ -186,19 +146,12 @@ gbmicrotest/stat_write_glitch_l154_b.gb  # stat
 gbmicrotest/stat_write_glitch_l154_d.gb  # stat
 gbmicrotest/stat_write_glitch_l1_b.gb  # stat
 gbmicrotest/stat_write_glitch_l1_c.gb  # stat
+gbmicrotest/temp.gb  # no-verdict (an empty main: it runs off the end of the ROM)
 gbmicrotest/toggle_lcdc.gb  # no-verdict
 gbmicrotest/vblank2_int_if_a.gb  # stat
 gbmicrotest/vblank2_int_if_c.gb  # stat
 gbmicrotest/vblank_int_if_a.gb  # stat
 gbmicrotest/vblank_int_if_c.gb  # stat
-gbmicrotest/vram_read_l0_b.gb  # ppu
-gbmicrotest/vram_read_l0_c.gb  # ppu
-gbmicrotest/vram_read_l1_b.gb  # ppu
-gbmicrotest/vram_read_l1_c.gb  # ppu
-gbmicrotest/vram_write_l0_b.gb  # ppu
-gbmicrotest/vram_write_l0_c.gb  # ppu
-gbmicrotest/vram_write_l1_b.gb  # ppu
-gbmicrotest/vram_write_l1_c.gb  # ppu
 gbmicrotest/wave_write_to_0xC003.gb  # no-verdict
 mealybug-tearoom-tests/ppu/m3_bgp_change.gb@cgb  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_bgp_change_sprites.gb@cgb  # ppu-mode3

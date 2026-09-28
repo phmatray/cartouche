@@ -30,6 +30,10 @@ enum Verdict {
 enum Hw {
     Dmg,
     Cgb,
+    /// Game Boy Pocket, Super Game Boy, Super Game Boy 2: a DMG with their own post-boot state.
+    Mgb,
+    Sgb,
+    Sgb2,
 }
 
 #[derive(Clone, Debug)]
@@ -57,13 +61,19 @@ fn conformance_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("test-roms/conformance")
 }
 
-/// DMG: post-boot state, like blargg.rs. CGB: Cartouche's CGB boot ROM runs to its end, so a
+/// DMG family: post-boot state, like blargg.rs. CGB: Cartouche's CGB boot ROM runs to its end, so a
 /// DMG-only cartridge starts in compatibility mode as on real hardware.
 fn boot(path: &Path, hw: Hw) -> Result<GameBoy, String> {
     let rom = std::fs::read(path).map_err(|e| format!("cannot read ROM: {e}"))?;
+    let model = match hw {
+        Hw::Mgb => Model::Mgb,
+        Hw::Sgb => Model::Sgb,
+        Hw::Sgb2 => Model::Sgb2,
+        _ => Model::Dmg,
+    };
     match hw {
-        Hw::Dmg => {
-            let mut gb = GameBoy::with_model(rom, Model::Dmg).map_err(|e| e.to_string())?;
+        Hw::Dmg | Hw::Mgb | Hw::Sgb | Hw::Sgb2 => {
+            let mut gb = GameBoy::with_model(rom, model).map_err(|e| e.to_string())?;
             gb.skip_boot_rom();
             Ok(gb)
         }
@@ -274,12 +284,19 @@ fn suffix(path: &Path) -> &str {
 }
 
 /// Mooneye names the models a test is for: `-cgb…`/`-C` CGB, `-A`/`-agb`/`-ags` AGB (run on its
-/// closest, the CGB), everything else (`-dmg…`, `-mgb`, `-sgb…`, `-G`, `-S`, none) on the DMG.
+/// closest, the CGB), `-mgb` the Pocket, `-sgb`/`-S` the Super Game Boy, `-sgb2` the SGB2,
+/// everything else (`-dmg…` even when it lists `mgb` too, `-G`, `-GS`, none) on the DMG.
 fn mooneye(rom: &Path, rel: &str) -> Vec<Job> {
     let s = suffix(rom);
     let letters = !s.is_empty() && s.chars().all(|c| "GSCA".contains(c));
     let cgb = ["cgb", "agb", "ags"].iter().any(|p| s.starts_with(p)) || (letters && !s.contains('G') && (s.contains('C') || s.contains('A')));
-    let hw = if cgb { Hw::Cgb } else { Hw::Dmg };
+    let hw = match s {
+        _ if cgb => Hw::Cgb,
+        "mgb" => Hw::Mgb,
+        "sgb" | "S" => Hw::Sgb,
+        "sgb2" => Hw::Sgb2,
+        _ => Hw::Dmg,
+    };
     vec![Job { label: rel.to_string(), rom: rom.to_path_buf(), hw, protocol: Protocol::Fibonacci }]
 }
 
