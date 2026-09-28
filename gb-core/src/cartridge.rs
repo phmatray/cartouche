@@ -260,6 +260,16 @@ pub enum MbcType {
     Mmm01 {
         regs: [u8; 4],
     },
+    /// MBC6 (Pan Docs): two 8 KiB ROM/flash windows (A at 4000, B at 6000) and two 4 KiB RAM
+    /// windows (A at A000, B at B000), each with its own bank; index 0 is A, 1 is B.
+    Mbc6 {
+        ram_enabled: bool,
+        ram_banks: [u8; 2],
+        rom_banks: [u8; 2],
+        in_flash: [bool; 2],
+        flash_enabled: bool,
+        flash_write: bool,
+    },
 }
 
 pub struct Cartridge {
@@ -341,6 +351,14 @@ impl Cartridge {
             0xFF => MbcType::Huc1 { ir_mode: false, rom_bank: 1, ram_bank: 0 },
             0x22 => MbcType::Mbc7 { rom_bank: 1, ram_enable_1: false, ram_enable_2: false },
             0x0B..=0x0D if hdr != 0 => MbcType::Mmm01 { regs: [0; 4] },
+            0x20 => MbcType::Mbc6 {
+                ram_enabled: false,
+                ram_banks: [0; 2],
+                rom_banks: [0; 2],
+                in_flash: [false; 2],
+                flash_enabled: false,
+                flash_write: false,
+            },
             _ => return Err(CartridgeError::UnsupportedType { cart_type }),
         };
 
@@ -355,6 +373,7 @@ impl Cartridge {
             0x05..=0x06 => 512,
             // MBC7: a 93LC56 EEPROM (128 16-bit words); the header says 0x00.
             0x22 => 256,
+            0x20 => 32 * 1024,
             _ => match ram_size {
                 0x00 => 0,
                 0x01 => 2 * 1024,
@@ -449,6 +468,17 @@ impl Cartridge {
                 let offset = match Self::mmm01_bank(regs, addr) {
                     None => self.rom.len().saturating_sub(0x8000) + addr as usize,
                     Some(bank) => (bank % self.rom_bank_count) * 0x4000 + (addr as usize & 0x3FFF),
+                };
+                self.rom.get(offset).copied().unwrap_or(0xFF)
+            }
+
+            MbcType::Mbc6 { rom_banks, .. } => {
+                let offset = match addr {
+                    0x4000..=0x7FFF => {
+                        let w = (addr >> 13 & 1) as usize;
+                        rom_banks[w] as usize * 0x2000 % (self.rom_bank_count * 0x4000) + (addr as usize & 0x1FFF)
+                    }
+                    _ => addr as usize,
                 };
                 self.rom.get(offset).copied().unwrap_or(0xFF)
             }
@@ -591,6 +621,19 @@ impl Cartridge {
                 regs[r] = (regs[r] & fixed | value & !fixed) & 0x7F;
             }
 
+            MbcType::Mbc6 { ram_enabled, ram_banks, rom_banks, in_flash, flash_enabled, flash_write } => match addr {
+                0x0000..=0x03FF => *ram_enabled = value & 0x0F == 0x0A,
+                0x0400..=0x07FF => ram_banks[0] = value & 0x07,
+                0x0800..=0x0BFF => ram_banks[1] = value & 0x07,
+                0x0C00..=0x0FFF => *flash_enabled = value & 1 != 0,
+                0x1000 => *flash_write = value & 1 != 0,
+                0x2000..=0x3FFF => {
+                    let w = (addr >> 12 & 1) as usize;
+                    if addr & 0x0800 == 0 { rom_banks[w] = value & 0x7F } else { in_flash[w] = value & 0x08 != 0 }
+                }
+                _ => {}
+            },
+
             // ponytail: bank 0 is not remapped to 1 (Pan Docs leaves it unconfirmed).
             MbcType::Mbc7 { rom_bank, ram_enable_1, ram_enable_2 } => match addr {
                 0x0000..=0x1FFF => *ram_enable_1 = value == 0x0A,
@@ -719,6 +762,9 @@ impl Cartridge {
                 self.ram[self.ram_index(Self::mmm01_ram_bank(regs), offset)]
             }
             MbcType::Mmm01 { .. } => 0xFF,
+
+            MbcType::Mbc6 { ram_enabled: true, ram_banks, .. } => self.ram[Self::mbc6_ram_index(ram_banks, offset)],
+            MbcType::Mbc6 { .. } => 0xFF,
         }
     }
 
@@ -736,6 +782,11 @@ impl Cartridge {
     fn mmm01_ram_bank(regs: &[u8; 4]) -> usize {
         let low = regs[2] & 3 & if regs[3] & 1 != 0 { 3 } else { regs[0] >> 4 & 3 };
         (regs[2] as usize >> 2 & 3) << 2 | low as usize
+    }
+
+    /// MBC6's 32 KiB of RAM in 4 KiB banks: A000-AFFF is window A, B000-BFFF window B.
+    fn mbc6_ram_index(ram_banks: &[u8; 2], offset: u16) -> usize {
+        ram_banks[(offset >> 12 & 1) as usize] as usize * 0x1000 + (offset as usize & 0x0FFF)
     }
 
     /// Banked SRAM index; the bank number wraps to the RAM actually present, as the MBC ignores
@@ -791,7 +842,7 @@ impl Cartridge {
             MbcType::Huc3 { rom_bank, ram_bank, .. } => (rom_bank as u16, ram_bank, false, false),
             MbcType::Mbc7 { rom_bank, ram_enable_1, ram_enable_2 } => (rom_bank as u16, 0, ram_enable_1, ram_enable_2),
             // Its registers go in `export_extra`.
-            MbcType::Mmm01 { .. } => (0, 0, false, false),
+            MbcType::Mmm01 { .. } | MbcType::Mbc6 { .. } => (0, 0, false, false),
         };
         let (sel, latch) = self.rtc.as_ref().map_or((0, false), |r| (r.selected_register.unwrap_or(0), r.latch_ready));
         let [lo, hi] = rom_bank.to_le_bytes();
@@ -813,7 +864,7 @@ impl Cartridge {
             MbcType::Huc1 { ir_mode, rom_bank, ram_bank } => (*ir_mode, *rom_bank, *ram_bank) = (md, rb as u8, rab),
             MbcType::Huc3 { rom_bank, ram_bank, .. } => (*rom_bank, *ram_bank) = (rb as u8, rab),
             MbcType::Mbc7 { rom_bank, ram_enable_1, ram_enable_2 } => (*rom_bank, *ram_enable_1, *ram_enable_2) = (rb as u8, en, md),
-            MbcType::Mmm01 { .. } => {}
+            MbcType::Mmm01 { .. } | MbcType::Mbc6 { .. } => {}
         }
         if let Some(rtc) = &mut self.rtc {
             rtc.selected_register = (s[5] != 0).then_some(s[5]);
@@ -1005,6 +1056,11 @@ impl Cartridge {
                 self.ram[addr] = value;
             }
             MbcType::Mmm01 { .. } => {}
+            MbcType::Mbc6 { ram_enabled: true, ram_banks, .. } => {
+                let i = Self::mbc6_ram_index(ram_banks, offset);
+                self.ram[i] = value;
+            }
+            MbcType::Mbc6 { .. } => {}
         }
     }
 
@@ -1518,6 +1574,34 @@ mod tests {
         header(&mut rom, 0, 0x01, 0x00);
         header(&mut rom, (banks - 2) * 0x4000, menu_type, ram_size);
         rom
+    }
+
+    /// An MBC6 cart (128 KiB) whose 8 KiB blocks each start with the marker `0xD0 + n`.
+    fn mbc6() -> Cartridge {
+        let mut rom = vec![0u8; 0x20000];
+        for n in 0..16 { rom[n * 0x2000] = 0xD0 + n as u8; }
+        header(&mut rom, 0, 0x20, 0x03);
+        Cartridge::from_rom(rom).unwrap()
+    }
+
+    #[test]
+    fn mbc6_maps_two_independent_8k_windows() {
+        let mut c = mbc6();
+        c.write_rom(0x2000, 5);
+        c.write_rom(0x3000, 9);
+        assert_eq!((c.read_rom(0x4000), c.read_rom(0x6000)), (0xD5, 0xD9));
+        assert_eq!(c.read_rom(0x0000), 0xD0, "0000-3FFF stays the first 16 KiB");
+        c.write_rom(0x0000, 0x0A);
+        c.write_rom(0x0400, 1);
+        c.write_rom(0x0800, 6);
+        c.write_ram(0x0010, 0x11); // A000: RAM bank A
+        c.write_ram(0x1010, 0x66); // B000: RAM bank B
+        assert_eq!((c.read_ram(0x0010), c.read_ram(0x1010)), (0x11, 0x66));
+        let sram = c.export_sram();
+        assert_eq!(sram.len(), 0x8000, "32 KiB of RAM");
+        assert_eq!((sram[0x1010], sram[0x6010]), (0x11, 0x66), "4 KiB banks 1 and 6");
+        c.write_rom(0x0000, 0x00);
+        assert_eq!(c.read_ram(0x0010), 0xFF, "RAM disabled");
     }
 
     #[test]
