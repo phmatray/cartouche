@@ -62,7 +62,9 @@ export default {
   display: {
     intro: 'The screen every game starts with. Original Game Boy and Game Boy Color games each have their own default; a game can keep its own settings from its manual.',
     style: 'Screen style',
-    defaults: 'Defaults for',
+    defaults: 'Settings for',
+    forDmg: 'Original games',
+    forCgb: 'Color games',
     dmgSub: 'Palettes recolor the four shades of an original Game Boy',
     cgbSub: 'Color games keep their own colors; palettes never apply',
     motion: 'Motion',

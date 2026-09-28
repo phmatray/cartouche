@@ -112,7 +112,9 @@ export function StorageTab() {
   };
   const jobText = (j: NonNullable<typeof job>) => (j.of ? t('shell.progress', { label: t(`settings.storage.${j.label}`), n: j.n, of: j.of }) : `${t(`settings.storage.${j.label}`)}…`);
   const total = usage ? usage.roms + usage.saves + usage.shots : 0;
-  const pct = (n: number) => `${total ? (n / total) * 100 : 0}%`;
+  // A share of the room the browser gives (when it says), not of what is stored: 155 kB must not look like a full bar.
+  const room = Math.max(total, quota?.quota ?? 0);
+  const pct = (n: number) => `${room ? (n / room) * 100 : 0}%`;
 
   const persist = async () => {
     const ok = !!(await navigator.storage?.persist?.().catch(() => false));
@@ -190,9 +192,9 @@ export function StorageTab() {
       <h2>{t('settings.tabs.storage')}</h2>
       <p className="intro">{t('settings.storage.intro')}</p>
       <div className="usage" role="img" aria-label={t('settings.storage.usage', { roms: mb(usage?.roms ?? 0), saves: mb(usage?.saves ?? 0), shots: mb(usage?.shots ?? 0) })}>
-        <i style={{ width: pct(usage?.roms ?? 0), background: 'var(--ink)' }} />
-        <i style={{ width: pct(usage?.saves ?? 0), background: 'var(--m)' }} />
-        <i style={{ width: pct(usage?.shots ?? 0), background: 'var(--c)' }} />
+        <i style={{ width: pct(usage?.roms ?? 0), minWidth: usage?.roms ? 3 : 0, background: 'var(--ink)' }} />
+        <i style={{ width: pct(usage?.saves ?? 0), minWidth: usage?.saves ? 3 : 0, background: 'var(--m)' }} />
+        <i style={{ width: pct(usage?.shots ?? 0), minWidth: usage?.shots ? 3 : 0, background: 'var(--c)' }} />
       </div>
       <div className="legend">
         <span><i style={{ background: 'var(--ink)' }} />{t('settings.pergame.romsCol')} · {num(own.length)} · {mb(usage?.roms ?? 0)}</span>

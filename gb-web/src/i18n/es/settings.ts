@@ -63,7 +63,9 @@ export default {
   display: {
     intro: 'La pantalla con la que empieza cada juego. Los juegos de Game Boy original y de Game Boy Color tienen cada uno su valor predeterminado; un juego puede tener sus propios ajustes desde su manual.',
     style: 'Estilo de pantalla',
-    defaults: 'Predeterminado para',
+    defaults: 'Ajustes de',
+    forDmg: 'Juegos originales',
+    forCgb: 'Juegos Color',
     dmgSub: 'Las paletas recolorean los cuatro tonos de una Game Boy original',
     cgbSub: 'Los juegos en color conservan sus colores; las paletas nunca se aplican',
     motion: 'Movimiento',

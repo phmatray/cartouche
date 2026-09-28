@@ -110,9 +110,10 @@ export function ControlsTab() {
         <Seg<TouchSize> label={t('settings.controls.size')} value={touchSize} options={[['S', 'S'], ['M', 'M'], ['L', 'L']]} set={(v) => set({ touchSize: v })} />
       </Row>
       <SwitchRow label={t('settings.controls.vibrate')} sub={t('settings.controls.vibrateSub')} on={haptics} set={(v) => set({ haptics: v })} />
+      {/* The touch skin and layouts' file: with the touch controls it saves, not under Rumble. */}
+      <ControlsFileRows />
 
       <RumbleRows />
-      <ControlsFileRows />
     </>
   );
 }
