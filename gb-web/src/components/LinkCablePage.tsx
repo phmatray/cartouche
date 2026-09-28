@@ -350,7 +350,7 @@ export function LinkCablePage() {
       <div className="pagehead">
         <h1>{t('link.title')}</h1>
         <p>{t('link.intro')}</p>
-        <div className="acts" style={{ marginTop: 20 }}><Link className="btn y" to="/link-cable/online">{I.link}{t('online.entry')}</Link></div>
+        <div className="acts" style={{ marginTop: 20 }}><Link className="btn line" to="/link-cable/online">{I.link}{t('online.entry')}</Link></div>
       </div>
       <div className="lc">
         {panel(1)}

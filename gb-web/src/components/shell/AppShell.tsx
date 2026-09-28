@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useGameLibrary, useSearchIndex } from '../../hooks/useGameLibrary';
 import { useBoxArtProgress } from '../../lib/cover-art';
@@ -143,7 +143,8 @@ export function AppShell() {
       </nav>
 
       {/* A new page remounts (fresh state); a settings section is the same page, so focus stays in its table of contents. */}
-      <div className="route" id="main" key={pathname.startsWith('/settings') ? '/settings' : pathname}><Outlet /></div>
+      {/* A page still loading waits under the header (the app-wide fallback would blank the whole screen). */}
+      <div className="route" id="main" key={pathname.startsWith('/settings') ? '/settings' : pathname}><Suspense fallback={<div className="loading wrap" aria-busy="true" />}><Outlet /></Suspense></div>
 
       <footer className="foot">
         {/* Three groups: what Cartouche promises, where to go next, then the small print (language, version, credits). */}
