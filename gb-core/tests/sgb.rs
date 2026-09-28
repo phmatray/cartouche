@@ -548,3 +548,20 @@ fn a_state_keeps_the_snes_sound_playing() {
     let rms = frame_rms(&mut gb);
     assert!(rms < 0.01 && !snes(&gb).covered(), "with the SNES side idle: RMS {rms}");
 }
+
+// ─── Built-in SOUND effects (clean-room approximations) ───
+
+use gb_core::sgb_fx::{recipe, Table};
+
+/// Effect ids of Pan Docs' SOUND tables: A 01-30, B 01-19.
+const FX_A: std::ops::RangeInclusive<u8> = 0x01..=0x30;
+const FX_B: std::ops::RangeInclusive<u8> = 0x01..=0x19;
+
+#[test]
+fn every_built_in_effect_has_a_recipe() {
+    for id in FX_A { assert!(recipe(Table::A, id).is_some(), "effect A {id:#04x}"); }
+    for id in FX_B { assert!(recipe(Table::B, id).is_some(), "effect B {id:#04x}"); }
+    for (t, id) in [(Table::A, 0x00), (Table::A, 0x31), (Table::A, 0x80), (Table::B, 0x1A), (Table::B, 0x80)] {
+        assert!(recipe(t, id).is_none(), "{id:#04x} is not an effect");
+    }
+}
