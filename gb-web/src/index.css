@@ -522,10 +522,12 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .row .btn,.paper p>.btn,.filters-h .sbtn{white-space:normal;height:auto;min-height:44px;padding-top:8px;padding-bottom:8px;line-height:1.15;text-align:center}
 .filters-h .sbtn{min-height:36px;padding-top:6px;padding-bottom:6px}
 .nf h1,.paper h2{overflow-wrap:break-word;hyphens:auto}
-.switch{position:relative;width:52px;height:30px;border:2px solid var(--ink);background:#fff;flex:none;padding:0}
-.switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;background:var(--ink);transition:transform .25s var(--ease)}
-.switch[aria-checked=true]{background:var(--y)}
-.switch[aria-checked=true]::after{transform:translateX(22px)}
+/* Off reads as off: a grey knob resting on a pale track (a black knob on white read as a ticked box). On: the ink
+   knob slides onto yellow. */
+.switch{position:relative;width:52px;height:30px;border:2px solid var(--ink-3);background:var(--paper-2);flex:none;padding:0;transition:background-color .2s,border-color .2s}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;background:var(--ink-3);transition:transform .25s var(--ease),background-color .2s}
+.switch[aria-checked=true]{background:var(--y);border-color:var(--ink)}
+.switch[aria-checked=true]::after{transform:translateX(22px);background:var(--ink)}
 /* One slider width whatever its label's length; where label and slider don't both fit (the manual's side sheet, phones),
    every slider goes under its label, so they still line up. */
 .range{display:flex;align-items:center;gap:14px;flex:none;width:min(280px,100%)}

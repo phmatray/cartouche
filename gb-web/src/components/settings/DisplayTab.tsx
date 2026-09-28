@@ -38,7 +38,7 @@ export function DisplayTab() {
       <p className="intro">{t('settings.display.intro')}</p>
       <h3>{t('settings.display.style')}</h3>
       <Row label={t('settings.display.defaults')} sub={kind === 'dmg' ? t('settings.display.dmgSub') : t('settings.display.cgbSub')}>
-        <Seg<ScreenKind> label={t('settings.display.defaults')} value={kind} options={[['dmg', 'Game Boy'], ['cgb', 'Color']]} set={setKind} />
+        <Seg<ScreenKind> label={t('settings.display.defaults')} value={kind} options={[['dmg', t('settings.display.forDmg')], ['cgb', t('settings.display.forCgb')]]} set={setKind} />
       </Row>
       {kind === 'dmg' && <ConsoleRows />}
       {kind === 'dmg' && colorized ? (
