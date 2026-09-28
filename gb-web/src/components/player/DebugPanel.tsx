@@ -58,7 +58,9 @@ function renderTiles(canvas: HTMLCanvasElement, vram: Uint8Array, bgp: number) {
 
 /** Development aid in the manual's Game page: CPU registers, memory, serial output, VRAM tiles. */
 export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmulator>; isRunning: boolean }) {
-  const { registers, readMemory, updateRegisters, getSerialOutput, clearSerialOutput, getVramData, getBgp } = emu;
+  const { registers, readMemory, updateRegisters, getSerialOutput, clearSerialOutput, getVramData, getBgp,
+    setIsRunning, stepInstruction, stepFrame, breakReason, breakpoints, addBreakpoint, removeBreakpoint } = emu;
+  const [bpInput, setBpInput] = useState('');
   const [tab, setTab] = useState<'cpu' | 'serial' | 'tiles'>('cpu');
   const [memAddr, setMemAddr] = useState(0x0000);
   const [memView, setMemView] = useState<number[]>([]);
@@ -81,6 +83,11 @@ export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmula
     return () => { cancelAnimationFrame(first); window.clearInterval(t); };
   }, [isRunning, refresh, tab]);
 
+  const addBp = () => {
+    const v = parseInt(bpInput, 16);
+    if (/^[0-9a-f]{1,4}$/i.test(bpInput) && v <= 0xffff) { addBreakpoint(v); setBpInput(''); }
+  };
+
   const mono = { font: '600 12px/1.5 ui-monospace,Menlo,monospace' };
   return (
     <div style={{ marginTop: 16 }}>
@@ -99,6 +106,29 @@ export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmula
               </div>
             </>
           ) : <p>{t('player.debug.noRom')}</p>}
+          <div role="group" aria-label={t('player.debug.controls')} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+            {isRunning
+              ? <button className="sbtn" onClick={() => setIsRunning(false)}>{t('player.debug.pause')}</button>
+              : <button className="sbtn" onClick={() => setIsRunning(true)}>{t('player.debug.continue')}</button>}
+            <button className="sbtn" disabled={isRunning} onClick={() => { stepInstruction(); refresh(); }}>{t('player.debug.step')}</button>
+            <button className="sbtn" disabled={isRunning} onClick={() => { stepFrame(); refresh(); }}>{t('player.debug.stepFrame')}</button>
+          </div>
+          {breakReason && !isRunning && <p role="status" style={{ margin: '0 0 8px' }}>{t('player.debug.stoppedAt', { reason: breakReason })}</p>}
+          <form style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }} onSubmit={(e) => { e.preventDefault(); addBp(); }}>
+            <label htmlFor="debug-bp">{t('player.debug.breakpoints')} 0x</label>
+            <input id="debug-bp" className="field" style={{ width: 90, height: 34 }} value={bpInput} maxLength={4}
+              onChange={(e) => setBpInput(e.target.value.trim())} />
+            <button className="sbtn" type="submit">{t('player.debug.addBreakpoint')}</button>
+          </form>
+          {breakpoints.length > 0 && (
+            <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 12px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {breakpoints.map((a) => (
+                <li key={a}>
+                  <button className="sbtn" aria-label={t('player.debug.removeBreakpoint', { addr: hex16(a) })} onClick={() => removeBreakpoint(a)}>{hex16(a)} ×</button>
+                </li>
+              ))}
+            </ul>
+          )}
           <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
             {t('player.debug.address')} 0x
             <input className="field" style={{ width: 90, height: 34 }} defaultValue={hex16(memAddr)} maxLength={4}
