@@ -141,6 +141,24 @@ impl Mbc7 {
         }
     }
 
+    /// Serial and sensor state for save states (the EEPROM words travel with SRAM).
+    pub fn export(&self) -> Vec<u8> {
+        let mut out = vec![self.pins, self.data_out as u8, self.phase, self.bits, self.write_enabled as u8, self.erased as u8];
+        for w in [self.shift, self.target, self.latched.0, self.latched.1] { out.extend(w.to_le_bytes()); }
+        out
+    }
+
+    /// Restores `export`; anything else (an older state) puts the serial port back to power-on.
+    pub fn import(&mut self, d: &[u8]) {
+        let tilt = self.tilt;
+        *self = Mbc7 { tilt, ..Mbc7::new() };
+        let Some((b, w)) = d.split_first_chunk::<6>().filter(|(_, w)| w.len() >= 8) else { return };
+        let w = |i: usize| u16::from_le_bytes([w[2 * i], w[2 * i + 1]]);
+        (self.pins, self.data_out, self.phase, self.bits) = (b[0] & 0xC2, b[1] != 0, b[2].min(DATA), b[3].min(16));
+        (self.write_enabled, self.erased) = (b[4] != 0, b[5] != 0);
+        (self.shift, self.target, self.latched) = (w(0), w(1).min(ALL), (w(2), w(3)));
+    }
+
     /// Programs one word; refused until EWEN (power-on is write-disabled).
     fn program(&self, ram: &mut [u8], addr: u16, word: u16) {
         let i = addr as usize * 2;

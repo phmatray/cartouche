@@ -768,9 +768,11 @@ impl Cartridge {
     }
 
     /// Mapper state beyond the fixed `export_state` block, for the save state's length-prefixed
-    /// mapper block. Empty for every mapper but HuC3: mode, address, last result, last opcode, then
+    /// mapper block. MBC7: its serial and sensor state (`Mbc7::export`). Empty for every other mapper
+    /// but HuC3: mode, address, last result, last opcode, then
     /// its 256 memory nibbles packed two per byte (low nibble first).
     pub fn export_extra(&self) -> Vec<u8> {
+        if let Some(m) = &self.mbc7 { return m.export(); }
         let (MbcType::Huc3 { mode, .. }, Some(h)) = (&self.mbc, &self.huc3) else { return Vec::new() };
         let mut out = vec![*mode, h.address, h.result, h.last_opcode];
         out.extend(h.memory.chunks(2).map(|p| p[0] & 0xF | p[1] << 4));
@@ -780,6 +782,7 @@ impl Cartridge {
     /// Restores `export_extra`. Anything shorter (a state saved before the block existed) puts the
     /// registers back to power-on; the HuC3 memory is left as the battery save restored it.
     pub fn import_extra(&mut self, data: &[u8]) {
+        if let Some(m) = &mut self.mbc7 { return m.import(data); }
         let (MbcType::Huc3 { mode, .. }, Some(h)) = (&mut self.mbc, &mut self.huc3) else { return };
         let Some((regs, packed)) = data.split_first_chunk::<4>().filter(|(_, p)| p.len() >= 128) else {
             (*mode, h.address, h.result, h.last_opcode) = (0, 0, 0, 0);
