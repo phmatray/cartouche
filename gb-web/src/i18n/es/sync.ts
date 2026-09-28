@@ -139,6 +139,7 @@ export default {
   error: {
     connect: 'Los dos dispositivos se encontraron, pero sus redes no pudieron abrir una conexión directa. Ponlos en el mismo Wi-Fi, o añade un servidor TURN en Jugar en línea › Ajustes de conexión.',
     failed: 'No se pudo iniciar la conexión. Recarga la página y vuelve a intentarlo.',
+    relays: 'No se pudo contactar con los relés de emparejamiento, así que no se encuentra el otro dispositivo. Revisa tu conexión. La vinculación sigue en cuanto uno responda.',
   },
   mark: {
     label: 'Sincronización: {state}',

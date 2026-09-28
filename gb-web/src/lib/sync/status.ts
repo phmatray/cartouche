@@ -47,8 +47,8 @@ export interface LinkState {
   theirRoms?: { count: number; bytes: number };
   error?: LinkError;
 }
-/** connect: no direct route between the two networks · failed: the connection couldn't start. */
-export type LinkError = 'connect' | 'failed';
+/** connect: no direct route between the two networks · failed: the connection couldn't start · relays: no matchmaking relay reachable. */
+export type LinkError = 'connect' | 'failed' | 'relays';
 
 export type PairPhase = 'showing' | 'joining' | 'found' | 'paired' | 'failed';
 export interface Pairing { phase: PairPhase; code?: string; peer?: string; error?: LinkError }

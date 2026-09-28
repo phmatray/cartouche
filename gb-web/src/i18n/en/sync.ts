@@ -138,6 +138,7 @@ export default {
   error: {
     connect: 'The two devices found each other, but their networks couldn’t open a direct connection. Put both on the same Wi-Fi, or add a TURN server in Play online › Connection settings.',
     failed: 'The connection couldn’t start. Reload the page and try again.',
+    relays: 'Couldn’t reach the matchmaking relays, so the other device can’t be found. Check your connection. Pairing goes on as soon as one answers.',
   },
   mark: {
     label: 'Sync: {state}',

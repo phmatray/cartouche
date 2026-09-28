@@ -46,6 +46,8 @@ const inPlay = (k: string, games: Games, busy: Busy) => /^(sram|state):/.test(k)
 const RETRY_MS = 15_000;
 /** Alone this long with the room open: rejoin it. */
 const REJOIN_MS = 16_000;
+/** Checks, 2 s apart, without a single matchmaking relay before a pairing says so (as the online lobby does). */
+const RELAY_TRIES = 4;
 
 interface Peer { nonce: Uint8Array; theirs?: Uint8Array; dev?: string; name?: string; verified?: boolean; ok?: boolean }
 
@@ -80,6 +82,7 @@ class Link {
   timer = 0;
   retry = 0;
   watch = 0;
+  relayWatch = 0;
   /** When a peer last arrived. */
   joined = 0;
   starting = false;
@@ -111,6 +114,15 @@ class Link {
     // Nobody proved themselves for a while (the other device reloaded and its new connection never came up):
     // join again from scratch. Not while a handshake is under way.
     this.watch = window.setInterval(() => { if (!this.active && Date.now() - this.joined > REJOIN_MS) this.room?.rejoin(); }, REJOIN_MS);
+    // No relay reachable (a firewall, a network that blocks them): nobody can find the pairing room. Said after a few
+    // checks rather than waiting silently forever, and taken back once one answers.
+    let unreached = 0;
+    if (this.pairing) this.relayWatch = window.setInterval(() => {
+      unreached = room.relays() ? 0 : unreached + 1;
+      const error = useSync.getState().pairing?.error;
+      if (unreached >= RELAY_TRIES && !error) pairState({ error: 'relays' });
+      else if (!unreached && error === 'relays') pairState({ error: undefined });
+    }, 2000);
     room.onMessage = (m, from) => {
       const b = bytesOf(m);
       if (b) this.queue = this.queue.then(() => this.receive(b, from)).catch((e) => console.warn('sync:', e));
@@ -123,6 +135,7 @@ class Link {
     clearInterval(this.timer);
     clearTimeout(this.retry);
     clearInterval(this.watch);
+    clearInterval(this.relayWatch);
     this.room?.leave();
     this.room = null;
     if (this.deviceId && this.round) this.interrupt();
