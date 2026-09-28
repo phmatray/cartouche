@@ -122,13 +122,16 @@ export function useEmulator() {
     return true;
   }, [addError]);
 
-  const runFrame = useCallback((): Uint8ClampedArray | null => {
+  /** `other`: online lockstep, this console and the partner's run one frame joined by the cable (`first`: this one is
+   *  Player 1, whose console always goes first so both browsers run the pair the same way). */
+  const runFrame = useCallback((other?: import('gb-core').Emulator, first = true): Uint8ClampedArray | null => {
     const emu = emulatorRef.current;
     if (!emu || stopped.current) return null;
 
-    const success = emu.run_frame();
+    const lead = other && !first ? other : emu;
+    const success = other ? lead.run_frame_linked(lead === emu ? other : emu) : emu.run_frame();
     if (!success) {
-      const err = emu.get_error();
+      const err = lead.get_error();
       if (err) addError(t('player.error.crashed'), err);
       setRunning(false);
       return null;
