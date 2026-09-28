@@ -168,27 +168,20 @@ export function LibraryPage() {
       {cont ? <ContinueHero game={cont} /> : <FirstHero bundled={free[0]} />}
       <div className="wrap">
         {storageError && <StorageNotice />}
-        <section className="sec" aria-labelledby="h-shelf">
-          <div className="sec-h">
-            <h2 id="h-shelf">{t('library.shelf')}</h2>
-            <span className="count">{shelf.length ? t(cont ? 'library.shelfMore' : 'library.shelfCount', { count: shelf.length }) : t(cont ? 'library.shelfEmptyMore' : 'library.shelfEmpty')}</span>
-            {hasRoms && <button className="linkbtn end" onClick={() => pickFilter('mine', true)}>{t('library.onlyMine')} {I.next}</button>}
-          </div>
-          {shelf.length ? (
+        {/* The shelf appears with a second game: before that, the hero above is the whole collection (no empty slots). */}
+        {shelf.length > 0 && (
+          <section className="sec" aria-labelledby="h-shelf">
+            <div className="sec-h">
+              <h2 id="h-shelf">{t('library.shelf')}</h2>
+              <span className="count">{t(cont ? 'library.shelfMore' : 'library.shelfCount', { count: shelf.length })}</span>
+              {hasRoms && <button className="linkbtn end" onClick={() => pickFilter('mine', true)}>{t('library.onlyMine')} {I.next}</button>}
+            </div>
             <div className="shelf rail">
               {shelf.slice(0, SHELF_MAX).map((g) => <Item key={g.id} game={g} saved={savedIds} />)}
               {shelf.length > SHELF_MAX && <button type="button" className="item more" onClick={() => { pickSort('recent'); pickFilter('mine', true); }}>{I.next}{t('library.shelfAll', { count: shelf.length + 1 })}</button>}
             </div>
-          ) : (
-            <>
-              <div className="slotrow">
-                <Link to="/add">{I.plus}{t('shell.addRoms')}</Link>
-                {Array.from({ length: 6 }, (_, i) => <span key={i} />)}
-              </div>
-              <p className="shelf-empty">{cont ? t('library.shelfHintMore') : `${t('library.shelfHint')} ${t('shell.dropSub')}`}</p>
-            </>
-          )}
-        </section>
+          </section>
+        )}
 
         {free.length > 0 && (
           <section className="sec" aria-labelledby="h-free">

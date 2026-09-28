@@ -175,11 +175,11 @@ canvas.lcd{aspect-ratio:10/9}
 .sec-h .count{font:600 var(--fs-body) var(--font);color:var(--mute)}
 .sec-h .end{margin-left:auto}
 .shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(164px,1fr));gap:36px 24px;align-items:start}
-.shelf.rail,.slotrow{--n:7;--g:24px;display:flex;align-items:flex-start;gap:var(--g);overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;padding:8px 0 20px;margin:-8px 0 -20px}
-.shelf.rail::-webkit-scrollbar,.slotrow::-webkit-scrollbar{display:none}
-.shelf.rail>.item,.slotrow>*{flex:0 0 calc((100% - (var(--n) - 1) * var(--g)) / var(--n));width:auto;scroll-snap-align:start}
-@media (max-width:1100px){.shelf.rail,.slotrow{--n:4.4}}
-@media (max-width:640px){.shelf{grid-template-columns:repeat(2,minmax(0,1fr));gap:32px 16px}.shelf.rail,.slotrow{--n:2.4;--g:16px}}
+.shelf.rail{--n:7;--g:24px;display:flex;align-items:flex-start;gap:var(--g);overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;padding:8px 0 20px;margin:-8px 0 -20px}
+.shelf.rail::-webkit-scrollbar{display:none}
+.shelf.rail>.item{flex:0 0 calc((100% - (var(--n) - 1) * var(--g)) / var(--n));width:auto;scroll-snap-align:start}
+@media (max-width:1100px){.shelf.rail{--n:4.4}}
+@media (max-width:640px){.shelf{grid-template-columns:repeat(2,minmax(0,1fr));gap:32px 16px}.shelf.rail{--n:2.4;--g:16px}}
 .item{display:flex;flex-direction:column;text-decoration:none;position:relative;min-width:0}
 .item .art{position:relative;aspect-ratio:1;flex:none}
 .shelf>.item{width:100%}
@@ -199,8 +199,9 @@ canvas.lcd{aspect-ratio:10/9}
 .tag.now{background:var(--c);color:#000}
 .tag.rom{background:var(--paper);color:#000}
 .tag.saved{background:var(--m);color:#fff}
-.tag.need{box-shadow:inset 0 0 0 1.5px var(--dim);color:#c4c4bf}
-.paper .tag.need{box-shadow:inset 0 0 0 1.5px var(--ink-3);color:var(--ink-2)}
+/* Needs a file (yours, or the author's): said in plain meta text, not boxed like the states you can act on at once. */
+.tag.need{padding-inline:0;color:var(--mute)}
+.paper .tag.need{color:var(--ink-2)}
 .paper .tag.rom{background:var(--ink);color:var(--paper)}
 .noart{background:var(--paper);color:var(--ink);display:flex;flex-direction:column;justify-content:space-between;padding:14px}
 .noart b{font:900 var(--fs-d3)/.9 var(--font);font-stretch:62%;text-transform:uppercase;overflow-wrap:break-word;hyphens:auto;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
@@ -249,12 +250,13 @@ canvas.lcd{aspect-ratio:10/9}
 .index button[aria-current]{background:var(--y);color:#000}
 @media (max-width:640px){
   .tools{display:block}
-  .chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -16px 16px;padding:0 16px}
+  /* The chips and the A–Z scroll sideways in one row each; the fading edge says there is more. */
+  .chips,.index{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -16px 16px;padding:0 16px;mask-image:linear-gradient(to right,#000 calc(100% - 40px),transparent)}
   .chip{flex:none}
   .tools .right{margin:0;flex-wrap:wrap;gap:12px 18px}
-  .index{grid-template-columns:repeat(9,1fr)}
-  .index button:nth-child(9n){border-right:0}
-  .index button{border-bottom:1px solid var(--rule)}
+  .index{display:flex;border:0;margin-bottom:24px}
+  .index button{flex:0 0 40px;height:44px;border:1px solid var(--rule);border-right-width:0}
+  .index button:last-child{border-right-width:1px}
 }
 .note{font:500 var(--fs-s)/1.5 var(--font);color:var(--mute);margin:28px 0 0}
 .hl{animation:hl 1.4s var(--ease)}
@@ -286,10 +288,6 @@ canvas.lcd{aspect-ratio:10/9}
 .first .steps{border-top-color:var(--ink);margin-top:44px}
 .first .steps span{color:var(--ink-2)}
 .first .cap{color:var(--ink)}
-.slotrow>*{aspect-ratio:1;border:2px dashed #3e3e3b}
-.slotrow a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;border-color:var(--y);color:var(--y);text-decoration:none;font:800 var(--fs-body) var(--font);text-transform:uppercase;letter-spacing:var(--tr-caps);text-align:center;padding:10px}
-.slotrow a:hover{background:rgba(255,212,0,.08)}
-.slotrow a svg{width:32px;height:32px}
 .shelf.rail>.more{flex:0 0 calc((100% - (var(--n) - 1) * var(--g)) / var(--n));scroll-snap-align:start;aspect-ratio:1;border:2px dashed var(--y);background:transparent;color:var(--y);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font:800 var(--fs-body) var(--font);text-transform:uppercase;letter-spacing:var(--tr-caps);text-align:center;padding:10px}
 .shelf.rail>.more:hover{background:rgba(255,212,0,.08)}
 .shelf.rail>.more svg{width:32px;height:32px}
@@ -1177,12 +1175,8 @@ body{font-family:var(--font)}
 }
 /* touch only: the search's keyboard hints (↑ ↓, Enter, Esc) don't apply */
 @media (pointer:coarse) and (hover:none){.shint>span:has(kbd){display:none}}
-@media (pointer:coarse) and (max-width:640px){
-  .index{grid-template-columns:repeat(7,1fr)} /* 27 keys: 7 across leaves one empty cell (8 left five), each ≥44 px wide */
-  .index button:nth-child(9n){border-right:1px solid var(--rule)}
-  .index button:nth-child(7n){border-right:0}
-  .index button{height:44px}
-}
+/* Under a finger every library control is 44 px: chips, the view switch, the letters, "See all". */
+@media (pointer:coarse){.chip,.vt button{height:44px}.vt button{width:44px}.index button{flex-basis:44px}.linkbtn{min-height:44px}}
 @media (pointer:coarse) and (max-width:900px){
   .deck{padding-left:8px;padding-right:8px}
   .speed button{min-width:44px}
