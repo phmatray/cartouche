@@ -131,7 +131,7 @@ emulator prove itself; hide them in Settings if you'd rather not see them.
 - Screenshots with <kbd>F12</kbd>, kept per game, exported as PNG or shared from the album.
 
 **Play together**
-- Link cable on one screen: two consoles side by side, real serial data between them, and infrared between two Color consoles (Mystery Gift and the like).
+- Link cable on one screen: two consoles side by side, real serial data between them, and infrared between two Color consoles (Mystery Gift and the like) or HuC1 and HuC3 cartridges, which carry their own.
 - Link cable online: two browsers joined by a room code, invite link or QR code, peer to peer over WebRTC ([how it works](docs/ONLINE_LINK.md)). Best for turn-based exchanges; real-time link games stutter once the round trip passes a few tens of milliseconds.
 - Super Game Boy multiplayer: up to four players with several gamepads.
 
@@ -176,7 +176,7 @@ listed, not hidden, in `gb-core/tests/expected-failures.txt`.
 | dmg-acid2, cgb-acid2 | PPU rendering, pixel for pixel against the reference | ✅ |
 | Homebrew smoke tests | Freely licensed GB and GBC games run without freezing | ✅ |
 | Link cable | Serial transfers between two consoles | ✅ |
-| Infrared (CGB) | Light between the two consoles of the link page | ✅ |
+| Infrared (CGB, HuC1, HuC3) | Light between the two consoles of the link page | ✅ |
 | Mooneye acceptance | Timers, DMA, interrupts, PPU and instruction timing | 56/75 |
 | Mooneye emulator-only MBC | MBC1, MBC2 and MBC5 banking | 27/28 |
 | Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 2/51 |
