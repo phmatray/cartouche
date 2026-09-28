@@ -97,14 +97,23 @@ export function addRom(base: string, rom: Omit<StoredRom, 'id'>, meta: Omit<Stor
       roms.getKey(id).onsuccess = (e) => {
         if ((e.target as IDBRequest).result !== undefined) return attempt(`${base}-${n}`, n + 1);
         roms.add({ ...rom, id });
-        // A game already known under this id (hosted, bundled, removed, or synced) keeps its favorite, play time and save.
         const metas = tx.objectStore(GAME_META_STORE);
-        metas.get(id).onsuccess = (m) => { metas.put({ ...(m.target as IDBRequest<StoredGameMeta | undefined>).result, ...meta, id }); };
+        metas.get(id).onsuccess = (m) => { metas.put(addedMeta((m.target as IDBRequest<StoredGameMeta | undefined>).result, { ...meta, id })); };
         done(id);
       };
     };
     attempt(base, 2);
   });
+}
+
+/**
+ * The meta of a ROM just stored under an id. A game already known under it (hosted, bundled, synced, or the same ROM
+ * removed and added again) keeps its favorite, play time and solo save; another ROM that gets a removed one's id
+ * (file names that aren't Latin all become 'rom') starts afresh.
+ */
+export function addedMeta(old: StoredGameMeta | undefined, meta: StoredGameMeta): StoredGameMeta {
+  const { removed, ...kept } = old ?? {};
+  return { ...(removed && removed !== meta.rom?.sha1 ? {} : kept), ...meta };
 }
 
 /**
@@ -176,7 +185,8 @@ export function deleteSaveState(id: string): Promise<void> { return txOp(SAVESTA
  * `size`: the ROM's length in bytes (summaries written before it lack it).
  */
 export interface RomSummary { title: string; genre: string; sha1: string; head: Uint8Array; size?: number }
-export interface StoredGameMeta { id: string; isFavorite?: boolean; totalPlayTime?: number; lastPlayed?: number; importedAt?: number; sessions?: number; activeSave?: string; rom?: RomSummary }
+/** `removed`: the SHA-1 of the ROM last removed from this id (see addedMeta). */
+export interface StoredGameMeta { id: string; isFavorite?: boolean; totalPlayTime?: number; lastPlayed?: number; importedAt?: number; sessions?: number; activeSave?: string; rom?: RomSummary; removed?: string }
 export type GameMeta = StoredGameMeta;
 export function getGameMeta(id: string): Promise<StoredGameMeta | undefined> { return txOp(GAME_META_STORE, 'readonly', (s) => s.get(id)); }
 export function setGameMeta(meta: StoredGameMeta): Promise<void> { return txOp(GAME_META_STORE, 'readwrite', (s) => s.put(meta)).then(() => {}); }
@@ -237,7 +247,7 @@ export function eraseGames(ids: string[], romIds: string[] = []): Promise<void> 
       roms.delete(id);
       metas.get(id).onsuccess = (e) => {
         const m = (e.target as IDBRequest<StoredGameMeta | undefined>).result;
-        if (m?.rom) { delete m.rom; metas.put(m); }
+        if (m?.rom) { m.removed = m.rom.sha1; delete m.rom; metas.put(m); }
       };
     }
     done(undefined);
