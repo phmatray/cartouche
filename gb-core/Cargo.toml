@@ -1,6 +1,6 @@
 [package]
 name = "gb-core"
-version = "1.8.0"
+version = "1.9.0"
 edition = "2021"
 description = "Game Boy / Game Boy Color emulation core for Cartouche, compiled to WebAssembly"
 license = "MIT"
