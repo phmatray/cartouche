@@ -10,8 +10,10 @@ on:
 permissions:
   contents: read
 
+# Called from release-please.yml, github.* is the caller's (workflow "release-please", ref main): without
+# the workflow in the group, the release run and main's push run cancelled each other on every release.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
