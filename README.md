@@ -163,7 +163,8 @@ browser's own install button.
 ## Accuracy
 
 The core is checked against the public hardware test ROMs that emulator
-authors rely on. Every suite below passes in CI on each commit.
+authors rely on. Every suite below runs in CI on each commit; known failures are
+listed, not hidden, in `gb-core/tests/expected-failures.txt`.
 
 | Suite | What it checks | Result |
 |---|---|---|
@@ -175,6 +176,13 @@ authors rely on. Every suite below passes in CI on each commit.
 | dmg-acid2, cgb-acid2 | PPU rendering, pixel for pixel against the reference | ✅ |
 | Homebrew smoke tests | Freely licensed GB and GBC games run without freezing | ✅ |
 | Link cable | Serial transfers between two consoles | ✅ |
+| Mooneye acceptance | Timers, DMA, interrupts, PPU and instruction timing | 32/75 |
+| Mooneye emulator-only MBC | MBC1, MBC2 and MBC5 banking | 27/28 |
+| Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 0/51 |
+| SameSuite | APU, HDMA and interrupt edge cases (CGB) | 5/78 |
+| Age | PPU, STAT, OAM/VRAM access and double-speed timing | 1/51 |
+| gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 263/513 |
+| rtc3test | The MBC3 real-time clock | 0/6 |
 
 ¹ Test 7 runs inside the combined `oam_bug.gb`. Run on its own, that ROM
 overruns its 8 KB text log and overwrites its own code, so it cannot finish on
