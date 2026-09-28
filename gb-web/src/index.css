@@ -913,7 +913,8 @@ a.fact:hover{background:var(--paper);color:#000}
 .nf{padding:120px 0}
 .nf h1{font:900 clamp(48px,10vw,160px)/.82 var(--font);font-stretch:62%;text-transform:uppercase;margin:0 0 24px}
 
-@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important}}
+/* Reduced motion: nothing moves, but state still reads: opacity and colour changes stay, as short fades. */
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-property:opacity,color,background-color,border-color,visibility!important;transition-duration:.15s!important;transition-delay:0s!important}}
 
 /* ---------- Route transitions (lib/transitions.ts sets html[data-vt] and names the one box that travels) ----------
    open   shelf → game page: the box flies to the hero, the game's ink floods out of it (clip circle).
