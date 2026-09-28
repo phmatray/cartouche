@@ -339,10 +339,12 @@ impl MemoryBus {
         self.timer.speed_switch_div_reset(earlier);
         self.double_speed = !self.double_speed;
         self.key1 = 0;
-        // Then the CPU waits while the clock settles and everything else runs: $20000 DIV counts,
-        // so DIV is back at 0 when it resumes (Age spsw-div, spsw-tima).
+        // Then the CPU halts while the clock settles and everything else runs: $20000 DIV counts,
+        // so DIV is back at 0 when it resumes (Age spsw-div, spsw-tima). Like HALT, an interrupt
+        // ends it early (Age spsw-interrupts).
         for _ in 0..0x8000 {
             self.tick_components();
+            if self.interrupts.pending() & !self.late_interrupts() != 0 { break; }
         }
         true
     }
@@ -581,6 +583,20 @@ mod tests {
         assert_eq!(bus.read_byte(0xFF04), 0, "DIV reset, then $20000 counts: back at 0");
         assert_eq!(bus.read_byte(0xFF05), 0x80, "the timer ran through the pause (Age spsw-tima)");
         assert_eq!(bus.cycle_count, 2 * 4 + 0x8000 * 2, "STOP's 2 M-cycles, then $8000 at the new speed");
+    }
+
+    #[test]
+    fn an_interrupt_ends_the_speed_switch_pause() {
+        let mut bus = bus();
+        bus.cgb_mode = true;
+        bus.interrupts.interrupt_enable = TIMER_BIT;
+        bus.write_byte(0xFF07, 0x05); // TIMA at 262 KHz: overflows 16 x 256 counts in
+        bus.write_byte(0xFF4D, 0x01);
+        bus.cycle_count = 0;
+        assert!(bus.try_speed_switch());
+        assert_ne!(bus.interrupts.interrupt_flag & TIMER_BIT, 0);
+        assert!(bus.cycle_count < 0x8000 * 2, "woken by the timer, not after $8000 M-cycles");
+        assert_ne!(bus.read_byte(0xFF04), 0, "DIV has not wrapped");
     }
 
     #[test]
