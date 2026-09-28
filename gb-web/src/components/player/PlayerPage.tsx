@@ -213,12 +213,15 @@ function Player({ game }: { game: GameEntry }) {
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenEnabled) setImmersive((v) => !v);
     else if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    else rootRef.current?.requestFullscreen().catch(() => {});
+    // Phones (Android): the player's own fullscreen layout has no touch controls. The whole page goes fullscreen
+    // instead, in the immersive layout, which keeps them.
+    else (sheetCovers() ? document.documentElement : rootRef.current)?.requestFullscreen().catch(() => {});
   }, []);
   // Left by Escape or the system as often as by the button: the button follows the browser.
-  const [full, setFull] = useState(false);
+  const [full, setFull] = useState<Element | null>(null);
+  const pageFull = full === document.documentElement;
   useEffect(() => {
-    const sync = () => setFull(!!document.fullscreenElement);
+    const sync = () => setFull(document.fullscreenElement);
     document.addEventListener('fullscreenchange', sync);
     return () => document.removeEventListener('fullscreenchange', sync);
   }, []);
@@ -607,7 +610,7 @@ function Player({ game }: { game: GameEntry }) {
   const pad = (b: string) => (b === 'dpad' ? handlers(b) : { 'data-pad': b, ...handlers(b) });
 
   return (
-    <div ref={rootRef} className={`pl${manual ? '' : ' closed'}${idle ? ' idle' : ''}${immersive ? ' imm' : ''}${bordered ? ' sgb' : ''}`} style={{ '--flood': ink } as CSSProperties}>
+    <div ref={rootRef} className={`pl${manual ? '' : ' closed'}${idle ? ' idle' : ''}${immersive || pageFull ? ' imm' : ''}${bordered ? ' sgb' : ''}`} style={{ '--flood': ink } as CSSProperties}>
       <header className="pl-top">
         <Link className="back" to={paths.game(game.id)}>{I.back}<span className="lbl">{t('common.back')}</span></Link>
         <h1><Link to={paths.game(game.id)} title={game.title}><Title text={game.title} /></Link></h1>
@@ -718,7 +721,7 @@ function Player({ game }: { game: GameEntry }) {
         <span className="push" />
         <button className="dk hide-m" onClick={mute} aria-pressed={muted} aria-label={t('player.deck.muteM')}>{muted ? I.mute : I.sound}</button>
         {document.fullscreenEnabled
-          ? <button className="dk fs" onClick={toggleFullscreen} aria-pressed={full} aria-label={full ? t('player.deck.leaveFullF') : t('player.deck.fullF')}>{full ? I.close : I.full}</button>
+          ? <button className="dk fs" onClick={toggleFullscreen} aria-pressed={!!full} aria-label={full ? t('player.deck.leaveFullF') : t('player.deck.fullF')}>{full ? I.close : I.full}</button>
           : <button className="dk fs" onClick={toggleFullscreen} aria-pressed={immersive} aria-label={immersive ? t('player.deck.leaveImmF') : t('player.deck.immF')}>{immersive ? I.close : I.full}</button>}
       </nav>
 
