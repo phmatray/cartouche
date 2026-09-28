@@ -504,7 +504,7 @@ pub struct SnesAudio {
     prev: (i16, i16),
     cur: (i16, i16),
     /// The built-in `SOUND` effects, played on the DSP while no uploaded program runs.
-    fx: FxPlayer,
+    pub(crate) fx: FxPlayer,
     /// DSP samples since the last `fx` tick (32 = 1 ms).
     fx_div: u8,
 }
