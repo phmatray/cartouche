@@ -140,6 +140,9 @@ kbd{border:1px solid #3a3a3a;padding:3px 7px;font:700 11px var(--font);color:var
 .flood .btn.play:hover{background:var(--paper-2)}
 .frame{background:#0b0b0b;padding:14px;box-shadow:0 22px 44px rgba(0,0,0,.35)}
 canvas.lcd,img.lcd{display:block;width:100%;height:auto;image-rendering:pixelated}
+/* The screen's own shape, not the canvas's: its backing size is rounded to device pixels, and a height following it would
+   feed back into the ResizeObserver that sets it (a loop error in Safari). */
+canvas.lcd{aspect-ratio:10/9}
 .cap{display:flex;align-items:center;gap:10px;margin-top:14px;font:800 12px/1 var(--font);text-transform:uppercase;letter-spacing:.07em}
 .cap i{flex:1;height:1px;background:currentColor;opacity:.6}
 .stage .cap span{white-space:nowrap}
