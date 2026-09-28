@@ -60,7 +60,7 @@ Messages are JSON with binary fields (`pack` in crypto.ts), each sealed.
 2. `man`: one device sends its manifest; the other answers with its own. The device with the smaller id starts
    on arrival (and every 3 minutes with auto-sync on); "Sync now" starts from either side.
 3. Each works out what it needs (`manifest.ts`, pure and unit-tested), copies aside its own older side of any
-   conflict, writes small records, then sends `want`: the big records it needs, each with the offset it already has.
+   conflict, deletes what the other deleted (see Conflict rules), writes small records, then sends `want`: the big records it needs, each with the offset it already has.
 4. `chunk` (192 KB each), paced by the data channel's buffer. Pieces are written to their own IndexedDB database
    (`cartouche-sync`) as they arrive, so a transfer cut by a closed tab, a reload or a lost network resumes where it
    stopped. A finished record is checked against its hash before it is stored, and only over what the plan saw:
@@ -85,7 +85,14 @@ sides. Manifests carry hashes, modification times and sizes; small records carry
 - Settings and favorites: last writer wins (a value still at its default loses to any choice). A game's own
   screen settings removed on one device are removed on the other.
 - Play time, sessions, last played: the larger of each.
-- Deletions of saves and states don't sync: a save deleted on one device comes back from the other.
+- Deletions: deleting a battery save, a save state or a ROM (one by one, or by removing or erasing a game) leaves a
+  tombstone, `localStorage['cartouche.sync.gone']` (`lib/sync/gone.ts`: this device's id → when). The manifest carries
+  them as `gone` (shared key → time), a field a device on an older version ignores (it keeps its copy and simply isn't
+  given the record back). A tombstone newer than the other side's record deletes it there too, and that device keeps
+  the tombstone with its time, to pass on to a third one; a record changed after the deletion wins and comes back. ROMs
+  only when both devices share them. A record that exists again (played, pulled back) drops its tombstone. Tombstones
+  are forgotten once 90 days old and every paired device has synced since, or after a year whatever happens: a device
+  away longer than that brings the record back.
 - The game running at the moment is left alone (its saves sync next time), and so are all saves while a link
   cable page (same screen or online) is open. This holds across the browser's tabs: an open player and the local
   link cable page hold a shared Web Lock (`lib/play-lock.ts`) that sync checks when it plans and when a record lands.

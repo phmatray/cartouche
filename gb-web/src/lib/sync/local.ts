@@ -3,13 +3,15 @@
  * (key formats: manifest.ts). Plus the pieces of an interrupted transfer, kept in their own small database
  * so a transfer resumes where it stopped, even after a reload.
  */
-import { gameOfSave, neutralName, getAllFrom, getAllGameMeta, getGameMeta, getRom, getRomIds, getSaveState, getSram, saveSaveState, saveSram, setGameMeta, STORES, type StoredSave, type StoredSaveState } from '../db';
+import { deleteSave, deleteSaveState, eraseGames, gameOfSave, neutralName, getAllFrom, getAllGameMeta, getGameMeta, getRom, getRomIds, getSaveState, getSram, saveSaveState, saveSram, setGameMeta, STORES, type StoredSave, type StoredSaveState } from '../db';
 import { importRom } from '../../hooks/useGameLibrary';
 import { computeSha1 } from '../rom-utils';
 import { useSettingsStore, type SettingsValues } from '../../store/settingsStore';
 import type { DisplayConfig } from '../../shaders/filters';
 import { digest, pack, unpack } from './crypto';
-import { copyName, gamesOf, kindOf, type Entry, type Games, type Manifest, type Play } from './manifest';
+import { loadGone, markGone, saveGone } from './gone';
+import { useSync } from './status';
+import { copyName, gamesOf, gcGone, kindOf, type Entry, type Games, type Manifest, type Play } from './manifest';
 
 /** Settings that follow the player from device to device. Screen size, touch controls, volume, keys, smooth motion
  * (it depends on the display), box art consent and haptics stay with each device. */
@@ -130,7 +132,17 @@ export async function readLocal(me: { id: string; name: string }, roms: boolean)
     entries.push({ k, h: '', t: seen[k][1] });
   }
   saveSeen(seen);
-  return { manifest: { dev: me.id, name: me.name, roms, games: shas, entries }, games, romBytes, romCount };
+  // Deletions made here (or passed on): a record that's back since forgets its tombstone, old ones are forgotten.
+  const held = new Set(entries.map((e) => e.k)), gone: Record<string, number> = {}, kept: Record<string, number> = {};
+  for (const [lk, t] of Object.entries(gcGone(loadGone(), now, useSync.getState().devices.map((d) => d.lastSync ?? 0)))) {
+    const id = lk.slice(lk.indexOf(':') + 1);
+    const k = lk.startsWith('sram:') ? sramKey(id, games) : lk.startsWith('state:') ? stateKey(id, games) : lk;
+    if (!k || held.has(k)) continue;
+    kept[lk] = t;
+    gone[k] = Math.max(gone[k] ?? 0, t);
+  }
+  saveGone(kept);
+  return { manifest: { dev: me.id, name: me.name, roms, games: shas, entries, gone }, games, romBytes, romCount };
 }
 
 /* ---------- one record ---------- */
@@ -214,6 +226,22 @@ export async function moveAside(from: string, to: string, games: Games, rename: 
   } else {
     const s = await getSaveState(a);
     if (s) await saveSaveState({ ...s, id: b, profile: rename.profile ? localId(`sram:${rename.profile}`, games) ?? s.profile : s.profile });
+  }
+}
+
+/** A record the other device deleted after it last changed here: deleted here too. */
+export async function dropRecord(k: string, games: Games): Promise<void> {
+  const id = localId(k, games);
+  if (!id) return;
+  if (kindOf(k) === 'sram') await deleteSave(id);
+  else if (kindOf(k) === 'state') await deleteSaveState(id);
+  else if (kindOf(k) === 'rom') await eraseGames([], [id]);
+}
+/** The other device's deletions, kept here with their own time (passed on to a third device). */
+export function rememberGone(gone: Record<string, number>, games: Games) {
+  for (const [k, t] of Object.entries(gone)) {
+    const id = kindOf(k) === 'rom' ? k.slice(4) : localId(k, games);
+    if (id) markGone([`${kindOf(k)}:${id}`], t);
   }
 }
 

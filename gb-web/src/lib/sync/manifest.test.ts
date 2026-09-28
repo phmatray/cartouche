@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { agreed, copyName, gameOfKey, gamesOf, plan, type Entry, type Manifest } from './manifest.ts';
+import { agreed, copyName, gameOfKey, gamesOf, gcGone, plan, type Entry, type Manifest } from './manifest.ts';
 
 const m = (name: string, entries: Entry[], roms = false): Manifest => ({ dev: name.toLowerCase(), name, roms, games: {}, entries });
 const e = (k: string, h: string, t: number, extra: Partial<Entry> = {}): Entry => ({ k, h, t, n: 100, ...extra });
@@ -131,4 +131,45 @@ test('a ROM stored twice: each copy keeps a key of its own, whatever order the g
     assert.equal(g.id('f00d'), 'x');
     assert.equal(g.id('@x-2'), 'x-2');
   }
+});
+
+test('a deletion syncs: the tombstone newer than the item drops it on the other side, and it never comes back', () => {
+  // The Mac deleted slot 2 and the save at t=500; the iPhone still has them, unchanged since.
+  const base = { 'sram:g': 'h', 'state:g#slot-2': 's' };
+  const mac = { ...m('Mac', []), gone: { 'sram:g': 500, 'state:g#slot-2': 500 } };
+  const phone = m('iPhone', [e('sram:g', 'h', 100), e('state:g#slot-2', 's', 200)]);
+  const onMac = plan(mac, phone, base), onPhone = plan(phone, mac, base);
+  assert.deepEqual(onMac.pull, []); // not pulled back
+  assert.deepEqual(onPhone.drop.sort(), ['sram:g', 'state:g#slot-2']); // dropped over there too
+  assert.deepEqual(onPhone.gone, { 'sram:g': 500, 'state:g#slot-2': 500 }); // and remembered, for a third device
+  assert.deepEqual(onMac.drop, []);
+});
+
+test('an item changed after the deletion wins over the tombstone', () => {
+  const mac = { ...m('Mac', []), gone: { 'state:g#auto': 500 } };
+  const phone = m('iPhone', [e('state:g#auto', 'new', 900)]); // played on the iPhone after the Mac deleted it
+  assert.deepEqual(plan(mac, phone, {}).pull.map((x) => x.k), ['state:g#auto']);
+  assert.deepEqual(plan(phone, mac, {}).drop, []);
+  assert.deepEqual(plan(phone, mac, {}).gone, {});
+});
+
+test('a ROM tombstone drops the ROM only when both devices share ROMs', () => {
+  const mac = { ...m('Mac', [], true), gone: { 'rom:abc': 500 } };
+  const phone = m('iPhone', [e('rom:abc', 'abc', 100, { n: 1 << 20 })], true);
+  assert.deepEqual(plan(mac, phone, {}).pull, []);
+  assert.deepEqual(plan(phone, mac, {}).drop, ['rom:abc']);
+  assert.deepEqual(plan({ ...phone, roms: false }, mac, {}).drop, []);
+});
+
+test('a peer on the old format (no tombstones) still syncs', () => {
+  const a = m('Mac', [e('sram:g', 'h', 1)]), b = m('iPhone', []);
+  assert.deepEqual(plan(b, a, {}).pull.map((x) => x.k), ['sram:g']);
+  assert.deepEqual(plan(a, b, {}).drop, []);
+});
+
+test('old tombstones are forgotten once every paired device synced after them, or after a year', () => {
+  const day = 86_400_000, now = 1000 * day;
+  const gone = { recent: now - day, old: now - 100 * day, ancient: now - 400 * day };
+  assert.deepEqual(Object.keys(gcGone(gone, now, [now - 50 * day])), ['recent']);
+  assert.deepEqual(Object.keys(gcGone(gone, now, [now - 50 * day, now - 200 * day])), ['recent', 'old']);
 });

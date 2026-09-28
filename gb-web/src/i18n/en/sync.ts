@@ -32,8 +32,8 @@ export default {
     staysBody: 'Screen size, touch controls, volume, key bindings, smooth motion, box art and screenshots: they belong to the device, not to you.',
     both: 'Played on both',
     bothBody: 'Nothing is overwritten. When a save changed on both devices since the last sync, both are kept: the newer keeps its place, the older becomes a separate save named after its device (or moves to a free save slot). You’re told when that happens.',
-    del: 'Deleting doesn’t sync',
-    delBody: 'A save deleted here comes back from the other device at the next sync. Delete it on both, or unpair first.',
+    del: 'Deleting syncs too',
+    delBody: 'A save, save state or ROM deleted here is deleted on your other devices at the next sync, unless it was played there after. A device left without a sync for over a year can bring it back.',
   },
   how: {
     title: 'How it connects',
