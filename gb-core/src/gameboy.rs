@@ -502,6 +502,7 @@ impl GameBoy {
         if let Some(s) = &self.bus.sgb {
             s.export_state(&mut data);
             s.audio.export_state(&mut data); // v6
+            s.audio.fx.export_state(&mut data); // v7
         }
         // Optional tail (absent from older states): stop mode, KEY0 (DMG compatibility set by the boot ROM).
         data.extend_from_slice(&[self.cpu.stopped as u8, self.bus.key0]);
@@ -703,6 +704,8 @@ impl GameBoy {
             if !s.import_state(data, &mut p) { return false; }
             // Older states have no SNES sound: it stays idle (as `import_state` left it).
             if saved == Console::Sgb && version >= 6 && !s.audio.import_state(data, &mut p) { return false; }
+            // Nor built-in effects before v7: none plays.
+            if saved == Console::Sgb && version >= 7 && !s.audio.fx.import_state(data, &mut p) { return false; }
             if saved == Console::Sgb { pos = p; }
         }
         if let Some(&[stopped, ..]) = data.get(pos..) {
@@ -770,7 +773,8 @@ const TIMING_TAIL_LEN: usize = 4;
 // v4 adds the console and palette bytes after the version (v3 states still load: see `state_console`).
 // v5 adds the start-up animation after them, so a state saved while it plays goes on with its own boot ROM.
 // v6 adds the Super Game Boy's SNES sound side after the SGB block (v5 states load with it idle).
-const SAVE_VERSION: u32 = 6;
+// v7 adds the built-in SGB sound effects playing, after the SNES sound side (v6 states load with none).
+const SAVE_VERSION: u32 = 7;
 
 #[cfg(test)]
 mod tests {
@@ -867,9 +871,9 @@ mod tests {
 
         // The pre-change layout ends right after KEY0 (then the mapper block, the timing tail and RP).
         let end = state.len() - TIMING_TAIL_LEN - 1;
-        let extra = u16::from_le_bytes([state[end - 134], state[end - 133]]);
-        assert_eq!(extra, 132, "mode, address, result, opcode, 128 bytes of nibbles");
-        let old = &state[..end - 134];
+        let extra = u16::from_le_bytes([state[end - 135], state[end - 134]]);
+        assert_eq!(extra, 133, "mode, address, result, opcode, 128 bytes of nibbles, IR LED");
+        let old = &state[..end - 135];
         let mut g = GameBoy::new(rom).unwrap();
         assert!(g.load_state(old));
     }
