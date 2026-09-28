@@ -199,6 +199,7 @@ export default {
     exportSub: 'ROM, sauvegardes, sauvegardes instantanées, captures, favoris, temps de jeu et réglages dans un seul fichier .cartouche',
     export: 'Exporter une copie',
     exported: 'Copie exportée',
+    exportFailed: 'Impossible de faire la copie : le stockage de ce navigateur est illisible.',
     restoreLabel: 'Restaurer une copie de sauvegarde',
     restoreSub: 'Fusionne avec cette bibliothèque ; rien n’est écrasé sans confirmation',
     import: 'Importer une copie',

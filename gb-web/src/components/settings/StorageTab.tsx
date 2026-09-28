@@ -115,8 +115,10 @@ export function StorageTab() {
     toast(ok ? tNow('settings.storage.protectedToast') : tNow('settings.storage.declined'), ok ? 'c' : 'm');
   };
   const doExport = async () => {
+    let blob: Blob;
+    try { blob = await exportBackup(); } catch { toast(tNow('settings.storage.exportFailed'), 'm'); return; }
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(await exportBackup());
+    a.href = URL.createObjectURL(blob);
     a.download = backupFileName();
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);

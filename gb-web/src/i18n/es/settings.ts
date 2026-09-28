@@ -199,6 +199,7 @@ export default {
     exportSub: 'ROM, partidas guardadas, estados guardados, capturas, favoritos, tiempo de juego y ajustes en un único archivo .cartouche',
     export: 'Exportar copia',
     exported: 'Copia exportada',
+    exportFailed: 'No se pudo hacer la copia: no se pudo leer el almacenamiento de este navegador.',
     restoreLabel: 'Restaurar una copia',
     restoreSub: 'Se fusiona con esta biblioteca; nada se sobrescribe sin preguntar',
     import: 'Importar copia',
