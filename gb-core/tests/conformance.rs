@@ -8,12 +8,17 @@
 //! The hardware comes from the suite's own file/directory naming, never from a ROM's title or
 //! checksum. A missing suite skips, unless CARTOUCHE_REQUIRE_ROMS is set (as in CI).
 
+mod common;
+
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
+use common::{cgb_to_rgb, dmg_to_grey, load_png_rgb};
 use gb_core::gameboy::{GameBoy, Model, CYCLES_PER_FRAME};
+use gb_core::interrupts::JOYPAD_BIT;
+use gb_core::joypad::JoypadButton;
 
 #[derive(Clone, Debug, PartialEq)]
 enum Verdict {
@@ -33,6 +38,11 @@ enum Protocol {
     Fibonacci,
     /// gbmicrotest: $FF82 becomes $01 (pass) or $FF (fail).
     Hram,
+    /// Stops on `LD B,B`; the frame must match the reference PNG pixel for pixel.
+    Screenshot(PathBuf),
+    /// rtc3test: presses `presses` in the menu, runs `secs` emulated seconds, then compares the
+    /// next complete frame with `reference`.
+    Scripted { presses: &'static [JoypadButton], secs: u64, reference: PathBuf },
 }
 
 /// One run of one ROM: `label` is its line in expected-failures.txt.
@@ -77,11 +87,54 @@ fn hram_verdict(byte: u8) -> Option<Verdict> {
     }
 }
 
+/// The frame being drawn against the reference, in the suites' colours: the four DMG greys, or
+/// CGB RGB555 expanded with (x<<3)|(x>>2), as acid2.rs compares.
+fn compare_screen(gb: &GameBoy, hw: Hw, reference: &Path) -> Verdict {
+    let to_rgb = if hw == Hw::Dmg { dmg_to_grey } else { cgb_to_rgb };
+    let actual: Vec<[u8; 3]> = gb.bus.ppu.framebuffer.chunks(4).map(to_rgb).collect();
+    let expected = load_png_rgb(reference);
+    if expected.len() != actual.len() {
+        return Verdict::Fail(format!("reference is {} pixels, frame {}", expected.len(), actual.len()));
+    }
+    match actual.iter().zip(&expected).filter(|(a, e)| a != e).count() {
+        0 => Verdict::Pass,
+        diff => Verdict::Fail(format!("{diff} pixels differ")),
+    }
+}
+
+fn frames(gb: &mut GameBoy, n: u64) -> Result<(), String> {
+    (0..n).try_for_each(|_| gb.run_frame()).map_err(|e| e.to_string())
+}
+
+/// Presses and releases `button`, each held 5 frames so the menu's input polling sees it.
+fn press(gb: &mut GameBoy, button: JoypadButton) -> Result<(), String> {
+    for down in [true, false] {
+        if gb.bus.joypad.set_button(button, down) {
+            gb.bus.interrupts.request(JOYPAD_BIT);
+        }
+        frames(gb, 5)?;
+    }
+    Ok(())
+}
+
+fn run_scripted(gb: &mut GameBoy, hw: Hw, presses: &[JoypadButton], secs: u64, reference: &Path) -> Result<Verdict, String> {
+    frames(gb, 60)?; // the menu is up after a second
+    for &b in presses {
+        press(gb, b)?;
+    }
+    frames(gb, secs * 60)?;
+    gb.run_to_vblank().map_err(|e| e.to_string())?;
+    Ok(compare_screen(gb, hw, reference))
+}
+
 fn run_rom(path: &Path, hw: Hw, protocol: &Protocol, timeout_secs: u64) -> Verdict {
     let mut gb = match boot(path, hw) {
         Ok(gb) => gb,
         Err(e) => return Verdict::Fail(e),
     };
+    if let Protocol::Scripted { presses, secs, reference } = protocol {
+        return run_scripted(&mut gb, hw, presses, *secs, reference).unwrap_or_else(|e| Verdict::Fail(format!("emulator error: {e}")));
+    }
     let limit = timeout_secs * 60 * CYCLES_PER_FRAME as u64;
     let mut cycles = 0u64;
     while cycles < limit {
@@ -95,6 +148,7 @@ fn run_rom(path: &Path, hw: Hw, protocol: &Protocol, timeout_secs: u64) -> Verdi
                     Verdict::Fail(format!("registers {regs:?}"))
                 };
             }
+            Protocol::Screenshot(reference) if at_breakpoint(&gb) => return compare_screen(&gb, hw, reference),
             Protocol::Hram => {
                 if let Some(v) = hram_verdict(gb.bus.hram[0x02]) {
                     return v;
@@ -210,10 +264,13 @@ fn run_suite(suite: &str, root: &str, dirs: &[&str], timeout_secs: u64, pick: fn
     }
 }
 
+fn stem(path: &Path) -> &str {
+    path.file_stem().unwrap().to_str().unwrap()
+}
+
 /// The part of a file stem after its last `-`, e.g. `dmgABC` in `boot_regs-dmgABC`.
 fn suffix(path: &Path) -> &str {
-    let stem = path.file_stem().unwrap().to_str().unwrap();
-    stem.rsplit_once('-').map_or("", |(_, s)| s)
+    stem(path).rsplit_once('-').map_or("", |(_, s)| s)
 }
 
 /// Mooneye names the models a test is for: `-cgb…`/`-C` CGB, `-A`/`-agb`/`-ags` AGB (run on its
@@ -255,11 +312,30 @@ fn age_hw(tokens: &str) -> Option<Hw> {
 }
 
 fn age(rom: &Path, rel: &str) -> Vec<Job> {
-    let stem = rom.file_stem().unwrap().to_str().unwrap();
-    let Some(hw) = age_hw(stem) else {
-        return Vec::new(); // no device named: a screenshot test (added with the screenshot protocol)
+    let Some(hw) = age_hw(stem(rom)) else {
+        return age_screenshots(rom, rel);
     };
     vec![Job { label: rel.to_string(), rom: rom.to_path_buf(), hw, protocol: Protocol::Fibonacci }]
+}
+
+/// An Age ROM that names no device is a screenshot test: `<stem>-<devices>.png` beside it, one
+/// per device set, each run on its hardware.
+fn age_screenshots(rom: &Path, rel: &str) -> Vec<Job> {
+    let prefix = format!("{}-", stem(rom));
+    let mut pngs: Vec<PathBuf> = std::fs::read_dir(rom.parent().unwrap())
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|e| e == "png"))
+        .filter(|p| stem(p).strip_prefix(&prefix).is_some_and(|devices| !devices.contains('-')))
+        .collect();
+    pngs.sort();
+    pngs.into_iter()
+        .filter_map(|png| {
+            let devices = stem(&png)[prefix.len()..].to_string();
+            let hw = age_hw(&devices)?;
+            Some(Job { label: format!("{rel}@{devices}"), rom: rom.to_path_buf(), hw, protocol: Protocol::Screenshot(png) })
+        })
+        .collect()
 }
 
 #[test]
@@ -287,6 +363,46 @@ fn hram_verdict_decoding() {
     assert_eq!(hram_verdict(0x00), None);
     assert_eq!(hram_verdict(0x01), Some(Verdict::Pass));
     assert!(matches!(hram_verdict(0xFF), Some(Verdict::Fail(_))));
+}
+
+/// Mealybug Tearoom ships one expected screenshot per model next to each ROM. The DMG one
+/// (`_dmg_blob`) runs on the DMG, the CGB one (`_cgb_d`, else `_cgb_c`) on the CGB; a ROM without
+/// one for a model does not run on it.
+fn mealybug(rom: &Path, rel: &str) -> Vec<Job> {
+    let refs = [(Hw::Dmg, "dmg", &["dmg_blob"][..]), (Hw::Cgb, "cgb", &["cgb_d", "cgb_c"][..])];
+    refs.iter()
+        .filter_map(|(hw, tag, names)| {
+            let png = names.iter().map(|n| rom.with_file_name(format!("{}_{n}.png", stem(rom)))).find(|p| p.is_file())?;
+            Some(Job { label: format!("{rel}@{tag}"), rom: rom.to_path_buf(), hw: *hw, protocol: Protocol::Screenshot(png) })
+        })
+        .collect()
+}
+
+/// rtc3test: pick a sub-test in its menu, let it run for the time its README gives, compare with
+/// the expected screenshot for the model (`-dmg`, `-cgb`).
+fn rtc3test(rom: &Path, rel: &str) -> Vec<Job> {
+    use JoypadButton::{Down, A};
+    let subtests: [(&str, &'static [JoypadButton], u64); 3] =
+        [("basic-tests", &[A], 13), ("range-tests", &[Down, A], 8), ("sub-second-writes", &[Down, Down, A], 26)];
+    let mut jobs = Vec::new();
+    for (name, presses, secs) in subtests {
+        for (hw, tag) in [(Hw::Dmg, "dmg"), (Hw::Cgb, "cgb")] {
+            let reference = rom.with_file_name(format!("rtc3test-{name}-{tag}.png"));
+            let protocol = Protocol::Scripted { presses, secs, reference };
+            jobs.push(Job { label: format!("{rel}@{name}-{tag}"), rom: rom.to_path_buf(), hw, protocol });
+        }
+    }
+    jobs
+}
+
+#[test]
+fn mealybug_tearoom() {
+    run_suite("Mealybug Tearoom", "mealybug-tearoom-tests", &[""], 30, mealybug);
+}
+
+#[test]
+fn rtc3test_all() {
+    run_suite("rtc3test", "rtc3test", &[""], 30, rtc3test);
 }
 
 #[test]
