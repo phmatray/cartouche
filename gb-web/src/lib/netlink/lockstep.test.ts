@@ -103,3 +103,34 @@ test('a battery save survives the trip as base64', () => {
   const save = Uint8Array.from({ length: 0x8030 }, (_, i) => (i * 31) & 0xff);
   assert.deepEqual(fromB64(toB64(save)), save);
 });
+
+test('rollback: a partner script 9 frames late, predicted then corrected, ends with the no-prediction pairs', () => {
+  const D = 2, LATE = 9, FRAMES = 400;
+  const mine = (f: number) => (f < D ? 0 : (f * 7) & 0xff);
+  const theirs = (f: number) => (f < D ? 0 : [0, 1, 1, 0x10, 0x81, 0x81, 0][Math.floor(f / 13) % 7]);
+  const lock = new Lockstep(1, D);
+  const used = new Map<number, [number, number]>();
+  const wrong: number[] = [];
+  const inbox: { at: number; m: LockMsg }[] = [];
+  let frame = 0;
+  const deliver = (tick: number) => {
+    while (inbox.length && inbox[0].at <= tick) {
+      const r = lock.remote(inbox.shift()!.m);
+      if (r === null) continue;
+      wrong.push(r);
+      for (let f = r; f < frame; f++) used.set(f, lock.predict(f)); // the re-run, with what is known now
+    }
+  };
+  for (let tick = 0; frame < FRAMES; tick++) {
+    inbox.push({ at: tick + LATE, m: { t: 'i', f: tick + D, b: theirs(tick + D) } }); // the partner, sampling now
+    deliver(tick);
+    lock.local(frame, mine(frame + D));
+    used.set(frame, lock.predict(frame));
+    frame++;
+  }
+  deliver(Infinity);
+  assert.ok(lock.confirmed() >= FRAMES - 1);
+  for (let f = 0; f < FRAMES; f++) assert.deepEqual(used.get(f), [mine(f), theirs(f)], `frame ${f}`);
+  const changes = Array.from({ length: FRAMES }, (_, f) => f).filter((f) => f >= D && theirs(f) !== theirs(f - 1));
+  assert.deepEqual(wrong, changes);
+});
