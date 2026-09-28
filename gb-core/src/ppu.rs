@@ -980,4 +980,25 @@ mod tests {
         let dark: Vec<usize> = shades(&p, 10).iter().enumerate().filter(|(_, &v)| v == 3).map(|(x, _)| x).collect();
         assert_eq!(dark, (0..20).map(|k| 8 * k + 5).collect::<Vec<_>>());
     }
+
+    /// BG: tile 0 (light) from the $9800 map. Window: tile 1 (dark) from the $9C00 map.
+    fn window_setup(p: &mut Ppu) {
+        p.lcdc = 0xF1;
+        p.vram[16..32].fill(0xFF);
+        p.vram[0x1C00..0x2000].fill(1);
+        p.wx = 50;
+    }
+
+    #[test]
+    fn window_starts_at_wx_minus_7() {
+        let s = shades(&run_line10(window_setup, |_, _| {}), 10);
+        assert_eq!(s.iter().position(|&v| v == 3), Some(43));
+        assert!(s[43..].iter().all(|&v| v == 3));
+    }
+
+    #[test]
+    fn mid_line_wx_write_moves_the_window() {
+        let s = shades(&run_line10(window_setup, |p, d| if d == 20 { p.write_register(0xFF4B, 100) }), 10);
+        assert_eq!(s.iter().position(|&v| v == 3), Some(93));
+    }
 }
