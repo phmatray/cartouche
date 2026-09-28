@@ -2,6 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState, type FormEvent } from 'reac
 import { Link } from 'react-router';
 import { renameGame, useGameLibrary } from '../../hooks/useGameLibrary';
 import { cancelImport, importAnyway, patchRow, queueImport, useImports, type Full, type ImportRow, type RowState } from '../../lib/import-queue';
+import { isGbsFile } from '../../lib/gbs';
 import { fileAccept, useInstall } from '../../lib/pwa';
 import { paths, touchOnly } from '../../lib/ui';
 import type { GameEntry } from '../../types/game';
@@ -50,7 +51,7 @@ export function AddRomsPage() {
         <div className="ic">{I.cart}</div>
         <div><h2>{t('add.drop')}</h2><p>{t('add.dropSub')}</p></div>
         <div className="acts">
-          <FileButton className="btn y" multiple accept={fileAccept('.gb,.gbc,.rom,.bin,.zip')} onFiles={queueImport}>{I.plus}{t('add.choose')}</FileButton>
+          <FileButton className="btn y" multiple accept={fileAccept('.gb,.gbc,.rom,.bin,.gbs,.zip')} onFiles={queueImport}>{I.plus}{t('add.choose')}</FileButton>
         </div>
       </div>
       {/* How to get files onto a phone: only on one (a desktop has a file manager and drag and drop). */}
@@ -99,8 +100,8 @@ const Row = memo(function Row({ r, g, onRename }: { r: ImportRow; g?: GameEntry;
       </div>
       <span className={`st ${r.st}`}><i />{t(LABEL[r.st])}</span>
       <span className="act">
-        {(r.st === 'ok' || r.st === 'unk') && r.id && <Link className="btn line" style={{ height: 38 }} to={paths.game(r.id)}>{t('common.open')}</Link>}
-        {r.st === 'dup' && <button className="btn line" style={{ height: 38 }} onClick={() => importAnyway(r)}>{t('add.anyway')}</button>}
+        {(r.st === 'ok' || r.st === 'unk') && r.id && <Link className="btn line" style={{ height: 38 }} to={isGbsFile(r.name) ? paths.music(r.id) : paths.game(r.id)}>{t('common.open')}</Link>}
+        {r.st === 'dup' && !isGbsFile(r.name) && <button className="btn line" style={{ height: 38 }} onClick={() => importAnyway(r)}>{t('add.anyway')}</button>}
         {r.st === 'unk' && <button className="btn line" style={{ height: 38 }} onClick={() => onRename(r)}>{t('common.rename')}</button>}
       </span>
     </div>
