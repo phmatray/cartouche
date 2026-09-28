@@ -39,6 +39,13 @@ export function heldBy(buttons: Record<string, boolean>, axes: Record<string, nu
   return held;
 }
 
+/** What goes down and up between two polls' `heldBy`, each [Game Boy button, player] once. */
+export function changes(before: [number, number][], after: [number, number][]) {
+  const key = ([b, p]: [number, number]) => `${p}:${b}`;
+  const was = new Map(before.map((x) => [key(x), x])), now = new Map(after.map((x) => [key(x), x]));
+  return { press: [...now].filter(([k]) => !was.has(k)).map(([, x]) => x), release: [...was].filter(([k]) => !now.has(k)).map(([, x]) => x) };
+}
+
 export function useGamepad(
   pressButton: (button: number, player?: number) => void,
   releaseButton: (button: number, player?: number) => void,
@@ -56,15 +63,7 @@ export function useGamepad(
 
   // Paused or unloaded: let go of what the pad holds (its release would never reach the game), and start afresh.
   useEffect(() => () => {
-    const who = (k: string) => (k.includes(':') ? [Number(k.split(':')[0]), k.split(':')[1]] as const : [0, k] as const);
-    for (const [k, on] of Object.entries(prevButtonsRef.current)) {
-      const [p, i] = who(k);
-      if (on && GAMEPAD_MAP[+i] !== undefined) releaseButton(GAMEPAD_MAP[+i], p);
-    }
-    for (const [k, v] of Object.entries(prevAxesRef.current)) {
-      const [p, a] = who(k), m = AXIS_MAP[a as keyof typeof AXIS_MAP];
-      if (m && Math.abs(v) > AXIS_DEADZONE) releaseButton(v < 0 ? m.negative : m.positive, p);
-    }
+    for (const [b, p] of heldBy(prevButtonsRef.current, prevAxesRef.current)) releaseButton(b, p);
     prevButtonsRef.current = {};
     prevAxesRef.current = {};
     quietRef.current = true;
@@ -102,50 +101,24 @@ export function useGamepad(
     const quiet = quietRef.current || dialog;
     quietRef.current = dialog;
 
+    const prev = prevButtonsRef.current, prevAxes = prevAxesRef.current;
+    const before = heldBy(prev, prevAxes);
     // The first connected gamepad is player 1; the next ones are Super Game Boy players 2-4 (ignored elsewhere).
     [...gamepads].filter((g) => g !== null).slice(0, 4).forEach((gp, player) => {
-      const prev = prevButtonsRef.current;
       const k = (i: number | string) => (player ? `${player}:${i}` : String(i));
-      const press = (b: number) => { if (!quiet) pressButton(b, player); }, release = (b: number) => releaseButton(b, player);
-
-      // Poll mapped buttons
-      for (const [gpIdx, gbBtn] of Object.entries(GAMEPAD_MAP)) {
-        const idx = Number(gpIdx);
-        const pressed = gp.buttons[idx]?.pressed ?? false;
-        const wasPressed = prev[k(idx)] ?? false;
-
-        if (pressed && !wasPressed) press(gbBtn);
-        if (!pressed && wasPressed) release(gbBtn);
-        prev[k(idx)] = pressed;
-      }
-
+      for (const idx of Object.keys(GAMEPAD_MAP)) prev[k(idx)] = gp.buttons[+idx]?.pressed ?? false;
       // Triangle (button 3) -> fullscreen toggle
       if (onToggleFullscreen && !player) {
         const triPressed = gp.buttons[3]?.pressed ?? false;
-        const triWas = prev[3] ?? false;
-        if (triPressed && !triWas && !quiet) onToggleFullscreen();
+        if (triPressed && !prev[3] && !quiet) onToggleFullscreen();
         prev[3] = triPressed;
       }
-
-      // Poll left stick axes
-      const prevAxes = prevAxesRef.current;
-      for (const [key, mapping] of Object.entries(AXIS_MAP)) {
-        const value = gp.axes[mapping.axis] ?? 0;
-        const prevValue = prevAxes[k(key)] ?? 0;
-
-        const wasNeg = prevValue < -AXIS_DEADZONE;
-        const wasPos = prevValue > AXIS_DEADZONE;
-        const isNeg = value < -AXIS_DEADZONE;
-        const isPos = value > AXIS_DEADZONE;
-
-        if (isNeg && !wasNeg) press(mapping.negative);
-        if (!isNeg && wasNeg) release(mapping.negative);
-        if (isPos && !wasPos) press(mapping.positive);
-        if (!isPos && wasPos) release(mapping.positive);
-
-        prevAxes[k(key)] = value;
-      }
+      for (const [key, mapping] of Object.entries(AXIS_MAP)) prevAxes[k(key)] = gp.axes[mapping.axis] ?? 0;
     });
+    // By Game Boy button: the D-pad and the stick both hold Right, and Right goes up only once neither does.
+    const { press, release } = changes(before, heldBy(prev, prevAxes));
+    for (const [b, player] of release) releaseButton(b, player);
+    if (!quiet) for (const [b, player] of press) pressButton(b, player);
   }, [active, pressButton, releaseButton, onToggleFullscreen]);
 
   useEffect(() => {

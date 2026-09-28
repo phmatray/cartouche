@@ -1,7 +1,7 @@
 // node --test: a gamepad that disconnects mid-press lets go of what it held.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { heldBy } from './useGamepad.ts';
+import { changes, heldBy } from './useGamepad.ts';
 
 test('buttons and stick still held, per player', () => {
   // Player 1: D-pad Right (15) held, A (0) released, Triangle (3, fullscreen) is no game button.
@@ -12,4 +12,15 @@ test('buttons and stick still held, per player', () => {
 
 test('nothing held, nothing released', () => {
   assert.deepEqual(heldBy({}, {}), []);
+});
+
+test('the D-pad and the stick on the same direction: it goes up only once neither holds it', () => {
+  const dpadAndStick = heldBy({ 15: true }, { leftX: 0.9 }), dpadOnly = heldBy({ 15: true }, { leftX: 0 });
+  assert.deepEqual(changes(heldBy({}, {}), dpadAndStick), { press: [[4, 0]], release: [] });
+  assert.deepEqual(changes(dpadAndStick, dpadOnly), { press: [], release: [] });
+  assert.deepEqual(changes(dpadOnly, heldBy({ 15: false }, { leftX: 0 })), { press: [], release: [[4, 0]] });
+});
+
+test('the same button on two players is two buttons', () => {
+  assert.deepEqual(changes(heldBy({ 0: true }, {}), heldBy({ 0: true, '1:0': true }, {})), { press: [[0, 1]], release: [] });
 });
