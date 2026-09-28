@@ -349,6 +349,7 @@ impl MemoryBus {
     pub fn stop_tick(&mut self) {
         let t = if self.double_speed { 2 } else { 4 };
         self.apu.silence(t);
+        self.cartridge.tick_clock(t as u64);
         self.cycle_count += t;
     }
 
@@ -381,6 +382,7 @@ impl MemoryBus {
             self.interrupts.request(SERIAL_BIT);
         }
         self.cartridge.tick();
+        self.cartridge.tick_clock(ppu_step as u64);
         self.apu.cgb_mode = self.cgb_mode || self.ppu.compat; // CGB hardware, whatever the mode
         if let Some((l, r)) = self.sgb.as_deref_mut().and_then(|s| s.audio.run(ppu_step)) {
             self.apu.mix_external(l, r);

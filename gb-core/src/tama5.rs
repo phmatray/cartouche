@@ -8,7 +8,7 @@
 //! reaches its 13 digit registers with command 8 (write register `7` with the nibble in `4`) and
 //! A (read it into C). The alarm and buzzer are not emulated.
 
-use crate::cartridge::now_ms;
+use crate::cartridge::DOTS_PER_SECOND;
 
 /// The `.sav` footer: 13 clock digits as u32 LE, then the unix seconds they were taken at (u64 LE).
 pub const FOOTER_LEN: usize = 13 * 4 + 8;
@@ -17,8 +17,8 @@ pub struct Tama5 {
     select: u8,
     regs: [u8; 16],
     out: u8,
-    /// Wall clock (ms since epoch) at which the clock read 2000-01-01 00:00:00.
-    base_ms: f64,
+    /// Emulated time since the clock read 2000-01-01 00:00:00, in dots (`DOTS_PER_SECOND`).
+    dots: u64,
 }
 
 const DAY: u64 = 86400;
@@ -62,11 +62,15 @@ fn seconds(d: &[u8; 13]) -> u64 {
 
 impl Tama5 {
     pub fn new() -> Self {
-        Tama5 { select: 0, regs: [0; 16], out: 0, base_ms: now_ms() }
+        Tama5 { select: 0, regs: [0; 16], out: 0, dots: 0 }
     }
 
     fn now(&self) -> u64 {
-        ((now_ms() - self.base_ms) / 1000.0).max(0.0) as u64
+        self.dots / DOTS_PER_SECOND
+    }
+
+    pub fn tick(&mut self, dots: u64) {
+        self.dots += dots;
     }
 
     pub fn rom_bank(&self) -> usize {
@@ -89,7 +93,7 @@ impl Tama5 {
             8 if lo < 13 => {
                 let mut d = digits(self.now());
                 d[lo as usize] = self.regs[4];
-                self.base_ms = now_ms() - seconds(&d) as f64 * 1000.0;
+                self.dots = seconds(&d) * DOTS_PER_SECOND;
             }
             0xA if lo < 13 => self.out = digits(self.now())[lo as usize],
             _ => {}
@@ -107,17 +111,17 @@ impl Tama5 {
         }
     }
 
-    pub fn export_footer(&self) -> Vec<u8> {
+    pub fn export_footer(&self, now: u64) -> Vec<u8> {
         let mut out: Vec<u8> = digits(self.now()).iter().flat_map(|&d| (d as u32).to_le_bytes()).collect();
-        out.extend_from_slice(&((now_ms() / 1000.0) as u64).to_le_bytes());
+        out.extend_from_slice(&now.to_le_bytes());
         out
     }
 
     /// Restores the footer; the clock goes on by the wall time elapsed since it was written.
-    pub fn import_footer(&mut self, f: &[u8]) {
+    pub fn import_footer(&mut self, f: &[u8], now: u64) {
         let d: [u8; 13] = std::array::from_fn(|i| f[i * 4]);
-        let saved_at = u64::from_le_bytes(f[52..60].try_into().unwrap()) as f64;
-        self.base_ms = (saved_at - seconds(&d) as f64) * 1000.0;
+        let saved_at = u64::from_le_bytes(f[52..60].try_into().unwrap());
+        self.dots = (seconds(&d) + now.saturating_sub(saved_at)) * DOTS_PER_SECOND;
     }
 
     /// Register state for save states: selected register, the 16 nibbles, the byte read back.
