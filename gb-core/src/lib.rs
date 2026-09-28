@@ -12,6 +12,7 @@ pub mod memory;
 pub mod ppu;
 pub mod printer;
 pub mod registers;
+pub mod sdsp;
 pub mod serial;
 pub mod sgb;
 pub mod spc700;
