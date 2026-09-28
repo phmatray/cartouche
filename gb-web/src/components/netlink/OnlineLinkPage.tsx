@@ -260,7 +260,8 @@ function Ticket({ code, compact }: { code: string; compact: boolean }) {
   const url = inviteUrl(code, new URL(import.meta.env.BASE_URL, location.origin).href);
   const qr = useMemo(() => encode(url, { ecc: 'M', border: 0 }), [url]);
   const path = useMemo(() => qr.data.flatMap((row, y) => row.map((on, x) => (on ? `M${x} ${y}h1v1h-1z` : ''))).join(''), [qr]);
-  const copy = (text: string, done: string) => navigator.clipboard?.writeText(text).then(() => toast(done, 'c'), () => toast(tNow('online.ticket.copyFailed'), 'm'));
+  // No clipboard API (a page on plain HTTP, say): the copy fails with its message rather than doing nothing.
+  const copy = (text: string, done: string) => Promise.resolve().then(() => navigator.clipboard.writeText(text)).then(() => toast(done, 'c'), () => toast(tNow('online.ticket.copyFailed'), 'm'));
   const canShare = typeof navigator.share === 'function';
   return (
     <section className={`nl-ticket paper${compact ? ' compact' : ''}`} aria-labelledby="h-code">
