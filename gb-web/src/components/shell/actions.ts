@@ -15,7 +15,8 @@ export function startInstall() {
 }
 
 export type Tone = '' | 'm' | 'c';
-export interface ToastAction { label: string; run: () => void }
+/** target: a selector for what the action opens, which gets the focus (its button goes with the toast). */
+export interface ToastAction { label: string; run: () => void; target?: string }
 export interface ToastItem { id: number; msg: string; tone: Tone; action?: ToastAction }
 export const useToasts = create<{ list: ToastItem[] }>(() => ({ list: [] }));
 let seq = 0;
