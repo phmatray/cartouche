@@ -321,9 +321,10 @@ export class LcdEngine {
       if (big) this.blend4 = out; else this.blend = out;
     }
     this.use(color, next, 0);
-    this.bind(0, src, false);
-    this.bind(1, prev.tex, false);
+    // Unit 0 last: textures created later are bound to the active unit, never to the curve's.
     this.bind(2, this.curves[f.correction === 'gba' ? 'gba' : 'gbc']!, true);
+    this.bind(1, prev.tex, false);
+    this.bind(0, src, false);
     gl.uniform1i(color.u.u_frame, 0);
     gl.uniform1i(color.u.u_hist, 1);
     gl.uniform1i(color.u.u_curve, 2);
@@ -340,8 +341,8 @@ export class LcdEngine {
 
     // Frame blending: the same program as a plain mix (raw colour, no adjustments) of the two unghosted frames.
     this.use(color, out!, 0);
-    this.bind(0, next.tex, false);
     this.bind(1, prev.tex, false);
+    this.bind(0, next.tex, false);
     gl.uniform1f(color.u.u_mode, 0);
     gl.uniform1f(color.u.u_adjOn, 0);
     gl.uniform1f(color.u.u_ghost, ghost);
