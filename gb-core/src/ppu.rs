@@ -198,7 +198,7 @@ impl Ppu {
     }
 
     pub fn write_register(&mut self, addr: u16, value: u8) {
-        if self.line.active && self.mode == PpuMode::Drawing && matches!(addr, 0xFF40 | 0xFF4A | 0xFF4B)
+        if self.line.active && self.mode == PpuMode::Drawing && matches!(addr, 0xFF40 | 0xFF43 | 0xFF4A | 0xFF4B)
             && self.read_register(addr) != value
         {
             self.line.relength = true; // DMG: see `step`
@@ -217,6 +217,7 @@ impl Ppu {
                     self.stat_irq_line = false;
                     self.lcd_on_line0 = false;
                     self.line.active = false;
+                    self.window_was_active = false;
                 } else if !was_enabled && is_enabled {
                     // Line 0 restarts 4 dots in, without an OAM scan.
                     self.mode = PpuMode::OamScan;
@@ -359,8 +360,9 @@ impl Ppu {
     fn mode3_length(&self, line: usize) -> u32 {
         let fine = (self.scx % 8) as i32;
         let window = self.lcdc & 0x20 != 0 && (self.cgb_mode || self.lcdc & 0x01 != 0)
-            && line >= self.wy as usize && self.wx <= 166;
+            && (if self.cgb_mode { line >= self.wy as usize } else { self.window_was_active || line == self.wy as usize }) && self.wx <= 166;
         let mut len = 172 + fine as u32 + if window { 6 } else { 0 };
+        if window && self.wx == 0 && fine > 0 && !self.cgb_mode { len += 1; }
         if self.lcdc & 0x02 == 0 { return len; }
         let (mut objs, n) = self.select_sprites(line);
         objs[..n].sort_by_key(|o| o.0); // fetched left to right
@@ -932,7 +934,7 @@ mod tests {
         assert_eq!(line_timing(|_| {}).0, 80 + 172);
         assert_eq!(line_timing(|p| p.scx = 3).0, 80 + 172 + 3);
         assert_eq!(line_timing(|p| p.scx = 8).0, 80 + 172, "only the fine scroll counts");
-        assert_eq!(line_timing(|p| { p.lcdc |= 0x20; p.wx = 7; }).0, 80 + 172 + 6);
+        assert_eq!(line_timing(|p| { p.lcdc |= 0x20; p.wx = 7; p.wy = 10; }).0, 80 + 172 + 6);
         assert_eq!(line_timing(|p| { p.lcdc |= 0x20; p.wx = 7; p.wy = 11; }).0, 80 + 172, "window below the line");
         // Pan Docs: 6 per OBJ, plus 5 minus its offset in its BG tile for the first OBJ on a tile.
         assert_eq!(line_timing(|p| objs_at(p, &[8])).0, 80 + 172 + 11);
@@ -949,7 +951,7 @@ mod tests {
     #[test]
     fn line_is_456_dots() {
         assert_eq!(line_timing(|_| {}).1, 456);
-        assert_eq!(line_timing(|p| { objs_at(p, &[8; 10]); p.scx = 7; p.lcdc |= 0x20; }).1, 456);
+        assert_eq!(line_timing(|p| { objs_at(p, &[8; 10]); p.scx = 7; p.lcdc |= 0x20; p.wy = 10; }).1, 456);
     }
 
     /// The shown picture is the last whole frame: stopping mid-frame (as a fixed-length
@@ -1018,6 +1020,7 @@ mod tests {
     /// BG: tile 0 (light) from the $9800 map. Window: tile 1 (dark) from the $9C00 map.
     fn window_setup(p: &mut Ppu) {
         p.lcdc = 0xF1;
+        p.wy = 10;
         p.vram[16..32].fill(0xFF);
         p.vram[0x1C00..0x2000].fill(1);
         p.wx = 50;
@@ -1028,6 +1031,46 @@ mod tests {
         let s = shades(&run_line10(window_setup, |_, _| {}), 10);
         assert_eq!(s.iter().position(|&v| v == 3), Some(43));
         assert!(s[43..].iter().all(|&v| v == 3));
+    }
+
+    /// The window needs WY to have matched LY on an earlier line of the frame, not just WY <= LY.
+    #[test]
+    fn window_waits_for_wy_to_match_ly() {
+        let s = shades(&run_line10(|p| { window_setup(p); p.wy = 0; }, |_, _| {}), 10);
+        assert!(s.iter().all(|&v| v == 0), "WY never matched this frame: {s:?}");
+        let s = shades(&run_line10(|p| { window_setup(p); p.wy = 0; p.window_was_active = true; }, |_, _| {}), 10);
+        assert_eq!(s.iter().position(|&v| v == 3), Some(43));
+    }
+
+    /// Turned off, then on again before WX matches once more, the window restarts there on its next row.
+    #[test]
+    fn window_retriggers_after_lcdc5_toggle() {
+        let setup = |p: &mut Ppu| {
+            window_setup(p);
+            p.vram[0x1C00..0x2000].fill(2); // tile 2: row 0 dark, row 1 light grey
+            p.vram[32..35].fill(0xFF);
+        };
+        let p = run_line10(setup, |p, d| match d {
+            90 => { p.write_register(0xFF40, 0xD1); p.write_register(0xFF4B, 100); }
+            110 => p.write_register(0xFF40, 0xF1),
+            _ => {}
+        });
+        let s = shades(&p, 10);
+        assert!(s[43..60].iter().all(|&v| v == 3), "the window from x = 43, row 0: {s:?}");
+        assert!(s[80..93].iter().all(|&v| v == 0), "BG while it is off: {s:?}");
+        assert!(s[93..].iter().all(|&v| v == 1), "restarted at x = 93 on row 1: {s:?}");
+        assert_eq!(p.window_line_counter, 2, "two rows used");
+    }
+
+    /// The first tile is fetched twice, but its tile number is read by the first fetch only.
+    #[test]
+    fn first_tile_number_read_once() {
+        let p = run_line10(|p| {
+            p.vram[16..32].fill(0xFF); // tile 1: dark
+            p.vram[0x1820..0x1840].fill(1); // map row 1 (lines 8-15 at SCY 0): dark
+        }, |p, d| if d == 10 { p.write_register(0xFF42, 8) }); // map row 2: light
+        let s = shades(&p, 10);
+        assert!(s[..8].iter().all(|&v| v == 3) && s[8..].iter().all(|&v| v == 0), "{s:?}");
     }
 
     #[test]
