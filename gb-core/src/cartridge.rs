@@ -222,8 +222,10 @@ impl Cartridge {
         };
 
         // $00-$08: 32 KB << n. Anything else (a damaged or hand-made header) is sized from the file,
-        // never 0 banks: `2 << n` wraps to 0 for some of them.
-        let rom_bank_count = if rom_size <= 8 { 2usize << rom_size } else { (data.len() / 0x4000).next_power_of_two().max(2) };
+        // never 0 banks: `2 << n` wraps to 0 for some of them. A header smaller than the file (a
+        // homebrew that never updated it) does not hide the banks past it: the chip is the file's size.
+        let file_banks = data.len().div_ceil(0x4000).next_power_of_two().max(2);
+        let rom_bank_count = if rom_size <= 8 { (2usize << rom_size).max(file_banks) } else { file_banks };
 
         // MBC2 has built-in 512x4-bit RAM; ignore the ram_size header byte for it
         let ram_bytes = match cart_type {
@@ -733,6 +735,18 @@ mod tests {
             c.write_rom(0x6000, 0x01); // mode 1: bank 0 area follows the upper bits
             assert_eq!(c.read_rom(0x0147), 0x01);
         }
+    }
+
+    #[test]
+    fn a_header_smaller_than_the_file_still_reaches_every_bank() {
+        let mut rom = vec![0u8; 0x4000 * 8];
+        rom[0x147] = 0x01; // MBC1
+        rom[0x148] = 0x00; // says 32 KB, the file is 128 KB
+        rom[0x14D] = (0x134..=0x14C).fold(0u8, |c, a| c.wrapping_sub(rom[a]).wrapping_sub(1));
+        rom[5 * 0x4000] = 0x55;
+        let mut c = Cartridge::from_rom(rom).expect("loads");
+        c.write_rom(0x2000, 5);
+        assert_eq!(c.read_rom(0x4000), 0x55, "bank 5, not bank 1");
     }
 
     #[test]
