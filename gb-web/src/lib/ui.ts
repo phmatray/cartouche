@@ -21,6 +21,28 @@ export const searchState = () => ({ from: (history.state as { idx?: number } | n
  */
 export const focusIfLost = (el: HTMLElement | null) => { if (el && (!document.activeElement || document.activeElement === document.body)) el.focus(); };
 
+/**
+ * When `el` (a dialog's opener) leaves the page, as a deleted row's button does, the focus goes to the nearest control
+ * still there instead of falling to <body>. Watches a few seconds: the removal can follow an async write.
+ */
+export function keepFocusNear(el: Element | null) {
+  const chain: Element[] = [];
+  for (let e = el; e && e !== document.body; e = e.parentElement) chain.push(e);
+  if (!el || !chain.length) return;
+  const settled = () => {
+    if (el.isConnected) return false;
+    if (document.activeElement && document.activeElement !== document.body) return true; // it went somewhere already
+    for (const c of chain) if (c.isConnected) {
+      const f = c.querySelector<HTMLElement>('a[href],button:not([disabled]),input:not([disabled]):not([tabindex="-1"]),select,[tabindex="0"]');
+      if (f) { f.focus(); break; }
+    }
+    return true;
+  };
+  const mo = new MutationObserver(() => { if (settled()) mo.disconnect(); });
+  mo.observe(document.body, { childList: true, subtree: true });
+  setTimeout(() => mo.disconnect(), 3000);
+}
+
 /** The focusable in `pool` nearest to `from` in an arrow key's direction (TV-style spatial navigation), or null. */
 export function spatialNext(from: Element, key: string, pool: Iterable<HTMLElement>): HTMLElement | null {
   const d = ({ ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] } as Record<string, number[]>)[key];
