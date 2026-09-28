@@ -102,7 +102,7 @@ export const LEGAL_ES: LegalSection[] = [
       'Tus ROM, partidas guardadas, estados guardados, ajustes, favoritos y tiempo de juego se guardan solo en este ' +
       'navegador (IndexedDB y localStorage) y nunca salen de tu dispositivo, salvo si activas la sincronización entre dispositivos (ver más abajo). Borra los datos de este sitio en ' +
       'los ajustes de tu navegador para eliminarlo todo.\n\n' +
-      'Solo GitHub recibe peticiones, salvo si permites las carátulas, conectas RetroAchievements, juegas en línea o activas la sincronización entre dispositivos (ver más abajo). GitHub Pages sirve la app y sus fuentes. Las carátulas están desactivadas de forma ' +
+      'Solo GitHub recibe peticiones, salvo si permites las carátulas, conectas RetroAchievements, inicias sesión para desbloquear logros, juegas en línea o activas la sincronización entre dispositivos (ver más abajo). GitHub Pages sirve la app y sus fuentes. Las carátulas están desactivadas de forma ' +
       'predeterminada y necesitan tu aceptación (cuadro de diálogo del primer inicio o Ajustes > Almacenamiento); solo entonces el ' +
       'navegador carga también las carátulas de las ROM reconocidas que añadiste desde raw.githubusercontent.com, y las de los juegos de GB Studio desde itch.io (img.itch.zone, ver Carátulas). Como cualquier ' +
       'servidor web, GitHub recibe ' +
@@ -114,8 +114,20 @@ export const LEGAL_ES: LegalSection[] = [
       'de la API web (nunca tu contraseña). Ambos se quedan en este navegador (localStorage). Mientras estás conectado, el navegador ' +
       'pide a retroachievements.org (https://retroachievements.org) la lista de juegos de las dos consolas y, para un juego que ' +
       'abres, sus logros y cuáles has conseguido; la clave y el usuario van en esas peticiones, como exige su API web. Una ROM se ' +
-      'reconoce comparando su huella MD5 con esas listas en el navegador: nunca se envían ni la ROM ni su huella. ' +
+      'reconoce comparando su huella MD5 con esas listas en el navegador: para ello, no se envían ni la ROM ni su huella. ' +
       'RetroAchievements recibe tu dirección IP y los datos de tu navegador. «Desconectar» olvida la clave y detiene toda petición.\n\n' +
+      'Desbloquear logros mientras juegas está desactivado hasta que inicias sesión en Ajustes > Logros > «Desbloquear ' +
+      'jugando» con tu nombre de usuario y tu contraseña, una sola vez. La contraseña se envía a RetroAchievements a ' +
+      'través del relé de Cartouche y nunca se guarda; solo el token de sesión que devuelve RetroAchievements se queda ' +
+      'en este navegador (localStorage). Mientras se ejecuta un juego reconocido, el navegador envía a través del relé la ' +
+      'huella MD5 de la ROM (para identificar el juego), los logros y las entradas de clasificación que consigues, y ' +
+      'señales periódicas con la presencia enriquecida (lo que haces en el juego, visible en tu perfil de ' +
+      'RetroAchievements). El relé es un Cloudflare Worker gestionado por el mantenedor de Cartouche ' +
+      '(cartouche-ra.phmatray.workers.dev): solo reenvía esas peticiones a retroachievements.org y no guarda nada (ni ' +
+      'registros ni almacenamiento). Cloudflare, su proveedor de alojamiento, recibe tu dirección IP y el contenido de esas ' +
+      'peticiones (nombre de usuario, token, la contraseña al iniciar sesión, huella); consulta la política de privacidad ' +
+      'de Cloudflare (https://www.cloudflare.com/privacypolicy/). «Cerrar sesión» olvida el token y detiene esas ' +
+      'peticiones.\n\n' +
       'El juego en línea (Cable Link) y la sincronización entre dispositivos (Ajustes > Sincronizar) no hacen ninguna ' +
       'petición hasta que abres o te unes a una sala, o vinculas un dispositivo. Entonces tu navegador contacta cinco ' +
       'relés Nostr públicos que Cartouche no gestiona (relay02.lnfi.network, staging.yabu.me, top.testrelay.top, ' +

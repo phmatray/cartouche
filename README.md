@@ -139,7 +139,7 @@ emulator prove itself; hide them in Settings if you'd rather not see them.
 **Your data**
 - Everything lives in your browser; no account, no server of ours.
 - Device sync between your own devices, paired by QR code and end-to-end encrypted: saves, states, favorites, play time and settings, and ROMs if both sides allow it ([how it works](docs/SYNC.md)).
-- RetroAchievements: connect your account to see a game's achievements and which ones you earned. Read-only for now: nothing is unlocked ([why](docs/RETROACHIEVEMENTS.md)).
+- RetroAchievements: connect your account to see a game's achievements and which ones you earned, and sign in to unlock them as you play (softcore; [details](docs/RETROACHIEVEMENTS.md)).
 - Settings › Storage shows what is stored and deletes any of it.
 
 **Accessibility and languages**
@@ -191,7 +191,7 @@ cd gb-core && cargo test --release --no-fail-fast
 - No account, no server, no analytics, no cookies, no tracking.
 - Your ROMs, saves, screenshots and settings stay in your browser (IndexedDB).
   Nothing is uploaded to a server.
-- Only GitHub is contacted (unless you connect RetroAchievements, play online or turn on device sync, below). GitHub Pages serves the app. Box art is off until
+- Only GitHub is contacted (unless you connect RetroAchievements, sign in to unlock achievements, play online or turn on device sync, below). GitHub Pages serves the app. Box art is off until
   you agree in the "Show box art?" dialog; after that, covers of recognized
   games come from `raw.githubusercontent.com`, and covers of GB Studio games
   from itch.io (`img.itch.zone`). Like any web server, GitHub (or itch.io) sees
@@ -200,9 +200,16 @@ cd gb-core && cargo test --release --no-fail-fast
 - Settings › Storage shows what is stored and deletes it, box art included.
 - RetroAchievements is off until you connect in Settings › Achievements with your
   username and web API key (never your password; both stay in the browser). Then
-  `retroachievements.org` is asked for your earned achievements, read-only
-  ([why nothing is unlocked](docs/RETROACHIEVEMENTS.md)). ROMs are matched by MD5
-  in the browser and never sent.
+  `retroachievements.org` is asked for your earned achievements. ROMs are matched
+  by MD5 in the browser and not sent.
+- Unlocking is off until you sign in under Settings › Achievements › "Unlock while
+  playing" with your password, once: it goes to RetroAchievements through
+  Cartouche's relay (a Cloudflare Worker that keeps nothing) and is never stored;
+  only the session token stays in the browser. While a recognized game runs, the
+  ROM's MD5 hash, your unlocks, leaderboard entries and rich presence pings go
+  through the relay, so Cloudflare sees them and your IP address
+  ([Cloudflare privacy policy](https://www.cloudflare.com/privacypolicy/),
+  [details](docs/RETROACHIEVEMENTS.md)). "Sign out" stops it.
 - Play online and device sync reach five public Nostr relays and Google and
   Cloudflare STUN servers to connect the two browsers: they see your IP address,
   and so does the other player or device. Game and sync data (saves, states,
@@ -221,7 +228,7 @@ your dumps.
 
 ## Roadmap
 
-- **RetroAchievements unlocks**, once the emulator is eligible (six months public, from March 2027) and RetroAchievements approves a browser client ([what is needed](docs/RETROACHIEVEMENTS.md)).
+- **RetroAchievements hardcore**: unlocks are softcore for now; hardcore needs the emulator validated by RetroAchievements (eligible after six months public, from March 2027) and the hardcore rules in the player ([what is needed](docs/RETROACHIEVEMENTS.md)).
 - **HuC1, HuC3 and MBC7** cartridge support.
 - **Super Game Boy sound**: the SNES side's music and effects.
 - **More hosted GB Studio games**, as authors choose licenses that allow it.
