@@ -501,12 +501,13 @@ function Player({ game }: { game: GameEntry }) {
   const rewind = online.on ? noop : startRewind, load = online.on ? async () => {} : loadSlot;
   const actions = useRef({ togglePlay, saveSlot, loadSlot: load, screenshot, mute, toggleFullscreen, startRewind: rewind, stopRewind });
   useEffect(() => { actions.current = { togglePlay, saveSlot, loadSlot: load, screenshot, mute, toggleFullscreen, startRewind: rewind, stopRewind }; });
-  // The pad's menu button (Home, or Select + Start): pause and open the Manual, or play on.
+  // The pad's menu button (Home, or Select + Start): pause and open the Manual, or play on. Not while the touch layout
+  // is edited: the game waits under the editor (as P does, see `down`).
   useEffect(() => {
     padNav.game = romLoaded && isRunning;
-    padNav.menu = romLoaded ? () => { if (isRunning) setManual(true); actions.current.togglePlay(); } : undefined;
+    padNav.menu = romLoaded && !editing ? () => { if (isRunning) setManual(true); actions.current.togglePlay(); } : undefined;
     return () => { padNav.game = false; padNav.menu = undefined; };
-  }, [romLoaded, isRunning]);
+  }, [romLoaded, isRunning, editing]);
   useEffect(() => {
     const buttonOf = (key: string) => {
       for (const [b, k] of Object.entries(keybindings)) if (k === key || k.toLowerCase() === key.toLowerCase()) return BUTTON_NUMBERS[b];
