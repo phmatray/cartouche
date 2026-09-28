@@ -8,6 +8,7 @@ import { parseRegion } from '../lib/catalog-utils';
 import { assetUrl, TEST_CATEGORY } from '../lib/ui';
 import { boxArtAllowed, getCoverArtUrl, needsDownload } from '../lib/cover-art';
 import { indexFor } from '../lib/search';
+import { catalogMatch, withCatalog, withLocal, withLocals } from '../lib/library-merge';
 import { inUse } from '../lib/play-lock';
 import { useSettingsStore } from '../store/settingsStore';
 import { t } from '../i18n';
@@ -50,48 +51,6 @@ function localEntry(id: string, title: string, genre: string, data: Uint8Array, 
     compatibility: h ? ({ 'DMG Only': 'mono', 'CGB Compatible': 'dual', 'CGB Only': 'color' } as const)[h.cgbFlag] : undefined,
     saveType: h ? (/BATTERY/.test(h.cartridgeType) ? 'battery' : 'none') : undefined,
   };
-}
-
-/**
- * The catalog entry a user ROM belongs to: same id, same SHA-1 (hosted GB Studio games), same title, or else an
- * unknown dump whose header title starts one catalog title and no other (GB Studio headers: 'OPOSSUMCOUNTR').
- */
-function catalogMatch(list: GameEntry[], e: GameEntry) {
-  const k = titleKey(e.title);
-  const found = list.find((g) => !g.isLocal && (g.id === e.id || (!!e.sha1 && g.sha1 === e.sha1) || catKey(g) === k));
-  const h = titleKey(e.romHeaderTitle ?? '');
-  if (found || e.developer || h.length < 6) return found;
-  const hits = list.filter((g) => !g.isLocal && catKey(g).startsWith(h));
-  return hits.length === 1 ? hits[0] : undefined;
-}
-// A library load matches every user ROM against the whole catalog: each catalog title is folded once, not once per ROM.
-const catKeys = new WeakMap<GameEntry, string>();
-function catKey(g: GameEntry) {
-  let k = catKeys.get(g);
-  if (k === undefined) catKeys.set(g, (k = titleKey(g.title)));
-  return k;
-}
-
-/**
- * Put a user ROM on the shelf. When it matches a catalog entry (same id, or same title) it replaces
- * that entry instead of appearing twice, and keeps the catalog's details.
- */
-function withLocal(list: GameEntry[], e: GameEntry): GameEntry[] {
-  const cat = catalogMatch(list, e);
-  const merged: GameEntry = cat ? {
-    ...cat, ...e,
-    title: e.developer ? e.title : cat.title, // no GameDB match: the catalog title beats a file name
-    description: e.developer ? e.description : cat.description || e.description,
-    descriptions: e.developer ? undefined : cat.descriptions,
-    regions: e.regions?.length ? e.regions : cat.regions,
-    genre: e.genre !== 'Unknown' ? e.genre : cat.genre,
-    developer: e.developer ?? cat.developer,
-    year: e.year ?? cat.year,
-    romUrl: cat.romUrl,
-    coverArt: cat.coverArt || e.coverArt,
-    coverCredit: cat.coverCredit,
-  } : e;
-  return [...list.filter((g) => g !== cat && g.id !== e.id), merged];
 }
 
 /**
@@ -142,16 +101,11 @@ async function loadLibrary() {
   // First load: the shelf shows now, the GB Studio collection joins it when its chunk lands (a cold visit on a slow
   // network). `loading` stays on until then: game pages, search and imports wait for the whole catalog.
   const early = useLibraryStore.getState().loading;
-  if (early) useLibraryStore.setState({ games: userEntries.reduce(withLocal, CATALOG).map(withMeta), savedIds, storageError: false });
+  if (early) useLibraryStore.setState({ games: withLocals(CATALOG, userEntries).map(withMeta), savedIds, storageError: false });
   const catalog = catalogList = await full;
   if (early) setGames((prev) => withCatalog(prev, catalog.slice(CATALOG.length).map(withMeta))); // keeps what changed meanwhile
-  else setGames(() => userEntries.reduce(withLocal, catalog).map(withMeta));
+  else setGames(() => withLocals(catalog, userEntries).map(withMeta));
   useLibraryStore.setState({ savedIds, loading: false, storageError: false });
-}
-
-/** The shelf with more catalog entries: the user ROMs already on it are matched against them again. */
-export function withCatalog(shelf: GameEntry[], more: GameEntry[]): GameEntry[] {
-  return shelf.filter((g) => g.isLocal).reduce(withLocal, [...shelf.filter((g) => !g.isLocal), ...more]);
 }
 
 const summarize = async (title: string, genre: string, data: Uint8Array): Promise<RomSummary> =>
@@ -179,7 +133,7 @@ function flushPending() {
   if (!pending.length) return;
   const add = pending;
   pending = [];
-  setGames((prev) => add.reduce(withLocal, prev));
+  setGames((prev) => withLocals(prev, add));
 }
 
 /**
