@@ -393,6 +393,9 @@ impl GameBoy {
         self.cpu.handle_interrupts(&mut self.bus);
         self.cpu.step(&mut self.bus)?;
         self.double_speed = self.bus.double_speed;
+        if let Some(w) = &mut self.bus.watch {
+            w.hit = None; // a step stops anyway: no break left over for the next run_frame
+        }
         Ok(self.bus.cycle_count)
     }
 

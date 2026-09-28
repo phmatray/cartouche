@@ -201,6 +201,16 @@ fn write_watchpoint_ignores_reads_and_removal_stops_it() {
 }
 
 #[test]
+fn a_watched_access_made_by_a_step_is_not_reported_later() {
+    let mut gb = booted(&[0x3E, 0x3F, 0xEA, 0x00, 0xC0, 0x18, 0xFE]);
+    gb.watch_add(0xC000, WRITE);
+    gb.step_instruction().unwrap();
+    gb.step_instruction().unwrap(); // the write, stepped over by hand
+    gb.run_frame().unwrap(); // JR -2 forever: nothing else touches $C000
+    assert_eq!(gb.take_break(), None);
+}
+
+#[test]
 fn oam_dma_over_a_watched_address_does_not_fire() {
     // $0100: LD SP, $DFF0; LD A, $C1; LDH [$46], A; JR -2. During the DMA the CPU fetches $FF
     // (RST $38) from ROM: the stack is moved off OAM so only the DMA writes there.
