@@ -26,5 +26,7 @@ export const dismissToast = (id: number) => useToasts.setState((s) => ({ list: s
 export function toast(msg: string, tone: Tone = '', action?: ToastAction) {
   const id = ++seq;
   useToasts.setState((s) => ({ list: [...s.list, { id, msg, tone, action }] }));
-  setTimeout(() => dismissToast(id), 4200);
+  // Held while the pointer or the focus is on it (its button stays reachable), then gone 4.2 s later.
+  const later = () => setTimeout(() => (document.querySelector(`.toast[data-id="${id}"]:is(:hover,:focus-within)`) ? later() : dismissToast(id)), 4200);
+  later();
 }
