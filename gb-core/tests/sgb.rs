@@ -530,13 +530,20 @@ fn a_state_keeps_the_snes_sound_playing() {
     assert!(snes(&fresh).covered());
 
     // The previous version (5): the same layout without the SNES block, which an idle SNES side
-    // saves as a single 0 just before the tail (stop mode, KEY0, an empty mapper block).
-    let mut v5 = sgb().save_state();
-    assert_eq!(v5[4], 6, "this layout is version 6");
-    let n = v5.len();
-    assert_eq!(v5[n - 5], 0, "an idle SNES side");
-    v5.remove(n - 5);
-    v5[4] = 5;
+    // saves as a single 0 near the end (before the optional tails). Found as the one byte whose
+    // removal, read as version 5, saves back as the version 6 state does after a load.
+    let v6 = sgb().save_state();
+    assert_eq!(v6[4], 6, "this layout is version 6");
+    let mut reloaded = sgb();
+    assert!(reloaded.load_state(&v6));
+    let resaved = reloaded.save_state();
+    let v5 = (v6.len() - 64..v6.len()).rev().find_map(|i| {
+        let mut v5 = v6.clone();
+        v5.remove(i);
+        v5[4] = 5;
+        let mut probe = sgb();
+        (probe.load_state(&v5) && probe.save_state() == resaved).then_some(v5)
+    }).expect("a version 5 state round-trips to this one");
     assert!(gb.load_state(&v5), "a version 5 state loads");
     let rms = frame_rms(&mut gb);
     assert!(rms < 0.01 && !snes(&gb).covered(), "with the SNES side idle: RMS {rms}");
