@@ -271,6 +271,19 @@ impl MemoryBus {
         true
     }
 
+    /// STOP entered: DIV resets and the LCD shows blank until a button wakes the CPU.
+    pub fn enter_stop(&mut self) {
+        self.write_byte(0xFF04, 0);
+        self.ppu.blank();
+    }
+
+    /// An M-cycle in stop mode: the clock is off (no PPU, timer, DMA or sound), only time passes.
+    pub fn stop_tick(&mut self) {
+        let t = if self.double_speed { 2 } else { 4 };
+        self.apu.silence(t);
+        self.cycle_count += t;
+    }
+
     pub fn serial_output(&self) -> &[u8] {
         self.serial.serial_output()
     }

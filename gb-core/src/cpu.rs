@@ -25,9 +25,11 @@ impl Cpu {
 
     /// Handle pending interrupts. Returns true if an interrupt was serviced.
     pub fn handle_interrupts(&mut self, bus: &mut MemoryBus) {
+        if self.stopped {
+            return; // only a button wakes stop mode (see `step`)
+        }
         if bus.interrupts.pending() != 0 {
             self.halted = false;
-            self.stopped = false;
         }
 
         if !self.ime {
@@ -49,6 +51,15 @@ impl Cpu {
         if self.ime_pending {
             self.ime = true;
             self.ime_pending = false;
+        }
+
+        if self.stopped {
+            bus.stop_tick();
+            // A selected joypad line going low wakes it; with none selected only a reset would.
+            if bus.read_byte(0xFF00) & 0x0F != 0x0F {
+                self.stopped = false;
+            }
+            return Ok(4);
         }
 
         if self.halted {
@@ -203,7 +214,25 @@ impl Cpu {
             }
 
             // === STOP ===
-            0x10 => { self.regs.pc = self.regs.pc.wrapping_add(1); if !bus.try_speed_switch() { self.stopped = true; } Ok(4) }
+            0x10 => {
+                // Pan Docs, "Using the STOP Instruction": the second byte is skipped unless an
+                // interrupt is pending.
+                let pending = bus.interrupts.pending() != 0;
+                if bus.try_speed_switch() {
+                    self.regs.pc = self.regs.pc.wrapping_add(1);
+                } else if bus.read_byte(0xFF00) & 0x0F != 0x0F {
+                    // A selected button already held: no stop mode, DIV kept; HALT when nothing is pending.
+                    if !pending {
+                        self.regs.pc = self.regs.pc.wrapping_add(1);
+                        self.halted = true;
+                    }
+                } else {
+                    if !pending { self.regs.pc = self.regs.pc.wrapping_add(1); }
+                    bus.enter_stop();
+                    self.stopped = true;
+                }
+                Ok(4)
+            }
 
             // === LD r8, r8 (0x40-0x7F, excluding HALT at 0x76) ===
             0x40 => Ok(4), // LD B,B

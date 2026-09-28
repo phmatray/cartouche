@@ -179,3 +179,45 @@ fn the_first_frame_after_a_load_continues_the_thumbnail() {
     assert_eq!(row(0), [9, 9, 9, 0xFF], "drawn before the save point");
     assert_ne!(row(100), [9, 9, 9, 0xFF], "drawn after the load");
 }
+
+/// LD A,$10 (select the buttons); LDH ($00),A; STOP; INC B; JR -2.
+const STOP: [u8; 9] = [0x3E, 0x10, 0xE0, 0x00, 0x10, 0x00, 0x04, 0x18, 0xFE];
+
+/// STOP halts the CPU and LCD (blank screen, DIV reset) until the web side presses a selected
+/// button; a save state keeps it stopped, and an older state (no tail) loads as not stopped.
+#[test]
+fn stop_mode_waits_for_a_button_from_the_web_side() {
+    let mut emu = gb_core::Emulator::new();
+    assert!(emu.load_rom(&rom(&STOP, &[])));
+    for _ in 0..3 { emu.step(); }
+    for _ in 0..3 { assert!(emu.run_frame()); }
+    assert_eq!((emu.get_pc(), emu.get_bc() >> 8), (0x0106, 0), "stopped after the 2-byte STOP");
+    assert_eq!(emu.read_memory(0xFF04), 0, "DIV reset and frozen");
+    let white = gb_core::ppu::PALETTE_COLORS[0];
+    assert!(emu.framebuffer_snapshot().chunks(4).all(|p| p == white), "LCD blank");
+
+    let state = emu.save_state();
+    let mut old = gb_core::Emulator::new();
+    assert!(old.load_rom(&rom(&STOP, &[])));
+    assert!(old.load_state(&state[..state.len() - 1]));
+    old.run_frame();
+    assert_ne!(old.get_pc(), 0x0106, "an older state is not in stop mode");
+    assert!(emu.load_state(&state));
+
+    emu.press_button(JoypadButton::Right); // the d-pad is not selected: still stopped
+    emu.run_frame();
+    assert_eq!(emu.get_pc(), 0x0106);
+    emu.press_button(JoypadButton::A);
+    emu.run_frame();
+    assert_eq!(emu.get_bc() >> 8, 1, "woken by A");
+}
+
+/// With a selected button already held, STOP enters no stop mode (Pan Docs): DIV is kept.
+#[test]
+fn stop_with_a_button_held_does_not_stop() {
+    let mut gb = boot(&STOP, &[]);
+    gb.bus.joypad.set_button(JoypadButton::A, true);
+    for _ in 0..3 { gb.step_instruction().unwrap(); }
+    assert!(!gb.cpu.stopped && gb.cpu.halted, "HALT instead, nothing pending");
+    assert_ne!(gb.bus.read_byte(0xFF04), 0);
+}

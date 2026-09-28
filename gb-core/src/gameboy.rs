@@ -345,6 +345,8 @@ impl GameBoy {
         data.extend_from_slice(&sr.remaining.to_le_bytes());
         self.bus.apu.export_state(&mut data);
         if let Some(s) = &self.bus.sgb { s.export_state(&mut data); }
+        // Optional tail (absent from older states): stop mode.
+        data.push(self.cpu.stopped as u8);
 
         data
     }
@@ -511,17 +513,23 @@ impl GameBoy {
         self.bus.ppu.lcd_on_line0 = read_u8!() != 0;
         self.bus.ppu.stat_irq_line = read_u8!() != 0;
         self.cpu.ime_pending = read_u8!() != 0;
-        self.cpu.stopped = read_u8!() != 0;
+        // Before the tail below, STOP never stopped anything: an older state is not in stop mode.
+        pos += 1;
+        self.cpu.stopped = false;
         self.bus.serial.data = read_u8!();
         self.bus.serial.control = read_u8!();
         self.bus.serial.incoming = read_u8!();
         self.bus.serial.remaining = read_u32!();
         if !self.bus.apu.import_state(data, &mut pos) { return false; }
         if let Some(s) = self.bus.sgb.as_deref_mut() {
-            if !s.import_state(data, &mut pos) { return false; }
+            // A Game Boy state has no SGB side (but may have the tail): that side starts fresh.
+            let mut p = if saved == Console::Sgb { pos } else { data.len() };
+            if !s.import_state(data, &mut p) { return false; }
+            if saved == Console::Sgb { pos = p; }
         }
-
-        let _ = pos;
+        if let Some(&[stopped, ..]) = data.get(pos..) {
+            self.cpu.stopped = stopped != 0;
+        }
         true
     }
 }

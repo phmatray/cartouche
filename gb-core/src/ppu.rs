@@ -222,6 +222,12 @@ impl Ppu {
         }
     }
 
+    /// Stop mode: the LCD shows blank (white, as SameBoy draws it) until the CPU wakes.
+    pub fn blank(&mut self) {
+        let white = if self.cgb_mode || self.compat { [0xFF; 4] } else { PALETTE_COLORS[0] };
+        for px in self.front.chunks_exact_mut(4) { px.copy_from_slice(&white); }
+    }
+
     /// Advance PPU by the given T-cycles. Returns (vblank_irq, stat_irq, hblank_entry).
     pub fn step(&mut self, cycles: u32) -> (bool, bool, bool) {
         if self.lcdc & 0x80 == 0 {
