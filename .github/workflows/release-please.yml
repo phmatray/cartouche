@@ -69,9 +69,12 @@ jobs:
     steps:
       - name: Approve the release PR's pending CI run
         run: |
+          # Only the run of the branch's head: older held runs (earlier release PRs, earlier pushes) stay as they
+          # are, as approving one would start it after the head's and cancel the head's (CI's concurrency group).
           # The run appears a few seconds after release-please pushed the branch (none: nothing was pushed).
+          sha=$(gh api "repos/$GITHUB_REPOSITORY/branches/$BRANCH" --jq .commit.sha 2>/dev/null) || exit 0
           for _ in $(seq 1 12); do
-            ids=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=$BRANCH&status=action_required" --jq '.workflow_runs[].id')
+            ids=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=$BRANCH&status=action_required&head_sha=$sha" --jq '.workflow_runs[].id')
             [ -n "$ids" ] && break
             sleep 5
           done
