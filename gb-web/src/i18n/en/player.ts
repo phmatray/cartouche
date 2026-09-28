@@ -78,6 +78,7 @@ export default {
     changedElsewhere: 'This save changed elsewhere (another tab or device): saving to a new one, “{name}”, so both are kept',
   },
   error: {
+    engine: 'the emulator couldn’t start, check the connection',
     crashed: 'The game stopped: the console hit an instruction it can’t run.',
     init: 'Emulator not initialized',
     unknown: 'Unknown error loading ROM',

@@ -27,28 +27,22 @@ export function useEmulator() {
   const [isCgb, setIsCgb] = useState(false);
   const [errors, setErrors] = useState<EmulatorError[]>([]);
   const [registers, setRegisters] = useState<RegisterState | null>(null);
+  /** The WebAssembly core couldn't load (offline before it was cached, say): the player offers a retry. */
+  const [initFailed, setInitFailed] = useState(false);
 
-  const initialize = useCallback(async () => {
-    try {
-      const wasm = await import('gb-core');
-      const initOutput = await wasm.default();
-      wasmMemory = initOutput.memory;
-
-      emulatorRef.current = new wasm.Emulator();
-      setIsReady(true);
-    } catch (e) {
-      setErrors(prev => [...prev, {
-        timestamp: Date.now(),
-        message: `Failed to initialize WASM: ${e}`,
-      }]);
-    }
-  }, []);
+  const initialize = useCallback(() => import('gb-core').then(async (wasm) => {
+    const initOutput = await wasm.default();
+    wasmMemory = initOutput.memory;
+    emulatorRef.current = new wasm.Emulator();
+    setIsReady(true);
+  }).catch((e) => { console.error(e); setInitFailed(true); }), []);
 
   useEffect(() => {
     initialize();
     // Free the core after every other cleanup of the page has run (they may still save state or SRAM).
     return () => { setTimeout(() => { emulatorRef.current?.free(); emulatorRef.current = null; }); };
   }, [initialize]);
+  const retryInit = useCallback(() => { setInitFailed(false); initialize(); }, [initialize]);
 
   const addError = useCallback((message: string, detail?: string) => {
     setErrors(prev => [...prev, { timestamp: Date.now(), message, detail }]);
@@ -309,6 +303,8 @@ export function useEmulator() {
     core,
     coreRef: emulatorRef,
     isReady,
+    initFailed,
+    retryInit,
     isRunning,
     setIsRunning,
     romLoaded,
