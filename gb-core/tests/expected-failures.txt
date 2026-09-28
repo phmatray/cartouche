@@ -150,7 +150,7 @@ gbmicrotest/802-ppu-latch-tileselect.gb  # no-verdict
 gbmicrotest/803-ppu-latch-bgdisplay.gb  # no-verdict
 gbmicrotest/audio_testbench.gb  # no-verdict
 gbmicrotest/cpu_bus_1.gb  # no-verdict
-gbmicrotest/dma_basic.gb  # oam-dma
+gbmicrotest/dma_basic.gb  # no-verdict
 gbmicrotest/flood_vram.gb  # no-verdict
 gbmicrotest/halt_bug.gb  # interrupt
 gbmicrotest/halt_op_dupe_delay.gb  # interrupt

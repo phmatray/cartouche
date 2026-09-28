@@ -36,14 +36,16 @@ fn dma_from_vram_leaves_rom_fetches_alone() {
 #[test]
 fn dma_conflicts_only_on_its_own_bus() {
     let mut gb = boot(&[0x18, 0xFE], &[]);
+    gb.bus.write_byte(0x8000, 0x5A);
+    gb.bus.write_byte(0xC000, 0x3C);
     gb.bus.write_byte(0xFF46, 0x80); // from VRAM
     for _ in 0..2 { gb.bus.cycle_tick(); } // start-up M-cycle, then the first byte
-    assert_ne!(gb.bus.read_byte(0x0100), 0xFF, "ROM is on the other bus");
-    assert_eq!(gb.bus.read_byte(0x8000), 0xFF, "VRAM is busy");
+    assert_eq!(gb.bus.read_byte(0x0100), 0x18, "ROM is on the other bus");
+    assert_eq!(gb.bus.read_byte(0x9ABC), 0x5A, "VRAM is busy: a read sees the DMA's byte");
     assert_eq!(gb.bus.read_byte(0xFE00), 0xFF, "OAM is busy");
     gb.bus.write_byte(0xFF46, 0xC0); // from WRAM
     for _ in 0..2 { gb.bus.cycle_tick(); }
-    assert_eq!(gb.bus.read_byte(0x0100), 0xFF, "ROM shares the external bus");
+    assert_eq!(gb.bus.read_byte(0x0100), 0x3C, "ROM shares the external bus: the DMA's byte");
     gb.bus.write_byte(0xFF80, 0x5A);
     assert_eq!(gb.bus.read_byte(0xFF80), 0x5A, "HRAM stays reachable");
 }

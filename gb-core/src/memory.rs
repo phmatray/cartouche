@@ -158,9 +158,20 @@ impl MemoryBus {
 
     pub fn read_byte(&self, addr: u16) -> u8 {
         if self.dma_active && self.dma_conflict(addr) {
-            return 0xFF;
+            // On a Game Boy the CPU sees the byte the DMA reads this M-cycle; OAM itself, and
+            // every conflict on Color hardware (as SameBoy), read $FF.
+            if addr >= 0xFE00 || self.cgb_mode || self.ppu.compat {
+                return 0xFF;
+            }
+            return self.peek(self.dma_src(self.dma_index.saturating_sub(1)));
         }
         self.peek(addr)
+    }
+
+    /// The address the OAM DMA reads byte `i` from; pages $E0-$FF read work RAM, like echo RAM.
+    fn dma_src(&self, i: u8) -> u16 {
+        let src = (self.dma_source as u16) << 8 | i as u16;
+        if src >= 0xE000 { src - 0x2000 } else { src }
     }
 
     /// The byte at `addr`, ignoring a running OAM DMA.
@@ -413,9 +424,7 @@ impl MemoryBus {
             self.dma_active = false;
             return;
         }
-        // Pages $E0-$FF read work RAM, like echo RAM.
-        let src = (self.dma_source as u16) << 8 | self.dma_index as u16;
-        let byte = self.peek(if src >= 0xE000 { src - 0x2000 } else { src });
+        let byte = self.peek(self.dma_src(self.dma_index));
         self.ppu.write_oam(self.dma_index as u16, byte);
         self.dma_index += 1;
     }
@@ -550,6 +559,19 @@ mod tests {
         assert_eq!(bus.read_byte(0xFE00), 0xFF, "the M-cycle of the last byte is still blocked");
         bus.cycle_tick();
         assert_eq!(bus.read_byte(0xFE00), 0x01, "done");
+    }
+
+    #[test]
+    fn oam_dma_conflicting_read_sees_the_dma_byte() {
+        let mut bus = bus();
+        bus.write_byte(0xFF46, 0xC0); // from WRAM, on the external bus with ROM
+        for _ in 0..2 { bus.cycle_tick(); }
+        assert_eq!(bus.read_byte(0x0100), 0x01, "a ROM read sees the byte the DMA reads");
+        assert_eq!(bus.read_byte(0xD123), 0x01);
+        bus.cycle_tick();
+        assert_eq!(bus.read_byte(0x0100), 0x02);
+        assert_eq!(bus.read_byte(0xFE00), 0xFF, "OAM itself still reads $FF");
+        assert_eq!(bus.read_byte(0x8000), 0x00, "VRAM is on the other bus");
     }
 
     #[test]
