@@ -1,7 +1,7 @@
 // node --test: SameBoy's LCD colour curves, and stored display settings made safe to render.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { correctRgb555 } from './lcd-curves.ts';
+import { correctRgb555, curveLut } from './lcd-curves.ts';
 import { cpuColor, normalizeDisplay, presetOf } from './filters.ts';
 
 // Literals printed by SameBoy v1.0.3 itself, never recomputed from the ported tables: Core/display.c
@@ -55,4 +55,16 @@ test('cpuColor corrects the 5-bit value the core drew', () => {
     assert.deepEqual([...out.slice(0, 3)], correctRgb555(r, g, b, mode));
   }
   assert.deepEqual([...cpuColor(px([10, 20, 5]), { ...f, correction: 'off' }, true)], [...px([10, 20, 5])]);
+});
+
+test('curveLut holds each channel ramp the colour pass samples', () => {
+  for (const mode of ['gbc', 'gba'] as const) {
+    const lut = curveLut(mode);
+    assert.equal(lut.length, 32 * 4);
+    assert.deepEqual([...lut.slice(31 * 4, 31 * 4 + 3)], correctRgb555(31, 31, 31, mode));
+    assert.deepEqual([...lut.slice(0, 3)], correctRgb555(0, 0, 0, mode));
+    // Red and blue are the curve alone: a pure-channel colour reads the same entry.
+    assert.equal(lut[16 * 4], correctRgb555(16, 0, 0, mode)[0]);
+    assert.equal(lut[16 * 4 + 2], correctRgb555(0, 0, 16, mode)[2]);
+  }
 });

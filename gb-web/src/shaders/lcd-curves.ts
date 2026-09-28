@@ -24,3 +24,14 @@ export function correctRgb555(r5: number, g5: number, b5: number, mode: LcdModel
   const mixed = (((g / 255) ** MIX_GAMMA * w + (b / 255) ** MIX_GAMMA) / (w + 1)) ** (1 / MIX_GAMMA);
   return [r, Math.round(mixed * 255), b];
 }
+
+/**
+ * The 32x1 RGBA texture color.glsl samples at (c * 31 + 0.5) / 32: each channel's curve, entry by 5-bit value.
+ * The green/blue mix is not separable, so the shader does it after the lookup, as correctRgb555 does.
+ */
+export function curveLut(mode: LcdModel): Uint8Array {
+  const curve = mode === 'gba' ? CURVE_AGB : CURVE_CGB;
+  const lut = new Uint8Array(32 * 4);
+  curve.forEach((v, i) => lut.set([v, v, v, 255], i * 4));
+  return lut;
+}
