@@ -488,6 +488,9 @@ impl Sweep {
 
     /// `ticks` 2 MHz ticks, after `lf_div` flipped for them.
     fn tick(&mut self, ch1: &mut SquareChannel, ticks: u32, lf_div: u16) {
+        if self.reload_timer | self.calculate_countdown | self.restart_hold == 0 {
+            return; // nothing pending: the common case, every M-cycle
+        }
         let mut sweep_ticks = (ticks / 2) as u8 + (ticks & 1 != 0 && lf_div == 0) as u8;
         if self.reload_timer > sweep_ticks {
             self.reload_timer -= sweep_ticks;
