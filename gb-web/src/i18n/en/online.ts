@@ -96,6 +96,7 @@ export default {
     joining: 'Joining the room',
     waiting: 'Waiting for Player {p}',
     bytes: { one: '{count} byte', other: '{count} bytes' },
+    inStep: 'in step',
   },
   wait: {
     lostT: 'Connection lost',
@@ -110,5 +111,13 @@ export default {
     wait: 'Each byte on the cable makes a round trip over the internet.',
     unplug: 'Unplug the cable',
     gaveUp: 'No answer from Player {p} for 20 s: the game saw the cable unplugged',
+    inStep: 'Both games run in step here: this one waits for Player {p}’s buttons.',
+  },
+  mode: {
+    lockstep: 'You both have both games: the two consoles now run in step, at full speed',
+  },
+  desync: {
+    title: 'Desynchronised',
+    body: 'The two games no longer match. Unplug the cable to play on alone.',
   },
 };

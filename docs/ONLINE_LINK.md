@@ -1,7 +1,8 @@
 # Online link cable
 
 Link cable over the internet between two browsers, peer to peer. Each player runs only their own Game Boy,
-their own cartridge and their own battery save; only the serial port's bytes cross the network.
+their own cartridge and their own battery save; only the serial port's bytes cross the network. When both players
+hold both games, each browser runs both consoles in step instead and only the buttons cross ([Lockstep mode](#lockstep-mode-both-players-hold-both-games)).
 Route: `/link-cable/online` (lobby), then `/game/:id/play?online=<room>&save=<profile>` for each player.
 
 ## Connection (`gb-web/src/lib/p2p/`)
@@ -70,8 +71,41 @@ Core hooks (`gb-core/src/serial.rs`, WASM: `set_link_remote`, `link_stalled`, `l
    reported counts through a lost connection too (an iPhone that switches apps pauses, then goes silent).
 
 Infrared is not carried in this mode: its pulses are timed in CPU cycles, which one round trip per byte can't preserve.
+It is in lockstep mode (below).
 
 While linked: speed is fixed at 1×; rewind and loading states are off; battery saves work as usual.
+
+## Lockstep mode (both players hold both games)
+
+Chosen on its own when each player has the other's game (the same game on both sides, or two games both hold);
+otherwise the byte mode above runs as before. Each browser then runs **both** consoles, joined by the core's own
+cable (`run_frame_linked`, serial and infrared), and only the buttons cross the network. `gb-web/src/lib/netlink/`:
+`lockstep.ts` (input scheduler, message guards), `session.ts` (handshake), `useLockstep.ts` (player page).
+
+1. Handshake, once both games run: each side sends `roms {g, s}`, the SHA-1 of its game and of every game it holds
+   (library entries with a SHA-1: imported ROMs and the hosted GB Studio games; the bundled catalog games have none
+   yet). No ROM ever crosses. If each holds the other's game, the host measures the round trip (median of 5 echoes
+   through the room, test delay included) and sends `boot {seed, d, save}`: the clock seed (epoch seconds, see
+   `set_emulated_clock`), the input delay and its battery save. The guest answers `boot {save}`. Until then the
+   offer and the host's boot go again with every heartbeat.
+2. Both browsers switch both consoles on the same way: plain `load_rom` (the game's own console, no start-up
+   animation, no colourisation or Super Game Boy), the player's battery save as sent, the clock seed, cheat codes
+   off. Player 1's console always runs first in the pair. The game restarts once, from its battery save, when the
+   mode is chosen (a toast says so).
+3. Every frame each side sends `i {f, b}`: its buttons, sampled now, for frame now + D. Frame n runs once both
+   inputs for n are known; the first D frames run with no button. D = `clamp(ceil(rtt / 2 / 16.74) + 1, 2, 10)`,
+   fixed for the session. Frames follow the Game Boy's pace from the start, so a frame a short wait held back is
+   made up (up to 4 per refresh; after half a second behind, a pause, the pace starts over).
+4. Every 60 frames: `h {f, x}`, both consoles' `state_hash` XOR-ed. A mismatch stops both sides on
+   *Desynchronised — the two games no longer match*, with *Unplug the cable*. Test knob:
+   `localStorage['cartouche.netlink.desync'] = '1'` sends wrong hashes.
+5. Each browser shows its own seat's screen, plays its own console's sound (the other's is dropped) and writes only
+   its own battery save. The partner's inputs late more than 600 ms bring the usual *Waiting for Player N* banner
+   (paused, lost, left); unplugging goes on alone from the current state.
+
+Every received message is checked for shape, types and ranges (`isLockMsg`, `isHashMsg`, `isRomsMsg` with at most
+4096 SHA-1s, `isBootMsg` with the save capped at 128 KiB + clock). A reload mid-session goes back to the byte
+mode for that page (no resume in this slice); rollback is the next slice (#151).
 
 ## Measurements (localhost, two Chrome contexts; artificial one-way delay added on each side)
 
@@ -92,6 +126,20 @@ slower (a few hundred bytes at 100 ms ≈ tens of seconds), **but no trade or ba
 game yet**: the synthetic Rust tests cover the exchange pattern, the two turn-based games tried never used the
 cable in the screens reached. **Real-time link games stutter**: the game above runs at a fraction of its speed
 once the round trip passes a few tens of ms.
+
+Lockstep mode (same setup, headless Chromium, hosted GB Studio games, a button pressed every second on each side):
+
+| Round trip | Input delay D | Frame rate, each side |
+|---|---|---|
+| ~1 ms | 2 | 58.5–58.6 fps |
+| ~50 ms | 3 | 59.4–59.5 fps |
+| ~150 ms | 6 | 59.3–59.7 fps |
+| ~300 ms | 10 | 59.5–59.6 fps |
+
+The hashes still matched after 5 minutes at ~150 ms (59.7 fps both sides); with the desync knob on one side, both
+showed *Desynchronised* within 2 s. Two different games held by both players (Dawn Will Come ↔ Poltersprite) run
+in lockstep too; a game the other player lacks falls back to the byte mode. No real-time link game was at hand to
+play: the tests check that both browsers run the same frames, not a game's own link play.
 
 Verified end to end on localhost (Playwright): Chrome↔Chrome and Chrome↔WebKit (iPhone 15 profile) lobbies;
 invite link; both ready → both games; pause on one side shows *Player N paused* on the other; a reload of one
