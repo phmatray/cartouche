@@ -924,7 +924,7 @@ html[data-motion=reduced] *,html[data-motion=reduced] *::before,html[data-motion
    close  game page → shelf: the reverse, faster; the ink drains back into the slot.
    play   → player: the box is inserted into the LCD, the bezel closes, the manual and the deck follow.
    eject  player → back: the screen shrinks into the box.
-   page   settings section → section: the paper page turns on its spine (forward) or back over (backward).
+   page   settings section → section: a short cross-fade of the paper; the contents' marker slides.
    fade   every other route: a short cross-fade, drifting the way the header's tabs go (data-vt-dir).
    still: reduced motion, 150 ms fades, nothing moves.
    The header's underline and the contents' tab marker are their own elements: they slide to the new entry. */
@@ -989,7 +989,6 @@ html[data-vt=eject]::view-transition-old(deck),html[data-vt=eject]::view-transit
 
 html[data-vt-shell] .nav .mk{view-transition-name:navmark}
 html[data-vt=page] .toc .mk{view-transition-name:tocmark}
-html[data-vt=page][data-vt-dir] .manual .paper{view-transition-name:paper}
 ::view-transition-group(top){z-index:3}
 ::view-transition-group(navmark){z-index:4;animation-duration:calc(280ms * var(--vt-k))}
 ::view-transition-group(tocmark){animation-duration:calc(300ms * var(--vt-k))}
@@ -997,13 +996,6 @@ html[data-vt=fade][data-vt-dir=fwd]::view-transition-old(root){animation:vt-out-
 html[data-vt=fade][data-vt-dir=fwd]::view-transition-new(root){animation:vt-in-r calc(240ms * var(--vt-k)) var(--ease) calc(40ms * var(--vt-k)) both}
 html[data-vt=fade][data-vt-dir=back]::view-transition-old(root){animation:vt-out-r calc(140ms * var(--vt-k)) var(--exit) both}
 html[data-vt=fade][data-vt-dir=back]::view-transition-new(root){animation:vt-in-l calc(240ms * var(--vt-k)) var(--ease) calc(40ms * var(--vt-k)) both}
-/* The leaf turns on its left edge, lifting toward the reader; the page under it comes out of its shadow. */
-::view-transition-image-pair(paper){perspective:2600px}
-::view-transition-group(paper){animation-duration:calc(400ms * var(--vt-k))}
-html[data-vt-dir=fwd]::view-transition-old(paper){z-index:1;transform-origin:0 50%;animation:vt-leaf calc(400ms * var(--vt-k)) cubic-bezier(.5,0,.4,1) both}
-html[data-vt-dir=fwd]::view-transition-new(paper){animation:vt-unshade calc(400ms * var(--vt-k)) linear both}
-html[data-vt-dir=back]::view-transition-new(paper){z-index:1;transform-origin:0 50%;animation:vt-leaf calc(400ms * var(--vt-k)) cubic-bezier(.5,0,.4,1) reverse both}
-html[data-vt-dir=back]::view-transition-old(paper){animation:vt-unshade calc(400ms * var(--vt-k)) linear reverse both}
 
 @keyframes vt-in{from{opacity:0}}
 @keyframes vt-out{to{opacity:0}}
@@ -1019,8 +1011,6 @@ html[data-vt-dir=back]::view-transition-old(paper){animation:vt-unshade calc(400
 @keyframes vt-out-r{to{opacity:0;transform:translateX(24px)}}
 @keyframes vt-in-r{from{opacity:0;transform:translateX(24px)}}
 @keyframes vt-in-l{from{opacity:0;transform:translateX(-24px)}}
-@keyframes vt-leaf{80%{opacity:1}to{opacity:0;transform:rotateY(-90deg);filter:brightness(.7)}}
-@keyframes vt-unshade{from{filter:brightness(.72)}}
 
 /* Landing points that take focus after a route change (not controls: no ring). */
 main h1[tabindex="-1"]:focus,.pl .stage canvas.lcd:focus{outline:none}
