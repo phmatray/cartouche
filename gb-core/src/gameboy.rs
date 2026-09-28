@@ -519,7 +519,8 @@ impl GameBoy {
         self.bus.serial.data = read_u8!();
         self.bus.serial.control = read_u8!();
         self.bus.serial.incoming = read_u8!();
-        self.bus.serial.remaining = read_u32!();
+        // A transfer lasts at most 8 x 512 cycles: a larger count would hold SC busy for minutes.
+        self.bus.serial.remaining = read_u32!().min(8 * 512);
         if !self.bus.apu.import_state(data, &mut pos) { return false; }
         if let Some(s) = self.bus.sgb.as_deref_mut() {
             // A Game Boy state has no SGB side (but may have the tail): that side starts fresh.
@@ -580,7 +581,7 @@ const SAVE_VERSION: u32 = 5;
 mod tests {
     use super::*;
 
-    /// A damaged state's PPU line, line clock and HBlank DMA are clamped to values the machine can
+    /// A damaged state's PPU line, line clock, HBlank DMA and serial transfer are clamped to values the machine can
     /// run from (release builds wrap instead of panicking: these ran a line per M-cycle for seconds,
     /// or copied 255 stray HDMA blocks over VRAM).
     #[test]
@@ -594,12 +595,14 @@ mod tests {
         gb.bus.ppu.ly = 200;
         gb.bus.ppu.mode_clock = u32::MAX - 8;
         (gb.bus.hdma_active, gb.bus.hdma_remaining, gb.bus.hdma_dest) = (true, 0, 0xFFFF);
+        gb.bus.serial.remaining = u32::MAX;
         let state = gb.save_state();
         let mut g = GameBoy::new(rom).unwrap();
         assert!(g.load_state(&state));
         assert!(g.bus.ppu.ly <= 143 && g.bus.ppu.mode_clock < 456);
         assert!(!g.bus.hdma_active);
         assert_eq!(g.bus.hdma_dest, 0x1FF0);
+        assert!(g.bus.serial.remaining <= 8 * 512);
         g.run_frame().unwrap();
     }
 
