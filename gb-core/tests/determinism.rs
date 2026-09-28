@@ -60,3 +60,46 @@ fn an_emulated_clock_stamps_the_same_battery_save_everywhere() {
     d.bus.cartridge.import_sram(&sav);
     assert_eq!(c.bus.cartridge.export_sram(), d.bus.cartridge.export_sram());
 }
+
+/// Two consoles joined by the cable, both on the same emulated clock.
+fn pair() -> (GameBoy, GameBoy) {
+    (console(Some(1_700_000_000.0)), console(Some(1_700_000_000.0)))
+}
+
+/// Presses the buttons whose bits are set in `mask` (bit 0 = A … bit 7 = Down), releases the rest.
+fn press(gb: &mut GameBoy, mask: u8) {
+    use gb_core::joypad::JoypadButton::*;
+    for (i, b) in [A, B, Select, Start, Right, Left, Up, Down].into_iter().enumerate() {
+        gb.bus.joypad.set_button(b, mask >> i & 1 != 0);
+    }
+}
+
+/// AC1: two independently built sessions fed one input log agree frame by frame, whatever the
+/// host's timing between frames.
+#[test]
+fn two_linked_sessions_fed_the_same_inputs_hash_the_same_every_frame() {
+    let log: Vec<u8> = (0..600).map(|i| [0x00, 0x01, 0x10, 0x81][i % 4]).collect();
+    let (mut a1, mut b1) = pair();
+    std::thread::sleep(std::time::Duration::from_millis(1100)); // the other machine, a second later
+    let (mut a2, mut b2) = pair();
+    for (frame, &mask) in log.iter().enumerate() {
+        if frame % 100 == 0 { std::thread::sleep(std::time::Duration::from_millis(20)); }
+        for gb in [&mut a1, &mut a2] { press(gb, mask); }
+        for gb in [&mut b1, &mut b2] { press(gb, !mask); }
+        gb_core::gameboy::run_linked_frame(&mut a1, &mut b1).unwrap();
+        gb_core::gameboy::run_linked_frame(&mut a2, &mut b2).unwrap();
+        assert_eq!((a1.state_hash(), b1.state_hash()), (a2.state_hash(), b2.state_hash()), "frame {frame}");
+    }
+    assert_ne!(a1.state_hash(), b1.state_hash(), "the two sides saw different inputs");
+    assert_eq!(a1.bus.read_byte(0xC000), 10, "and their clocks ran");
+}
+
+/// AC4: loading a console's own state back changes nothing its hash can see.
+#[test]
+fn a_state_loaded_back_hashes_the_same() {
+    let mut gb = console(Some(1_700_000_000.0));
+    for _ in 0..300 { gb.run_frame().unwrap(); }
+    let before = gb.state_hash();
+    assert!(gb.load_state(&gb.save_state()));
+    assert_eq!(gb.state_hash(), before);
+}

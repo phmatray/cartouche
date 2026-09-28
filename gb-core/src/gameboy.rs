@@ -336,6 +336,11 @@ impl GameBoy {
         Ok(self.bus.cycle_count)
     }
 
+    /// A stable 32-bit FNV-1a hash of `save_state()`, to check that two copies of a session agree.
+    pub fn state_hash(&self) -> u32 {
+        self.save_state().iter().fold(0x811C_9DC5, |h, &b| (h ^ b as u32).wrapping_mul(0x0100_0193))
+    }
+
     pub fn save_state(&self) -> Vec<u8> {
         let mut data = Vec::with_capacity(65536);
 
