@@ -3,16 +3,19 @@ pub const SCREEN_HEIGHT: usize = 144;
 pub const FRAMEBUFFER_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT * 4;
 
 use crate::fifo::LineState;
-use crate::trace::{Tracer, LAYER_BG, LAYER_OBJ, LAYER_WIN, LINE_CGB, LINE_RENDERED, NO_OBJ};
+use crate::trace::Tracer;
 
 /// An OBJ selected for a scanline: (x, OAM slot, y, tile, attributes), raw OAM values.
 pub(crate) type Sprite = (u8, usize, u8, u8, u8);
 
 /// HBlank (its interrupt, HBlank DMA) starts this many dots before mode 3's length
-/// (`Ppu::mode3_length`) runs out, and STAT reads mode 0 from 3 dots later (`read_register`): so a
+/// (`Ppu::mode3_len`) runs out, and STAT reads mode 0 from 3 dots later (`read_register`): so a
 /// CPU takes the interrupt, and reads mode 0, at the M-cycle hardware does for every SCX, window
 /// and OBJ (gbmicrotest `hblank_int_scx*`, `ppu_sprite0_scx*`, `sprite_*`, `win*`).
 const MODE0_EARLY: u32 = 2;
+/// The longest mode 3 a line can have (172 + 7 fine scroll + 6 window + 10 OBJs of 11 dots): what
+/// `mode3_len` holds until the FIFO measures the line (`measure_len`).
+const MODE3_MAX: u32 = 295;
 
 pub const PALETTE_COLORS: [[u8; 4]; 4] = [
     [0xE0, 0xF8, 0xD0, 0xFF], // lightest
@@ -54,8 +57,8 @@ pub struct Ppu {
     /// First line after the LCD is switched on, until its HBlank: no OAM scan (STAT reads mode 0),
     /// the line is 4 dots short, and its mode 3 shows late and ends late.
     pub(crate) lcd_on_line0: bool,
-    /// Dots mode 3 lasts on the current line (`mode3_length`, set as it starts; on a DMG, the pixel
-    /// FIFO's length after a mid-line LCDC/WY/WX write); HBlank gets the rest.
+    /// Dots mode 3 lasts on the current line, as the pixel FIFO measures it (`measure_len`; until
+    /// then `MODE3_MAX`); HBlank gets the rest.
     pub mode3_len: u32,
     /// Dots per CPU M-cycle: 4, or 2 in CGB double speed (set by the bus when the speed changes).
     pub m_cycle_dots: u32,
@@ -66,9 +69,6 @@ pub struct Ppu {
     /// frame the emulator stops in the middle of never mixes two emulated frames.
     pub front: Vec<u8>,
     pub frame_ready: bool,
-
-    // Per-scanline BG color ID buffer for OBJ-to-BG priority
-    bg_color_ids: [u8; SCREEN_WIDTH],
 
     // STAT interrupt line — used for rising-edge detection to avoid re-firing
     pub(crate) stat_irq_line: bool,
@@ -81,13 +81,12 @@ pub struct Ppu {
     pub obj_cram: [u8; 64],
     pub bcps: u8,
     pub ocps: u8,
-    bg_cgb_priority: [bool; SCREEN_WIDTH],
+    /// OPRI ($FF6C): bit 0 set, CGB OBJs overlap by X (as on a DMG) instead of by OAM index.
+    pub opri: u8,
 
     /// Per-frame layer trace; `None` (the default) in normal play. See `trace.rs`.
     pub trace: Option<Box<Tracer>>,
-    /// Traced lines only: `[slot, colour id, attr, drawn]` of the OBJ claiming each dot.
-    line_obj: [[u8; 4]; SCREEN_WIDTH],
-    /// DMG: the pixel FIFO of the line in mode 3 (`fifo.rs`); not saved, a loaded state redraws the line.
+    /// The pixel FIFO of the line in mode 3 (`fifo.rs`); not saved, a loaded state redraws the line.
     pub(crate) line: LineState,
 }
 
@@ -113,12 +112,11 @@ impl Ppu {
             window_line_counter: 0,
             window_was_active: false,
             lcd_on_line0: false,
-            mode3_len: 172,
+            mode3_len: MODE3_MAX,
             m_cycle_dots: 4,
             framebuffer: [0; FRAMEBUFFER_SIZE],
             front: vec![0; FRAMEBUFFER_SIZE],
             frame_ready: false,
-            bg_color_ids: [0; SCREEN_WIDTH],
             stat_irq_line: false,
             cgb_mode: false,
             compat: false,
@@ -126,9 +124,8 @@ impl Ppu {
             obj_cram: [0; 64],
             bcps: 0,
             ocps: 0,
-            bg_cgb_priority: [false; SCREEN_WIDTH],
+            opri: 0,
             trace: None,
-            line_obj: [[NO_OBJ, 0, 0, 0]; SCREEN_WIDTH],
             line: LineState::default(),
         }
     }
@@ -224,6 +221,7 @@ impl Ppu {
             0xFF69 => self.bg_cram[(self.bcps & 0x3F) as usize],
             0xFF6A => self.ocps | 0x40,
             0xFF6B => self.obj_cram[(self.ocps & 0x3F) as usize],
+            0xFF6C => 0xFE | self.opri,
             _ => 0xFF,
         }
     }
@@ -232,7 +230,7 @@ impl Ppu {
         if self.line.active && self.mode == PpuMode::Drawing && matches!(addr, 0xFF40 | 0xFF43 | 0xFF4A | 0xFF4B)
             && self.read_register(addr) != value
         {
-            self.line.relength = true; // DMG: see `step`
+            self.line.relength = true; // see `measure_len`
         }
         match addr {
             0xFF40 => {
@@ -288,6 +286,7 @@ impl Ppu {
                     self.ocps = (self.ocps & 0x80) | new_idx;
                 }
             }
+            0xFF6C => self.opri = value & 1,
             _ => {}
         }
     }
@@ -315,31 +314,24 @@ impl Ppu {
                 if self.mode_clock >= 80 {
                     self.mode_clock -= 80;
                     self.mode = PpuMode::Drawing;
-                    // After LCD on, line 0 has no OBJs (no OAM scan) and its mode 3 ends 2 dots later.
-                    self.mode3_len = if self.lcd_on_line0 { self.mode3_length(0, false) + 2 } else { self.mode3_length(self.ly as usize, true) };
-                    if !self.cgb_mode { self.start_line(); }
+                    self.mode3_len = MODE3_MAX;
+                    self.start_line();
                 }
             }
             PpuMode::Drawing => {
-                if !self.cgb_mode {
-                    if !self.line.active { self.start_line(); } // a state loaded in mode 3: redraw the line
-                    self.run_line(self.mode_clock + MODE0_EARLY);
-                    if self.line.relength {
-                        self.line.relength = false;
-                        self.mode3_len = self.predict_len();
-                    }
-                }
+                if !self.line.active { self.start_line(); } // a state loaded in mode 3: redraw the line
+                self.run_line(self.mode_clock + MODE0_EARLY);
+                self.measure_len();
                 if self.mode_clock >= self.mode3_len - MODE0_EARLY {
                     self.mode_clock -= self.mode3_len - MODE0_EARLY;
                     self.mode = PpuMode::HBlank;
                     self.lcd_on_line0 = false;
                     hblank_entry = true;
-                    if self.cgb_mode { self.render_scanline(); }
                 }
             }
             PpuMode::HBlank => {
-                // DMG: the FIFO lags behind the mode the CPU sees; the line ends in HBlank.
-                if self.line.active && !self.cgb_mode { self.run_line(self.mode_clock + self.mode3_len); }
+                // The FIFO lags behind the mode the CPU sees; the line ends in HBlank.
+                if self.line.active { self.run_line(self.mode_clock + self.mode3_len); }
                 if self.mode_clock >= 376 + MODE0_EARLY - self.mode3_len {
                     self.mode_clock -= 376 + MODE0_EARLY - self.mode3_len;
                     self.ly += 1;
@@ -382,41 +374,6 @@ impl Ppu {
         self.stat_irq_line = new_stat_line;
 
         (vblank_irq, stat_irq, hblank_entry)
-    }
-
-    /// Mode-3 length of `line` in dots (Pan Docs, "Mode 3 length"): 172, plus the SCX fine-scroll
-    /// discard, plus 6 when the window shows on the line, plus each OBJ's fetch: 6 dots, and for the
-    /// first OBJ (left to right) on a BG/window tile, 5 minus the OBJ's offset in that tile (≥ 0).
-    /// OBJs at OAM X 0 share a tile of their own: the first costs 11 whatever SCX.
-    /// The pixel FIFO (#155) must reproduce these lengths.
-    fn mode3_length(&self, line: usize, objs: bool) -> u32 {
-        let fine = (self.scx % 8) as i32;
-        let window = self.lcdc & 0x20 != 0 && (self.cgb_mode || self.lcdc & 0x01 != 0)
-            && (if self.cgb_mode { line >= self.wy as usize } else { self.window_was_active || line == self.wy as usize }) && self.wx <= 166;
-        let mut len = 172 + fine as u32 + if window { 6 } else { 0 };
-        if window && self.wx == 0 && fine > 0 && !self.cgb_mode { len += 1; }
-        if self.lcdc & 0x02 == 0 || !objs { return len; }
-        let (mut objs, n) = self.select_sprites(line);
-        objs[..n].sort_by_key(|o| o.0); // fetched left to right
-        let mut paid = 0u64; // tiles an OBJ already waited on: BG 0..=21, window 32..=53, X 0 63
-        for &(x, ..) in &objs[..n] {
-            if x >= 168 { continue; } // never reached
-            // Position of the OBJ's leftmost pixel, + 8, in the BG (with the discard) or the window.
-            let from_window = x as i32 + 7 - self.wx as i32;
-            let (tile, offset) = if x == 0 {
-                (63, 0) // off the left edge: a tile of its own, whatever the scroll
-            } else if window && from_window >= 8 {
-                (32 + from_window / 8, from_window % 8)
-            } else {
-                ((x as i32 + fine) / 8, (x as i32 + fine) % 8)
-            };
-            len += 6;
-            if paid & 1 << tile == 0 {
-                paid |= 1 << tile;
-                len += (5 - offset).max(0) as u32;
-            }
-        }
-        len
     }
 
     /// OR of all enabled STAT interrupt sources. Used for rising-edge detection.
@@ -490,79 +447,6 @@ impl Ppu {
         self.oam_bug_read();
     }
 
-    fn render_scanline(&mut self) {
-        let line = self.ly as usize;
-        if line >= SCREEN_HEIGHT { return; }
-        if !self.cgb_mode { return self.draw_line_dmg(); }
-        let traced = self.trace.is_some();
-        if traced {
-            self.line_obj = [[NO_OBJ, 0, 0, 0]; SCREEN_WIDTH];
-        }
-        let window_line = self.window_line_counter;
-        self.render_scanline_cgb(line);
-        if traced {
-            self.trace_line(line, window_line);
-        }
-    }
-
-    /// Traced lines: copies the line as it stands after the BG (`window == false`) or the
-    /// window pass into the BG plane / the window plane of the frame being built.
-    fn trace_plane(&mut self, line: usize, window: bool) {
-        if let Some(t) = self.trace.as_deref_mut() {
-            let r = line * SCREEN_WIDTH * 4..(line + 1) * SCREEN_WIDTH * 4;
-            let plane = if window { &mut t.building.win } else { &mut t.building.bg };
-            plane[r.clone()].copy_from_slice(&self.framebuffer[r]);
-        }
-    }
-
-    /// Traced lines: records the line's registers, OBJ selection and per-pixel layer info.
-    fn trace_line(&mut self, line: usize, window_line: u8) {
-        let Some(mut t) = self.trace.take() else { return };
-        let window_drawn = self.window_line_counter != window_line;
-        let win_x = self.wx.saturating_sub(7) as usize;
-        let (sprites, n) = if self.lcdc & 0x02 != 0 { self.select_sprites(line) } else { ([(0, 0, 0, 0, 0); 10], 0) };
-        let b = &mut t.building;
-        for x in 0..SCREEN_WIDTH {
-            let i = line * SCREEN_WIDTH + x;
-            let p = i * 4;
-            let covered = window_drawn && x >= win_x;
-            if !covered {
-                b.win[p..p + 4].fill(0);
-            }
-            let [slot, cid, attr, drawn] = self.line_obj[x];
-            let obj = if slot == NO_OBJ {
-                [0; 4]
-            } else if self.cgb_mode {
-                self.get_obj_cram_color(attr & 0x07, cid)
-            } else {
-                self.apply_palette(if attr & 0x10 != 0 { self.obp1 } else { self.obp0 }, cid, 1 + (attr >> 4 & 1))
-            };
-            b.obj[p..p + 4].copy_from_slice(&obj);
-            let layer = if drawn != 0 { LAYER_OBJ } else if covered { LAYER_WIN } else { LAYER_BG };
-            let ids = self.bg_color_ids[x] | (self.bg_cgb_priority[x] as u8) << 2 | cid << 4;
-            b.info[p..p + 4].copy_from_slice(&[layer, slot, ids, attr]);
-        }
-        let l = b.line_mut(line);
-        l[..12].copy_from_slice(&[
-            self.lcdc,
-            self.scx,
-            self.scy,
-            self.wx,
-            self.wy,
-            if window_drawn { window_line } else { 0xFF },
-            win_x as u8,
-            self.bgp,
-            self.obp0,
-            self.obp1,
-            LINE_RENDERED | if self.cgb_mode { LINE_CGB } else { 0 } | self.vram_bank << 2,
-            n as u8,
-        ]);
-        for (k, &(x, slot, y, tile, attr)) in sprites[..n].iter().enumerate() {
-            l[12 + k * 5..17 + k * 5].copy_from_slice(&[slot as u8, y, x, tile, attr]);
-        }
-        self.trace = Some(t);
-    }
-
     /// The first 10 OBJs (OAM order) that overlap `line`.
     pub(crate) fn select_sprites(&self, line: usize) -> ([Sprite; 10], usize) {
         let height: i16 = if self.lcdc & 0x04 != 0 { 16 } else { 8 };
@@ -580,159 +464,8 @@ impl Ppu {
         (out, n)
     }
 
-    // CGB rendering
-
-    fn render_scanline_cgb(&mut self, line: usize) {
-        let c0 = self.get_bg_cram_color(0, 0);
-        let ls = line * SCREEN_WIDTH * 4;
-        for x in 0..SCREEN_WIDTH {
-            let o = ls + x * 4;
-            self.framebuffer[o..o + 4].copy_from_slice(&c0);
-            self.bg_color_ids[x] = 0;
-            self.bg_cgb_priority[x] = false;
-        }
-        let bgmp = self.lcdc & 0x01 != 0;
-        self.render_bg_line_cgb(line);
-        self.trace_plane(line, false);
-        if self.lcdc & 0x20 != 0 && self.ly >= self.wy { self.render_window_line_cgb(line); }
-        self.trace_plane(line, true);
-        if self.lcdc & 0x02 != 0 { self.render_sprites_line_cgb(line, bgmp); }
-    }
-
-    fn render_bg_line_cgb(&mut self, line: usize) {
-        let tdb: u16 = if self.lcdc & 0x10 != 0 { 0x0000 } else { 0x0800 };
-        let tmb: u16 = if self.lcdc & 0x08 != 0 { 0x1C00 } else { 0x1800 };
-        let signed = self.lcdc & 0x10 == 0;
-        let y = self.scy.wrapping_add(line as u8);
-        let tr = (y / 8) as u16;
-        let pr = y % 8;
-        for sx in 0..SCREEN_WIDTH {
-            let x = self.scx.wrapping_add(sx as u8);
-            let tc = (x / 8) as u16;
-            let pc = x % 8;
-            let mo = tmb + tr * 32 + tc;
-            let ti = self.vram[mo as usize];
-            let attr = self.vram[0x2000 + mo as usize];
-            let pal = attr & 0x07;
-            let bank = (attr >> 3) & 0x01;
-            let fx = attr & 0x20 != 0;
-            let fy = attr & 0x40 != 0;
-            let prio = attr & 0x80 != 0;
-            let ta = if signed {
-                let si = ti as i8 as i16;
-                (tdb as i16 + (si + 128) * 16) as u16
-            } else { tdb + ti as u16 * 16 };
-            let ar = if fy { 7 - pr } else { pr };
-            let ac = if fx { 7 - pc } else { pc };
-            let cid = self.get_tile_pixel_banked(ta as usize, ar, ac, bank);
-            self.bg_color_ids[sx] = cid;
-            self.bg_cgb_priority[sx] = prio;
-            let col = self.get_bg_cram_color(pal, cid);
-            self.set_pixel(sx, line, col);
-        }
-    }
-
-    fn render_window_line_cgb(&mut self, line: usize) {
-        if self.wx > 166 || self.wy > 143 { return; }
-        let wxs = if self.wx < 7 { 0 } else { (self.wx - 7) as usize };
-        if line < self.wy as usize { return; }
-        let tdb: u16 = if self.lcdc & 0x10 != 0 { 0x0000 } else { 0x0800 };
-        let tmb: u16 = if self.lcdc & 0x40 != 0 { 0x1C00 } else { 0x1800 };
-        let signed = self.lcdc & 0x10 == 0;
-        let wy = self.window_line_counter;
-        let tr = (wy / 8) as u16;
-        let pr = wy % 8;
-        let mut rendered = false;
-        for sx in wxs..SCREEN_WIDTH {
-            rendered = true;
-            let wc = (sx - wxs) as u8;
-            let tc = (wc / 8) as u16;
-            let pc = wc % 8;
-            let mo = tmb + tr * 32 + tc;
-            let ti = self.vram[mo as usize];
-            let attr = self.vram[0x2000 + mo as usize];
-            let pal = attr & 0x07;
-            let bank = (attr >> 3) & 0x01;
-            let fx = attr & 0x20 != 0;
-            let fy = attr & 0x40 != 0;
-            let prio = attr & 0x80 != 0;
-            let ta = if signed {
-                let si = ti as i8 as i16;
-                (tdb as i16 + (si + 128) * 16) as u16
-            } else { tdb + ti as u16 * 16 };
-            let ar = if fy { 7 - pr } else { pr };
-            let ac = if fx { 7 - pc } else { pc };
-            let cid = self.get_tile_pixel_banked(ta as usize, ar, ac, bank);
-            self.bg_color_ids[sx] = cid;
-            self.bg_cgb_priority[sx] = prio;
-            let col = self.get_bg_cram_color(pal, cid);
-            self.set_pixel(sx, line, col);
-        }
-        if rendered { self.window_line_counter += 1; }
-    }
-
-    fn render_sprites_line_cgb(&mut self, line: usize, bgmp: bool) {
-        let sh: i16 = if self.lcdc & 0x04 != 0 { 16 } else { 8 };
-        let (spr, n) = self.select_sprites(line);
-        // Highest priority (lowest OAM index) first; see render_sprites_line.
-        let mut claimed = [false; SCREEN_WIDTH];
-        for &(sx, slot, sy, ti, fl) in &spr[..n] {
-            let x0 = sx as i16 - 8;
-            let fx = fl & 0x20 != 0;
-            let fy = fl & 0x40 != 0;
-            let obp = fl & 0x80 != 0;
-            let cpal = fl & 0x07;
-            let cbnk = (fl >> 3) & 0x01;
-            let mut row = (line as i16 - (sy as i16 - 16)) as u8;
-            if fy { row = sh as u8 - 1 - row; }
-            let ti2 = if sh == 16 { if row < 8 { ti & 0xFE } else { ti | 0x01 } } else { ti };
-            let ta = ti2 as usize * 16;
-            let tr = row % 8;
-            for col in 0..8u8 {
-                let px = x0 + col as i16;
-                if px < 0 || px >= SCREEN_WIDTH as i16 { continue; }
-                let px = px as usize;
-                let ac = if fx { 7 - col } else { col };
-                let cid = self.get_tile_pixel_banked(ta, tr, ac, cbnk);
-                if cid == 0 || claimed[px] { continue; }
-                claimed[px] = true;
-                let traced = self.trace.is_some();
-                if traced { self.line_obj[px] = [slot as u8, cid, fl, 0]; }
-                if bgmp {
-                    if self.bg_cgb_priority[px] && self.bg_color_ids[px] != 0 { continue; }
-                    if obp && self.bg_color_ids[px] != 0 { continue; }
-                }
-                let color = self.get_obj_cram_color(cpal, cid);
-                self.set_pixel(px, line, color);
-                if traced { self.line_obj[px][3] = 1; }
-            }
-        }
-    }
-
-    // Helpers
-
-    pub(crate) fn get_tile_pixel(&self, tile_addr: usize, row: u8, col: u8) -> u8 {
-        let byte_offset = tile_addr + (row as usize * 2);
-        if byte_offset + 1 >= 0x2000 {
-            return 0;
-        }
-        let lo = self.vram[byte_offset];
-        let hi = self.vram[byte_offset + 1];
-        let bit = 7 - col;
-        ((hi >> bit) & 1) << 1 | ((lo >> bit) & 1)
-    }
-
-    fn get_tile_pixel_banked(&self, addr: usize, row: u8, col: u8, bank: u8) -> u8 {
-        let base = bank as usize * 0x2000;
-        let o = base + addr + row as usize * 2;
-        if o + 1 >= self.vram.len() { return 0; }
-        let lo = self.vram[o];
-        let hi = self.vram[o + 1];
-        let bit = 7 - col;
-        ((hi >> bit) & 1) << 1 | ((lo >> bit) & 1)
-    }
-
     /// `which`: 0 BG/window, 1 OBP0, 2 OBP1 (the CRAM palette used in compatibility mode).
+    #[inline]
     pub(crate) fn apply_palette(&self, palette: u8, color_id: u8, which: u8) -> [u8; 4] {
         let shade = (palette >> (color_id * 2)) & 0x03;
         match (self.compat, which) {
@@ -742,26 +475,34 @@ impl Ppu {
         }
     }
 
+    #[inline]
     pub(crate) fn rgb555_to_rgba8888(lo: u8, hi: u8) -> [u8; 4] {
-        let v = (hi as u16) << 8 | lo as u16;
-        let r = ((v & 0x1F) as u16 * 255 / 31) as u8;
-        let g = (((v >> 5) & 0x1F) as u16 * 255 / 31) as u8;
-        let b = (((v >> 10) & 0x1F) as u16 * 255 / 31) as u8;
-        [r, g, b, 0xFF]
+        /// 5-bit channel → 8-bit (x * 255 / 31), looked up: the FIFO converts every pixel.
+        const C8: [u8; 32] = {
+            let mut t = [0; 32];
+            let mut i = 0;
+            while i < 32 { t[i] = (i * 255 / 31) as u8; i += 1; }
+            t
+        };
+        let v = (hi as usize) << 8 | lo as usize;
+        [C8[v & 0x1F], C8[v >> 5 & 0x1F], C8[v >> 10 & 0x1F], 0xFF]
     }
 
-    fn get_bg_cram_color(&self, pal: u8, cid: u8) -> [u8; 4] {
+    #[inline]
+    pub(crate) fn get_bg_cram_color(&self, pal: u8, cid: u8) -> [u8; 4] {
         let i = pal as usize * 8 + cid as usize * 2;
         if i + 1 >= self.bg_cram.len() { return [0xFF, 0xFF, 0xFF, 0xFF]; }
         Self::rgb555_to_rgba8888(self.bg_cram[i], self.bg_cram[i + 1])
     }
 
-    fn get_obj_cram_color(&self, pal: u8, cid: u8) -> [u8; 4] {
+    #[inline]
+    pub(crate) fn get_obj_cram_color(&self, pal: u8, cid: u8) -> [u8; 4] {
         let i = pal as usize * 8 + cid as usize * 2;
         if i + 1 >= self.obj_cram.len() { return [0xFF, 0xFF, 0xFF, 0xFF]; }
         Self::rgb555_to_rgba8888(self.obj_cram[i], self.obj_cram[i + 1])
     }
 
+    #[inline]
     pub(crate) fn set_pixel(&mut self, x: usize, y: usize, rgba: [u8; 4]) {
         let offset = (y * SCREEN_WIDTH + x) * 4;
         if offset + 4 <= self.framebuffer.len() {
@@ -855,7 +596,7 @@ mod tests {
         p.obp0 = 0xE4;
         p.bg_cram[2..4].copy_from_slice(&[0x00, 0x7C]); // BG pal 0, colour 1: blue
         p.obj_cram[4..6].copy_from_slice(&[0x1F, 0x00]); // OBJ pal 0, colour 2: red
-        p.render_scanline();
+        p.draw_line();
         p
     }
 
@@ -1006,7 +747,7 @@ mod tests {
     }
 
     #[test]
-    fn mode3_length_grows_with_scx_window_and_objs() {
+    fn mode3_grows_with_scx_window_and_objs() {
         assert_eq!(line_timing(|_| {}).0, 80 + 172);
         assert_eq!(line_timing(|p| p.scx = 3).0, 80 + 172 + 3);
         assert_eq!(line_timing(|p| p.scx = 8).0, 80 + 172, "only the fine scroll counts");
@@ -1155,14 +896,52 @@ mod tests {
         assert_eq!(s.iter().position(|&v| v == 3), Some(93));
     }
 
-    /// The FIFO's own mode-3 length agrees with `mode3_length` (Pan Docs) for 0, 1 and 10 OBJs.
+    /// Pan Docs' "Mode 3 length" of the current line with the registers as they are: 172, plus the
+    /// SCX fine-scroll discard, plus 6 when the window shows on the line, plus each OBJ's fetch: 6
+    /// dots, and for the first OBJ (left to right) on a BG/window tile, 5 minus the OBJ's offset in
+    /// that tile (≥ 0). OBJs at OAM X 0 share a tile of their own: the first costs 11 whatever SCX.
+    /// On a DMG, WX 0 with a fine scroll costs one dot more. The pixel FIFO must add up to it.
+    fn pan_docs_len(p: &Ppu) -> u32 {
+        let fine = (p.scx % 8) as i32;
+        let window = p.lcdc & 0x20 != 0 && (p.cgb_mode || p.lcdc & 0x01 != 0)
+            && (p.window_was_active || p.ly == p.wy) && p.wx <= 166;
+        let mut len = 172 + fine as u32 + if window { 6 } else { 0 };
+        if window && p.wx == 0 && fine > 0 && !p.cgb_mode { len += 1; }
+        if p.lcdc & 0x02 == 0 { return len; }
+        let (mut objs, n) = p.select_sprites(p.ly as usize);
+        objs[..n].sort_by_key(|o| o.0); // fetched left to right
+        let mut paid = 0u64; // tiles an OBJ already waited on: BG 0..=21, window 32..=53, X 0 63
+        for &(x, ..) in &objs[..n] {
+            if x >= 168 { continue; } // never reached
+            // Position of the OBJ's leftmost pixel, + 8, in the BG (with the discard) or the window.
+            let from_window = x as i32 + 7 - p.wx as i32;
+            let (tile, offset) = if x == 0 {
+                (63, 0) // off the left edge: a tile of its own, whatever the scroll
+            } else if window && from_window >= 8 {
+                (32 + from_window / 8, from_window % 8)
+            } else {
+                ((x as i32 + fine) / 8, (x as i32 + fine) % 8)
+            };
+            len += 6;
+            if paid & 1 << tile == 0 {
+                paid |= 1 << tile;
+                len += (5 - offset).max(0) as u32;
+            }
+        }
+        len
+    }
+
+    /// The FIFO's own mode-3 length agrees with Pan Docs for 0, 1 and 10 OBJs, DMG and CGB.
     #[test]
     fn obj_penalty_matches_formula() {
         let lines: [&[u8]; 5] = [&[], &[8], &[8, 16, 24, 32, 40, 48, 56, 64, 72, 80], &[0, 3, 11, 13, 50, 50, 51, 90, 160, 167], &[1; 10]];
-        for xs in lines {
-            for scx in 0..8 {
-                let p = run_line10(|p| { p.lcdc |= 0x02; objs_at(p, xs); p.scx = scx; }, |_, _| {});
-                assert_eq!(p.line.len, p.mode3_length(10, true), "OBJs at {xs:?}, SCX {scx}");
+        for cgb in [false, true] {
+            for xs in lines {
+                for scx in 0..8 {
+                    let p = run_line10(|p| { p.cgb_mode = cgb; p.lcdc |= 0x02; objs_at(p, xs); p.scx = scx; }, |_, _| {});
+                    assert_eq!(p.line.len, pan_docs_len(&p), "CGB {cgb}, OBJs at {xs:?}, SCX {scx}");
+                    assert_eq!(p.mode3_len, p.line.len, "STAT's mode 3 is the FIFO's");
+                }
             }
         }
     }
@@ -1219,13 +998,19 @@ mod tests {
         assert!(first_new(100) < first_new(140));
     }
 
-    /// Steps a frame from line 0 and checks the FIFO's measured mode-3 length on every line.
-    fn assert_fifo_matches_formula(step: &mut dyn FnMut() -> (bool, bool, u32, u32, u8), what: &str) {
+    fn probe(p: &Ppu) -> (bool, bool, u32, u32, u32, u8) {
+        (p.line.active, p.frame_ready, p.line.len, p.mode3_len, pan_docs_len(p), p.ly)
+    }
+
+    /// Steps a frame from line 0 and checks, on every line, the FIFO's mode-3 length against
+    /// Pan Docs and against the length STAT went by (`mode3_len`).
+    fn assert_fifo_matches_formula(step: &mut dyn FnMut() -> (bool, bool, u32, u32, u32, u8), what: &str) {
         let (mut was_active, mut lines) = (false, 0);
         loop {
-            let (active, frame_done, len, predicted, ly) = step();
+            let (active, frame_done, len, stat_len, pan_docs, ly) = step();
             if was_active && !active {
-                assert_eq!(len, predicted, "{what}: line {ly}");
+                assert_eq!(len, pan_docs, "{what}: line {ly}");
+                assert_eq!(len, stat_len, "{what}: line {ly}, STAT");
                 lines += 1;
             }
             was_active = active;
@@ -1237,35 +1022,101 @@ mod tests {
     #[test]
     fn fifo_mode3_matches_formula() {
         // Synthetic frames: 40 OBJs spread over the lines and columns, the window on from line 20.
-        for (scx, wx) in [(0, 7), (3, 0), (5, 3), (7, 30), (1, 166), (2, 167), (6, 88)] {
-            let mut p = Ppu::new();
-            (p.lcdc, p.scx, p.wx, p.wy) = (0xF3, scx, wx, 20);
-            for i in 0..40 {
-                p.oam[i * 4..i * 4 + 2].copy_from_slice(&[(i * 7 % 160) as u8, (i * 37 % 170) as u8]);
+        for cgb in [false, true] {
+            for (scx, wx) in [(0, 7), (3, 0), (5, 3), (7, 30), (1, 166), (2, 167), (6, 88)] {
+                let mut p = Ppu::new();
+                (p.lcdc, p.scx, p.wx, p.wy, p.cgb_mode) = (0xF3, scx, wx, 20, cgb);
+                for i in 0..40 {
+                    p.oam[i * 4..i * 4 + 2].copy_from_slice(&[(i * 7 % 160) as u8, (i * 37 % 170) as u8]);
+                }
+                let mut step = || {
+                    p.step(4);
+                    probe(&p)
+                };
+                assert_fifo_matches_formula(&mut step, &format!("CGB {cgb}, SCX {scx}, WX {wx}"));
             }
-            let mut step = || {
-                p.step(4);
-                (p.line.active, p.frame_ready, p.line.len, p.mode3_len, p.ly)
-            };
-            assert_fifo_matches_formula(&mut step, &format!("SCX {scx}, WX {wx}"));
         }
-        // Every line of a dmg-acid2 frame.
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("test-roms/dmg-acid2.gb");
-        let Ok(rom) = std::fs::read(&path) else {
-            assert!(std::env::var_os("CARTOUCHE_REQUIRE_ROMS").is_none(), "{} not found", path.display());
-            return;
+        // Every line of a dmg-acid2 and a cgb-acid2 frame.
+        for (name, cgb) in [("dmg-acid2.gb", false), ("cgb-acid2.gbc", true)] {
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("test-roms").join(name);
+            let Ok(rom) = std::fs::read(&path) else {
+                assert!(std::env::var_os("CARTOUCHE_REQUIRE_ROMS").is_none(), "{} not found", path.display());
+                return;
+            };
+            let mut gb = crate::gameboy::GameBoy::new(rom).unwrap();
+            gb.skip_boot_rom();
+            // The LD B,B breakpoint: the test image is up.
+            while gb.cpu.halted || gb.bus.read_byte(gb.cpu.regs.pc) != 0x40 { gb.step_instruction().unwrap(); }
+            assert!(gb.bus.ppu.lcdc & 0x80 != 0, "{name}: LCD on");
+            assert_eq!(gb.bus.ppu.cgb_mode, cgb);
+            while gb.bus.ppu.ly != 0 || gb.bus.ppu.mode != PpuMode::OamScan { gb.bus.cycle_tick(); }
+            gb.bus.ppu.frame_ready = false;
+            let mut step = || {
+                gb.bus.cycle_tick();
+                probe(&gb.bus.ppu)
+            };
+            assert_fifo_matches_formula(&mut step, name);
+        }
+    }
+
+    /// CGB line 10 with BG palette 0 colour 3 red, then a BCPD write partway through mode 3 turns it
+    /// blue: the pixels already out stay red, the later ones are blue.
+    #[test]
+    fn mid_line_bcpd_write() {
+        let rgb = |p: &Ppu| -> Vec<[u8; 4]> {
+            p.framebuffer[10 * SCREEN_WIDTH * 4..11 * SCREEN_WIDTH * 4].chunks(4).map(|c| c.try_into().unwrap()).collect()
         };
-        let mut gb = crate::gameboy::GameBoy::new(rom).unwrap();
-        gb.skip_boot_rom();
-        for _ in 0..10 { gb.run_frame().unwrap(); }
-        assert!(!gb.bus.ppu.cgb_mode);
-        while gb.bus.ppu.ly != 0 || gb.bus.ppu.mode != PpuMode::OamScan { gb.bus.cycle_tick(); }
-        gb.bus.ppu.frame_ready = false;
-        let mut step = || {
-            gb.bus.cycle_tick();
-            let p = &gb.bus.ppu;
-            (p.line.active, p.frame_ready, p.line.len, p.mode3_len, p.ly)
+        let switch_at = |dot: u32| {
+            let p = run_line10(|p| {
+                p.cgb_mode = true;
+                p.vram[0..16].fill(0xFF); // tile 0: colour 3
+                p.bg_cram[6..8].copy_from_slice(&[0x1F, 0x00]); // red
+                p.write_register(0xFF68, 6);
+            }, |p, d| if d == dot { p.write_register(0xFF69, 0x00); p.write_register(0xFF68, 7); p.write_register(0xFF69, 0x7C) });
+            let s = rgb(&p);
+            let x = s.iter().position(|&c| c == [0, 0, 255, 255]).expect("blue shows");
+            assert!(s[..x].iter().all(|&c| c == [255, 0, 0, 255]) && s[x..].iter().all(|&c| c == [0, 0, 255, 255]), "{s:?}");
+            x
         };
-        assert_fifo_matches_formula(&mut step, "dmg-acid2");
+        let x = switch_at(60);
+        assert!((20..60).contains(&x), "switch at {x}");
+        assert_eq!(switch_at(64), x + 4, "4 dots later, 4 pixels later");
+    }
+
+    /// CGB tile attributes: map entry 0 uses bank 1 and flips X and Y; its tile has one dark
+    /// pixel at row 0, column 0 in bank 1 (and nothing in bank 0), so it shows at row 7, column 7.
+    #[test]
+    fn cgb_tile_attributes_flip_and_bank() {
+        let p = run_line10(|p| {
+            p.cgb_mode = true;
+            p.scy = 0xFD; // line 10 + SCY = 7: map row 0, tile row 7
+            p.vram[0x2000..0x2002].copy_from_slice(&[0x80, 0x80]); // bank 1, tile 0, row 0: colour 3 at column 0
+            p.vram[0x2000 + 0x1800] = 0x68; // map entry 0: bank 1, X flip, Y flip
+            p.bg_cram[6..8].copy_from_slice(&[0x1F, 0x00]); // palette 0 colour 3: red
+        }, |_, _| {});
+        let row = &p.framebuffer[10 * SCREEN_WIDTH * 4..11 * SCREEN_WIDTH * 4];
+        let red: Vec<usize> = row.chunks(4).enumerate().filter(|(_, c)| *c == [255, 0, 0, 255]).map(|(x, _)| x).collect();
+        assert_eq!(red, [7], "the flipped bank-1 pixel");
+    }
+
+    /// CGB: two overlapping OBJs, the one further right (X 12) first in OAM: it wins where both are
+    /// opaque, although the DMG would give the dot to the one on the left (X 8).
+    #[test]
+    fn cgb_obj_priority_by_oam_index() {
+        let run = |opri: u8| {
+            let p = run_line10(|p| {
+                (p.cgb_mode, p.lcdc, p.opri) = (true, 0x93, opri);
+                p.vram[0..16].fill(0xFF); // tile 0: colour 3
+                p.oam[0..8].copy_from_slice(&[10 + 16, 12, 0, 0x01, 10 + 16, 8, 0, 0x00]); // OBJ palettes 1, 0
+                p.vram[0x1800..0x1C00].fill(1); // BG: tile 1, colour 0
+                p.obj_cram[6..8].copy_from_slice(&[0x1F, 0x00]); // OBJ palette 0 colour 3: red
+                p.obj_cram[14..16].copy_from_slice(&[0x00, 0x7C]); // OBJ palette 1 colour 3: blue
+            }, |_, _| {});
+            let px = |x: usize| <[u8; 4]>::try_from(&p.framebuffer[(10 * SCREEN_WIDTH + x) * 4..][..4]).unwrap();
+            (px(3), px(4), px(11))
+        };
+        let (red, blue) = ([255, 0, 0, 255], [0, 0, 255, 255]);
+        assert_eq!(run(0), (red, blue, blue), "by OAM index");
+        assert_eq!(run(1), (red, red, blue), "OPRI bit 0: by X, as on a DMG");
     }
 }

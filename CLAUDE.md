@@ -52,7 +52,7 @@ must also be listed with their SHA-1 in `scripts/rom-allowlist.sha1` and credite
 | Opcode dispatch | Flat `match` on u8 | Compiles to jump table; most readable for auditing |
 | Framebuffer transfer | Zero-copy via `framebuffer_ptr()` | Avoids 92KB copy per frame |
 | Error boundary | Errors stored as `last_error: String` | wasm-bindgen can't serialize Rust enums; JS calls `get_error()` |
-| PPU accuracy | DMG: pixel FIFO (`fifo.rs`), CGB: scanline until #156 | Mid-line register writes take effect on DMG; mode-3 length from `Ppu::mode3_length` |
+| PPU accuracy | Pixel FIFO (dot-stepped) | Mid-scanline effects and variable mode-3 length (Mealybug, Mooneye PPU timing) |
 | Timer | Simplified tick counting | Accurate falling-edge detection can be added later |
 | Tailwind | v4 with `@import "tailwindcss"` | CSS-native approach, no config file needed |
 

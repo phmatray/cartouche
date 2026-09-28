@@ -230,7 +230,7 @@ impl MemoryBus {
                     0xFF
                 }
             }
-            0xFF68..=0xFF6B => {
+            0xFF68..=0xFF6C => {
                 if self.cgb_mode { self.ppu.read_register(addr) } else { 0xFF }
             }
             0xFF70 => {
@@ -328,7 +328,7 @@ impl MemoryBus {
             0xFF56 => {
                 if self.cgb_mode { self.rp = value & 0xC1; }
             }
-            0xFF68..=0xFF6B => {
+            0xFF68..=0xFF6C => {
                 if self.cgb_mode { self.ppu.write_register(addr, value); }
             }
             0xFF70 => {
