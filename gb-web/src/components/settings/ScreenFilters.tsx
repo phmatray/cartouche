@@ -150,7 +150,7 @@ export function ScreenFilters({ kind, gameId, frame }: { kind: ScreenKind; gameI
       </div>
       {color ? (
         <Row label={t('settings.screen.correction')} sub={t('settings.screen.correctionSub')}>
-          <Seg<Correction> label={t('settings.screen.correction')} value={f.correction} options={[['off', t('settings.screen.off')], ['accurate', t('settings.screen.accurate')], ['vivid', t('settings.screen.vivid')]]} set={(correction) => tweak({ correction })} />
+          <Seg<Correction> label={t('settings.screen.correction')} value={f.correction} options={[['off', t('settings.screen.off')], ['gbc', t('settings.screen.accurate')]]} set={(correction) => tweak({ correction })} />
         </Row>
       ) : (
         <div className="row col">

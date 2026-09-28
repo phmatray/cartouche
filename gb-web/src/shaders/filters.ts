@@ -1,8 +1,12 @@
 /** The display filter chain: what LcdEngine draws and the Screen / Display controls edit. */
+import { correctRgb555 } from './lcd-curves.ts';
 
 export type PresetName = 'dmg-classic' | 'gb-pocket' | 'gb-light' | 'clean' | 'crt-tv' | 'gbc-accurate' | 'neural';
 export type PaletteId = 'original' | 'pea-soup' | 'pocket-grey' | 'backlit' | 'teal' | 'arctic' | 'sunset' | 'grey' | 'custom';
-export type Correction = 'off' | 'accurate' | 'vivid';
+/** 'gbc' / 'gba': SameBoy's measured Game Boy Color / Game Boy Advance LCD response (lcd-curves.ts). */
+export type Correction = 'off' | 'gbc' | 'gba';
+/** 'lcd': the LCD's slow response, a fading trail. 'blend': an even mix with the previous frame, no trail (30 Hz flicker transparency). */
+export type GhostMode = 'lcd' | 'blend';
 /** 'neural': Neural 4x (neural/upscaler.ts), WebGL 2 only; nearest elsewhere. */
 export type Upscale = 'nearest' | 'scale2x' | 'scale3x' | 'smooth' | 'neural';
 /** Which default a game uses: original Game Boy games, or games the core runs in Color mode. */
@@ -16,6 +20,7 @@ export interface Filters {
   correction: Correction;
   /** LCD persistence, 0 to 0.7: how much of the previous frame stays. */
   ghosting: number;
+  ghostMode: GhostMode;
   upscale: Upscale;
   /** 0 to 1 each. */
   grid: number;
@@ -41,7 +46,7 @@ export const PALETTES: { id: PaletteId; label: string; colors: string[] }[] = [
 ];
 
 const NEUTRAL: Filters = {
-  palette: 'original', custom: PALETTES[1].colors, correction: 'off', ghosting: 0, upscale: 'nearest',
+  palette: 'original', custom: PALETTES[1].colors, correction: 'off', ghosting: 0, ghostMode: 'lcd', upscale: 'nearest',
   grid: 0, scanlines: 0, crt: false, brightness: 0, contrast: 0, saturation: 0,
 };
 
@@ -52,17 +57,17 @@ const DMG: ScreenKind[] = ['dmg'], BOTH: ScreenKind[] = ['dmg', 'cgb'];
 
 export const PRESETS: PresetInfo[] = [
   { name: 'dmg-classic', label: 'DMG Classic', description: 'Original 1989 Game Boy', kinds: DMG,
-    filters: { ...NEUTRAL, palette: 'pea-soup', correction: 'accurate', ghosting: 0.3, grid: 0.4 } },
+    filters: { ...NEUTRAL, palette: 'pea-soup', correction: 'gbc', ghosting: 0.3, grid: 0.4 } },
   { name: 'gb-pocket', label: 'Pocket', description: 'Game Boy Pocket (1996)', kinds: DMG,
-    filters: { ...NEUTRAL, palette: 'pocket-grey', correction: 'accurate', ghosting: 0.15, grid: 0.5 } },
+    filters: { ...NEUTRAL, palette: 'pocket-grey', correction: 'gbc', ghosting: 0.15, grid: 0.5 } },
   { name: 'gb-light', label: 'Light', description: 'Game Boy Light (1998)', kinds: DMG,
-    filters: { ...NEUTRAL, palette: 'backlit', correction: 'accurate', ghosting: 0.15, grid: 0.5, brightness: 0.05 } },
+    filters: { ...NEUTRAL, palette: 'backlit', correction: 'gbc', ghosting: 0.15, grid: 0.5, brightness: 0.05 } },
   { name: 'gbc-accurate', label: 'GBC Accurate', description: 'Color LCD response', kinds: ['cgb'],
-    filters: { ...NEUTRAL, correction: 'accurate', ghosting: 0.2, grid: 0.3 } },
+    filters: { ...NEUTRAL, correction: 'gbc', ghosting: 0.2, grid: 0.3 } },
   { name: 'crt-tv', label: 'CRT TV', description: 'Scanlines on a curved tube', kinds: BOTH,
-    filters: { ...NEUTRAL, correction: 'vivid', ghosting: 0.1, upscale: 'smooth', scanlines: 0.6, crt: true, brightness: 0.05, saturation: 0.1 } },
+    filters: { ...NEUTRAL, correction: 'gbc', ghosting: 0.1, upscale: 'smooth', scanlines: 0.6, crt: true, brightness: 0.05, saturation: 0.1 } },
   { name: 'neural', label: 'Neural', description: 'Neural 4× upscaling', kinds: BOTH,
-    filters: { ...NEUTRAL, upscale: 'neural', correction: 'accurate' } },
+    filters: { ...NEUTRAL, upscale: 'neural', correction: 'gbc' } },
   { name: 'clean', label: 'Clean', description: 'No filter, raw pixels', kinds: BOTH, filters: NEUTRAL },
 ];
 
@@ -80,6 +85,8 @@ export const sameFilters = (a: Filters, b: Filters) =>
 const clamp = (v: unknown, lo: number, hi: number, d: number) => (typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
 const oneOf = <T extends string>(v: unknown, all: readonly T[], d: T) => (all.includes(v as T) ? (v as T) : d);
 const HEX = /^#[0-9a-f]{6}$/i;
+/** Before SameBoy's curves: one matrix, at full or half strength. */
+const LEGACY_CORRECTION: Record<string, Correction> = { accurate: 'gbc', vivid: 'gbc' };
 
 /** Settings from storage or a backup, made safe to render (unknown values fall back to the preset's). */
 export function normalizeDisplay(c: unknown, kind: ScreenKind): DisplayConfig {
@@ -93,8 +100,9 @@ export function normalizeDisplay(c: unknown, kind: ScreenKind): DisplayConfig {
     filters: {
       palette: oneOf(f.palette, [...PALETTES.map((p) => p.id), 'custom'], d.palette),
       custom,
-      correction: oneOf(f.correction, ['off', 'accurate', 'vivid'] as const, d.correction),
+      correction: oneOf(LEGACY_CORRECTION[f.correction as string] ?? f.correction, ['off', 'gbc', 'gba'] as const, d.correction),
       ghosting: clamp(f.ghosting, 0, 0.7, d.ghosting),
+      ghostMode: oneOf(f.ghostMode, ['lcd', 'blend'] as const, d.ghostMode),
       upscale: oneOf(f.upscale, ['nearest', 'scale2x', 'scale3x', 'smooth', 'neural'] as const, d.upscale),
       grid: clamp(f.grid, 0, 1, d.grid),
       scanlines: clamp(f.scanlines, 0, 1, d.scanlines),
@@ -120,9 +128,6 @@ export function colorMode(f: Filters, color: boolean): number {
 
 export const hasAdjustments = (f: Filters) => f.brightness !== 0 || f.contrast !== 0 || f.saturation !== 0;
 
-// Rows sum to 1 so white stays white.
-const GBC = [[0.86638, 0.13362, 0], [0.02429, 0.70857, 0.26714], [0.1325, 0.13379, 0.73371]];
-
 /**
  * Canvas2D fallback: the colour pass of color.glsl on the CPU (palette or correction, then adjustments).
  * No ghosting or screen textures.
@@ -133,7 +138,6 @@ export function cpuColor(src: Uint8ClampedArray, f: Filters, color: boolean): Ui
   const out = new Uint8ClampedArray(src);
   if (mode === 0 && !adj) return out;
   const pal = paletteRgb(f);
-  const corr = f.correction === 'vivid' ? 0.5 : 1;
   const cache = new Map<number, number>();
   const c = [0, 0, 0];
   for (let i = 0; i < out.length; i += 4) {
@@ -142,11 +146,9 @@ export function cpuColor(src: Uint8ClampedArray, f: Filters, color: boolean): Ui
     if (v === undefined) {
       c[0] = src[i] / 255; c[1] = src[i + 1] / 255; c[2] = src[i + 2] / 255;
       if (mode === 2) {
-        const lin = c.map((x) => x ** 2.2);
-        for (let k = 0; k < 3; k++) {
-          const m = Math.min(1, Math.max(0, (GBC[k][0] * lin[0] + GBC[k][1] * lin[1] + GBC[k][2] * lin[2]))) ** (1 / 2.2);
-          c[k] += (m - c[k]) * corr;
-        }
+        // The core draws 5-bit colour as c5 * 255 / 31: recover c5, then the LCD's response.
+        const lcd = correctRgb555(Math.round(c[0] * 31), Math.round(c[1] * 31), Math.round(c[2] * 31), f.correction === 'gba' ? 'gba' : 'gbc');
+        for (let k = 0; k < 3; k++) c[k] = lcd[k] / 255;
       } else if (mode === 1) {
         const l = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
         const p = pal[l > 0.79 ? 0 : l > 0.49 ? 1 : l > 0.21 ? 2 : 3];

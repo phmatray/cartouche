@@ -303,7 +303,7 @@ export class LcdEngine {
     gl.uniform1i(color.u.u_hist, 1);
     gl.uniform1f(color.u.u_mode, colorMode(f, this.color));
     gl.uniform3fv(color.u['u_pal[0]'], paletteRgb(f).flat());
-    gl.uniform1f(color.u.u_corr, f.correction === 'vivid' ? 0.5 : 1);
+    gl.uniform1f(color.u.u_corr, 1);
     gl.uniform1f(color.u.u_adjOn, hasAdjustments(f) ? 1 : 0);
     gl.uniform3f(color.u.u_adj, f.brightness, f.contrast, f.saturation);
     gl.uniform1f(color.u.u_ghost, this.fresh ? 0 : f.ghosting);
