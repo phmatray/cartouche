@@ -41,6 +41,14 @@ export default {
     kept: 'Stockage conservé : le navigateur ne l’effacera pas',
     refused: 'Le navigateur a refusé',
   },
+  patch: {
+    chooseBase: 'Choisir la ROM de base',
+    pickBody: 'Le jeu pour lequel ce patch a été fait. Le jeu patché est ajouté à part ; celui-ci reste tel quel.',
+    none: 'Aucun jeu dans votre bibliothèque : ajoutez d’abord la ROM pour laquelle ce patch a été fait.',
+    unverified: 'non vérifié : un patch IPS n’a pas de somme de contrôle',
+    wrongBase: 'ce patch est pour une autre version du jeu',
+    broken: 'patch endommagé ou illisible',
+  },
   rename: {
     title: 'Nommer cette ROM',
     body: 'Elle n’a pas été reconnue, elle n’a donc pas de jaquette. Donnez-lui un titre pour l’étagère.',

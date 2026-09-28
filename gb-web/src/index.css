@@ -750,7 +750,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .rrow .t small{display:block;font:500 var(--fs-s) var(--font);font-stretch:100%;text-transform:none;color:var(--mute);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .rrow .st{font:800 var(--fs-micro) var(--font);text-transform:uppercase;letter-spacing:var(--tr-caps);display:flex;align-items:center;gap:8px}
 .rrow .st i{width:10px;height:10px;flex:none}
-.st.ok i{background:var(--c)}.st.dup i{background:var(--warn)}.st.unk i{background:var(--paper)}.st.bad i{background:var(--err)}.st.stop i{background:var(--dim)}
+.st.ok i{background:var(--c)}.st.dup i{background:var(--warn)}.st.unk i{background:var(--paper)}.st.bad i{background:var(--err)}.st.stop i{background:var(--dim)}.st.base i{background:var(--warn)}
 .rrow{content-visibility:auto;contain-intrinsic-size:auto 81px} /* thousands of rows in a big import: off-screen ones cost nothing */
 .tip{margin:14px 0 0;font:500 var(--fs-body)/1.5 var(--font);color:var(--mute);max-width:70ch}
 .tip[hidden]{display:none}

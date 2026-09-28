@@ -41,6 +41,14 @@ export default {
     kept: 'Almacenamiento conservado: el navegador no lo borrará',
     refused: 'El navegador no lo permitió',
   },
+  patch: {
+    chooseBase: 'Elegir la ROM base',
+    pickBody: 'El juego para el que se hizo este parche. El juego parcheado se añade aparte; este queda como está.',
+    none: 'Aún no hay juegos en tu biblioteca: añade primero la ROM para la que se hizo este parche.',
+    unverified: 'sin verificar: un parche IPS no tiene suma de control',
+    wrongBase: 'este parche es para otra versión del juego',
+    broken: 'parche dañado o ilegible',
+  },
   rename: {
     title: 'Pon nombre a esta ROM',
     body: 'No se reconoció, así que no tiene carátula. Dale un título para tu estantería.',

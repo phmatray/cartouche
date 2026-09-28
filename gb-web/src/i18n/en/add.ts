@@ -40,6 +40,14 @@ export default {
     kept: 'Storage kept: the browser won’t clear it',
     refused: 'The browser didn’t allow it',
   },
+  patch: {
+    chooseBase: 'Choose the base ROM',
+    pickBody: 'The game this patch was made for. The patched game is added as its own entry; this one stays as it is.',
+    none: 'No game in your library yet: add the ROM this patch was made for first.',
+    unverified: 'unverified: an IPS patch has no checksum',
+    wrongBase: 'this patch is for a different version of the game',
+    broken: 'damaged or unreadable patch',
+  },
   rename: {
     title: 'Name this ROM',
     body: 'It wasn’t recognized, so it has no box art. Give it a title for your shelf.',

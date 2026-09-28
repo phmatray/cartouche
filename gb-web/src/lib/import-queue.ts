@@ -150,6 +150,7 @@ function run(list: () => Promise<{ rows: ImportRow[]; ignored: number }>) {
 /** A patch row: applied at once when its base is here (BPS/UPS name it by size and CRC32), else it waits for one to be chosen. */
 async function patched(r: ImportRow, p: Uint8Array, batch: string[]): Promise<Partial<ImportRow>> {
   const src = patchSource(p);
+  if (!src && r.patch !== 'ips') return { st: 'bad', note: t('add.patch.broken') };
   const base = src && await findBase(src.size, src.crc32, batch);
   return base ? applyTo(r, p, base) : { st: 'base' };
 }
@@ -170,11 +171,26 @@ async function applyTo(r: ImportRow, p: Uint8Array, baseId: string, force = fals
   if (!rom) return { st: 'bad' };
   let res;
   try { res = applyPatch(rom.data, p); } catch (e) {
-    if (e instanceof PatchError) return { st: 'bad' };
+    if (e instanceof PatchError) return { st: 'bad', note: t(e.reason === 'source' ? 'add.patch.wrongBase' : 'add.patch.broken') };
     throw e;
   }
   const o = asRow(await importRom(r.name.replace(/\.[^.]+$/, '.gb'), res.data, force, undefined, { sha1: await computeSha1(rom.data), patch: r.name }));
-  return { ...o, base: baseId };
+  return { ...o, base: baseId, note: res.verified || o.st === 'bad' ? undefined : t('add.patch.unverified') };
+}
+
+/** A waiting patch applied to the library game the player chose (still verified: a BPS/UPS for another game is refused). */
+export async function applyToBase(r: ImportRow, baseId: string) {
+  patchRow(r.key, { st: 'work' }, true);
+  const p = await r.read?.().catch(() => null);
+  if (!p) { patchRow(r.key, { st: 'base' }, true); toast(t('add.toast.reread'), 'm'); return; }
+  try {
+    const out = await applyTo(r, p, baseId);
+    patchRow(r.key, out, true);
+    if (out.st === 'ok' || out.st === 'unk') toast(t('add.toast.added', { count: 1 }), 'c');
+  } catch (e) {
+    patchRow(r.key, { st: 'base' }, true);
+    await storageFull(e);
+  }
 }
 
 /** Stop: what is being stored finishes, nothing after it starts. */
