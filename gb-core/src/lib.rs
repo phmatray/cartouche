@@ -4,6 +4,7 @@ pub mod camera;
 pub mod cartridge;
 pub mod cpu;
 pub mod debug;
+pub mod disasm;
 pub mod error;
 pub mod gameboy;
 pub mod interrupts;
@@ -175,6 +176,33 @@ impl Emulator {
     /// once; `None` when it ran to the end of the frame.
     pub fn debug_break_reason(&mut self) -> Option<String> {
         self.gb.as_mut()?.take_break().map(|b| b.describe())
+    }
+
+    /// `count` instructions from `addr`, one per line as `ADDR|BYTES|TEXT` ("0150|3E 01|LD A, $01").
+    /// Reads only, so it changes no machine state.
+    pub fn disassemble(&self, addr: u16, count: u16) -> String {
+        let Some(gb) = &self.gb else { return String::new() };
+        let mut out = Vec::with_capacity(count as usize);
+        let mut at = addr;
+        for _ in 0..count {
+            let (text, len) = crate::disasm::disassemble_one(&gb.bus, at);
+            let bytes: Vec<String> = (0..len as u16).map(|i| format!("{:02X}", gb.bus.read_byte(at.wrapping_add(i)))).collect();
+            out.push(format!("{at:04X}|{}|{text}", bytes.join(" ")));
+            at = at.wrapping_add(len as u16);
+        }
+        out.join("\n")
+    }
+
+    /// Runs a `CALL`/`RST` to its return (bounded by the frame), otherwise one step.
+    pub fn debug_step_over(&mut self) -> bool {
+        let Some(gb) = &mut self.gb else { return false };
+        match gb.step_over() {
+            Ok(()) => true,
+            Err(e) => {
+                self.last_error = Some(e.to_string());
+                false
+            }
+        }
     }
 
     /// Runs to the next VBlank and stops there (reason "frame").
