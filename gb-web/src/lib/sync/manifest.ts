@@ -31,6 +31,11 @@ export interface Manifest {
   /** SHA-1 → this device's game id, for games stored here under a ROM. */
   games: Record<string, string>;
   entries: Entry[];
+  /**
+   * Deletions of big records (tombstones): key → when it was deleted here, or on a device this one heard it from.
+   * Only for keys this device doesn't hold. Absent from a peer on an older version, which ignores it.
+   */
+  gone?: Record<string, number>;
 }
 
 /** A device's games ↔ the keys both devices share. */
@@ -85,6 +90,10 @@ export interface Plan {
   /** Small values to write here (null: delete). */
   write: { k: string; v: unknown; t: number; h: string }[];
   conflicts: Conflict[];
+  /** Local big records the other device deleted after they last changed: deleted here too. */
+  drop: string[];
+  /** The other device's deletions to remember here (passed on to a third device), by key → when. */
+  gone: Record<string, number>;
 }
 
 const newer = (a: Entry, b: Entry) => a.t > b.t || (a.t === b.t && a.h > b.h);
@@ -96,7 +105,17 @@ const newer = (a: Entry, b: Entry) => a.t > b.t || (a.t === b.t && a.h > b.h);
 export function plan(local: Manifest, remote: Manifest, base: Record<string, string>): Plan {
   const mine = new Map(local.entries.map((e) => [e.k, e]));
   const theirs = new Map(remote.entries.map((e) => [e.k, e]));
-  const out: Plan = { pull: [], moves: [], write: [], conflicts: [] };
+  const out: Plan = { pull: [], moves: [], write: [], conflicts: [], drop: [], gone: {} };
+  const mineGone = local.gone ?? {};
+  // Their deletions: a record not changed here since it was deleted there goes here too.
+  const shareRoms = local.roms && remote.roms;
+  for (const [k, t] of Object.entries(remote.gone ?? {})) {
+    if (!isBig(k) || typeof t !== 'number' || theirs.has(k) || (kindOf(k) === 'rom' && !shareRoms)) continue;
+    const l = mine.get(k);
+    if (l && l.t >= t) continue; // changed here after: it stays, and goes back to them
+    if (l) out.drop.push(k);
+    if (t > (mineGone[k] ?? 0)) out.gone[k] = t;
+  }
   const taken = new Set([...mine.keys(), ...theirs.keys()]);
   const keys = [...theirs.keys()].sort(); // 'sram:' before 'state:': a state's save conflict is known before the state's
   const olderSaves = new Map<string, { copy: string; remoteWins: boolean }>();
@@ -105,6 +124,8 @@ export function plan(local: Manifest, remote: Manifest, base: Record<string, str
     const l = mine.get(k);
     const kind = kindOf(k);
     if (l && l.h === r.h) continue;
+    // Deleted here after their last change: not taken back (they drop theirs, seeing our tombstone).
+    if (!l && (mineGone[k] ?? 0) > r.t) continue;
     if (kind === 'play') {
       const v = mergePlay(l?.v as Play | undefined, r.v as Play | undefined);
       if (JSON.stringify(v) !== JSON.stringify(l?.v ?? null)) out.write.push({ k, v, t: Math.max(l?.t ?? 0, r.t), h: '' });
@@ -180,6 +201,15 @@ export function agreed(local: Manifest, remote: Manifest, mine: Plan, theirPulls
   for (const p of mine.pull) if (p.dest === p.k) out[p.k] = p.from;
   for (const p of theirPulls) if (p.dest === p.k) out[p.k] = l.get(p.k) ?? p.from;
   return out;
+}
+
+const DAY = 86_400_000;
+/**
+ * Tombstones worth keeping: a deletion is forgotten once 90 days old and every paired device synced after it
+ * (`lastSyncs`), or after a year whatever happens (a device gone for good). A device away longer brings it back.
+ */
+export function gcGone(gone: Record<string, number>, now: number, lastSyncs: number[]): Record<string, number> {
+  return Object.fromEntries(Object.entries(gone).filter(([, t]) => t > now - 365 * DAY && (t > now - 90 * DAY || lastSyncs.some((s) => s <= t))));
 }
 
 /** Sizes, for the progress bar and the ROM estimate. */

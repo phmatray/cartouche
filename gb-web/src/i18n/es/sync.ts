@@ -33,8 +33,8 @@ export default {
     staysBody: 'Tamaño de pantalla, controles táctiles, volumen, teclas, movimiento suave, carátulas y capturas: dependen del dispositivo, no de ti.',
     both: 'Jugado en ambos',
     bothBody: 'Nada se sobrescribe. Cuando una partida cambió en ambos dispositivos desde la última sincronización, se guardan las dos: la más reciente conserva su sitio y la más antigua pasa a ser una partida aparte con el nombre de su dispositivo (o se mueve a una ranura libre). Se te avisa cuando ocurre.',
-    del: 'Borrar no se sincroniza',
-    delBody: 'Una partida borrada aquí vuelve desde el otro dispositivo en la próxima sincronización. Bórrala en ambos, o desvincúlalos antes.',
+    del: 'Borrar también se sincroniza',
+    delBody: 'Una partida, un estado o una ROM borrados aquí se borran también en tus otros dispositivos en la próxima sincronización, salvo si se jugaron allí después. Un dispositivo que pase más de un año sin sincronizar puede recuperarlos.',
   },
   how: {
     title: 'Cómo se conectan',

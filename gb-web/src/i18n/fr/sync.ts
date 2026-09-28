@@ -33,8 +33,8 @@ export default {
     staysBody: 'Taille de l’écran, commandes tactiles, volume, touches, mouvement fluide, jaquettes et captures : ils dépendent de l’appareil, pas de vous.',
     both: 'Joué sur les deux',
     bothBody: 'Rien n’est écrasé. Quand une sauvegarde a changé sur les deux appareils depuis la dernière synchro, les deux sont gardées : la plus récente garde sa place, la plus ancienne devient une sauvegarde à part, nommée d’après son appareil (ou va dans un emplacement libre). Vous en êtes averti.',
-    del: 'Les suppressions ne se synchronisent pas',
-    delBody: 'Une sauvegarde supprimée ici revient de l’autre appareil à la prochaine synchro. Supprimez-la sur les deux, ou dissociez-les d’abord.',
+    del: 'Les suppressions aussi',
+    delBody: 'Une sauvegarde, un état ou une ROM supprimés ici le sont aussi sur vos autres appareils à la prochaine synchro, sauf s’ils y ont été joués depuis. Un appareil resté plus d’un an sans synchro peut les ramener.',
   },
   how: {
     title: 'Comment ils se connectent',

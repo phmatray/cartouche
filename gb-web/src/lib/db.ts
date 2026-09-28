@@ -1,4 +1,5 @@
 import { t } from '../i18n/core.ts';
+import { markGone } from './sync/gone.ts';
 
 const DB_NAME = 'gb-emulator';
 const DB_VERSION = 5;
@@ -137,7 +138,8 @@ export const mainName = (name: string) => { const m = MAIN_NAME.exec(name); retu
 export const neutralName = (name: string) => { const m = MAIN_NAME.exec(name); return m ? 'Main' + (m[1] ?? '') : name; };
 export function saveSram(save: StoredSave): Promise<void> { return txOp(SAVE_STORE, 'readwrite', (s) => s.put(save)).then(() => {}); }
 export function getSram(id: string): Promise<StoredSave | undefined> { return txOp<StoredSave | undefined>(SAVE_STORE, 'readonly', (s) => s.get(id)).then((r) => r && asProfile(r)); }
-export function deleteSave(id: string): Promise<void> { return txOp(SAVE_STORE, 'readwrite', (s) => s.delete(id)).then(() => {}); }
+/** Deletes stay deleted on paired devices: each leaves a tombstone the sync passes on (lib/sync/gone). */
+export function deleteSave(id: string): Promise<void> { return txOp(SAVE_STORE, 'readwrite', (s) => s.delete(id)).then(() => markGone([`sram:${id}`])); }
 
 /** Every save profile of a game: Main first, then by creation. (Settings › Storage can use this.) */
 export async function listProfiles(gameId: string): Promise<StoredSave[]> {
@@ -177,7 +179,7 @@ export async function setActiveProfile(gameId: string, id: string): Promise<void
 export interface StoredSaveState { id: string; data: Uint8Array; thumbnail: Uint8Array; timestamp: number; profile?: string; }
 export function saveSaveState(state: StoredSaveState): Promise<void> { return txOp(SAVESTATE_STORE, 'readwrite', (s) => s.put(state)).then(() => {}); }
 export function getSaveState(id: string): Promise<StoredSaveState | undefined> { return txOp(SAVESTATE_STORE, 'readonly', (s) => s.get(id)); }
-export function deleteSaveState(id: string): Promise<void> { return txOp(SAVESTATE_STORE, 'readwrite', (s) => s.delete(id)).then(() => {}); }
+export function deleteSaveState(id: string): Promise<void> { return txOp(SAVESTATE_STORE, 'readwrite', (s) => s.delete(id)).then(() => markGone([`state:${id}`])); }
 
 /**
  * What the library shows of a stored ROM, kept beside it so a launch reads a few hundred bytes per game
@@ -231,27 +233,32 @@ export function deleteScreenshot(id: number): Promise<void> { return txOp(SCREEN
  * time stay), all in one transaction: a few hundred games go in one pass instead of ten transactions each.
  */
 export function eraseGames(ids: string[], romIds: string[] = []): Promise<void> {
+  const gone: string[] = []; // what existed: tombstones for the sync (deleteSave)
   return inTx([ROM_STORE, GAME_META_STORE, SAVE_STORE, SAVESTATE_STORE, SCREENSHOT_STORE], (tx, done) => {
     const byGame = (name: string, id: string) => {
       const store = tx.objectStore(name);
-      store.index('gameId').getAllKeys(id).onsuccess = (e) => { for (const k of (e.target as IDBRequest<IDBValidKey[]>).result) store.delete(k); };
+      store.index('gameId').getAllKeys(id).onsuccess = (e) => {
+        for (const k of (e.target as IDBRequest<IDBValidKey[]>).result) { store.delete(k); if (name === SAVE_STORE) gone.push(`sram:${String(k)}`); }
+      };
     };
     const states = tx.objectStore(SAVESTATE_STORE);
     for (const id of ids) {
       byGame(SAVE_STORE, id);
       byGame(SCREENSHOT_STORE, id);
-      [resumeStateId(id), ...Array.from({ length: SLOT_COUNT }, (_, i) => slotStateId(id, i))].forEach((k) => states.delete(k));
+      [resumeStateId(id), ...Array.from({ length: SLOT_COUNT }, (_, i) => slotStateId(id, i))].forEach((k) => {
+        states.getKey(k).onsuccess = (e) => { if ((e.target as IDBRequest).result !== undefined) { states.delete(k); gone.push(`state:${k}`); } };
+      });
     }
     const roms = tx.objectStore(ROM_STORE), metas = tx.objectStore(GAME_META_STORE);
     for (const id of romIds) {
       roms.delete(id);
       metas.get(id).onsuccess = (e) => {
         const m = (e.target as IDBRequest<StoredGameMeta | undefined>).result;
-        if (m?.rom) { m.removed = m.rom.sha1; delete m.rom; metas.put(m); }
+        if (m?.rom) { m.removed = m.rom.sha1; gone.push(`rom:${m.rom.sha1}`); delete m.rom; metas.put(m); }
       };
     }
     done(undefined);
-  });
+  }).then(() => markGone(gone));
 }
 
 /** Every store, for backup, restore and "erase everything". */

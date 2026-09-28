@@ -13,7 +13,7 @@
 import { joinRoom, type DataPayload, type P2PRoom } from '../p2p/room';
 import { codeToSecret, concat, deriveKeys, open, prove, randomBytes, rekey, seal, secretToCode, verify, type Keys, type Msg } from './crypto';
 import { agreed, gameOfKey, plan, total, type Conflict, type Games, type Manifest, type Plan, type Pull } from './manifest';
-import { addPart, currentHash, dropParts, loadRecord, localGames, moveAside, partKey, partsOf, readLocal, rememberAlias, storeRecord, writeSmall, type Snapshot } from './local';
+import { addPart, currentHash, dropParts, dropRecord, loadRecord, localGames, moveAside, partKey, partsOf, readLocal, rememberAlias, rememberGone, storeRecord, writeSmall, type Snapshot } from './local';
 import { IDLE, linkOf, setDevice, setLink, useSync, type Device, type LinkState, type Note, type SyncReport } from './status';
 import { refreshSavedIds, reloadLibrary } from '../../hooks/useGameLibrary';
 import { toast } from '../../components/shell/actions';
@@ -271,7 +271,8 @@ class Link {
     const games = round.snap.games;
     const busy = await busyNow();
     const keep = (k: string) => !inPlay(k, games, busy);
-    const blocked = [...p.pull.map((x) => x.k), ...p.moves.map((x) => x.from)].filter((k) => !keep(k));
+    const keepDrop = (k: string) => keep(k.startsWith('rom:') ? `sram:${k.slice(4)}` : k); // a ROM goes with its game's saves
+    const blocked = [...p.pull.map((x) => x.k), ...p.moves.map((x) => x.from)].filter((k) => !keep(k)).concat(p.drop.filter((k) => !keepDrop(k)));
     if (blocked.length) {
       const playing = busy.link ? undefined : busy.games.find((id) => blocked.some((k) => gameOfKey(k) === games.key(id)));
       round.notes.push(playing ? { game: playing, key: 'running' } : { key: 'linkBusy' });
@@ -279,6 +280,7 @@ class Link {
     p.pull = p.pull.filter((x) => keep(x.k));
     p.moves = p.moves.filter((x) => keep(x.from));
     p.conflicts = p.conflicts.filter((x) => keep(x.k));
+    p.drop = p.drop.filter(keepDrop);
     round.plan = p;
     for (const c of p.conflicts) round.notes.push(conflictNote(c, games));
     for (const mv of p.moves) {
@@ -288,6 +290,13 @@ class Link {
       await moveAside(mv.from, mv.to, games, { from: c.olderFrom, at: c.olderAt, profile: c.profile });
       round.changed = true;
     }
+    // Deleted over there after it last changed here: deleted here too (unless it changed since the snapshot).
+    for (const k of p.drop) {
+      if ((await currentHash(k, games)) !== this.planned(round, k) && !k.startsWith('rom:')) continue;
+      await dropRecord(k, games);
+      round.got++; round.changed = true;
+    }
+    rememberGone(p.gone, games);
     for (const w of p.write) { await writeSmall(w.k, w.v, w.t, await localGames()); round.got++; round.changed = true; }
     // What already arrived of each (an interrupted transfer picks up from there).
     const theirT = new Map(theirs.entries.map((e) => [e.k, e.t]));
