@@ -119,6 +119,21 @@ impl MemoryBus {
         }
     }
 
+    /// A byte at a RetroAchievements address (rcheevos consoleinfo.c): the bus, except that $A000-$BFFF is cartridge
+    /// RAM bank 0 and $D000-$DFFF work RAM bank 1 whatever is paged in; $10000-$15FFF are the Color's work RAM banks 2-7,
+    /// $16000-$33FFF cartridge RAM banks 1-15. 0 outside.
+    pub fn read_ra(&self, addr: u32) -> u8 {
+        let ram = |i: u32| self.cartridge.ram_byte(i as usize);
+        match addr {
+            0xA000..=0xBFFF => ram(addr - 0xA000).unwrap_or_else(|| self.read_byte(addr as u16)),
+            0xD000..=0xDFFF => self.wram[(addr - 0xC000) as usize],
+            0x0000..=0xFFFF => self.read_byte(addr as u16),
+            0x10000..=0x15FFF if self.cgb_mode => self.wram[(addr - 0x10000 + 0x2000) as usize],
+            0x16000..=0x33FFF => ram(addr - 0x16000 + 0x2000).unwrap_or(0),
+            _ => 0,
+        }
+    }
+
     pub fn read_byte(&self, addr: u16) -> u8 {
         if self.dma_active && self.dma_conflict(addr) {
             return 0xFF;
