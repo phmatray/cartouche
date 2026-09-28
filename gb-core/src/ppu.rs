@@ -54,6 +54,9 @@ pub struct Ppu {
     /// First line after the LCD is switched on: no OAM scan (STAT reads mode 0)
     /// and the line is 4 dots short.
     pub(crate) lcd_on_line0: bool,
+    /// Mode 3 of that line (`cpu_locked`). Not in save states: it only moves the VRAM/OAM lock
+    /// by one M-cycle on that one line.
+    pub(crate) lcd_on_drawing: bool,
     /// Dots mode 3 lasts on the current line (`mode3_length`, set as it starts; on a DMG, the pixel
     /// FIFO's length after a mid-line LCDC/WY/WX write); HBlank gets the rest.
     pub mode3_len: u32,
@@ -113,6 +116,7 @@ impl Ppu {
             window_line_counter: 0,
             window_was_active: false,
             lcd_on_line0: false,
+            lcd_on_drawing: false,
             mode3_len: 172,
             m_cycle_dots: 4,
             framebuffer: [0; FRAMEBUFFER_SIZE],
@@ -156,6 +160,33 @@ impl Ppu {
         self.oam[offset as usize] = value;
     }
 
+    /// The CPU cannot reach OAM in modes 2 and 3 nor VRAM in mode 3 (reads $FF, writes are
+    /// dropped). A read is blocked from the M-cycle before STAT shows the mode (the internal mode)
+    /// until STAT shows mode 0; a write only while STAT shows it, except in the M-cycle mode 3
+    /// has begun but STAT still shows mode 2, which lets a write through. The line after the LCD
+    /// turns on has no OAM scan and no lead.
+    /// (gbmicrotest `poweron_oam_*`, `poweron_vram_*`, `oam_*_l0/l1_*`, `vram_*_l0/l1_*`.)
+    pub fn cpu_locked(&self, addr: u16, write: bool) -> bool {
+        if self.lcdc & 0x80 == 0 || !matches!(addr, 0x8000..=0x9FFF | 0xFE00..=0xFE9F) {
+            return false;
+        }
+        let shown = match self.read_register(0xFF41) & 3 {
+            2 if self.lcd_on_drawing => 0,
+            m => m,
+        };
+        let internal = match self.mode {
+            PpuMode::OamScan if !self.lcd_on_line0 => 2,
+            PpuMode::Drawing if !self.lcd_on_drawing => 3,
+            _ => 0,
+        };
+        let from = if addr >= 0xFE00 { 2 } else { 3 };
+        if write {
+            shown >= from && !(shown == 2 && self.mode == PpuMode::Drawing)
+        } else {
+            shown >= from || internal >= from
+        }
+    }
+
     pub fn read_register(&self, addr: u16) -> u8 {
         match addr {
             0xFF40 => self.lcdc,
@@ -168,7 +199,7 @@ impl Ppu {
                     _ if self.lcdc & 0x80 == 0 => 0,
                     PpuMode::HBlank if self.mode_clock < 5 - m / 2 => 3, // see MODE0_EARLY
                     PpuMode::Drawing if self.mode_clock < m => 2,
-                    PpuMode::OamScan if self.mode_clock < m && self.ly != 0 => 0,
+                    PpuMode::OamScan if self.mode_clock < m => 0,
                     PpuMode::VBlank if self.mode_clock < m && self.ly == 144 => 0,
                     _ if self.lcd_on_line0 => 0,
                     mode => mode as u8,
@@ -216,6 +247,7 @@ impl Ppu {
                     self.mode_clock = 0;
                     self.stat_irq_line = false;
                     self.lcd_on_line0 = false;
+                    self.lcd_on_drawing = false;
                     self.line.active = false;
                     self.window_was_active = false;
                 } else if !was_enabled && is_enabled {
@@ -285,6 +317,7 @@ impl Ppu {
                     self.mode_clock -= 80;
                     self.mode = PpuMode::Drawing;
                     self.mode3_len = if self.lcd_on_line0 { 172 } else { self.mode3_length(self.ly as usize) };
+                    self.lcd_on_drawing = self.lcd_on_line0;
                     if !self.cgb_mode { self.start_line(); }
                     self.lcd_on_line0 = false;
                 }
@@ -301,6 +334,7 @@ impl Ppu {
                 if self.mode_clock >= self.mode3_len - MODE0_EARLY {
                     self.mode_clock -= self.mode3_len - MODE0_EARLY;
                     self.mode = PpuMode::HBlank;
+                    self.lcd_on_drawing = false;
                     hblank_entry = true;
                     if self.cgb_mode { self.render_scanline(); }
                 }

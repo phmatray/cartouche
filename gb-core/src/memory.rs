@@ -519,7 +519,7 @@ impl MemoryBus {
     pub fn cycle_read(&mut self, addr: u16) -> u8 {
         self.tick_components();
         if (0xFE00..=0xFEFF).contains(&addr) { self.ppu.oam_bug_read(); }
-        let value = self.read_byte(addr);
+        let value = if self.ppu.cpu_locked(addr, false) { 0xFF } else { self.read_byte(addr) };
         if let Some(w) = &mut self.watch { w.record(addr, value, false); }
         value
     }
@@ -529,7 +529,7 @@ impl MemoryBus {
     pub fn cycle_read_inc(&mut self, addr: u16) -> u8 {
         self.tick_components();
         if (0xFE00..=0xFEFF).contains(&addr) { self.ppu.oam_bug_read_inc(); }
-        let value = self.read_byte(addr);
+        let value = if self.ppu.cpu_locked(addr, false) { 0xFF } else { self.read_byte(addr) };
         if let Some(w) = &mut self.watch { w.record(addr, value, false); }
         value
     }
@@ -538,7 +538,7 @@ impl MemoryBus {
         self.tick_components();
         if (0xFE00..=0xFEFF).contains(&addr) { self.ppu.oam_bug_write(); }
         if let Some(w) = &mut self.watch { w.record(addr, value, true); }
-        self.write_byte(addr, value);
+        if !self.ppu.cpu_locked(addr, true) { self.write_byte(addr, value); }
     }
 
     /// Internal M-cycle in which the 16-bit IDU increments/decrements `addr`
