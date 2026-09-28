@@ -453,3 +453,65 @@ fn sou_trn_uploads_and_runs_a_sound_program() {
     transfer(&mut gb, 0x09, 0, &unterminated);
     assert!(!snes(&gb).covered() && snes(&gb).aram()[0x200] == 0, "ignored");
 }
+
+/// A hand-built BRR square wave (one looping block: eight samples up, eight down, shift 12)
+/// at $0300, its directory entry at $0400, and a program at $0200 that plays it on voice 0 at
+/// 32 kHz / 16 (2 kHz), full volume, then runs `ECHO_LOOP`.
+fn tone(start: u16) -> Vec<u8> {
+    let mut p = Vec::new();
+    // FLG (unmute, echo writes off), DIR, main volume, voice 0: volume, pitch $1000, source 0,
+    // direct GAIN $7F, then KON.
+    for (reg, v) in [(0x6C, 0x20), (0x5D, 0x04), (0x0C, 0x7F), (0x1C, 0x7F), (0x00, 0x7F), (0x01, 0x7F),
+        (0x02, 0x00), (0x03, 0x10), (0x04, 0x00), (0x05, 0x00), (0x07, 0x7F), (0x4C, 0x01)] {
+        p.extend_from_slice(&[0x8F, reg, 0xF2, 0x8F, v, 0xF3]); // MOV $F2,#reg; MOV $F3,#v
+    }
+    p.extend_from_slice(&ECHO_LOOP);
+    let brr = [0xC3, 0x77, 0x77, 0x77, 0x77, 0x88, 0x88, 0x88, 0x88];
+    sou(&[(0x0200, &p), (0x0300, &brr), (0x0400, &[0x00, 0x03, 0x00, 0x03])], start)
+}
+
+/// RMS of the mixed audio of one frame.
+fn frame_rms(gb: &mut GameBoy) -> f32 {
+    gb.bus.apu.clear_samples();
+    gb.run_frame().unwrap();
+    let n = gb.bus.apu.buffer_len();
+    let s = unsafe { std::slice::from_raw_parts(gb.bus.apu.buffer_ptr(), n) };
+    (s.iter().map(|x| x * x).sum::<f32>() / n.max(1) as f32).sqrt()
+}
+
+fn snes_music(gb: &GameBoy) -> bool {
+    gb.bus.sgb.as_ref().unwrap().snes_music()
+}
+
+#[test]
+fn a_sound_program_is_heard_with_the_game_boy_audio() {
+    let mut gb = sgb();
+    assert!(frame_rms(&mut gb) < 0.01, "silent before");
+    transfer(&mut gb, 0x09, 0, &tone(0x0200));
+    for _ in 0..30 { gb.run_frame().unwrap(); }
+    let rms = frame_rms(&mut gb);
+    assert!(rms > 0.1, "the tone plays: RMS {rms}");
+    for _ in 0..350 { frame(&mut gb); }
+    assert!(!snes_music(&gb), "covered: no switch back to the Game Boy");
+    assert!(frame_rms(&mut gb) > 0.1, "still playing");
+}
+
+#[test]
+fn a_program_that_leaves_its_upload_is_silent_and_switches_back() {
+    let mut gb = sgb();
+    transfer(&mut gb, 0x09, 0, &tone(0x1000));
+    for _ in 0..30 { gb.run_frame().unwrap(); }
+    let rms = frame_rms(&mut gb);
+    assert!(rms < 0.01, "silent: RMS {rms}");
+    for _ in 0..300 { frame(&mut gb); }
+    assert!(snes_music(&gb), "the notice path, as before");
+}
+
+#[test]
+fn sound_parameters_reach_the_program() {
+    let mut gb = sgb();
+    transfer(&mut gb, 0x09, 0, &sou(&[(0x0200, &ECHO_LOOP)], 0x0200));
+    send(&mut gb, 0x08, &[0x42, 0x01, 0x02, 0x03]); // SOUND
+    gb.run_frame().unwrap();
+    assert_eq!(snes(&gb).ports_out()[1], 0x42, "$F4 echoed to $F5");
+}

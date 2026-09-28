@@ -235,8 +235,9 @@ impl Sgb {
                 if c[1] & 0x40 != 0 { self.mask = 0; }
             }
             0x17 => self.mask = c[1] & 3,
+            0x08 => self.audio.spc.ports_in.copy_from_slice(&c[1..5]),
             0x09 => { self.snes_sound = true; self.start_trn(Trn::Sou); }
-            _ => {} // sound, SNES code and the rest: not emulated
+            _ => {} // SNES code and the rest: not emulated
         }
         self.refresh_border();
     }
@@ -455,11 +456,12 @@ impl Sgb {
 }
 
 impl Sgb {
-    /// The game plays its music on the SNES sound chip, which isn't emulated: it sent SOU_TRN,
-    /// then kept the Game Boy's own channels off most of the next 10 s (a game that only adds
-    /// SNES sound on top of its Game Boy music is not one).
+    /// The game plays its music on the SNES side and it isn't heard here: it sent SOU_TRN, then kept
+    /// the Game Boy's own channels off most of the next 10 s (a game that only adds SNES sound on
+    /// top of its Game Boy music is not one), and its sound program is not covered (it never
+    /// uploaded one, or it ran code it did not upload: the SGB's built-in sound driver).
     pub fn snes_music(&self) -> bool {
-        self.snes_frames >= SNES_WINDOW && self.gb_sound_frames < SNES_WINDOW / 2
+        !self.audio.covered() && self.snes_frames >= SNES_WINDOW && self.gb_sound_frames < SNES_WINDOW / 2
     }
 }
 
@@ -473,6 +475,9 @@ const SPC_HZ: i64 = 1_024_000;
 const SGB_HZ: i64 = 4_295_454;
 /// SPC700 cycles per S-DSP sample (32 kHz).
 const SPC_PER_SAMPLE: u32 = 32;
+/// S-DSP full scale (±32768) mixed in at the Game Boy's full scale (±1: four channels at volume 15,
+/// NR50 at 7), so a program's own volumes set the balance between the two.
+const SNES_LEVEL: f32 = 1.0 / 32768.0;
 
 /// The SNES sound side: an SPC700 running the program a game uploaded with `SOU_TRN`, and the S-DSP
 /// it drives. Idle (costing nothing) until a game uploads a program. `running` is also the
@@ -489,6 +494,9 @@ pub struct SnesAudio {
     acc: i64,
     /// SPC700 cycles since the last DSP sample.
     div: u32,
+    /// The last two DSP samples (left, right), interpolated between for the 44.1 kHz output.
+    prev: (i16, i16),
+    cur: (i16, i16),
 }
 
 impl Default for SnesAudio {
@@ -497,10 +505,13 @@ impl Default for SnesAudio {
 
 impl SnesAudio {
     pub fn new() -> Self {
-        SnesAudio { spc: Spc700::new(), dsp: Sdsp::new(), uploaded: vec![0; 0x10000 / 64], running: false, acc: 0, div: 0 }
+        SnesAudio { spc: Spc700::new(), dsp: Sdsp::new(), uploaded: vec![0; 0x10000 / 64], running: false, acc: 0, div: 0, prev: (0, 0), cur: (0, 0) }
     }
 
     pub fn aram(&self) -> &[u8] { &self.spc.aram[..] }
+
+    /// What the program last wrote to `$F4-$F7` for the SNES side.
+    pub fn ports_out(&self) -> [u8; 4] { self.spc.ports_out }
 
     /// Everything the SPC700 has run so far was uploaded by the game.
     pub fn covered(&self) -> bool { self.running }
@@ -532,24 +543,30 @@ impl SnesAudio {
         true
     }
 
-    /// Runs the SNES side for `gb_cycles` Game Boy cycles (nothing while idle).
-    pub fn run(&mut self, gb_cycles: u32) {
-        if !self.running { return; }
+    /// Runs the SNES side for `gb_cycles` Game Boy cycles and returns its output level now, for
+    /// `Apu::mix_external`: linear between the last two 32 kHz samples, so sampling it at 44.1 kHz
+    /// resamples linearly (one DSP sample behind). `None` while idle; silence once it stops.
+    pub fn run(&mut self, gb_cycles: u32) -> Option<(f32, f32)> {
+        if !self.running { return None; }
         self.acc += gb_cycles as i64 * SPC_HZ;
         while self.acc > 0 {
             let pc = self.spc.pc as usize;
             if !self.spc.halted && self.uploaded[pc / 64] & 1 << (pc % 64) == 0 {
                 self.running = false;
-                return;
+                return Some((0.0, 0.0));
             }
             let c = self.spc.step(&mut self.dsp);
             self.acc -= c as i64 * SGB_HZ;
             self.div += c;
             while self.div >= SPC_PER_SAMPLE {
                 self.div -= SPC_PER_SAMPLE;
-                self.dsp.sample(&mut self.spc.aram);
+                self.prev = self.cur;
+                self.cur = self.dsp.sample(&mut self.spc.aram);
             }
         }
+        let t = self.div as f32 / SPC_PER_SAMPLE as f32;
+        let lerp = |a: i16, b: i16| (a as f32 + (b as f32 - a as f32) * t) * SNES_LEVEL;
+        Some((lerp(self.prev.0, self.cur.0), lerp(self.prev.1, self.cur.1)))
     }
 }
 
