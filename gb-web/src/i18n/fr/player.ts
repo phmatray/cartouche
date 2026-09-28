@@ -231,6 +231,10 @@ export default {
     breakpoints: 'Point d’arrêt',
     addBreakpoint: 'Ajouter',
     removeBreakpoint: 'Retirer le point d’arrêt {addr}',
+    loadSymbols: 'Charger les symboles',
+    symbolsLoaded: '{count} symboles chargés, {skipped} lignes ignorées',
+    unknownLabel: 'Aucune étiquette ni adresse « {name} »',
+    otherBank: '{name} est dans la banque {bank} : ce point d’arrêt s’arrête en {addr} dans toutes les banques',
     stoppedAt: 'Arrêté : {reason}',
   },
   music: {

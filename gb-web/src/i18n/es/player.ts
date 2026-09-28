@@ -232,6 +232,10 @@ export default {
     addBreakpoint: 'Añadir',
     removeBreakpoint: 'Quitar el punto de interrupción {addr}',
     stoppedAt: 'Detenido: {reason}',
+    loadSymbols: 'Cargar símbolos',
+    symbolsLoaded: '{count} símbolos cargados, {skipped} líneas omitidas',
+    unknownLabel: 'No hay etiqueta ni dirección «{name}»',
+    otherBank: '{name} está en el banco {bank}: este punto de interrupción se detiene en {addr} en cualquier banco',
   },
   music: {
     play: 'Reproducir',

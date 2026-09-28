@@ -223,6 +223,9 @@ export function useEmulator() {
     });
   }, []);
 
+  /** The ROM bank mapped at $4000-$7FFF now, for banked symbols. */
+  const romBank = useCallback((): number => emulatorRef.current?.rom_bank() ?? 1, []);
+
   const addBreakpoint = useCallback((addr: number) => {
     emulatorRef.current?.debug_add_breakpoint(addr);
     if (!bpRef.current.includes(addr)) setBreakpoints(bpRef.current = [...bpRef.current, addr].sort((a, b) => a - b));
@@ -446,6 +449,7 @@ export function useEmulator() {
     stepOver,
     steps,
     disassemble,
+    romBank,
     breakReason,
     breakpoints,
     addBreakpoint,
