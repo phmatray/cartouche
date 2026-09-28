@@ -57,7 +57,7 @@ export default function Achievements({ game }: { game: GameEntry }) {
       {head}
       <p className="ra-sum">
         <b>{t('ra.earned', { count: got.length, total: list.length })}</b>
-        <span>{t('ra.points', { earned: pts(got), total: pts(list) })}</span>
+        <span>{t('ra.points', { count: pts(got), total: pts(list) })}</span>
       </p>
       <ul className="ra-list">
         {list.map((a) => (

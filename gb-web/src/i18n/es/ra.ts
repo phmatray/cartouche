@@ -18,7 +18,7 @@ export default {
   looking: 'Buscando este cartucho en RetroAchievements…',
   none: 'RetroAchievements no tiene logros para esta versión del cartucho.',
   earned: { one: '{count} de {total} conseguido', other: '{count} de {total} conseguidos' },
-  points: '{earned} de {total} puntos',
+  points: { one: '{count} de {total} puntos', other: '{count} de {total} puntos' },
   pts: { one: 'punto', other: 'puntos' },
   hardcore: 'Hardcore',
   locked: 'Aún sin conseguir',

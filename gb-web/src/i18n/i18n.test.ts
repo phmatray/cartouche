@@ -62,6 +62,9 @@ test('plurals follow each language’s rules', () => {
   assert.equal(translate('es', 'common.games', { count: 1 }), '1 juego');
   assert.equal(translate('es', 'common.games', { count: 1000000 }), '1.000.000 juegos'); // "many" falls back to other
   assert.equal(translate('fr', 'common.games', { count: 12345 }), '12 345 jeux'); // numbers formatted for the language
+  assert.equal(translate('fr', 'ra.points', { count: 0, total: 50 }), '0 point sur 50'); // the noun follows the points earned
+  assert.equal(translate('fr', 'ra.points', { count: 25, total: 50 }), '25 points sur 50');
+  assert.equal(translate('en', 'ra.points', { count: 1, total: 50 }), '1 of 50 points');
   assert.equal(translate('en', 'library.jumpTo', { letter: 'B' }), 'Jump to B');
   assert.equal(translate('en', 'library.jumpTo'), 'Jump to {letter}'); // a missing value stays visible, never "undefined"
 });
