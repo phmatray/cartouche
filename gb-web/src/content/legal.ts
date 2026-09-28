@@ -104,7 +104,7 @@ export const LEGAL_SECTIONS: LegalSection[] = [
       'Your ROMs, saves, save states, settings, favorites and play time are stored only in this ' +
       'browser (IndexedDB and localStorage) and never leave your device, unless you turn on device sync ' +
       '(see below). Clear this site\'s data in your browser settings to delete everything.\n\n' +
-      'Only GitHub receives requests, unless you allow box art, connect RetroAchievements, play online or turn on device ' +
+      'Only GitHub receives requests, unless you allow box art, connect RetroAchievements, sign in to unlock achievements, play online or turn on device ' +
       'sync (see below). GitHub Pages serves the app and its fonts. Box art is off by ' +
       'default and needs your yes (first-launch dialog or Settings > Storage); only then does the ' +
       'browser also load covers of recognized ROMs you added from raw.githubusercontent.com, and covers of GB Studio games from itch.io (img.itch.zone, see Box art). Like any ' +
@@ -117,8 +117,18 @@ export const LEGAL_SECTIONS: LegalSection[] = [
       'password). Both stay in this browser (localStorage). While connected, the browser asks retroachievements.org (' + 
       'https://retroachievements.org) for the game lists of both consoles and, for a game you open, its achievements and ' +
       'which ones you earned; the key and username go in those requests, as its Web API requires. It identifies a ROM by ' +
-      'comparing its MD5 fingerprint with those lists in the browser: the ROM and its fingerprint are never sent. ' +
+      'comparing its MD5 fingerprint with those lists in the browser: for this, the ROM and its fingerprint are not sent. ' +
       'RetroAchievements receives your IP address and browser details. "Disconnect" forgets the key and stops every request.\n\n' +
+      'Unlocking achievements while you play is off until you sign in under Settings > Achievements > "Unlock while ' +
+      'playing" with your username and password, once. The password is sent to RetroAchievements through Cartouche\'s ' +
+      'relay and never stored; only the session token RetroAchievements returns stays in this browser (localStorage). ' +
+      'While a recognized game runs, the browser sends through the relay the ROM\'s MD5 fingerprint (to identify the ' +
+      'game), the achievements and leaderboard entries you earn, and regular pings with rich presence (what you are ' +
+      'doing in the game, shown on your RetroAchievements profile). The relay is a Cloudflare Worker run by the ' +
+      'Cartouche maintainer (cartouche-ra.phmatray.workers.dev): it only forwards these requests to retroachievements.org ' +
+      'and keeps nothing (no logs, no storage). Cloudflare, its host, receives your IP address and the contents of those ' +
+      'requests (username, token, the password at sign-in, fingerprint); see the Cloudflare privacy policy ' +
+      '(https://www.cloudflare.com/privacypolicy/). "Sign out" forgets the token and stops these requests.\n\n' +
       'Play online (Link Cable) and device sync (Settings > Sync) make no request until you open or join a room, or ' +
       'pair a device. Then your browser contacts five public Nostr relays that Cartouche does not run ' +
       '(relay02.lnfi.network, staging.yabu.me, top.testrelay.top, yabu.me and relay.mostro.network) to find the ' +

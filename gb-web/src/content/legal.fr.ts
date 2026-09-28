@@ -103,7 +103,7 @@ export const LEGAL_FR: LegalSection[] = [
       'Les ROM, sauvegardes, sauvegardes instantanées, réglages, favoris et temps de jeu sont stockés uniquement dans ce ' +
       'navigateur (IndexedDB et localStorage) et ne quittent jamais l’appareil, sauf si la synchronisation entre appareils est activée (voir plus bas). Effacer les données de ce site dans ' +
       'les réglages du navigateur supprime tout.\n\n' +
-      'Seul GitHub reçoit des requêtes, sauf si les jaquettes sont autorisées, en cas de connexion à RetroAchievements, de jeu en ligne ou de synchronisation entre appareils (voir plus bas). GitHub Pages sert l’app et ses polices. Les jaquettes sont désactivées par ' +
+      'Seul GitHub reçoit des requêtes, sauf si les jaquettes sont autorisées, en cas de connexion à RetroAchievements ou d’identification pour débloquer des succès, de jeu en ligne ou de synchronisation entre appareils (voir plus bas). GitHub Pages sert l’app et ses polices. Les jaquettes sont désactivées par ' +
       'défaut et nécessitent un accord (boîte de dialogue du premier lancement ou Réglages > Stockage) ; seulement alors le ' +
       'navigateur charge aussi les jaquettes des ROM reconnues ajoutées depuis raw.githubusercontent.com, et celles des jeux GB Studio depuis itch.io (img.itch.zone, voir Jaquettes). Comme tout ' +
       'serveur web, GitHub reçoit ' +
@@ -115,8 +115,20 @@ export const LEGAL_FR: LegalSection[] = [
       'clé d’API web (jamais le mot de passe). Les deux restent dans ce navigateur (localStorage). Une fois connecté, le navigateur ' +
       'demande à retroachievements.org (https://retroachievements.org) la liste des jeux des deux consoles et, pour un jeu ouvert, ' +
       'ses succès et ceux déjà obtenus ; la clé et le nom d’utilisateur figurent dans ces requêtes, comme l’exige son API web. ' +
-      'Une ROM est reconnue en comparant son empreinte MD5 à ces listes dans le navigateur : ni la ROM ni son empreinte ne sont ' +
-      'envoyées. RetroAchievements reçoit l’adresse IP et les informations du navigateur. « Déconnecter » oublie la clé et arrête toute requête.\n\n' +
+      'Une ROM est reconnue en comparant son empreinte MD5 à ces listes dans le navigateur : pour cela, ni la ROM ni son empreinte ne sont ' +
+      'envoyées. RetroAchievements reçoit l’adresse IP et les informations du navigateur. « Déconnecter » oublie la clé et arrête toute requête.\n\n' +
+      'Le déblocage des succès en jouant reste désactivé tant qu’aucune identification n’a eu lieu dans Réglages > Succès > ' +
+      '« Débloquer en jouant », avec un nom d’utilisateur et un mot de passe, une seule fois. Le mot de passe est ' +
+      'envoyé à RetroAchievements par le relais de Cartouche et n’est jamais conservé ; seul le jeton de session renvoyé par ' +
+      'RetroAchievements reste dans ce navigateur (localStorage). Pendant qu’un jeu reconnu tourne, le navigateur envoie par ' +
+      'le relais l’empreinte MD5 de la ROM (pour identifier le jeu), les succès et entrées de classement obtenus, et des ' +
+      'signaux réguliers avec la présence enrichie (ce que vous faites dans le jeu, affiché sur votre profil ' +
+      'RetroAchievements). Le relais est un Cloudflare Worker géré par le mainteneur de Cartouche ' +
+      '(cartouche-ra.phmatray.workers.dev) : il ne fait que transmettre ces requêtes à retroachievements.org et ne garde ' +
+      'rien (ni journaux, ni stockage). Cloudflare, son hébergeur, reçoit l’adresse IP et le contenu de ces requêtes (nom ' +
+      'd’utilisateur, jeton, mot de passe lors de l’identification, empreinte) ; voir la politique de confidentialité ' +
+      'de Cloudflare (https://www.cloudflare.com/privacypolicy/). « Se déconnecter » oublie le jeton et arrête ' +
+      'ces requêtes.\n\n' +
       'Le jeu en ligne (Câble Link) et la synchronisation entre appareils (Réglages > Synchro) n’envoient aucune requête ' +
       'tant qu’aucun salon n’est ouvert ou rejoint et qu’aucun appareil n’est associé. Ensuite, le navigateur contacte ' +
       'cinq relais Nostr publics que Cartouche n’exploite pas (relay02.lnfi.network, staging.yabu.me, top.testrelay.top, ' +

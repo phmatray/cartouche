@@ -362,6 +362,44 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+### rcheevos (compiled into the web app as WebAssembly)
+
+- File: `gb-web/src/vendor/rcheevos.js`, built by `gb-web/rcheevos/build.sh`
+  with emscripten from `gb-web/rcheevos/shim.c` and the rcheevos source. It is
+  loaded only once a player signs in to unlock RetroAchievements.
+- Work: rcheevos, © 2018 RetroAchievements.org
+  (https://github.com/RetroAchievements/rcheevos, tag `v12.5.0`, archive
+  SHA-256 pinned in `build.sh`). Unmodified; `shim.c` (Cartouche, MIT) bridges
+  its `rc_client` to JavaScript.
+- The module also contains emscripten's JavaScript runtime and C library
+  support code, under emscripten's own licenses (MIT and
+  University of Illinois/NCSA).
+- License: MIT (copy in `gb-web/src/vendor/rcheevos.LICENSE`):
+
+```
+MIT License
+
+Copyright (c) 2018 RetroAchievements.org
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ### Rust crates compiled into the WebAssembly core
 
 `wasm-bindgen`, `js-sys`, `thiserror` and `log`, and their dependencies
@@ -408,19 +446,30 @@ and are not part of the published build.
 - Those requests go to itch.io, which receives the player's IP address and browser details; see the
   [itch.io privacy policy](https://itch.io/docs/legal/privacy-policy).
 
-### RetroAchievements (achievement lists and badges)
+### RetroAchievements (achievements, badges and unlocking)
 
-- Source: the RetroAchievements Web API (https://retroachievements.org/API/)
-  and badge images from `media.retroachievements.org`.
+- Source: the RetroAchievements Web API (https://retroachievements.org/API/),
+  badge images from `media.retroachievements.org`, and, for unlocking, the
+  emulator API (`https://retroachievements.org/dorequest.php`) reached through
+  Cartouche's relay (below).
 - Achievement titles, descriptions and badge images belong to RetroAchievements
   and their authors. Cartouche does **not** copy, host or redistribute any of
-  them: the player's browser requests them directly, and only after the player
+  them: the player's browser requests them, and only after the player
   connected their own RetroAchievements account in Settings > Achievements
-  (off by default; "Disconnect" stops every request). Read-only: Cartouche does
-  not unlock achievements (see `docs/RETROACHIEVEMENTS.md`).
-- Those requests go to RetroAchievements, which receives the player's IP
-  address, browser details, username and web API key. ROMs and their hashes
-  are never sent.
+  (off by default; "Disconnect" stops every request) or signed in under
+  "Unlock while playing" ("Sign out" stops it). See `docs/RETROACHIEVEMENTS.md`.
+- The Web API requests go to RetroAchievements, which receives the player's IP
+  address, browser details, username and web API key; for the list, ROMs and
+  their hashes are not sent. When unlocking, RetroAchievements receives the
+  username, the password once at sign-in (never stored by Cartouche) and then
+  the session token, the ROM's MD5 hash, unlocks, leaderboard entries and
+  rich presence pings.
+- Relay: a Cloudflare Worker run by the Cartouche maintainer
+  (`relay/retroachievements/`, `https://cartouche-ra.phmatray.workers.dev`)
+  adds CORS and the emulator's `User-Agent`, forwards the requests to
+  `dorequest.php` and keeps nothing (no logs, no storage). Cloudflare, its
+  host, receives the requests (IP address and contents); see the
+  [Cloudflare privacy policy](https://www.cloudflare.com/privacypolicy/).
 - RetroAchievements does not endorse Cartouche.
 
 ### Nostr relays and STUN servers (online link cable and device sync)
