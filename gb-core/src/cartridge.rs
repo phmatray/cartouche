@@ -430,6 +430,27 @@ impl Cartridge {
         })
     }
 
+    /// The ROM bank mapped at $4000-$7FFF now, as `read_rom` resolves it (for debugger symbols).
+    pub fn current_rom_bank(&self) -> u16 {
+        let count = self.rom_bank_count.max(1);
+        let bank = match &self.mbc {
+            MbcType::NoMbc => 1,
+            MbcType::Mbc1 { rom_bank, ram_bank, .. } => (*ram_bank as usize) << 5 | *rom_bank as usize,
+            MbcType::Mbc2 { rom_bank, .. }
+            | MbcType::Mbc3 { rom_bank, .. }
+            | MbcType::Camera { rom_bank, .. }
+            | MbcType::Huc1 { rom_bank, .. }
+            | MbcType::Huc3 { rom_bank, .. }
+            | MbcType::Mbc7 { rom_bank, .. } => *rom_bank as usize,
+            MbcType::Mbc5 { rom_bank, .. } => *rom_bank as usize,
+            MbcType::Mmm01 { regs } => Self::mmm01_bank(regs, 0x4000).unwrap_or(count - 1),
+            // ponytail: MBC6 maps two 8 KiB windows; this reports window A's 16 KiB-equivalent bank.
+            MbcType::Mbc6 { rom_banks, .. } => rom_banks[0] as usize / 2,
+            MbcType::Tama5 => self.tama5.as_ref().map_or(1, |t| t.rom_bank()),
+        };
+        (bank % count) as u16
+    }
+
     pub fn read_rom(&self, addr: u16) -> u8 {
         match &self.mbc {
             MbcType::NoMbc => self.rom.get(addr as usize).copied().unwrap_or(0xFF),

@@ -278,6 +278,11 @@ impl Emulator {
         self.gb.as_ref().map_or(0, |gb| gb.cpu.regs.pc)
     }
 
+    /// The ROM bank mapped at $4000-$7FFF now (1 with no ROM), so banked symbols resolve.
+    pub fn rom_bank(&self) -> u16 {
+        self.gb.as_ref().map_or(1, |gb| gb.bus.cartridge.current_rom_bank())
+    }
+
     pub fn get_sp(&self) -> u16 {
         self.gb.as_ref().map_or(0, |gb| gb.cpu.regs.sp)
     }
