@@ -187,7 +187,7 @@ export default {
   game: {
     open: 'Abrir la página del juego',
     debug: 'Depuración',
-    debugSub: 'Registros, memoria, salida serie y tiles, para desarrollo',
+    debugSub: 'Registros, código, memoria, salida serie y tiles, para desarrollo',
   },
   debug: {
     view: 'Vista de depuración',

@@ -187,7 +187,7 @@ export default {
   game: {
     open: 'Ouvrir la page du jeu',
     debug: 'Débogage',
-    debugSub: 'Registres, mémoire, sortie série et tuiles, pour le développement',
+    debugSub: 'Registres, code, mémoire, sortie série et tuiles, pour le développement',
   },
   debug: {
     view: 'Vue de débogage',
