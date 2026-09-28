@@ -10,6 +10,8 @@ pub enum Break {
     Frame,
     /// A watched address was accessed by the instruction at `pc` (the machine stops after it).
     Watch { addr: u16, value: u8, write: bool, pc: u16 },
+    /// Run to scanline: LY reached this line.
+    Scanline(u8),
 }
 
 impl Break {
@@ -21,6 +23,7 @@ impl Break {
                 let kind = if *write { "write" } else { "read" };
                 format!("{kind} ${addr:04X} = ${value:02X} at ${pc:04X}")
             }
+            Break::Scanline(ly) => format!("scanline {ly}"),
         }
     }
 }
@@ -71,6 +74,8 @@ pub struct Debugger {
     pub resume_pc: Option<u16>,
     /// One-shot stop for step over: the address after the `CALL`/`RST` (no `hit` when it fires).
     pub temp_stop: Option<u16>,
+    /// One-shot stop for run to scanline: after the instruction that brings LY to this line.
+    pub stop_ly: Option<u8>,
 }
 
 impl Debugger {

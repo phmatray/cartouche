@@ -211,6 +211,37 @@ fn oam_dma_over_a_watched_address_does_not_fire() {
 }
 
 #[test]
+fn run_to_scanline_stops_when_ly_reaches_it() {
+    // $0100: LD A, $91; $0102: LDH [$40], A (LCD on); $0104: JR -2.
+    let mut gb = booted(&[0x3E, 0x91, 0xE0, 0x40, 0x18, 0xFE]);
+    gb.run_to_scanline(72).unwrap();
+    assert_eq!(gb.bus.read_byte(0xFF44), 72);
+    assert_eq!(gb.take_break().unwrap().describe(), "scanline 72");
+}
+
+#[test]
+fn run_to_scanline_with_the_lcd_off_stops_at_the_frame() {
+    // $0100: XOR A; $0101: LDH [$40], A (LCD off); $0103: JR -2.
+    let mut gb = booted(&[0xAF, 0xE0, 0x40, 0x18, 0xFE]);
+    gb.run_to_scanline(72).unwrap();
+    assert_eq!(gb.take_break(), Some(gb_core::debug::Break::Frame));
+}
+
+#[test]
+fn emulator_watchpoints_and_run_to_scanline() {
+    let mut emu = gb_core::Emulator::new();
+    assert!(emu.load_rom(&rom(&WRITE_THEN_READ)));
+    emu.debug_add_watchpoint(0xC000, 9);
+    assert!(emu.get_error().is_some(), "an unknown kind is refused");
+    emu.debug_add_watchpoint(0xC000, READ);
+    assert!(emu.run_frame());
+    assert_eq!(emu.debug_break_reason().as_deref(), Some("read $C000 = $3F at $0105"));
+    emu.debug_remove_watchpoint(0xC000, READ);
+    assert!(emu.debug_run_to_scanline(100));
+    assert_eq!(emu.debug_break_reason().as_deref(), Some("scanline 100"));
+}
+
+#[test]
 fn breakpoint_on_an_interrupt_vector_fires_on_dispatch() {
     // $0100: LD A, 1; $0102: LDH [$FF], A; $0104: EI; $0105: JR -2. VBlank jumps to $0040.
     let mut gb = booted(&[0x3E, 0x01, 0xE0, 0xFF, 0xFB, 0x18, 0xFE]);
