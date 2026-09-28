@@ -3,7 +3,7 @@ import { Link } from 'react-router';
 import { renameGame, useGameLibrary } from '../../hooks/useGameLibrary';
 import { cancelImport, importAnyway, patchRow, queueImport, useImports, type Full, type ImportRow, type RowState } from '../../lib/import-queue';
 import { fileAccept, useInstall } from '../../lib/pwa';
-import { paths } from '../../lib/ui';
+import { paths, touchOnly } from '../../lib/ui';
 import type { GameEntry } from '../../types/game';
 import { I } from '../icons';
 import { Cover } from '../library/Cover';
@@ -53,7 +53,8 @@ export function AddRomsPage() {
           <FileButton className="btn y" multiple accept={fileAccept('.gb,.gbc,.rom,.bin,.zip')} onFiles={queueImport}>{I.plus}{t('add.choose')}</FileButton>
         </div>
       </div>
-      <p className="tip" hidden={storageError}>
+      {/* How to get files onto a phone: only on one (a desktop has a file manager and drag and drop). */}
+      <p className="tip" hidden={storageError || !touchOnly()}>
         {rich(t('add.iphone'), { b: (s) => <b>{s}</b> })}
       </p>
 
