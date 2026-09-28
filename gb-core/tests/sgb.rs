@@ -405,3 +405,51 @@ fn the_first_frame_after_a_load_continues_the_thumbnail() {
     assert_eq!(px(&fresh, 0, 0), rgb(RED), "drawn before the save point");
     assert_eq!(px(&fresh, 0, 100), rgb(WHITE), "drawn after the load");
 }
+
+// ─── SNES sound (SOU_TRN) ───
+
+/// A SOU_TRN payload: `[len][dest][data]` blocks, then a zero length and the start address,
+/// zero-padded to 4 KB.
+fn sou(blocks: &[(u16, &[u8])], start: u16) -> Vec<u8> {
+    let mut d = Vec::new();
+    for (dest, data) in blocks {
+        d.extend_from_slice(&(data.len() as u16).to_le_bytes());
+        d.extend_from_slice(&dest.to_le_bytes());
+        d.extend_from_slice(data);
+    }
+    d.extend_from_slice(&[0, 0]);
+    d.extend_from_slice(&start.to_le_bytes());
+    d.resize(4096, 0);
+    d
+}
+
+/// Hand-assembled SPC700 loop: MOV A,$F4; MOV $F5,A; INCW $10; BRA back to the start.
+const ECHO_LOOP: [u8; 8] = [0xE4, 0xF4, 0xC4, 0xF5, 0x3A, 0x10, 0x2F, 0xF8];
+
+fn snes(gb: &GameBoy) -> &gb_core::sgb::SnesAudio {
+    &gb.bus.sgb.as_ref().unwrap().audio
+}
+
+#[test]
+fn sou_trn_uploads_and_runs_a_sound_program() {
+    let mut gb = sgb();
+    transfer(&mut gb, 0x09, 0, &sou(&[(0x0200, &ECHO_LOOP), (0x0300, &[1, 2, 3])], 0x0200));
+    assert_eq!(snes(&gb).aram()[0x200..0x208], ECHO_LOOP, "first block in audio RAM");
+    assert_eq!(snes(&gb).aram()[0x300..0x303], [1, 2, 3], "second block");
+    let count = |gb: &GameBoy| u16::from_le_bytes([snes(gb).aram()[0x10], snes(gb).aram()[0x11]]);
+    let before = count(&gb);
+    gb.run_frame().unwrap();
+    assert_ne!(count(&gb), before, "the program runs");
+    assert!(snes(&gb).covered(), "it only ran what it uploaded");
+
+    let mut gb = sgb();
+    transfer(&mut gb, 0x09, 0, &sou(&[(0x0200, &ECHO_LOOP)], 0x1000));
+    gb.run_frame().unwrap();
+    assert!(!snes(&gb).covered(), "started outside the upload");
+
+    let mut gb = sgb();
+    let mut unterminated = vec![0u8; 4096];
+    unterminated[0..4].copy_from_slice(&[0xFF, 0x0F, 0x00, 0x02]); // one block longer than the transfer
+    transfer(&mut gb, 0x09, 0, &unterminated);
+    assert!(!snes(&gb).covered() && snes(&gb).aram()[0x200] == 0, "ignored");
+}

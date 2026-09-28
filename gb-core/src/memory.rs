@@ -334,6 +334,7 @@ impl MemoryBus {
         }
         self.cartridge.tick();
         self.apu.cgb_mode = self.cgb_mode || self.ppu.compat; // CGB hardware, whatever the mode
+        if let Some(s) = self.sgb.as_deref_mut() { s.audio.run(ppu_step); }
         self.apu.step(ppu_step);
         self.cycle_count += ppu_step;
 
