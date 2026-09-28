@@ -3,6 +3,7 @@ pub mod boot_rom;
 pub mod camera;
 pub mod cartridge;
 pub mod cpu;
+pub mod debug;
 pub mod error;
 pub mod gameboy;
 pub mod interrupts;

@@ -1,5 +1,6 @@
 use crate::cartridge::{Cartridge, MAPPER_STATE_LEN};
 use crate::cpu::Cpu;
+use crate::debug::{Break, Debugger};
 use crate::error::EmulatorError;
 use crate::memory::MemoryBus;
 
@@ -37,6 +38,8 @@ pub struct GameBoy {
     pub palette: u8,
     /// The start-up animation its boot ROM plays (`with_boot`), 0 none.
     pub boot: u8,
+    /// Breakpoints, `None` until the first is set (never part of a save state).
+    pub debugger: Option<Box<Debugger>>,
 }
 
 impl GameBoy {
@@ -65,6 +68,7 @@ impl GameBoy {
             console: if cgb_cart { Console::Cgb } else if cgb { Console::Compat } else { Console::Dmg },
             palette: 0,
             boot: animation,
+            debugger: None,
         };
         gb.bus.boot_rom = crate::boot_rom::image(gb.console, animation);
         if gb.console == Console::Compat {
@@ -148,7 +152,7 @@ impl GameBoy {
         let bus = MemoryBus::new(cartridge, cgb_mode);
         let cpu = Cpu::new();
         let console = if cgb_mode { Console::Cgb } else { Console::Dmg };
-        let mut gb = GameBoy { cpu, bus, cgb_mode, double_speed: false, frame_cycles: 0, console, palette: 0, boot: 0 };
+        let mut gb = GameBoy { cpu, bus, cgb_mode, double_speed: false, frame_cycles: 0, console, palette: 0, boot: 0, debugger: None };
         // The built-in boot ROM is a DMG one: it hands over with A=$01, which CGB software reads
         // as "running on a DMG" (CGB-only titles then show their "GBC only" screen, dual-mode
         // titles fall back to monochrome). CGB carts therefore start from the CGB post-boot state.
@@ -216,7 +220,8 @@ impl GameBoy {
     }
 
     /// Runs one frame's worth of cycles. With a remote link, returns early while a transfer waits
-    /// for the partner's byte (`bus.serial.stalled()`); the next call finishes that frame.
+    /// for the partner's byte (`bus.serial.stalled()`), and on a breakpoint (`take_break`); the
+    /// next call finishes that frame.
     pub fn run_frame(&mut self) -> Result<(), EmulatorError> {
         if self.frame_cycles == 0 {
             self.bus.ppu.frame_ready = false;
@@ -224,6 +229,11 @@ impl GameBoy {
         while self.frame_cycles < CYCLES_PER_FRAME {
             if self.bus.serial.stalled() {
                 return Ok(());
+            }
+            if let Some(d) = &mut self.debugger {
+                if d.should_stop(self.cpu.regs.pc) {
+                    return Ok(());
+                }
             }
             self.bus.cycle_count = 0;
             self.cpu.handle_interrupts(&mut self.bus);
@@ -247,6 +257,32 @@ impl GameBoy {
             total += self.step_instruction()?;
         }
         Ok(true)
+    }
+
+    /// The debugger, created on first use.
+    pub fn debugger_mut(&mut self) -> &mut Debugger {
+        self.debugger.get_or_insert_with(Box::default)
+    }
+
+    /// Why the last `run_frame` / `step_frame` stopped, once.
+    pub fn take_break(&mut self) -> Option<Break> {
+        self.debugger.as_mut()?.hit.take()
+    }
+
+    /// Lets the instruction at the current PC run on the next `run_frame` even if it has a
+    /// breakpoint (after a step, so Continue moves on).
+    pub fn resume_here(&mut self) {
+        if let Some(d) = &mut self.debugger {
+            d.resume_pc = Some(self.cpu.regs.pc);
+        }
+    }
+
+    /// Runs to the next VBlank (see `run_to_vblank`) and stops there with `Break::Frame`.
+    pub fn step_frame(&mut self) -> Result<(), EmulatorError> {
+        self.run_to_vblank()?;
+        self.resume_here();
+        self.debugger_mut().hit = Some(Break::Frame);
+        Ok(())
     }
 
     pub fn step_instruction(&mut self) -> Result<u32, EmulatorError> {
@@ -368,7 +404,13 @@ impl GameBoy {
     pub fn load_state(&mut self, data: &[u8]) -> bool {
         if self.state_console(data).is_none() { return false; }
         let before = self.save_state();
-        if self.read_state(data) { return true; }
+        if self.read_state(data) {
+            if let Some(d) = &mut self.debugger {
+                d.hit = None;
+                d.resume_pc = None;
+            }
+            return true;
+        }
         let restored = self.read_state(&before);
         debug_assert!(restored, "a state this machine just saved reads back");
         false
