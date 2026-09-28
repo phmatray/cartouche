@@ -17,7 +17,7 @@ export default {
     stays: '<b>Tout reste dans ce navigateur.</b> ROM, sauvegardes et temps de jeu restent sur cet appareil. Pas de compte, aucun envoi.',
     backup: 'Faire une copie de sauvegarde',
     version: 'Version {v} : les nouveautés',
-    art: 'Jaquettes : libretro-thumbnails · Illustrations de Tobu Tobu Girl : Tangram Games (CC BY 4.0)',
+    art: 'Jaquettes : libretro-thumbnails, itch.io (GB Studio) · Illustrations de Tobu Tobu Girl : Tangram Games (CC BY 4.0)',
   },
   drop: 'Déposer pour ajouter',
   dropSub: 'Les fichiers sont lus dans ce navigateur et ne sont jamais envoyés à un serveur.',
@@ -39,7 +39,7 @@ export default {
   art: {
     title: 'Afficher les jaquettes ?',
     p1: 'Les jaquettes sont protégées par le droit d’auteur de leurs éditeurs. Cartouche n’en héberge ni n’en fournit aucune (à part les jaquettes sous licence libre des jeux inclus).',
-    p2: 'Si vous acceptez, votre navigateur télécharge les jaquettes des jeux reconnus que vous ajoutez, directement depuis le projet libretro-thumbnails sur GitHub : GitHub voit donc votre adresse IP et les informations de votre navigateur (voir <a>la déclaration de confidentialité de GitHub</a>). Elles sont conservées dans le stockage de ce navigateur. Rien n’est partagé avec nous. Vous pouvez les supprimer à tout moment dans Réglages › Stockage.',
+    p2: 'Si vous acceptez, votre navigateur télécharge les jaquettes des jeux reconnus que vous ajoutez, directement depuis le projet libretro-thumbnails sur GitHub, et celles des jeux GB Studio depuis les pages itch.io de leurs auteurs : GitHub et itch.io voient donc votre adresse IP et les informations de votre navigateur (voir <a>la déclaration de confidentialité de GitHub</a>). Elles sont conservées dans le stockage de ce navigateur. Rien n’est partagé avec nous. Vous pouvez les supprimer à tout moment dans Réglages › Stockage.',
     no: 'Continuer sans',
     yes: 'Télécharger les jaquettes',
     ready: { one: 'Jaquette prête pour {count} jeu', other: 'Jaquettes prêtes pour {count} jeux' },

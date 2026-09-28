@@ -13,6 +13,9 @@ export interface GameEntry {
   coverArt: string;
   /** Attribution for coverArt (shown with the game's credits). */
   coverCredit?: string;
+  /** The cover image on the author's itch.io page (GB Studio link-out entries; its URL only, never a file of the app):
+   *  loaded from itch.io at runtime, only when box art is allowed. scripts/gbstudio-covers.mjs refreshes it. */
+  remoteCover?: string;
   screenshots: string[];
   romUrl?: string;
   libretroName?: string;

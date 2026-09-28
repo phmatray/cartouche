@@ -43,7 +43,7 @@ function Snake({ text }: { text: string }) {
 
 /**
  * The printed card every box sits on: always there, so a missing or slow cover still looks designed.
- * GB Studio games (no box art is ever fetched for them) print the four shades of a Game Boy screen instead of the process inks.
+ * GB Studio games print the four shades of a Game Boy screen instead of the process inks.
  */
 export function NoArt({ game }: { game: GameEntry }) {
   return (
@@ -64,7 +64,7 @@ export function Cover({ game, className = '', 'aria-hidden': hidden }: { game: G
     <span ref={ref} className={`cv ${className}${seen && loading ? ' wait' : ''}`} aria-hidden={hidden} data-game={game.id}>
       <NoArt game={game} />
       {coverUrl && (
-        <img src={coverUrl} alt="" width={512} height={512} decoding="async"
+        <img src={coverUrl} alt="" width={512} height={512} decoding="async" referrerPolicy="no-referrer"
           className={shown === coverUrl ? 'in' : ''} onLoad={() => setShown(coverUrl)} />
       )}
     </span>

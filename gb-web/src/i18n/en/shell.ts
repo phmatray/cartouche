@@ -16,7 +16,7 @@ export default {
     stays: '<b>Everything stays in this browser.</b> ROMs, saves and play time live on your device. No account, no upload.',
     backup: 'Back up your data',
     version: 'Version {v}: what’s new',
-    art: 'Box art: libretro-thumbnails · Tobu Tobu Girl art: Tangram Games (CC BY 4.0)',
+    art: 'Box art: libretro-thumbnails, itch.io (GB Studio) · Tobu Tobu Girl art: Tangram Games (CC BY 4.0)',
   },
   drop: 'Drop to add',
   dropSub: 'Your files are read in this browser and never uploaded to a server.',
@@ -38,7 +38,7 @@ export default {
   art: {
     title: 'Show box art?',
     p1: 'Box art is copyrighted by the game publishers. Cartouche doesn’t host or ship any (only the freely licensed covers of its bundled games).',
-    p2: 'If you agree, your browser downloads the covers of recognized games you add directly from the libretro-thumbnails project on GitHub, so GitHub sees your IP address and browser details (see <a>GitHub’s privacy statement</a>), and keeps them in this browser’s storage. Nothing is shared with us. You can delete them anytime in Settings › Storage.',
+    p2: 'If you agree, your browser downloads the covers of recognized games you add directly from the libretro-thumbnails project on GitHub, and the covers of GB Studio games from their authors’ itch.io pages, so GitHub and itch.io see your IP address and browser details (see <a>GitHub’s privacy statement</a>), and keeps them in this browser’s storage. Nothing is shared with us. You can delete them anytime in Settings › Storage.',
     no: 'Continue without',
     yes: 'Download box art',
     ready: { one: 'Box art ready for {count} game', other: 'Box art ready for {count} games' },

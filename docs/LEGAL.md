@@ -109,6 +109,17 @@ the app makes no request to libretro-thumbnails at all. Settings > Storage
 shows the space the covers use, deletes them ("Delete downloaded box art",
 which also turns box art off) and downloads them again for your library.
 
+GB Studio games: the four that Cartouche hosts show their own title screens
+as covers, files of this app under the licenses of their artwork (see
+[`LICENSES.txt`](../gb-web/public/roms/gbstudio/LICENSES.txt)). For every
+other one, only the address of the cover image on its author's itch.io page
+is stored (refreshed by `scripts/gbstudio-covers.mjs`, which downloads no
+image). With box art allowed, your browser loads that image directly from
+itch.io (`img.itch.zone`), which receives your IP address and browser details
+([itch.io privacy policy](https://itch.io/docs/legal/privacy-policy)), and
+keeps it only in its ordinary cache. With box art off, no request goes to
+itch.io.
+
 ## Game metadata
 
 Titles, developers, release dates, genres and similar facts come from
