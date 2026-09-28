@@ -651,9 +651,9 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .pg-sum div{border-bottom:1px solid var(--paper-2);padding:8px 0}
 .pg-sum dt{font:800 11px var(--font);text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3)}
 .pg-sum dd{margin:4px 0 0;font:900 24px/1 var(--font);font-stretch:62%;font-variant-numeric:tabular-nums}
-.pg-top{font:500 13px/1.6 var(--font);color:var(--ink-2);margin:10px 0 0}
+.pg-top{font:500 13px/1.6 var(--font);color:var(--ink-2);margin:10px 0 0;overflow-wrap:anywhere} /* a title with no space never widens the page */
 .pg-top b{font-weight:800;color:var(--ink)}
-.pg-top .linkbtn{font:700 13px var(--font);text-transform:none;letter-spacing:0;text-decoration:underline;text-underline-offset:3px;color:var(--ink)}
+.pg-top .linkbtn{display:inline;text-align:left;font:700 13px var(--font);text-transform:none;letter-spacing:0;text-decoration:underline;text-underline-offset:3px;color:var(--ink)}
 .pg-tools{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;margin:20px 0 12px}
 .pg-tools .field{flex:1 1 220px}
 .paper .chip{border-color:var(--ink-3);color:var(--ink);background:transparent}
