@@ -1003,7 +1003,7 @@ mod tests {
         assert_eq!(state[..3], [5, 0, 2]);
     }
 
-    /// One HuC3 RTC command (mode 0xB write to A000), then back to whatever mode the test needs.
+    /// One HuC3 RTC command: a write to A000 in mode 0xB (left selected).
     fn huc3_cmd(c: &mut Cartridge, cmd: u8) {
         c.write_rom(0x0000, 0x0B);
         c.write_ram(0, cmd);
