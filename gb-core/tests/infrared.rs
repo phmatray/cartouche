@@ -107,9 +107,9 @@ fn a_save_state_keeps_the_led_and_an_older_state_still_loads() {
     assert!(fresh.load_state(&state));
     assert_eq!(fresh.bus.read_byte(0xFF56), 0xFF, "LED on and reading enabled after a load");
 
-    // A state from before RP: the same bytes without the last one.
+    // A state from before RP: the same bytes without the last five (RP, then the mode-3 length).
     let mut older = console(&[], true);
-    assert!(older.load_state(&state[..state.len() - 1]));
+    assert!(older.load_state(&state[..state.len() - 5]));
     assert_eq!(older.bus.read_byte(0xFF56), 0x3E, "RP starts off");
 }
 
@@ -187,7 +187,7 @@ fn a_save_state_keeps_the_huc_led_and_an_older_state_still_loads() {
 
         // A state from before the LED byte: its mapper block one byte shorter.
         let extra = gb.bus.cartridge.export_extra().len();
-        let tail = 4 + 1; // after the mapper block: the timing tail, then RP
+        let tail = 4 + 1 + 4; // after the mapper block: the timing tail, RP, the mode-3 length
         let at = state.len() - tail - extra - 2;
         let mut old = state[..at].to_vec();
         old.extend(((extra - 1) as u16).to_le_bytes());
