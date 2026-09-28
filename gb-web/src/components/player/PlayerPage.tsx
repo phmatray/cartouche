@@ -55,8 +55,8 @@ const SPEEDS = [0.5, 1, 2, 4];
 /** Phones, upright or sideways: the Manual is a sheet over the controls, not a page beside the game (see index.css). */
 const SHEET = '(max-width:900px),(orientation:landscape) and (max-height:500px)';
 const sheetCovers = () => matchMedia(SHEET).matches;
-/** What Enter and Space press when it has the focus. */
-const CONTROL = 'button,a[href],summary,[role=tab],[role=button],label[tabindex]';
+/** What Enter and Space press when it has the focus (and, for a slider, what the arrows move). */
+const CONTROL = 'button,a[href],summary,[role=tab],[role=button],label[tabindex],input[type=range]';
 /** Text is being typed: a slider, a switch or a button keeping focus leaves the keys to the game (Enter: see `down`). */
 const typing = () => {
   const el = document.activeElement as HTMLElement | null;
@@ -528,6 +528,9 @@ function Player({ game }: { game: GameEntry }) {
       // Enter or Space on a control reached with the keyboard presses it; after a click, the keys stay the game's.
       const control = (e.key === 'Enter' || e.key === ' ') && e.target instanceof Element ? e.target.closest(CONTROL) : null;
       if (control && control !== clicked) return;
+      // Likewise the arrows (Home, End, Page Up/Down) move a slider reached with the keyboard.
+      const slider = /^(Arrow|Home$|End$|Page)/.test(e.key) && e.target instanceof HTMLInputElement && e.target.type === 'range' ? e.target : null;
+      if (slider && slider !== clicked) return;
       const a = actions.current;
       const b = buttonOf(e.key);
       if (b !== undefined) { e.preventDefault(); if (!e.repeat) { pressed.set(e.code, b); pressButton(b); } return; }
