@@ -500,6 +500,8 @@ function Player({ game }: { game: GameEntry }) {
     };
     // The control last focused by a click or a tap (a focus moved on by Tab or the pad forgets it).
     let clicked: Element | null = null;
+    // The button each physical key pressed: its keyup can carry another `key` (Shift pressed or let go meanwhile: '1' comes up as '!').
+    const pressed = new Map<string, number>();
     const onPointer = (e: PointerEvent) => { clicked = e.target instanceof Element ? e.target.closest(CONTROL) : null; };
     const onFocus = (e: FocusEvent) => { if (e.target !== clicked) clicked = null; };
     const down = (e: KeyboardEvent) => {
@@ -512,7 +514,7 @@ function Player({ game }: { game: GameEntry }) {
       if (control && control !== clicked) return;
       const a = actions.current;
       const b = buttonOf(e.key);
-      if (b !== undefined) { e.preventDefault(); if (!e.repeat) pressButton(b); return; }
+      if (b !== undefined) { e.preventDefault(); if (!e.repeat) { pressed.set(e.code, b); pressButton(b); } return; }
       const k = e.key.toLowerCase();
       const run = { f5: () => a.saveSlot(0), f8: () => a.loadSlot(0), f12: a.screenshot, p: a.togglePlay, m: a.mute, f: a.toggleFullscreen, r: a.startRewind }[k];
       if (!run) return;
@@ -520,12 +522,13 @@ function Player({ game }: { game: GameEntry }) {
       if (!e.repeat) run();
     };
     const up = (e: KeyboardEvent) => {
-      const b = buttonOf(e.key);
+      const b = pressed.get(e.code) ?? buttonOf(e.key);
+      pressed.delete(e.code);
       if (b !== undefined) releaseButton(b);
       else if (e.key.toLowerCase() === 'r') actions.current.stopRewind();
     };
     // A key released in another window never comes back as a keyup: let go of everything when the page loses focus.
-    const releaseAll = () => { Object.values(BUTTON_NUMBERS).forEach((n) => releaseButton(n)); actions.current.stopRewind(); };
+    const releaseAll = () => { pressed.clear(); Object.values(BUTTON_NUMBERS).forEach((n) => releaseButton(n)); actions.current.stopRewind(); };
     const onHidden = () => { if (document.visibilityState === 'hidden') releaseAll(); };
     window.addEventListener('pointerdown', onPointer, true);
     window.addEventListener('focusin', onFocus, true);
