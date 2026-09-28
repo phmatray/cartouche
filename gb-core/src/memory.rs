@@ -204,7 +204,14 @@ impl MemoryBus {
             0xFF01 => self.serial.write(addr, value),
             0xFF02 => self.serial.write(addr, if self.cgb_mode { value } else { value & !0x02 }),
             0xFF04..=0xFF07 => {
-                if self.timer.write(addr, value) { self.interrupts.request(TIMER_BIT); }
+                // An overflow requests the interrupt at once, a TIMA write cancelling the reload withdraws it (Timer::step).
+                let pending = self.timer.reload_pending;
+                self.timer.write(addr, value);
+                match (pending, self.timer.reload_pending) {
+                    (false, true) => self.interrupts.request(TIMER_BIT),
+                    (true, false) => self.interrupts.interrupt_flag &= !TIMER_BIT,
+                    _ => {}
+                }
             }
             0xFF0F => self.interrupts.interrupt_flag = value & 0x1F,
             0xFF10..=0xFF3F => self.apu.write_register(addr, value),

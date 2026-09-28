@@ -45,9 +45,6 @@ mooneye-test-suite/acceptance/ret_timing.gb  # cpu-timing
 mooneye-test-suite/acceptance/reti_timing.gb  # cpu-timing
 mooneye-test-suite/acceptance/rst_timing.gb  # cpu-timing
 mooneye-test-suite/acceptance/serial/boot_sclk_align-dmgABCmgb.gb  # boot
-mooneye-test-suite/acceptance/timer/tima_reload.gb  # timer
-mooneye-test-suite/acceptance/timer/tima_write_reloading.gb  # timer
-mooneye-test-suite/acceptance/timer/tma_write_reloading.gb  # timer
 mooneye-test-suite/emulator-only/mbc1/multicart_rom_8Mb.gb  # mbc
 same-suite/apu/channel_1/channel_1_align.gb  # apu
 same-suite/apu/channel_1/channel_1_align_cpu.gb  # apu
@@ -376,9 +373,6 @@ gbmicrotest/timer_tima_phase_g.gb  # timer
 gbmicrotest/timer_tima_phase_h.gb  # timer
 gbmicrotest/timer_tima_phase_i.gb  # timer
 gbmicrotest/timer_tima_phase_j.gb  # timer
-gbmicrotest/timer_tima_reload_256k_c.gb  # timer
-gbmicrotest/timer_tima_write_e.gb  # timer
-gbmicrotest/timer_tma_write_a.gb  # timer
 gbmicrotest/toggle_lcdc.gb  # no-verdict
 gbmicrotest/vblank2_int_if_a.gb  # stat
 gbmicrotest/vblank2_int_if_c.gb  # stat
