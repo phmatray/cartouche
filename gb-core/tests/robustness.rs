@@ -199,7 +199,7 @@ fn stop_mode_waits_for_a_button_from_the_web_side() {
     let state = emu.save_state();
     let mut old = gb_core::Emulator::new();
     assert!(old.load_rom(&rom(&STOP, &[])));
-    assert!(old.load_state(&state[..state.len() - 1]));
+    assert!(old.load_state(&state[..state.len() - 2]));
     old.run_frame();
     assert_ne!(old.get_pc(), 0x0106, "an older state is not in stop mode");
     assert!(emu.load_state(&state));

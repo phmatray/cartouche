@@ -345,8 +345,8 @@ impl GameBoy {
         data.extend_from_slice(&sr.remaining.to_le_bytes());
         self.bus.apu.export_state(&mut data);
         if let Some(s) = &self.bus.sgb { s.export_state(&mut data); }
-        // Optional tail (absent from older states): stop mode.
-        data.push(self.cpu.stopped as u8);
+        // Optional tail (absent from older states): stop mode, KEY0 (DMG compatibility set by the boot ROM).
+        data.extend_from_slice(&[self.cpu.stopped as u8, self.bus.key0]);
 
         data
     }
@@ -530,6 +530,9 @@ impl GameBoy {
         if let Some(&[stopped, ..]) = data.get(pos..) {
             self.cpu.stopped = stopped != 0;
         }
+        if let Some(&[_, key0, ..]) = data.get(pos..) {
+            self.bus.key0 = key0;
+        }
         true
     }
 }
@@ -598,5 +601,22 @@ mod tests {
         assert!(!g.bus.hdma_active);
         assert_eq!(g.bus.hdma_dest, 0x1FF0);
         g.run_frame().unwrap();
+    }
+
+    /// KEY0 set by the CGB boot ROM (DMG compatibility) goes with a state saved before it unmaps.
+    #[test]
+    fn a_state_keeps_key0_until_the_boot_rom_unmaps() {
+        let mut rom = vec![0u8; 0x8000];
+        rom[0x100..0x102].copy_from_slice(&[0x18, 0xFE]);
+        rom[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(rom[i]).wrapping_sub(1));
+        let mut gb = GameBoy::with_boot(rom.clone(), true, 0, 1).unwrap();
+        gb.run_frame().unwrap();
+        gb.bus.key0 = 0x04;
+        let state = gb.save_state();
+        let mut g = GameBoy::with_boot(rom, true, 0, 1).unwrap();
+        assert!(g.load_state(&state));
+        assert_eq!(g.bus.key0, 0x04);
+        g.finish_boot().unwrap();
+        assert!(!g.bus.boot_rom_active && g.bus.ppu.compat && !g.bus.cgb_mode, "DMG compatibility mode");
     }
 }
