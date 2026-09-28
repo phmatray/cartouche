@@ -72,6 +72,17 @@ export async function progressOf(id: number, c: RaCreds): Promise<RaGame> {
   return { id: g.ID, title: g.Title, achievements };
 }
 
+/** The ROM's MD5 off the main thread (up to ~0.1 s for 8 MB: a stutter while a game runs); inline if the worker fails. */
+export function romHash(rom: Uint8Array): Promise<string> {
+  return new Promise((done) => {
+    const w = new Worker(new URL('../workers/md5-worker.ts', import.meta.url), { type: 'module' });
+    const end = (h: string) => { w.terminate(); done(h); };
+    w.onmessage = (e: MessageEvent<string>) => end(e.data);
+    w.onerror = () => end(md5(rom));
+    w.postMessage(rom);
+  });
+}
+
 /** The ROM's RetroAchievements hash: for Game Boy and Color, the MD5 of the whole file (rcheevos rc_hash). */
 export function md5(data: Uint8Array): string {
   const n = data.length, words = new Uint32Array((((n + 8) >> 6) + 1) * 16);

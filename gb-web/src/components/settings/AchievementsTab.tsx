@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import { checkCreds, getCreds, RaError, setCreds } from '../../lib/retroachievements';
+import { getPlay, signIn, signOut } from '../../lib/ra-client';
 import { rich, useT } from '../../i18n';
 import { Row } from './parts';
 
-/** RetroAchievements: connect with a username and web API key (never a password), read-only. */
+/** RetroAchievements: the achievements earned (username and web API key), and unlocking while playing (password once). */
 export function AchievementsTab() {
   const t = useT();
   const [creds, setState] = useState(getCreds);
@@ -39,6 +40,42 @@ export function AchievementsTab() {
           <label><span>{t('ra.key')}</span><input className="field" name="key" type="password" autoComplete="off" spellCheck={false} required /></label>
           <small>{rich(t('ra.keySub'), { a: keys })}</small>
           <button className="btn k" disabled={busy} aria-busy={busy}>{busy ? t('ra.checking') : t('ra.connect')}</button>
+          {err && <p className="note" role="alert" style={{ margin: 0, color: 'var(--warn)' }}>{err}</p>}
+        </form>
+      )}
+      <Unlocking />
+    </>
+  );
+}
+
+/** Unlocking while playing (lib/ra-client): the password once, for the session token RetroAchievements gives back. */
+function Unlocking() {
+  const t = useT();
+  const [me, setMe] = useState(getPlay);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const go = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const user = String(f.get('user')).trim(), password = String(f.get('password'));
+    if (!user || !password) return;
+    setBusy(true); setErr('');
+    try { setMe(await signIn(user, password)); } catch (x) { setErr(t('ra.playFailed', { error: (x as Error).message || t('ra.offline') })); }
+    setBusy(false);
+  };
+  return (
+    <>
+      <h3>{t('ra.playTitle')}</h3>
+      <p className="intro">{t('ra.playIntro')}</p>
+      {me ? (
+        <Row label={t('ra.playOn', { user: me.user })} sub={t('ra.playOnSub')}>
+          <button className="btn line" style={{ color: 'var(--ink)' }} onClick={() => { signOut(); setMe(null); }}>{t('ra.playOff')}</button>
+        </Row>
+      ) : (
+        <form className="ra-form" onSubmit={go}>
+          <label><span>{t('ra.user')}</span><input className="field" name="user" defaultValue={getCreds()?.user} autoComplete="username" autoCapitalize="none" spellCheck={false} required /></label>
+          <label><span>{t('ra.password')}</span><input className="field" name="password" type="password" autoComplete="current-password" required /></label>
+          <button className="btn k" disabled={busy} aria-busy={busy}>{busy ? t('ra.signingIn') : t('ra.signIn')}</button>
           {err && <p className="note" role="alert" style={{ margin: 0, color: 'var(--warn)' }}>{err}</p>}
         </form>
       )}

@@ -1,20 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { GameEntry } from '../../types/game';
 import { fetchRom } from '../../hooks/useGameLibrary';
-import { BADGES, gameIdOf, getCreds, md5, progressOf, RaError, type RaFail, type RaGame } from '../../lib/retroachievements';
+import { BADGES, gameIdOf, getCreds, progressOf, RaError, romHash, type RaFail, type RaGame } from '../../lib/retroachievements';
+import { getPlay } from '../../lib/ra-client';
 import { date, useT } from '../../i18n';
 
 type State = RaGame | null | RaFail;
-/** The ROM's MD5 off the main thread (up to ~0.1 s for 8 MB: a stutter while a game runs); inline if the worker fails. */
-function hash(rom: Uint8Array): Promise<string> {
-  return new Promise((done) => {
-    const w = new Worker(new URL('../../workers/md5-worker.ts', import.meta.url), { type: 'module' });
-    const end = (h: string) => { w.terminate(); done(h); };
-    w.onmessage = (e: MessageEvent<string>) => end(e.data);
-    w.onerror = () => end(md5(rom));
-    w.postMessage(rom);
-  });
-}
 /** One lookup per account, game and session: the game page and the manual share it. */
 const seen = new Map<string, Promise<State>>();
 function load(game: GameEntry): Promise<State> {
@@ -24,7 +15,7 @@ function load(game: GameEntry): Promise<State> {
   let p = seen.get(k);
   if (!p) {
     p = fetchRom(game).then(async (rom) => {
-      const id = await gameIdOf(await hash(rom), c);
+      const id = await gameIdOf(await romHash(rom), c);
       return id === null ? null : progressOf(id, c);
     }).catch((e) => (e instanceof RaError ? e.kind : 'net'));
     p.then((s) => { if (s === 'net') seen.delete(k); }); // offline: try again next time
@@ -76,7 +67,7 @@ export default function Achievements({ game }: { game: GameEntry }) {
         ))}
       </ul>
       <p className="note ra-foot">
-        {t('ra.readOnly')} <a href={`https://retroachievements.org/game/${s.id}`} target="_blank" rel="noreferrer">{t('ra.site')}</a>
+        {!getPlay() && <>{t('ra.readOnly')} </>}<a href={`https://retroachievements.org/game/${s.id}`} target="_blank" rel="noreferrer">{t('ra.site')}</a>
       </p>
     </>
   );
