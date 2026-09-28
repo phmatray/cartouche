@@ -591,16 +591,22 @@ impl Cartridge {
 
     pub fn import_sram(&mut self, data: &[u8]) {
         let ram_len = self.ram.len();
-        let len = data.len().min(ram_len);
+        // Standard clock footer (44 B with a u32 time, 48 B with a u64): ten u32 registers, all < 256.
+        // The legacy Cartouche layout starts with an f64 ms timestamp, whose bytes 1-3 are never all 0.
+        // Found from the end of the file, after a RAM part of any cartridge RAM size: other emulators
+        // may save more or less RAM than the header says.
+        let word = |f: &[u8], i: usize| u32::from_le_bytes(f[i * 4..i * 4 + 4].try_into().unwrap());
+        let footer = self.rtc.as_ref().and([48, 44].into_iter().find(|&n| {
+            let Some(ram_part) = data.len().checked_sub(n) else { return false };
+            (ram_part == 0 || ram_part.is_power_of_two()) && (0..10).all(|i| word(&data[ram_part..], i) < 256)
+        })).map(|n| &data[data.len() - n..]);
+        let len = (data.len() - footer.map_or(0, |f| f.len())).min(ram_len);
         self.ram[..len].copy_from_slice(&data[..len]);
 
         // Restore RTC state if present
         if let Some(ref mut rtc) = self.rtc {
-            let footer = data.get(ram_len..).unwrap_or(&[]);
-            let word = |i: usize| u32::from_le_bytes(footer[i * 4..i * 4 + 4].try_into().unwrap());
-            // Standard footer (44 B with a u32 time, 48 B with a u64): ten u32 registers, all < 256.
-            // The legacy Cartouche layout starts with an f64 ms timestamp, whose bytes 1-3 are never all 0.
-            if (footer.len() == 44 || footer.len() == 48) && (0..10).all(|i| word(i) < 256) {
+            if let Some(footer) = footer {
+                let word = |i: usize| word(footer, i);
                 let saved_at = if footer.len() == 48 {
                     u64::from_le_bytes(footer[40..48].try_into().unwrap()) as f64
                 } else {
@@ -836,6 +842,27 @@ mod tests {
             c.import_sram(&sav);
             assert_eq!(read_clock(&mut c), [30, 45, 13, 5, 0x40]);
         }
+    }
+
+    /// The footer is found from the end: a RAM part larger or smaller than the header's 8 KB
+    /// (here 32 KB and 2 KB) is not read as the legacy layout, nor copied into RAM as data.
+    #[test]
+    fn rtc_footer_is_found_after_a_ram_part_of_another_size() {
+        for (ram, long) in [(0x8000, true), (0x8000, false), (0x800, true), (0x800, false)] {
+            let mut c = cart(0x10, 0x02);
+            let mut sav = vec![0xAAu8; ram];
+            for v in [30u32, 45, 13, 5, 0x40, 1, 2, 3, 4, 0x40] { sav.extend_from_slice(&v.to_le_bytes()); }
+            if long { sav.extend_from_slice(&1_700_000_000u64.to_le_bytes()) } else { sav.extend_from_slice(&1_700_000_000u32.to_le_bytes()) }
+            c.import_sram(&sav);
+            assert_eq!(read_clock(&mut c), [30, 45, 13, 5, 0x40], "RAM {ram:#x}, long {long}");
+            assert_eq!(c.ram[ram.min(0x2000) - 1], 0xAA);
+            if ram < 0x2000 { assert_eq!(c.ram[ram], 0, "the footer is not RAM"); }
+        }
+        // A RAM-only file (no footer) whose last bytes happen to be zero is not read as a clock.
+        let mut c = cart(0x10, 0x03);
+        let before = c.rtc.as_ref().unwrap().base_timestamp;
+        c.import_sram(&[0u8; 0x8000]);
+        assert_eq!(c.rtc.as_ref().unwrap().base_timestamp, before);
     }
 
     #[test]
