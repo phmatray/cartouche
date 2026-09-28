@@ -1,6 +1,6 @@
 import { t } from '../i18n';
 import { decode, jsonBlob, splitJson } from './backup-json';
-import { backupRom, mover, placeRom } from './backup-merge';
+import { backupRom, mergeMeta, mover, placeRom } from './backup-merge';
 import { computeSha1 } from './rom-utils';
 import { asProfile, getAllFrom, getAllGameMeta, getRom, getRomIds, putInto, STORES, type StoredGameMeta, type StoredRom, type StoredSave, type StoredSaveState, type StoredScreenshot } from './db';
 import { cleanSetting } from './settings-clean';
@@ -113,15 +113,7 @@ export async function restoreBackup(b: Backup, withSettings: boolean, count: Res
   await newer(STORES.states, states, b.states.map(move.state));
 
   const metaById = new Map(meta.map((m) => [m.id, m]));
-  for (const m of b.meta.map(move.meta)) {
-    const o = metaById.get(m.id);
-    const max = (a?: number, c?: number) => (a == null ? c : c == null ? a : Math.max(a, c));
-    await putInto(STORES.meta, o ? {
-      ...o, isFavorite: !!(o.isFavorite || m.isFavorite), totalPlayTime: max(o.totalPlayTime, m.totalPlayTime),
-      sessions: max(o.sessions, m.sessions), lastPlayed: max(o.lastPlayed, m.lastPlayed),
-      importedAt: o.importedAt ?? m.importedAt,
-    } : { ...m, rom: undefined }); // a backup's ROM summary is untrusted: the next launch computes it from the ROM itself
-  }
+  for (const m of b.meta.map(move.meta)) await putInto(STORES.meta, mergeMeta(metaById.get(m.id), m));
 
   const shotKey = (s: StoredScreenshot) => `${s.gameId}@${s.timestamp}`;
   const have = new Set(shots.map(shotKey));

@@ -1,7 +1,7 @@
 // node --test: a backup's game that shares an id with a different game here gets its own id, and its saves follow it.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { backupRom, mover, placeRom } from './backup-merge.ts';
+import { backupRom, mergeMeta, mover, placeRom } from './backup-merge.ts';
 
 test('backup ROMs are matched by SHA-1, and a taken id moves the game and its saves', () => {
   const here = new Map([['rom', 'aaa'], ['puzzle', 'ccc'], ['x', 'fff'], ['x-2', 'fff']]);
@@ -33,4 +33,13 @@ test('a backup ROM record with a missing or non-text title or genre is repaired,
   assert.equal(backupRom({ id: 7, title: 'a', data }), null);
   assert.equal(backupRom({ id: 'x', title: 'a', data: [1, 2] }), null);
   assert.equal(backupRom(null), null);
+});
+
+test('a restored game keeps the solo save picked here, else takes the backup’s', () => {
+  const backup = { id: 'g', activeSave: 'g~lea', isFavorite: true, totalPlayTime: 50, sessions: 2, lastPlayed: 9 };
+  // Played here a little, no save picked: the backup's pick comes with its saves.
+  assert.deepEqual(mergeMeta({ id: 'g', totalPlayTime: 10, sessions: 1, lastPlayed: 20 }, backup),
+    { id: 'g', isFavorite: true, totalPlayTime: 50, sessions: 2, lastPlayed: 20, importedAt: undefined, activeSave: 'g~lea' });
+  assert.equal(mergeMeta({ id: 'g', activeSave: 'g~mine' }, backup).activeSave, 'g~mine');
+  assert.deepEqual(mergeMeta(undefined, { ...backup, rom: { title: 't', genre: 'x', sha1: 's', head: new Uint8Array() } }), { ...backup, rom: undefined });
 });
