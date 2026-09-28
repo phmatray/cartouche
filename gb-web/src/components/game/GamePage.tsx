@@ -39,7 +39,7 @@ export function GamePage() {
 const stamp = (ts: number) => date(ts, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 
 function GameDetails({ game }: { game: GameEntry }) {
-  const { savedIds, toggleFavorite, deleteGame, eraseSaves } = useGameLibrary();
+  const { games, savedIds, toggleFavorite, deleteGame, eraseSaves } = useGameLibrary();
   const navigate = useNavigate();
   const t = useT();
   const ink = useInk(game);
@@ -162,6 +162,7 @@ function GameDetails({ game }: { game: GameEntry }) {
           <h3>{t('game.cart.title')}</h3>
           {header ? (
             <dl className="spec">
+              {game.patchedFrom && <div><dt>{t('game.patchedFrom')}</dt><dd><PatchedFrom from={game.patchedFrom} games={games} /></dd></div>}
               <div><dt>{t('game.cart.hardware')}</dt><dd>{hardwareOf(header)}</dd></div>
               <div><dt>{t('game.cart.mapper')}</dt><dd>{header.cartridgeType}</dd></div>
               <div><dt>{t('game.cart.romSize')}</dt><dd>{headerSize(header.romSize)}</dd></div>
@@ -385,3 +386,9 @@ function Saves({ game, header, setConfirm }: { game: GameEntry; header: RomMetad
   );
 }
 
+
+/** The base ROM a patched game was made from: a link when it's in this library, else the patch's name. */
+function PatchedFrom({ from, games }: { from: NonNullable<GameEntry['patchedFrom']>; games: GameEntry[] }) {
+  const base = games.find((g) => g.isLocal && g.sha1 === from.sha1);
+  return base ? <><Link to={paths.game(base.id)}>{base.title}</Link> · {from.patch}</> : <>{from.patch}</>;
+}

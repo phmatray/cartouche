@@ -37,6 +37,7 @@ export default {
     hosted: 'Descarga libre (alojado aquí)',
     afterDownload: 'La cabecera del cartucho se lee de la ROM cuando la descargas: mapper, tamaño de la ROM y del guardado, compatibilidad con color.',
   },
+  patchedFrom: 'Parcheado a partir de',
   album: 'Álbum',
   shot: 'Captura, {ago}',
   print: 'Copia, {ago}',
