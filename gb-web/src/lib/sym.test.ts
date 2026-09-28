@@ -46,4 +46,9 @@ test('resolves names and hex addresses', () => {
   assert.equal(resolve(t, '0150'), 0x0150);
   assert.equal(resolve(t, 'Nope'), undefined);
   assert.equal(resolve(parseSym(''), 'ff80'), 0xff80);
+  assert.equal(resolve(t, '0x0150'), 0x0150);
+});
+
+test('an MBC5 bank above $FF still parses', () => {
+  assert.equal(labelAt(parseSym('1A3:4000 Deep'), 0x4000, 0x1a3), 'Deep');
 });

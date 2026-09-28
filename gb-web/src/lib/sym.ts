@@ -2,7 +2,7 @@
 export interface Sym { bank: number; addr: number; name: string }
 export interface SymTable { byName: Map<string, Sym>; byAddr: Map<number, Sym[]>; skipped: number }
 
-const LINE = /^([0-9a-f]{1,2}):([0-9a-f]{4})\s+(\S+)$/i;
+const LINE = /^([0-9a-f]{1,4}):([0-9a-f]{4})\s+(\S+)$/i;
 
 export function parseSym(text: string): SymTable {
   const t: SymTable = { byName: new Map(), byAddr: new Map(), skipped: 0 };
@@ -33,11 +33,11 @@ export function withLabels(t: SymTable, text: string, romBank: number): string {
   return text.replace(/\$([0-9A-F]{4})\b/gi, (hex, a: string) => labelAt(t, parseInt(a, 16), romBank) ?? hex);
 }
 
-/** "Main", "Main.loop", or "$0150"/"0150". */
+/** "Main", "Main.loop", or "$0150"/"0x0150"/"0150". */
 export function resolve(t: SymTable, input: string): number | undefined {
   const s = input.trim();
   const sym = t.byName.get(s);
   if (sym) return sym.addr;
-  const m = /^\$?([0-9a-f]{1,4})$/i.exec(s);
+  const m = /^(?:\$|0x)?([0-9a-f]{1,4})$/i.exec(s);
   return m ? parseInt(m[1], 16) : undefined;
 }
