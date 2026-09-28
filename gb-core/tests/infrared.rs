@@ -82,6 +82,16 @@ fn a_receiver_with_reading_disabled_sees_nothing() {
 }
 
 #[test]
+fn a_console_running_alone_again_sees_no_light() {
+    let mut a = console(&[0x3E, 0xC1, 0xE0, 0x56], true); // LED on for good
+    let mut b = console(&[0x3E, 0xC0, 0xE0, 0x56], true); // reading enabled
+    run_linked_frame(&mut a, &mut b).unwrap();
+    assert_eq!(b.bus.read_byte(0xFF56) & 2, 0, "linked: light seen");
+    b.run_frame().unwrap();
+    assert_eq!(b.bus.read_byte(0xFF56) & 2, 2, "alone: dark");
+}
+
+#[test]
 fn a_save_state_keeps_the_led_and_an_older_state_still_loads() {
     let mut gb = console(&[], true);
     gb.bus.write_byte(0xFF56, 0xC1);

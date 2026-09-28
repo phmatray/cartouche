@@ -223,6 +223,7 @@ impl GameBoy {
     /// for the partner's byte (`bus.serial.stalled()`), and on a breakpoint (`take_break`); the
     /// next call finishes that frame.
     pub fn run_frame(&mut self) -> Result<(), EmulatorError> {
+        self.bus.ir_light_in = false; // alone: no partner's light (only `run_linked_frame` sets it)
         if self.frame_cycles == 0 {
             self.bus.ppu.frame_ready = false;
             self.apply_ram_cheats();
