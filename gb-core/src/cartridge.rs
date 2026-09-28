@@ -944,6 +944,11 @@ impl Cartridge {
         }
     }
 
+    /// Whether the cartridge has an MBC7 accelerometer (type 0x22).
+    pub fn has_tilt(&self) -> bool {
+        self.mbc7.is_some()
+    }
+
     /// MBC7 tilt in g (x > 0 = right side down, y > 0 = top side down), clamped to ±2 g and held
     /// until the next call; the game reads it at its next latch. Ignored on other cartridges.
     pub fn set_tilt(&mut self, x: f32, y: f32) {
@@ -1209,6 +1214,17 @@ mod tests {
         c.write_rom(0x0000, 0x0A);
         c.write_rom(0x4000, 0x40);
         c
+    }
+
+    #[test]
+    fn set_tilt_reaches_the_cartridge() {
+        let mut other = cart(0x1B, 0x03);
+        assert!(!other.has_tilt());
+        other.set_tilt(1.0, 1.0); // ignored, no panic
+        let mut c = mbc7_enabled();
+        assert!(c.has_tilt());
+        c.set_tilt(5.0, f32::NAN); // clamped to 2 g; not a number reads level
+        assert_eq!(mbc7_latch(&mut c), (0x81D0 - 0xE0, 0x81D0));
     }
 
     #[test]

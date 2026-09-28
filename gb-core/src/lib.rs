@@ -448,6 +448,17 @@ impl Emulator {
         self.gb.as_mut().map_or(0.0, |gb| gb.bus.cartridge.take_rumble())
     }
 
+    /// True when the cartridge has an MBC7 accelerometer (type 0x22): feed it with `set_tilt`.
+    pub fn has_tilt(&self) -> bool {
+        self.gb.as_ref().map_or(false, |gb| gb.bus.cartridge.has_tilt())
+    }
+
+    /// Tilt in g (x > 0 = right side down, y > 0 = top side down), clamped to ±2 and held until the
+    /// next call. A no-op without a game or on other cartridges.
+    pub fn set_tilt(&mut self, x: f32, y: f32) {
+        if let Some(gb) = self.gb.as_mut() { gb.bus.cartridge.set_tilt(x, y); }
+    }
+
     // Remote link cable (the partner is on another machine; see serial.rs). While a transfer this
     // console clocks waits for the partner's byte, run_frame returns early and link_stalled() is true.
 
