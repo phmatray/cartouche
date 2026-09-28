@@ -139,6 +139,7 @@ export default {
   error: {
     connect: 'Les deux appareils se sont trouvés, mais leurs réseaux n’ont pas pu ouvrir de connexion directe. Mettez-les sur le même Wi-Fi, ou ajoutez un serveur TURN dans Jouer en ligne › Réglages de connexion.',
     failed: 'La connexion n’a pas pu démarrer. Rechargez la page et réessayez.',
+    relays: 'Impossible de joindre les relais de mise en relation, donc l’autre appareil reste introuvable. Vérifiez votre connexion. L’association reprend dès que l’un d’eux répond.',
   },
   mark: {
     label: 'Synchro : {state}',
