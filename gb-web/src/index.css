@@ -277,6 +277,10 @@ canvas.lcd{aspect-ratio:10/9}
 .slotrow a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;border-color:var(--y);color:var(--y);text-decoration:none;font:800 14px var(--font);text-transform:uppercase;letter-spacing:.06em;text-align:center;padding:10px}
 .slotrow a:hover{background:rgba(255,212,0,.08)}
 .slotrow a svg{width:32px;height:32px}
+.shelf.rail>.more{flex:0 0 calc((100% - (var(--n) - 1) * var(--g)) / var(--n));scroll-snap-align:start;aspect-ratio:1;border:2px dashed var(--y);background:transparent;color:var(--y);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;font:800 14px var(--font);text-transform:uppercase;letter-spacing:.06em;text-align:center;padding:10px}
+.shelf.rail>.more:hover{background:rgba(255,212,0,.08)}
+.shelf.rail>.more svg{width:32px;height:32px}
+.shelf.rail>.more:focus-visible{outline:4px solid var(--y);outline-offset:4px}
 .shelf-empty{font:500 15px/1.5 var(--font);color:var(--mute);margin:18px 0 0;max-width:60ch}
 .dropall{position:fixed;inset:0;z-index:400;background:rgba(20,20,20,.88);display:none;align-items:center;justify-content:center;padding:24px;pointer-events:none}
 .dropall.on{display:flex}
