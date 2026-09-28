@@ -1,7 +1,7 @@
 use crate::apu::Apu;
 use crate::boot_rom::DMG_BOOT_ROM;
 use crate::cartridge::Cartridge;
-use crate::interrupts::{InterruptController, SERIAL_BIT, STAT_BIT, TIMER_BIT, VBLANK_BIT};
+use crate::interrupts::{InterruptController, JOYPAD_BIT, SERIAL_BIT, STAT_BIT, TIMER_BIT, VBLANK_BIT};
 use crate::joypad::Joypad;
 use crate::ppu::Ppu;
 use crate::serial::Serial;
@@ -178,7 +178,10 @@ impl MemoryBus {
             0xFE00..=0xFE9F => self.ppu.write_oam(addr - 0xFE00, value),
             0xFEA0..=0xFEFF => {}
             0xFF00 => {
+                // Selecting a group whose button is held pulls a line low: a joypad interrupt, as a press would.
+                let before = self.joypad.read();
                 self.joypad.write(value);
+                if before & !self.joypad.read() & 0x0F != 0 { self.interrupts.request(JOYPAD_BIT); }
                 if let Some(s) = self.sgb.as_deref_mut() { s.write_p1(value); }
             }
             0xFF01 | 0xFF02 => self.serial.write(addr, value),
