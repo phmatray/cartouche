@@ -155,7 +155,7 @@ fn run_suite(suite: &str, root: &str, dirs: &[&str], timeout_secs: u64, pick: fn
         eprintln!("{suite}: skipped: run scripts/fetch-test-roms.sh");
         return;
     }
-    let prefixes: Vec<String> = dirs.iter().map(|d| format!("{root}/{d}")).collect();
+    let prefixes: Vec<String> = dirs.iter().map(|d| format!("{root}/{d}").trim_end_matches('/').to_string()).collect();
     let jobs: Vec<Job> = prefixes
         .iter()
         .flat_map(|p| roms(&base.join(p)))
@@ -219,6 +219,42 @@ fn mooneye_acceptance() {
 #[test]
 fn mooneye_emulator_only_mbc() {
     run_suite("Mooneye emulator-only MBC", "mooneye-test-suite", &["emulator-only/mbc1", "emulator-only/mbc2", "emulator-only/mbc5"], 30, mooneye);
+}
+
+/// SameSuite targets the CGB (its sgb/ tests need a Super Game Boy, which fail here and are listed).
+fn samesuite(rom: &Path, rel: &str) -> Vec<Job> {
+    vec![Job { label: rel.to_string(), rom: rom.to_path_buf(), hw: Hw::Cgb, protocol: Protocol::Fibonacci }]
+}
+
+/// Age names its devices in `-`-separated tokens: `dmgC`, `cgbBCE`, `ncmBCE` (a CGB running the
+/// cartridge in non-CGB mode). Run on the CGB when one is named, else on the DMG.
+fn age_hw(tokens: &str) -> Option<Hw> {
+    let devices: Vec<&str> = tokens.split('-').filter(|t| ["dmg", "cgb", "ncm"].iter().any(|p| t.starts_with(p))).collect();
+    if devices.iter().any(|t| t.starts_with("cgb") || t.starts_with("ncm")) {
+        Some(Hw::Cgb)
+    } else if devices.is_empty() {
+        None
+    } else {
+        Some(Hw::Dmg)
+    }
+}
+
+fn age(rom: &Path, rel: &str) -> Vec<Job> {
+    let stem = rom.file_stem().unwrap().to_str().unwrap();
+    let Some(hw) = age_hw(stem) else {
+        return Vec::new(); // no device named: a screenshot test (added with the screenshot protocol)
+    };
+    vec![Job { label: rel.to_string(), rom: rom.to_path_buf(), hw, protocol: Protocol::Fibonacci }]
+}
+
+#[test]
+fn samesuite_all() {
+    run_suite("SameSuite", "same-suite", &[""], 30, samesuite);
+}
+
+#[test]
+fn age_all() {
+    run_suite("Age", "age-test-roms", &[""], 30, age);
 }
 
 #[test]
