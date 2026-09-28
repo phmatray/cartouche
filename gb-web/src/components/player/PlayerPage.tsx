@@ -606,7 +606,8 @@ function Player({ game }: { game: GameEntry }) {
   const askStartOver = () => setConfirm({ title: t('player.restart.title'), body: t('player.restart.body'), danger: true, ok: t('player.restart.ok'), run: startOver });
   const auto = saves.states[0];
   const [kind, label] = tagOf(game, savedIds);
-  const status = needsRom ? label : savedJustNow ? t('player.savedNow') : auto ? t('player.resumeAgo', { ago: ago(auto.timestamp) }) : label;
+  // Only what the title doesn't already say: a file is missing, it was just saved, or where it resumes from.
+  const status = needsRom ? label : savedJustNow ? t('player.savedNow') : auto ? t('player.resumeAgo', { ago: ago(auto.timestamp) }) : null;
   // A fixed size (2×–4×) is the most the screen takes: the CSS still shrinks it to the room there is.
   const screenStyle = screenSize === 'fit' ? undefined : { '--sw': `${(bordered ? 256 : 160) * +screenSize + 24}px` } as CSSProperties;
   const disabled = !romLoaded;
@@ -657,7 +658,7 @@ function Player({ game }: { game: GameEntry }) {
       <header className="pl-top">
         <Link className="back" to={paths.game(game.id)}>{I.back}<span className="lbl">{t('common.back')}</span></Link>
         <h1><Link to={paths.game(game.id)} title={game.title}><Title text={game.title} /></Link></h1>
-        <span className={`tag ${savedJustNow || auto ? 'saved' : kind}`}>{status}</span>
+        {status && <span className={`tag ${savedJustNow || auto ? 'saved' : kind}`}>{status}</span>}
         <div className="right">
           <span className={`pad${gamepad ? ' on' : ''}`}><i /><span>{gamepad ? t('player.gamepad') : t('player.noGamepad')}</span></span>
           <button className="manual-btn" aria-expanded={manual} aria-controls="sheet" onClick={() => setManual(!manual)}>{I.book}<span>{t('player.manual')}</span></button>

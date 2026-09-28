@@ -113,12 +113,16 @@ export function AppShell() {
           <Wordmark />
           <nav className="nav" aria-label={t('shell.nav.main')}>
             {/* The underline is its own element so a route transition can slide it to the next tab. */}
-            {NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === '/'}>{({ isActive }) => <>{t(label)}{isActive && <i className="mk" />}</>}</NavLink>)}
+            {NAV.map(([to, label]) => {
+              // A game's page and the add page belong to the library.
+              const on = to === '/' ? /^\/($|game\/|add$)/.test(pathname) : pathname === to || pathname.startsWith(`${to}/`);
+              return <Link key={to} to={to} aria-current={on ? 'page' : undefined}>{t(label)}{on && <i className="mk" />}</Link>;
+            })}
           </nav>
           <button className="search" aria-label={t('shell.search')} onClick={openSearch}>
             {I.search}<span>{shown ? t('shell.searchN', { count: shown }) : t('shell.search')}</span><kbd>/</kbd>
           </button>
-          <Link className="btn y" aria-label={t('shell.addRoms')} to="/add">{I.plus}<span className="lbl">{t('shell.addRoms')}</span></Link>
+          <Link className="btn y" aria-label={t('shell.addRoms')} to="/add" aria-current={pathname === '/add' ? 'page' : undefined}>{I.plus}<span className="lbl">{t('shell.addRoms')}</span></Link>
           <SyncSlot />
           <a className="gh" href={REPO_URL} target="_blank" rel="noopener" aria-label={t('shell.github')} title={t('shell.github')}>{I.github}</a>
           <button ref={menuBtn} className="menu" aria-label={menu ? t('shell.closeMenu') : t('shell.menu')} aria-expanded={menu} aria-controls="mnav" onClick={() => (menu ? closeMenu() : setMenu(true))}>{menu ? I.close : I.menu}</button>

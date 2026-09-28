@@ -122,6 +122,8 @@ kbd{border:1px solid #3a3a3a;padding:3px 7px;font:700 var(--fs-micro) var(--font
 .btn:active{transform:translateY(1px)}
 .btn.y{background:var(--y);color:#000}
 .btn.y:hover{background:#ffe04d}
+/* The header's Add ROMs on the add page itself: here, not a call to go there. */
+.top .btn.y[aria-current]{background:transparent;color:var(--y);box-shadow:inset 0 0 0 2px var(--y)}
 .btn.p{background:var(--paper);color:#000}
 .btn.p:hover{background:#fff}
 .btn.k{background:var(--ink);color:var(--paper)}
