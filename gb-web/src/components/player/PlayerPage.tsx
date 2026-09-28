@@ -38,6 +38,7 @@ import { TouchControls } from './TouchControls';
 import { useMedia } from './touch-dom';
 import { fileAccept } from '../../lib/pwa';
 import { holdGame } from '../../lib/play-lock';
+import { activeCodes } from '../../lib/cheats';
 import { useRaSession } from '../../hooks/useRaSession';
 import { t as tNow, useT } from '../../i18n';
 import { usePeripherals } from '../../peripherals/usePeripherals';
@@ -170,7 +171,11 @@ function Player({ game }: { game: GameEntry }) {
   }, [loadRom, syncBorder]);
   const { coreRef } = emu;
   const peekRa = useCallback((a: number) => coreRef.current?.read_memory_ra(a) ?? 0, [coreRef]);
-  const ra = useRaSession(power, () => romData.current, peekRa, game.title);
+  // Cheat codes: the core gets the ones on at once, and unlocking goes off while any is.
+  const codes = useSettingsStore((s) => activeCodes(s.gameCheats[game.id] ?? []));
+  const { setCheats } = emu;
+  useEffect(() => { setCheats(codes); }, [codes, setCheats]);
+  const ra = useRaSession(power, () => romData.current, peekRa, game.title, codes !== '');
   const raJumped = ra.jumped, raFrame = ra.frame;
 
   // Every state load (slot, resume point, rewind step) draws its picture at once, paused or not, with no ghosting from before the jump.

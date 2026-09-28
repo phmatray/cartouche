@@ -110,7 +110,7 @@ export default {
   },
   touch: { label: 'Touch controls', up: 'Up', down: 'Down', left: 'Left', right: 'Right', rewind: 'Rewind, hold', ff: 'Fast-forward, hold',
     misfit: 'Your control layout doesn’t fit this screen, so the skin’s layout is in use.', fix: 'Edit' },
-  tabs: { controls: 'Controls', saves: 'Saves', screen: 'Screen', album: 'Album', game: 'Game' },
+  tabs: { controls: 'Controls', saves: 'Saves', screen: 'Screen', album: 'Album', codes: 'Codes', game: 'Game' },
   controls: {
     intro: 'Change any key in <a>Settings</a>. A connected gamepad works right away.',
     input: 'Input',
@@ -182,6 +182,19 @@ export default {
     share: 'Share',
     empty: 'Nothing here yet. Press F12 while playing.',
     emptyTouch: 'Nothing here yet. Tap Take screenshot above while a game is on.',
+  },
+  codes: {
+    intro: 'Game Genie (ABC-DEF or ABC-DEF-GHI) and GameShark (01VVLLHH) codes for this game. Each has its own switch, and the game follows it at once.',
+    code: 'Code',
+    name: 'Name',
+    optional: 'Optional',
+    add: 'Add code',
+    remove: 'Delete',
+    empty: 'No code for this game yet.',
+    format: 'A code uses only the digits 0 to 9 and the letters A to F.',
+    length: 'A Game Genie code has 6 or 9 characters, a GameShark code 8.',
+    refused: 'The game can’t use this code. {error}',
+    raOff: 'Achievements don’t unlock while a code is on, and stay off until the game restarts with every code off.',
   },
   game: {
     open: 'Open game page',

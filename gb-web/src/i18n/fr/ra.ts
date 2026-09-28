@@ -40,4 +40,5 @@ export default {
   serverError: 'RetroAchievements : {error}',
   pending: 'RetroAchievements est injoignable : vos succès seront envoyés dès son retour.',
   sent: 'Succès en attente envoyés à RetroAchievements.',
+  cheatsOff: 'Les succès sont coupés tant que des codes sont actifs. Redémarrez le jeu sans aucun code pour les débloquer à nouveau.',
 } satisfies Messages['ra'];
