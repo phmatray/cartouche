@@ -430,6 +430,8 @@ impl GameBoy {
         data.extend_from_slice(&[self.bus.timer.reload_pending as u8, b.dma_delay, b.dma_index, b.dma_source]);
         // Then the infrared port (RP; absent from older states: LED off, reading disabled).
         data.push(self.bus.rp);
+        // Then the current line's mode-3 length (u32 LE; absent from older states: 172 dots).
+        data.extend_from_slice(&self.bus.ppu.mode3_len.to_le_bytes());
 
         data
     }
@@ -637,6 +639,9 @@ impl GameBoy {
         self.bus.dma_index = byte(2).unwrap_or(0xA0).min(0xA0); // older states: the transfer is done
         if let Some(source) = byte(3) { self.bus.dma_source = source; }
         self.bus.rp = byte(TIMING_TAIL_LEN).map_or(0, |rp| rp & 0xC1);
+        // Clamped to what a line can hold: 172 to 172 + 7 + 6 + 10 x 11 dots.
+        self.bus.ppu.mode3_len = timing.get(TIMING_TAIL_LEN + 1..TIMING_TAIL_LEN + 5)
+            .map_or(172, |b| u32::from_le_bytes(b.try_into().unwrap()).clamp(172, 295));
         true
     }
 }
@@ -736,7 +741,7 @@ mod tests {
         assert_eq!(g.save_state(), state);
 
         let mut g = GameBoy::new(rom).unwrap();
-        assert!(g.load_state(&state[..state.len() - TIMING_TAIL_LEN - 1])); // - 1: RP
+        assert!(g.load_state(&state[..state.len() - TIMING_TAIL_LEN - 5])); // - 5: RP, mode-3 length
         assert!(!g.bus.timer.reload_pending);
         assert_eq!(g.bus.dma_index, 0xA0, "an older state's transfer is already in OAM");
     }
@@ -756,6 +761,31 @@ mod tests {
         assert_eq!(g.bus.key0, 0x04);
         g.finish_boot().unwrap();
         assert!(!g.bus.boot_rom_active && g.bus.ppu.compat && !g.bus.cgb_mode, "DMG compatibility mode");
+    }
+
+    /// A state saved mid-line keeps that line's mode-3 length; an older state (without it) loads
+    /// with the plain 172 dots.
+    #[test]
+    fn save_state_keeps_mode3_len() {
+        let mut rom = vec![0u8; 0x8000];
+        rom[0x100..0x102].copy_from_slice(&[0x18, 0xFE]);
+        rom[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(rom[i]).wrapping_sub(1));
+        let mut gb = GameBoy::new(rom.clone()).unwrap();
+        gb.skip_boot_rom();
+        gb.bus.ppu.scx = 5;
+        while gb.bus.ppu.mode != crate::ppu::PpuMode::Drawing { gb.bus.cycle_tick(); }
+        assert_eq!(gb.bus.ppu.mode3_len, 177);
+        let state = gb.save_state();
+
+        let mut g = GameBoy::new(rom.clone()).unwrap();
+        assert!(g.load_state(&state));
+        assert_eq!(g.bus.ppu.mode3_len, 177);
+        assert_eq!(g.save_state(), state);
+
+        let mut g = GameBoy::new(rom).unwrap();
+        g.bus.ppu.mode3_len = 200;
+        assert!(g.load_state(&state[..state.len() - 4]));
+        assert_eq!(g.bus.ppu.mode3_len, 172);
     }
 
     /// A HuC3 caught mid-command (mode 0xB, address set) goes on from the same place after a load;
@@ -779,8 +809,9 @@ mod tests {
         c.write_rom(0x0000, 0x0C);
         assert_eq!(c.read_ram(0), 0x97);
 
-        // The pre-change layout ends right after KEY0 (then the mapper block, the timing tail and RP).
-        let end = state.len() - TIMING_TAIL_LEN - 1;
+        // The pre-change layout ends right after KEY0 (then the mapper block, the timing tail, RP
+        // and the mode-3 length).
+        let end = state.len() - TIMING_TAIL_LEN - 5;
         let extra = u16::from_le_bytes([state[end - 134], state[end - 133]]);
         assert_eq!(extra, 132, "mode, address, result, opcode, 128 bytes of nibbles");
         let old = &state[..end - 134];
@@ -835,7 +866,7 @@ mod tests {
     /// state cut right after KEY0 (before the mapper block existed) still loads.
     fn reload(gb: &GameBoy, rom: &[u8]) -> GameBoy {
         let state = gb.save_state();
-        let cut = state.len() - 1 - TIMING_TAIL_LEN - 2 - gb.bus.cartridge.export_extra().len(); // 1: RP
+        let cut = state.len() - 5 - TIMING_TAIL_LEN - 2 - gb.bus.cartridge.export_extra().len(); // 5: RP, mode-3 length
         assert_eq!(state[cut..cut + 2], (gb.bus.cartridge.export_extra().len() as u16).to_le_bytes());
         let mut old = GameBoy::new(rom.to_vec()).unwrap();
         assert!(old.load_state(&state[..cut]), "a state without the mapper block");
