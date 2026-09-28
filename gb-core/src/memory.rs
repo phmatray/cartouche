@@ -351,14 +351,29 @@ impl MemoryBus {
         if !self.cgb_mode || self.key1 & 0x01 == 0 {
             return false;
         }
-        self.double_speed = !self.double_speed;
-        self.key1 = 0;
-        // Pan Docs, "CGB Registers": DIV resets and the CPU waits 2050 M-cycles for the clock to settle.
+        // STOP's second M-cycle reads the byte after it; DIV resets at the end of the next one.
+        self.tick_components();
+        let earlier = self.timer.div_counter;
+        self.tick_components();
         let div = self.timer.div_counter;
-        self.timer.write(0xFF04, 0);
-        self.div_apu_edge(div);
-        for _ in 0..2050 {
-            self.stop_tick();
+        self.timer.speed_switch_div_reset(earlier);
+        self.div_apu_edge(div); // the reset can drop DIV's APU bit, in the old speed
+        self.double_speed = !self.double_speed;
+        self.ppu.m_cycle_dots = if self.double_speed { 2 } else { 4 };
+        self.key1 = 0;
+        // Then the CPU halts while the clock settles and everything else runs: $20000 DIV counts,
+        // so DIV is back at 0 when it resumes (Age spsw-div, spsw-tima). Like HALT, an interrupt
+        // ends it early (Age spsw-interrupts). Back in single speed the PPU comes out one dot
+        // behind (Age spsw-mode0: the LCD-to-CPU alignment shifts).
+        let mut behind = !self.double_speed;
+        for _ in 0..0x8000 {
+            self.tick_components();
+            // Taken back once the PPU is a dot into a mode, so no mode change is undone.
+            if behind && self.ppu.mode_clock > 0 {
+                self.ppu.mode_clock -= 1;
+                behind = false;
+            }
+            if self.interrupts.pending() & !self.late_interrupts() != 0 { break; }
         }
         true
     }
@@ -616,11 +631,28 @@ mod tests {
         assert_ne!(bus.read_byte(0xFF04), 0);
         bus.write_byte(0xFF4D, 0x01);
         assert_eq!(bus.read_byte(0xFF4D), 0x7F, "armed, normal speed");
+        bus.write_byte(0xFF07, 0x04); // TIMA at 4 KHz
+        bus.write_byte(0xFF05, 0x00);
         bus.cycle_count = 0;
         assert!(bus.try_speed_switch());
         assert_eq!(bus.read_byte(0xFF4D), 0xFE, "double speed, disarmed");
-        assert_eq!(bus.read_byte(0xFF04), 0, "DIV reset, and still while the clock settles");
-        assert_eq!(bus.cycle_count, 2050 * 2, "2050 M-cycles at the new speed");
+        assert_eq!(bus.read_byte(0xFF04), 0, "DIV reset, then $20000 counts: back at 0");
+        assert_eq!(bus.read_byte(0xFF05), 0x80, "the timer ran through the pause (Age spsw-tima)");
+        assert_eq!(bus.cycle_count, 2 * 4 + 0x8000 * 2, "STOP's 2 M-cycles, then $8000 at the new speed");
+    }
+
+    #[test]
+    fn an_interrupt_ends_the_speed_switch_pause() {
+        let mut bus = bus();
+        bus.cgb_mode = true;
+        bus.interrupts.interrupt_enable = TIMER_BIT;
+        bus.write_byte(0xFF07, 0x05); // TIMA at 262 KHz: overflows 16 x 256 counts in
+        bus.write_byte(0xFF4D, 0x01);
+        bus.cycle_count = 0;
+        assert!(bus.try_speed_switch());
+        assert_ne!(bus.interrupts.interrupt_flag & TIMER_BIT, 0);
+        assert!(bus.cycle_count < 0x8000 * 2, "woken by the timer, not after $8000 M-cycles");
+        assert_ne!(bus.read_byte(0xFF04), 0, "DIV has not wrapped");
     }
 
     #[test]

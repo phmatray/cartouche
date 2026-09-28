@@ -19,8 +19,9 @@ export const isHashMsg = (m: { t?: unknown; f?: unknown; x?: unknown }): m is Ha
 
 /** Our game's SHA-1 (`g`) and those of every game we hold (`s`): lockstep needs both games on both sides. `k`: an answer. */
 export type RomsMsg = { t: 'roms'; g: string; s: string[]; k?: true };
-/** The host's `seed` (clock, epoch seconds) and delay `d`, with its battery save; the guest answers with its own. */
-export type BootMsg = { t: 'boot'; seed?: number; d?: number; save?: string };
+/** The host's `seed` (clock, epoch seconds) and delay `d`, with its battery save; the guest answers with its own.
+ *  `abort`, alone: lockstep couldn't start on that side, both go back to the byte mode. */
+export type BootMsg = { t: 'boot'; seed?: number; d?: number; save?: string; abort?: true };
 
 const sha1 = (v: unknown) => typeof v === 'string' && /^[0-9a-f]{40}$/.test(v);
 /** Up to 4096 games in a library. */
@@ -28,8 +29,9 @@ export const isRomsMsg = (m: { t?: unknown; g?: unknown; s?: unknown; k?: unknow
   m.t === 'roms' && sha1(m.g) && Array.isArray(m.s) && m.s.length <= 4096 && m.s.every(sha1) && (m.k === undefined || m.k === true);
 /** The biggest battery save (128 KiB of RAM, plus a clock) as base64. */
 const MAX_SAVE = Math.ceil((0x20000 + 64) / 3) * 4;
-export const isBootMsg = (m: { t?: unknown; seed?: unknown; d?: unknown; save?: unknown }): m is BootMsg =>
+export const isBootMsg = (m: { t?: unknown; seed?: unknown; d?: unknown; save?: unknown; abort?: unknown }): m is BootMsg =>
   m.t === 'boot'
+  && (m.abort === undefined || (m.abort === true && m.seed === undefined && m.d === undefined && m.save === undefined))
   && (m.seed === undefined ? m.d === undefined : frame(m.seed) && Number.isInteger(m.d) && (m.d as number) >= 2 && (m.d as number) <= 10)
   && (m.save === undefined || (typeof m.save === 'string' && m.save.length <= MAX_SAVE && /^[A-Za-z0-9+/]*={0,2}$/.test(m.save)));
 

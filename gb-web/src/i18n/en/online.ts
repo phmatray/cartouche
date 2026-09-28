@@ -115,6 +115,8 @@ export default {
   },
   mode: {
     lockstep: 'You both have both games: the two consoles now run in step, at full speed',
+    abort: 'In-step mode couldn’t start here (Player {p}’s game didn’t load): back to the usual link',
+    partnerAbort: 'In-step mode couldn’t start for Player {p}: back to the usual link',
   },
   desync: {
     title: 'Desynchronised',

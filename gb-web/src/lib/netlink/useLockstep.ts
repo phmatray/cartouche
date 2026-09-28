@@ -5,7 +5,7 @@ import { computeSha1 } from '../rom-utils';
 import { owned } from '../ui';
 import { toast } from '../../components/shell/actions';
 import { t } from '../../i18n';
-import { endLockstep, lockstepBoot, lockstepLink, offerLockstep, useNet } from './session';
+import { abortLockstep, endLockstep, lockstepBoot, lockstepLink, offerLockstep, useNet } from './session';
 import { GB_FPS } from '../pace';
 import { fromB64, Lockstep, toB64, type HashMsg, type LockMsg } from './lockstep';
 
@@ -116,7 +116,11 @@ export function useLockstep(opts: {
       live.current = l;
       setActive(true);
       toast(t('online.mode.lockstep'), 'c');
-    })().catch(() => { if (!gone) endLockstep(); }); // back to the byte mode
+    })().catch(() => { // both back to the byte mode
+      if (gone) return;
+      abortLockstep();
+      toast(t('online.mode.abort', { p: 3 - seat }));
+    });
     return () => { gone = true; };
   }, [mode, stop]);
   useEffect(() => stop, [stop]);

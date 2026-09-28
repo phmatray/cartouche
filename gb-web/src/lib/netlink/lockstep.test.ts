@@ -93,6 +93,10 @@ test('isBootMsg: seed, delay and save checked', () => {
   assert.equal(isBootMsg({ t: 'boot', seed: 1 }), false); // a seed comes with its delay
   assert.equal(isBootMsg({ t: 'boot', save: 'not base64!' }), false);
   assert.equal(isBootMsg({ t: 'boot', save: 'A'.repeat(300_000) }), false);
+  assert.equal(isBootMsg({ t: 'boot', abort: true }), true); // lockstep couldn't start on that side
+  assert.equal(isBootMsg({ t: 'boot', abort: false }), false);
+  assert.equal(isBootMsg({ t: 'boot', abort: true, seed: 1, d: 3 }), false);
+  assert.equal(isBootMsg({ t: 'boot', abort: true, save: 'AAEC' }), false);
 });
 
 test('a battery save survives the trip as base64', () => {
