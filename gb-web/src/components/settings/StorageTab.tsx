@@ -108,6 +108,7 @@ export function StorageTab() {
     await refresh();
     toast(tNow('settings.storage.artDeleted'), 'm');
   };
+  const jobText = (j: NonNullable<typeof job>) => (j.of ? t('shell.progress', { label: t(`settings.storage.${j.label}`), n: j.n, of: j.of }) : `${t(`settings.storage.${j.label}`)}…`);
   const total = usage ? usage.roms + usage.saves + usage.shots : 0;
   const pct = (n: number) => `${total ? (n / total) * 100 : 0}%`;
 
@@ -116,9 +117,13 @@ export function StorageTab() {
     setPersisted(ok);
     toast(ok ? tNow('settings.storage.protectedToast') : tNow('settings.storage.declined'), ok ? 'c' : 'm');
   };
+  // A backup of a big library takes a while either way: the button says how far it is, and can't start a second one.
+  const [job, setJob] = useState<{ label: 'exporting' | 'restoring'; n: number; of: number } | null>(null);
   const doExport = async () => {
+    if (job) return;
     let blob: Blob;
-    try { blob = await exportBackup(); } catch { toast(tNow('settings.storage.exportFailed'), 'm'); return; }
+    setJob({ label: 'exporting', n: 0, of: 0 });
+    try { blob = await exportBackup((n, of) => setJob({ label: 'exporting', n, of })); } catch { toast(tNow('settings.storage.exportFailed'), 'm'); return; } finally { setJob(null); }
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = backupFileName();
@@ -150,8 +155,9 @@ export function StorageTab() {
         run: async () => {
           const n = { roms: 0, saves: 0, screenshots: 0 };
           const what = () => ({ roms: tNow('settings.storage.nRoms', { count: n.roms }), saves: tNow('settings.storage.nSaves', { count: n.saves }), shots: tNow('settings.storage.nShots', { count: n.screenshots }) });
+          setJob({ label: 'restoring', n: 0, of: b.romCount });
           try {
-            await restoreBackup(b, withSettings.current, n);
+            await restoreBackup(b, withSettings.current, n, (i, of) => setJob({ label: 'restoring', n: i, of }));
             toast(tNow('settings.storage.restored', what()), 'c');
           } catch (e) {
             // A full disk (or any storage error) midway: say what landed; running it again skips that.
@@ -160,6 +166,7 @@ export function StorageTab() {
             await reloadLibrary();
             await refreshSavedIds().catch(() => {});
             await refresh().catch(() => {});
+            setJob(null);
           }
         },
       });
@@ -218,12 +225,14 @@ export function StorageTab() {
 
       <h3>{t('settings.storage.backup')}</h3>
       <Row label={t('settings.storage.exportLabel')} sub={t('settings.storage.exportSub')}>
-        <button className="btn k" onClick={doExport}>{t('settings.storage.export')}</button>
+        <button className="btn k" onClick={doExport} aria-disabled={!!job || undefined} style={job ? { opacity: 0.6, cursor: 'progress' } : undefined}>
+          <span aria-live="polite">{job?.label === 'exporting' ? jobText(job) : t('settings.storage.export')}</span>
+        </button>
       </Row>
       <Row label={t('settings.storage.restoreLabel')} sub={t('settings.storage.restoreSub')}>
-        <FileButton className="btn line" style={{ color: 'var(--ink)', ...(reading && { opacity: 0.6, cursor: 'progress' }) }} aria-disabled={reading || undefined}
+        <FileButton className="btn line" style={{ color: 'var(--ink)', ...((reading || job) && { opacity: 0.6, cursor: 'progress' }) }} aria-disabled={reading || !!job || undefined}
           accept={fileAccept('.cartouche,.cartshelf,application/json')} onFiles={([f]) => doImport(f)}>
-          <span aria-live="polite">{t(reading ? 'settings.storage.reading' : 'settings.storage.import')}</span>
+          <span aria-live="polite">{job?.label === 'restoring' ? jobText(job) : t(reading ? 'settings.storage.reading' : 'settings.storage.import')}</span>
         </FileButton>
       </Row>
 
