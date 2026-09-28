@@ -8,7 +8,8 @@ import { toast } from '../shell/actions';
 import { Row, Seg, SwitchRow } from './parts';
 import { t as tNow, useT, type Key } from '../../i18n';
 import { RumbleRows } from '../../peripherals/RumbleRows';
-import { bindable } from '../../utils/keybindings';
+import { bindable, isKey } from '../../utils/keybindings';
+import { useKeyLayout } from '../../hooks/useKeyLayout';
 
 const BUTTONS: GameBoyButton[] = ['Up', 'Down', 'Left', 'Right', 'A', 'B', 'Start', 'Select'];
 /** Keys the player already uses for its own shortcuts. */
@@ -26,6 +27,8 @@ export function ControlsTab() {
   const { keybindings, updateKeybinding, resetKeybindings, touchSize, haptics, set } = useSettingsStore();
   const [listening, setListening] = useState<GameBoyButton | null>(null);
   const [pad, setPad] = useState(padName);
+  const layout = useKeyLayout();
+  const label = (k: string) => keyLabel(k, layout);
   const t = useT();
   // The layout is edited over a real game: the last one played, else the bundled one.
   const { games } = useGameLibrary();
@@ -40,26 +43,25 @@ export function ControlsTab() {
 
   useEffect(() => {
     if (!listening) return;
-    // The keyboard's own characters (Chromium): a key captured with Shift held binds what the key alone types.
-    let layout: Map<string, string> | undefined;
-    (navigator as { keyboard?: { getLayoutMap?: () => Promise<Map<string, string>> } }).keyboard?.getLayoutMap?.().then((m) => { layout = m; }, () => {});
     const capture = (e: KeyboardEvent) => {
       e.preventDefault();
       e.stopPropagation();
       if (e.key === 'Escape') { setListening(null); return; }
-      const key = bindable(e, layout);
-      if (!key) return; // a dead key, or Shift's character: still listening
-      const clash = BUTTONS.find((b) => b !== listening && keybindings[b].toLowerCase() === key.toLowerCase());
-      if (clash) { toast(tNow('settings.controls.clash', { key: keyLabel(key), button: btn(clash) }), 'm'); return; }
-      const reserved = RESERVED[key];
-      if (reserved) { toast(tNow('settings.controls.reserved', { key: keyLabel(key), action: tNow(reserved) }), 'm'); return; }
+      // The physical key: Shift held or not, and on any layout, it plays as it was bound.
+      const key = bindable(e);
+      if (!key) return; // a dead key: still listening
+      const clash = BUTTONS.find((b) => b !== listening && isKey(keybindings[b], e));
+      if (clash) { toast(tNow('settings.controls.clash', { key: keyLabel(key, layout), button: btn(clash) }), 'm'); return; }
+      // The player's own shortcuts go by the character typed.
+      const reserved = RESERVED[e.key.length === 1 ? e.key.toLowerCase() : e.key];
+      if (reserved) { toast(tNow('settings.controls.reserved', { key: keyLabel(key, layout), action: tNow(reserved) }), 'm'); return; }
       updateKeybinding(listening, key);
-      toast(tNow('settings.controls.now', { button: btn(listening), key: keyLabel(key) }), 'c');
+      toast(tNow('settings.controls.now', { button: btn(listening), key: keyLabel(key, layout) }), 'c');
       setListening(null);
     };
     window.addEventListener('keydown', capture, true);
     return () => window.removeEventListener('keydown', capture, true);
-  }, [listening, keybindings, updateKeybinding]);
+  }, [listening, keybindings, updateKeybinding, layout]);
 
   // One press wipes a whole custom layout: say so, with a way back.
   const resetKeys = () => {
@@ -78,7 +80,7 @@ export function ControlsTab() {
         {BUTTONS.map((b) => (
           <li key={b}>
             <span className="btnname">{btn(b)}</span>
-            <span className={`key${listening === b ? ' listening' : ''}${keyLabel(keybindings[b]).length > 2 ? ' wide' : ''}`}>{keyLabel(keybindings[b])}</span>
+            <span className={`key${listening === b ? ' listening' : ''}${label(keybindings[b]).length > 2 ? ' wide' : ''}`}>{label(keybindings[b])}</span>
             <span className="leader" />
             <button className="sbtn" aria-label={t('settings.controls.changeFor', { button: btn(b) })} onClick={() => setListening(listening === b ? null : b)}>
               {listening === b ? t('settings.controls.press') : t('link.cart.change')}

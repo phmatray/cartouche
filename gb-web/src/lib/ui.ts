@@ -1,6 +1,7 @@
 import type { KeyboardEvent } from 'react';
 import type { GameEntry } from '../types/game';
 import { size, t } from '../i18n/core.ts';
+import { usChar } from '../utils/keybindings.ts';
 
 /** Route builders: /game/:id is the game page, /game/:id/play the player. */
 export const paths = {
@@ -72,14 +73,19 @@ export { ago, dur } from '../i18n/core.ts';
 /** A byte count as bytes, kB, MB or GB. */
 export const mb = size;
 
-/** A KeyboardEvent.key as printed on a key cap. */
-export function keyLabel(k: string): string {
+/**
+ * A KeyboardEvent.key, or a bound key's code, as printed on a key cap: a code reads as the character `layout` (this
+ * keyboard's, see useKeyLayout) says it types, else the US one.
+ */
+export function keyLabel(k: string, layout?: { get(code: string): string | undefined } | null): string {
   if (!k) return '—';
   const named: Record<string, string> = {
     ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Control: 'Ctrl', Escape: 'Esc',
-    ' ': t('common.keys.space'), Enter: t('common.keys.enter'), Shift: t('common.keys.shift'), Backspace: t('common.keys.backspace'), Tab: t('common.keys.tab'),
+    ' ': t('common.keys.space'), Space: t('common.keys.space'), Enter: t('common.keys.enter'), Shift: t('common.keys.shift'), Backspace: t('common.keys.backspace'), Tab: t('common.keys.tab'),
   };
-  return named[k] ?? (k.length === 1 ? k.toUpperCase() : k);
+  if (named[k]) return named[k];
+  const ch = k.length === 1 ? k : layout?.get(k) ?? usChar(k);
+  return ch ? ch.toUpperCase() : k.replace(/^Numpad/, 'Num ');
 }
 
 /** A touch screen with no mouse or trackpad (a phone): copy that says "tap" rather than "press F12". */

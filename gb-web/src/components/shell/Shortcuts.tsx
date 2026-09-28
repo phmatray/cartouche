@@ -1,15 +1,18 @@
 import { useEffect, useRef } from 'react';
 import { useSettingsStore } from '../../store/settingsStore';
 import { keyLabel } from '../../lib/ui';
+import { useKeyLayout } from '../../hooks/useKeyLayout';
 import { useT, type Key } from '../../i18n';
 
 /** Every keyboard shortcut, with the game keys as currently bound in Settings. */
 export function ShortcutsList() {
-  const k = useSettingsStore((s) => s.keybindings);
+  const b = useSettingsStore((s) => s.keybindings);
+  const layout = useKeyLayout();
+  const k = Object.fromEntries(Object.entries(b).map(([n, c]) => [n, keyLabel(c, layout)])) as typeof b;
   const t = useT();
   const rows: [Key | string, string[]][] = [
-    ['shell.keys.search', ['/']], ['shell.keys.shortcuts', ['?']], ['shell.keys.dpad', [k.Up, k.Down, k.Left, k.Right].map(keyLabel)], ['A / B', [keyLabel(k.A), keyLabel(k.B)]],
-    ['Start / Select', [keyLabel(k.Start), keyLabel(k.Select)]], ['shell.keys.pause', ['P']], ['shell.keys.rewind', ['R']], ['shell.keys.save', ['F5']],
+    ['shell.keys.search', ['/']], ['shell.keys.shortcuts', ['?']], ['shell.keys.dpad', [k.Up, k.Down, k.Left, k.Right]], ['A / B', [k.A, k.B]],
+    ['Start / Select', [k.Start, k.Select]], ['shell.keys.pause', ['P']], ['shell.keys.rewind', ['R']], ['shell.keys.save', ['F5']],
     ['shell.keys.load', ['F8']], ['shell.keys.screenshot', ['F12']], ['shell.keys.mute', ['M']], ['shell.keys.fullscreen', ['F']],
   ];
   return (

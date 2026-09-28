@@ -38,16 +38,50 @@ export const BUTTON_NUMBERS: Record<string, number> = {
 export const chord = (e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey'>) =>
   (e.ctrlKey && e.key !== 'Control') || (e.metaKey && e.key !== 'Meta') || (e.altKey && e.key !== 'Alt' && e.key !== 'AltGraph');
 
+// A button is bound to a physical key (KeyboardEvent.code), a modifier without its side: 'KeyZ', 'Digit1', 'Shift'. The
+// same key then plays whatever Shift does to its character, and on any layout. A binding saved before codes is the
+// character typed ('z'): it matches by character until the keyboard says which key types it (resolve, learn).
+type Key = Pick<KeyboardEvent, 'key' | 'code'>;
+type Bindings = Record<string, string>;
+/** The binding a key press is: its code, Shift for either Shift (Control, Alt, Meta likewise). */
+export const codeOf = (e: Pick<KeyboardEvent, 'code'>) => e.code.replace(/^(Shift|Control|Alt|Meta)(Left|Right)$/, '$1');
+/** A binding saved before codes: one character. */
+const legacy = (k: string) => k.length === 1;
+const typed = (e: Key) => (e.key.length === 1 ? e.key.toLowerCase() : e.key);
+
+/** Whether key press `e` is the key `binding` names: by code, or by character for a binding saved before codes. */
+export const isKey = (binding: string, e: Key) => binding === codeOf(e) || binding === typed(e);
+
+/** What a keydown binds a button to, or null: a dead key (an accent waiting for its letter), or one with no code. */
+export const bindable = (e: Key): string | null => (e.key === 'Dead' || !e.code ? null : codeOf(e));
+
 /**
- * What a keydown binds a button to, as the player matches keys (`key`, a letter in lower case), or null when it can't:
- * a dead key (an accent waiting for its letter), or a character Shift made that the key alone doesn't type ('!' for 1).
- * Under Shift the key's own character comes from `layout` (the browser's keyboard map, where it has one), else from a
- * digit key's code when Shift changed it. Unknown (another symbol): null, the player lets go of Shift and presses again.
+ * The bindings with each character saved before codes turned into the key that types it on this keyboard (`layout`:
+ * navigator.keyboard.getLayoutMap(), code → character typed without Shift), or null when none changed. A character
+ * the layout doesn't type without Shift ('!') stays, until `learn`.
  */
-export function bindable(e: Pick<KeyboardEvent, 'key' | 'code' | 'shiftKey'>, layout?: { get(code: string): string | undefined }): string | null {
-  if (e.key === 'Dead' || e.key === 'Unidentified') return null;
-  if (e.key.length !== 1) return e.key;
-  if (!e.shiftKey || /^Key[A-Z]$/.test(e.code)) return e.key.toLowerCase();
-  const digit = /^Digit\d$/.test(e.code) && e.key !== e.code[5] ? e.code[5] : undefined;
-  return (layout?.get(e.code) ?? digit)?.toLowerCase() ?? null;
+export function resolve<T extends Bindings>(bindings: T, layout: Iterable<[string, string]>): T | null {
+  const codes = new Map<string, string>();
+  for (const [code, ch] of layout) if (!codes.has(ch.toLowerCase())) codes.set(ch.toLowerCase(), code);
+  const out = Object.fromEntries(Object.entries(bindings).map(([b, k]) => [b, (legacy(k) && codes.get(k)) || k])) as T;
+  return Object.keys(out).some((b) => out[b] !== bindings[b]) ? out : null;
 }
+
+/**
+ * The bindings with the character saved before codes that key press `e` types turned into its key, or null. Only a
+ * press Shift left alone: Shift + 1 types '!' on a US keyboard, but the key bound to '!' is where '!' is typed alone.
+ */
+export function learn<T extends Bindings>(bindings: T, e: Key & Pick<KeyboardEvent, 'shiftKey'>): T | null {
+  if (e.shiftKey || !e.code) return null;
+  const hit = Object.keys(bindings).find((b) => legacy(bindings[b]) && bindings[b] === typed(e));
+  return hit ? { ...bindings, [hit]: codeOf(e) } : null;
+}
+
+// The US keyboard's characters by code, to label a key where the browser can't say what this keyboard types.
+const US = '`1234567890-=qwertyuiop[]\\asdfghjkl;\'zxcvbnm,./';
+const keys = (s: string, p: string) => [...s].map((c) => p + c);
+const CODES = ['Backquote', ...keys('1234567890', 'Digit'), 'Minus', 'Equal', ...keys('QWERTYUIOP', 'Key'), 'BracketLeft', 'BracketRight',
+  'Backslash', ...keys('ASDFGHJKL', 'Key'), 'Semicolon', 'Quote', ...keys('ZXCVBNM', 'Key'), 'Comma', 'Period', 'Slash'];
+
+/** The character a code types on a US keyboard ('Digit1' → '1'), for a label where the browser can't say. */
+export const usChar = (code: string): string | undefined => US[CODES.indexOf(code)];

@@ -5,6 +5,7 @@ import type { Lang } from '../i18n/core';
 import type { Layout, Shell, Skin } from '../lib/touch-layout';
 import type { Startup } from '../lib/settings-clean';
 import { DEFAULT_DISPLAY, normalizeDisplay, presetOf, sameFilters, type DisplayConfig, type Filters, type PresetName, type ScreenKind } from '../shaders/filters';
+import { resolve } from '../utils/keybindings';
 
 export type GameBoyButton = 'A' | 'B' | 'Select' | 'Start' | 'Right' | 'Left' | 'Up' | 'Down';
 
@@ -129,8 +130,8 @@ const DEFAULT_KEYBINDINGS: Record<GameBoyButton, string> = {
   Down: 'ArrowDown',
   Left: 'ArrowLeft',
   Right: 'ArrowRight',
-  A: 'z',
-  B: 'x',
+  A: 'KeyZ',
+  B: 'KeyX',
   Start: 'Enter',
   Select: 'Shift',
 };
@@ -270,4 +271,13 @@ export function useDisplay(kind: ScreenKind, gameId?: string) {
     reset: () => setDisplay(kind, gameId, { ...cfg, filters: preset.filters }),
     setPerGame: (on: boolean) => { if (gameId !== undefined) setGameDisplay(gameId, on ? cfg : null); },
   };
+}
+
+// Keys saved as characters (before codes) become the key that types them on this keyboard, where the browser says
+// (Chromium). Elsewhere each still matches by character until its first press teaches its key (the player, learn).
+if (typeof navigator !== 'undefined') {
+  (navigator as Navigator & { keyboard?: { getLayoutMap?: () => Promise<Iterable<[string, string]>> } }).keyboard?.getLayoutMap?.().then((m) => {
+    const keybindings = resolve(useSettingsStore.getState().keybindings, m);
+    if (keybindings) useSettingsStore.setState({ keybindings });
+  }, () => {});
 }
