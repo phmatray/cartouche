@@ -7,8 +7,9 @@
 //! fetch is done twice, so the first pixel leaves at dot 12. A popped pixel reaches the LCD
 //! `OUT_DELAY` dots later, where it is mixed and coloured with BGP/OBP0/OBP1 as they are then.
 //!
-//! The FIFO runs `FIFO_LAG` dots behind mode 3 as the CPU sees it (STAT, `Ppu::mode3_length`,
-//! which still ends mode 3): the last pixels are drawn early in HBlank. Both delays are measured
+//! The FIFO runs `FIFO_LAG` dots behind mode 3 as the CPU sees it: the last pixels are drawn early
+//! in HBlank. Mode 3 starts with `Ppu::mode3_length`'s length; a mid-line write to LCDC, WY or WX
+//! runs the rest of the line ahead on a copy (`predict_len`), so HBlank starts where the FIFO ends. Both delays are measured
 //! with Mealybug Tearoom's DMG ROMs (`m3_bgp_change`, `m3_scx_high_5_bits`).
 //!
 //! An OBJ whose X is reached stops the pixels: the fetcher finishes its current tile, then the OBJ
@@ -130,6 +131,8 @@ pub(crate) struct LineState {
     pub lcdc_prev: u8,
     /// BGP before a write: the next pixel shown mixes both (DMG).
     pub bgp_old: Option<(u8, u32)>,
+    /// A register that sets mode 3's length (LCDC, WY, WX) was written: `Ppu::step` asks the FIFO again.
+    pub relength: bool,
 }
 
 impl Ppu {
@@ -164,6 +167,19 @@ impl Ppu {
             self.dot_dmg();
         }
         if self.line.out_x == SCREEN_WIDTH as u8 { self.end_line_dmg(); }
+    }
+
+    /// The dot x will reach 160 if no register changes from here: the line run ahead on a copy
+    /// (no pixel reaches the LCD). The FIFO lags mode 3, so this is how mode 3 learns its end.
+    pub(crate) fn predict_len(&mut self) -> u32 {
+        let saved = self.line;
+        while self.line.x < SCREEN_WIDTH as u8 {
+            self.line.dot += 1;
+            self.fifo_dot();
+        }
+        let len = self.line.len;
+        self.line = saved;
+        len
     }
 
     /// The whole line at once (tests and callers outside `step`).
