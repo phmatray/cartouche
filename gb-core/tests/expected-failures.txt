@@ -90,8 +90,6 @@ same-suite/apu/div_write_trigger.gb  # apu
 same-suite/apu/div_write_trigger_10.gb  # apu
 same-suite/apu/div_write_trigger_volume.gb  # apu
 same-suite/apu/div_write_trigger_volume_10.gb  # apu
-same-suite/dma/hdma_lcd_off.gb  # hdma
-same-suite/dma/hdma_mode0.gb  # hdma
 same-suite/sgb/command_mlt_req.gb  # sgb
 same-suite/sgb/command_mlt_req_1_incrementing.gb  # sgb
 age-test-roms/halt/halt-m0-interrupt-dmgC-cgbBCE.gb  # interrupt
@@ -145,7 +143,7 @@ gbmicrotest/802-ppu-latch-tileselect.gb  # no-verdict
 gbmicrotest/803-ppu-latch-bgdisplay.gb  # no-verdict
 gbmicrotest/audio_testbench.gb  # no-verdict
 gbmicrotest/cpu_bus_1.gb  # no-verdict
-gbmicrotest/dma_basic.gb  # oam-dma
+gbmicrotest/dma_basic.gb  # no-verdict
 gbmicrotest/flood_vram.gb  # no-verdict
 gbmicrotest/halt_op_dupe_delay.gb  # interrupt
 gbmicrotest/hblank_int_if_a.gb  # stat
