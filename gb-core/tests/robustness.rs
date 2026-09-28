@@ -204,8 +204,8 @@ fn stop_mode_waits_for_a_button_from_the_web_side() {
     let mut old = gb_core::Emulator::new();
     assert!(old.load_rom(&rom(&STOP, &[])));
     // Cut the tail: stop mode and KEY0, the (empty) mapper block's u16 length, the timing bytes, RP,
-    // the mode-3 length, the speed-switch byte.
-    assert!(old.load_state(&state[..state.len() - 14]));
+    // the mode-3 length, the speed-switch byte, OPRI.
+    assert!(old.load_state(&state[..state.len() - 15]));
     old.run_frame();
     assert_ne!(old.get_pc(), 0x0106, "an older state is not in stop mode");
     assert!(emu.load_state(&state));
