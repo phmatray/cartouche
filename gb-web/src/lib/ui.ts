@@ -7,6 +7,7 @@ import { usChar } from '../utils/keybindings.ts';
 export const paths = {
   play: (id: string, q = '') => `/game/${encodeURIComponent(id)}/play${q}`,
   game: (id: string) => `/game/${encodeURIComponent(id)}`,
+  music: (id: string) => `/music/${encodeURIComponent(id)}`,
   /** The search overlay over the library, with a query in the search syntax (readable: `?q=genre:rpg+players:2`). */
   search: (q: string) => `/?q=${encodeURIComponent(q).replace(/%20/g, '+').replace(/%3A/gi, ':').replace(/%2C/gi, ',')}`,
 };

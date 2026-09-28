@@ -3,12 +3,13 @@ import { markGone } from './sync/gone.ts';
 import type { GameEntry } from '../types/game.ts';
 
 const DB_NAME = 'gb-emulator';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 const ROM_STORE = 'roms';
 const SAVE_STORE = 'saves';
 const SAVESTATE_STORE = 'savestates';
 const GAME_META_STORE = 'gamemeta';
 const SCREENSHOT_STORE = 'screenshots';
+const MUSIC_STORE = 'music';
 
 /**
  * A tab still holding an older version's connection blocks the upgrade: say so on the page (the app
@@ -56,6 +57,8 @@ function openConnection(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(GAME_META_STORE)) db.createObjectStore(GAME_META_STORE, { keyPath: 'id' });
       // v4: album. Existing stores are kept as they are; only the new one is added.
       if (!db.objectStoreNames.contains(SCREENSHOT_STORE)) db.createObjectStore(SCREENSHOT_STORE, { keyPath: 'id', autoIncrement: true }).createIndex('gameId', 'gameId');
+      // v6: GBS music files, kept apart from the games.
+      if (!db.objectStoreNames.contains(MUSIC_STORE)) db.createObjectStore(MUSIC_STORE, { keyPath: 'id' });
     };
     req.onsuccess = () => { blockedNotice(false); resolve(req.result); };
     req.onerror = () => { blockedNotice(false); reject(req.error); };
@@ -123,6 +126,13 @@ export function addedMeta(old: StoredGameMeta | undefined, meta: StoredGameMeta)
  * ("Main", "Léa's game"…). The game's first one is keyed by the game id itself (the layout before
  * profiles); the others by `${gameId}~${suffix}`. `timestamp` is the last write (last played).
  */
+/** A GBS music file (lib/gbs.ts); not part of backups or sync. */
+export interface StoredMusic { id: string; title: string; author: string; copyright: string; songs: number; first: number; sha1: string; data: Uint8Array; importedAt: number }
+export function saveMusic(m: StoredMusic): Promise<void> { return txOp(MUSIC_STORE, 'readwrite', (s) => s.put(m)).then(() => {}); }
+export function getMusic(id: string): Promise<StoredMusic | undefined> { return txOp(MUSIC_STORE, 'readonly', (s) => s.get(id)); }
+export function listMusic(): Promise<StoredMusic[]> { return txOp(MUSIC_STORE, 'readonly', (s) => s.getAll()); }
+export function deleteMusic(id: string): Promise<void> { return txOp(MUSIC_STORE, 'readwrite', (s) => s.delete(id)).then(() => {}); }
+
 export interface StoredSave { id: string; gameId: string; name: string; sram: Uint8Array; timestamp: number; created?: number; }
 export const gameOfSave = (id: string) => id.split('~')[0];
 /** Fill in what a save written before profiles (or read from a backup, untrusted) lacks or gets wrong. */
@@ -277,7 +287,7 @@ export function eachIn<T>(store: StoreName, fn: (value: T) => void): Promise<voi
 export function putInto(store: StoreName, value: unknown): Promise<void> { return txOp(store, 'readwrite', (s) => s.put(value)).then(() => {}); }
 export async function clearAll(): Promise<void> {
   const db = await openDB();
-  const names = Object.values(STORES);
+  const names = [...Object.values(STORES), MUSIC_STORE];
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(names, 'readwrite');
     names.forEach((s) => tx.objectStore(s).clear());
