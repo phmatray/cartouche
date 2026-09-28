@@ -22,7 +22,8 @@ const SECTIONS: [string, Key, number, ComponentType][] = [
 /** Settings laid out as a printed manual: table of contents on the left, one paper page per section. */
 export function SettingsPage() {
   const { section } = useParams();
-  const cur = SECTIONS.find(([id]) => id === section);
+  // /settings opens on the first page as it is (a redirect would cut short the transition into it).
+  const cur = section ? SECTIONS.find(([id]) => id === section) : SECTIONS[0];
   const t = useT();
   const toc = useRef<HTMLElement>(null);
   // On a phone the contents are one scrolling row: bring the open section into it (About sits off-screen otherwise).
@@ -34,13 +35,13 @@ export function SettingsPage() {
   }, [section]);
   useEffect(() => { if (cur) document.title = t('common.docTitle', { page: `${t(cur[1])} · ${t('shell.nav.settings')}` }); }, [cur, t]);
   if (!cur) return <Navigate to="/settings/controls" replace />;
-  const [, label, page, Body] = cur;
+  const [open, label, page, Body] = cur;
   return (
     <main className="wrap">
       <div className="pagehead"><h1>{t('shell.nav.settings')}</h1><p>{t('settings.intro')}</p></div>
       <div className="manual">
         <nav ref={toc} className="toc" aria-label={t('settings.sections')}>
-          {SECTIONS.map(([id, l, p]) => <Link key={id} to={`/settings/${id}`} aria-current={id === section ? 'page' : undefined}>{t(l)}<small>{t('player.page', { n: String(p) })}</small></Link>)}
+          {SECTIONS.map(([id, l, p]) => <Link key={id} to={`/settings/${id}`} aria-current={id === open ? 'page' : undefined}>{t(l)}<small>{t('player.page', { n: String(p) })}</small>{id === open && <i className="mk" />}</Link>)}
         </nav>
         <section className="paper" aria-label={t(label)}>
           <span className="pgno">{t('player.page', { n: String(page) })}</span>

@@ -112,7 +112,8 @@ export function AppShell() {
         <div className="wrap">
           <Wordmark />
           <nav className="nav" aria-label={t('shell.nav.main')}>
-            {NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === '/'}>{t(label)}</NavLink>)}
+            {/* The underline is its own element so a route transition can slide it to the next tab. */}
+            {NAV.map(([to, label]) => <NavLink key={to} to={to} end={to === '/'}>{({ isActive }) => <>{t(label)}{isActive && <i className="mk" />}</>}</NavLink>)}
           </nav>
           <button className="search" aria-label={t('shell.search')} onClick={openSearch}>
             {I.search}<span>{shown ? t('shell.searchN', { count: shown }) : t('shell.search')}</span><kbd>/</kbd>

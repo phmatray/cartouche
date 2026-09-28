@@ -59,9 +59,10 @@ a{color:inherit}
 .strip i{height:26px}
 .strip i:nth-child(1){background:var(--c)}.strip i:nth-child(2){background:var(--m)}.strip i:nth-child(3){background:var(--y)}
 .nav{display:flex;gap:24px;font:600 15px/1 var(--font);font-stretch:88%}
-.nav a{color:var(--mute);text-decoration:none;padding:8px 0}
+.nav a{color:var(--mute);text-decoration:none;padding:8px 0;position:relative}
 .nav a:hover{color:var(--paper)}
-.nav a[aria-current]{color:var(--paper);box-shadow:inset 0 -3px 0 var(--y)}
+.nav a[aria-current]{color:var(--paper)}
+.nav .mk{position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--y)}
 .search{margin-left:auto;display:flex;align-items:center;gap:10px;border:1px solid #3a3a3a;height:44px;padding:0 12px;width:300px;color:var(--mute);font:500 15px var(--font);background:transparent;text-align:left}
 .search:hover{border-color:#5a5a5a;color:var(--paper)}
 kbd{border:1px solid #3a3a3a;padding:3px 7px;font:700 11px var(--font);color:var(--mute)}
@@ -632,7 +633,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
 .toc a small{font:700 11px var(--font);font-stretch:100%;letter-spacing:.06em;color:#8a8a84}
 .toc a:hover{color:var(--paper)}
 .toc a[aria-current]{color:var(--paper)}
-.toc a[aria-current]::after{content:"";position:absolute;right:-1px;top:-1px;bottom:-1px;width:6px;background:var(--y)}
+.toc .mk{position:absolute;right:-1px;top:-1px;bottom:-1px;width:6px;background:var(--y)}
 .manual .paper{min-height:640px;padding:36px 44px 48px}
 .manual .paper h2{font:900 48px/.9 var(--font);font-stretch:62%;text-transform:uppercase;margin:0 0 8px}
 .manual .paper .intro{font:500 16px/1.5 var(--font);color:var(--ink-2);margin:0 0 20px;max-width:58ch}
@@ -717,7 +718,7 @@ body:has(.pl) .toasts{bottom:auto;top:80px}
     -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 40px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 40px),transparent)}
   .toc a{flex:none;border:0;padding:14px 16px 14px 0;font-size:22px}
   .toc a small{display:none}
-  .toc a[aria-current]::after{left:0;right:16px;top:auto;bottom:4px;height:4px;width:auto}
+  .toc .mk{left:0;right:16px;top:auto;bottom:4px;height:4px;width:auto}
   .manual .paper{padding:24px 18px 32px}
   .binds li{grid-template-columns:80px auto 1fr}
   .binds .sbtn{justify-self:end} /* the leader is gone: the button keeps its size at the end of the line */
@@ -921,9 +922,13 @@ a.fact:hover{background:var(--paper);color:#000}
    close  game page → shelf: the reverse, faster; the ink drains back into the slot.
    play   → player: the box is inserted into the LCD, the bezel closes, the manual and the deck follow.
    eject  player → back: the screen shrinks into the box.
-   fade   every other route: a short cross-fade.  still: reduced motion, 150 ms fades, nothing moves. */
-:root{--vt-k:1;--exit:cubic-bezier(.4,0,1,1)}
-@media (max-width:640px){:root{--vt-k:.8}}
+   page   settings section → section: the paper page turns on its spine (forward) or back over (backward).
+   fade   every other route: a short cross-fade, drifting the way the header's tabs go (data-vt-dir).
+   still: reduced motion, 150 ms fades, nothing moves.
+   The header's underline and the contents' tab marker are their own elements: they slide to the new entry. */
+/* One knob for every route transition's pace: the durations below are the authored ones, scaled down by it. */
+:root{--vt-k:.8;--exit:cubic-bezier(.4,0,1,1)}
+@media (max-width:640px){:root{--vt-k:.65}}
 html[data-vt-shell] .top{view-transition-name:top}
 html[data-vt=play] .pl:not(.closed) .sheet,html[data-vt=eject] .pl:not(.closed) .sheet{view-transition-name:sheet}
 html[data-vt=play] .deck,html[data-vt=eject] .deck{view-transition-name:deck}
@@ -980,6 +985,24 @@ html[data-vt=eject]::view-transition-new(root){animation:vt-in calc(180ms * var(
 html[data-vt=eject]::view-transition-old(sheet){animation:vt-to-right calc(160ms * var(--vt-k)) var(--exit) both}
 html[data-vt=eject]::view-transition-old(deck),html[data-vt=eject]::view-transition-old(pad){animation:vt-to-below calc(200ms * var(--vt-k)) var(--exit) both}
 
+html[data-vt-shell] .nav .mk{view-transition-name:navmark}
+html[data-vt=page] .toc .mk{view-transition-name:tocmark}
+html[data-vt=page][data-vt-dir] .manual .paper{view-transition-name:paper}
+::view-transition-group(top){z-index:3}
+::view-transition-group(navmark){z-index:4;animation-duration:calc(280ms * var(--vt-k))}
+::view-transition-group(tocmark){animation-duration:calc(300ms * var(--vt-k))}
+html[data-vt=fade][data-vt-dir=fwd]::view-transition-old(root){animation:vt-out-l calc(140ms * var(--vt-k)) var(--exit) both}
+html[data-vt=fade][data-vt-dir=fwd]::view-transition-new(root){animation:vt-in-r calc(240ms * var(--vt-k)) var(--ease) calc(40ms * var(--vt-k)) both}
+html[data-vt=fade][data-vt-dir=back]::view-transition-old(root){animation:vt-out-r calc(140ms * var(--vt-k)) var(--exit) both}
+html[data-vt=fade][data-vt-dir=back]::view-transition-new(root){animation:vt-in-l calc(240ms * var(--vt-k)) var(--ease) calc(40ms * var(--vt-k)) both}
+/* The leaf turns on its left edge, lifting toward the reader; the page under it comes out of its shadow. */
+::view-transition-image-pair(paper){perspective:2600px}
+::view-transition-group(paper){animation-duration:calc(400ms * var(--vt-k))}
+html[data-vt-dir=fwd]::view-transition-old(paper){z-index:1;transform-origin:0 50%;animation:vt-leaf calc(400ms * var(--vt-k)) cubic-bezier(.5,0,.4,1) both}
+html[data-vt-dir=fwd]::view-transition-new(paper){animation:vt-unshade calc(400ms * var(--vt-k)) linear both}
+html[data-vt-dir=back]::view-transition-new(paper){z-index:1;transform-origin:0 50%;animation:vt-leaf calc(400ms * var(--vt-k)) cubic-bezier(.5,0,.4,1) reverse both}
+html[data-vt-dir=back]::view-transition-old(paper){animation:vt-unshade calc(400ms * var(--vt-k)) linear reverse both}
+
 @keyframes vt-in{from{opacity:0}}
 @keyframes vt-out{to{opacity:0}}
 @keyframes vt-flood{from{clip-path:circle(0 at var(--vt-x) var(--vt-y))}to{clip-path:circle(var(--vt-r) at var(--vt-x) var(--vt-y))}}
@@ -990,6 +1013,12 @@ html[data-vt=eject]::view-transition-old(deck),html[data-vt=eject]::view-transit
 @keyframes vt-to-below{to{opacity:0;transform:translateY(100%)}}
 @keyframes vt-from-right{from{transform:translateX(100%)}}
 @keyframes vt-from-below{from{opacity:0;transform:translateY(100%)}}
+@keyframes vt-out-l{to{opacity:0;transform:translateX(-24px)}}
+@keyframes vt-out-r{to{opacity:0;transform:translateX(24px)}}
+@keyframes vt-in-r{from{opacity:0;transform:translateX(24px)}}
+@keyframes vt-in-l{from{opacity:0;transform:translateX(-24px)}}
+@keyframes vt-leaf{80%{opacity:1}to{opacity:0;transform:rotateY(-90deg);filter:brightness(.7)}}
+@keyframes vt-unshade{from{filter:brightness(.72)}}
 
 /* Landing points that take focus after a route change (not controls: no ring). */
 main h1[tabindex="-1"]:focus,.pl .stage canvas.lcd:focus{outline:none}
