@@ -624,20 +624,23 @@ impl WaveChannel {
     }
 
     pub fn step(&mut self, cycles: u32) {
-        // Per T-cycle: wave RAM access while playing depends on the exact fetch cycle.
-        for _ in 0..cycles {
-            self.since_fetch = self.since_fetch.saturating_add(1);
-            if !self.enabled {
-                continue;
-            }
-            self.frequency_timer -= 1;
-            if self.frequency_timer <= 0 {
-                self.frequency_timer = self.period();
-                self.sample_index = (self.sample_index + 1) & 31;
-                self.sample_byte = self.wave_ram[(self.sample_index / 2) as usize];
-                self.since_fetch = 0;
-            }
+        // `since_fetch` counts the T-cycles after the last fetch: wave RAM access while playing
+        // depends on the exact fetch cycle.
+        self.since_fetch = self.since_fetch.saturating_add(cycles);
+        if !self.enabled {
+            return;
         }
+        let mut left = cycles as i32;
+        let mut timer = self.frequency_timer.max(1);
+        while timer <= left {
+            // The fetch lands on the timer's last cycle.
+            left -= timer;
+            timer = self.period();
+            self.sample_index = (self.sample_index + 1) & 31;
+            self.sample_byte = self.wave_ram[(self.sample_index / 2) as usize];
+            self.since_fetch = left as u32;
+        }
+        self.frequency_timer = timer - left;
     }
 
     /// The digital output (0-15) while the channel plays.
