@@ -264,6 +264,7 @@ let theirs: RomsMsg | null = null;
 let hostBoot: BootMsg | null = null; // the host's boot message (sent by us, or received)
 let boot: LockBoot | null = null;
 let lockSink: ((m: LockMsg | HashMsg) => void) | null = null;
+let early: (LockMsg | HashMsg)[] = []; // from a partner that started first, kept until our consoles run
 const echoes = new Map<number, () => void>();
 
 /** The player page offers lockstep: our game, the games we hold (SHA-1s) and our battery save (base64). */
@@ -283,12 +284,14 @@ export const lockstepBoot = () => boot;
 /** The page runs the lockstep: inputs and hashes from the partner go to `onMsg`; returns the sender. */
 export function lockstepLink(onMsg: ((m: LockMsg | HashMsg) => void) | null) {
   lockSink = onMsg;
+  if (onMsg) early.splice(0).forEach(onMsg);
   return (m: LockMsg | HashMsg) => toPartner(m);
 }
 /** Back to the byte mode (the player page left, or the room closed): the next game negotiates again. */
 export function endLockstep() {
   offer = theirs = hostBoot = boot = null;
   lockSink = null;
+  early = [];
   set({ mode: 'bytes', rtt: null });
 }
 
@@ -298,7 +301,10 @@ function lockstepMsg(m: RomsMsg | BootMsg | LockMsg | HashMsg | Echo) {
   if (m.t === 'e') {
     if (m.r) echoes.get(m.n)?.();
     else toPartner({ t: 'e', n: m.n, r: true });
-  } else if (m.t === 'i' || m.t === 'h') lockSink?.(m);
+  } else if (m.t === 'i' || m.t === 'h') {
+    if (lockSink) lockSink(m);
+    else if (boot && early.length < 4096) early.push(m);
+  }
   else if (m.t === 'roms') {
     if (boot) return; // already running (a reloaded partner starts over in the byte mode: no resume in this slice)
     theirs = m;

@@ -20,6 +20,7 @@ export function useOnlineLink(core: RefObject<Core | null>, power: number, code:
   const runningRef = useRef(running);
   useEffect(() => { runningRef.current = running; }, [running]);
   const on = !!code && !unplugged;
+  const lockstep = useNet((s) => s.mode === 'lockstep'); // both consoles here (useLockstep): no bytes cross
 
   useEffect(() => {
     if (!code) return;
@@ -31,21 +32,25 @@ export function useOnlineLink(core: RefObject<Core | null>, power: number, code:
   useEffect(() => {
     const emu = core.current;
     if (!on || !power || !emu) return; // plugged in again on every power-on (a new console)
-    emu.set_link_remote(true);
-    // The answer came: finish the stalled frame now (running the game only while it plays), and send what it says.
-    const c = plug(emu, () => {
-      if (!runningRef.current || document.visibilityState === 'hidden') return;
-      emu.run_frame(); // up to the frame's end, or the next transfer (whose answer resumes us again)
-      c.pump();
-    });
+    let c: ReturnType<typeof plug> | null = null;
+    if (!lockstep) {
+      emu.set_link_remote(true);
+      // The answer came: finish the stalled frame now (running the game only while it plays), and send what it says.
+      const cable = plug(emu, () => {
+        if (!runningRef.current || document.visibilityState === 'hidden') return;
+        emu.run_frame(); // up to the frame's end, or the next transfer (whose answer resumes us again)
+        cable.pump();
+      });
+      c = cable;
+    }
     cable.current = c;
     setSeat({ playing: true });
     return () => {
-      c.unplug();
+      c?.unplug();
       cable.current = null;
       setSeat({ playing: false, ready: false, paused: false });
     };
-  }, [on, power, core]);
+  }, [on, power, core, lockstep]);
 
   // Paused, or hidden (the frame loop stops in the background): the other console may wait on this one.
   useEffect(() => {
