@@ -31,6 +31,8 @@ enum Hw {
 enum Protocol {
     /// Stops on `LD B,B`; B,C,D,E,H,L = 3,5,8,13,21,34 is a pass.
     Fibonacci,
+    /// gbmicrotest: $FF82 becomes $01 (pass) or $FF (fail).
+    Hram,
 }
 
 /// One run of one ROM: `label` is its line in expected-failures.txt.
@@ -67,6 +69,14 @@ fn at_breakpoint(gb: &GameBoy) -> bool {
     !gb.cpu.halted && gb.bus.read_byte(gb.cpu.regs.pc) == 0x40
 }
 
+fn hram_verdict(byte: u8) -> Option<Verdict> {
+    match byte {
+        0x00 => None,
+        0x01 => Some(Verdict::Pass),
+        b => Some(Verdict::Fail(format!("$FF82 = ${b:02X}"))),
+    }
+}
+
 fn run_rom(path: &Path, hw: Hw, protocol: &Protocol, timeout_secs: u64) -> Verdict {
     let mut gb = match boot(path, hw) {
         Ok(gb) => gb,
@@ -84,6 +94,11 @@ fn run_rom(path: &Path, hw: Hw, protocol: &Protocol, timeout_secs: u64) -> Verdi
                 } else {
                     Verdict::Fail(format!("registers {regs:?}"))
                 };
+            }
+            Protocol::Hram => {
+                if let Some(v) = hram_verdict(gb.bus.hram[0x02]) {
+                    return v;
+                }
             }
             _ => {}
         }
@@ -255,6 +270,23 @@ fn samesuite_all() {
 #[test]
 fn age_all() {
     run_suite("Age", "age-test-roms", &[""], 30, age);
+}
+
+/// gbmicrotest runs on the DMG it was checked on (DMG-CPU B/C).
+fn gbmicrotest(rom: &Path, rel: &str) -> Vec<Job> {
+    vec![Job { label: rel.to_string(), rom: rom.to_path_buf(), hw: Hw::Dmg, protocol: Protocol::Hram }]
+}
+
+#[test]
+fn gbmicrotest_all() {
+    run_suite("gbmicrotest", "gbmicrotest", &[""], 30, gbmicrotest);
+}
+
+#[test]
+fn hram_verdict_decoding() {
+    assert_eq!(hram_verdict(0x00), None);
+    assert_eq!(hram_verdict(0x01), Some(Verdict::Pass));
+    assert!(matches!(hram_verdict(0xFF), Some(Verdict::Fail(_))));
 }
 
 #[test]
