@@ -3,7 +3,7 @@ import { useLcdShader } from '../../hooks/useLcdShader';
 import { consoleFor, consoleOf, sgbOn, useDisplay, useSettingsStore, type ConsoleChoice, type SgbCart } from '../../store/settingsStore';
 import { supportsWebGL2 } from '../../shaders/lcd-engine';
 import { neuralStatus } from '../../neural/governor';
-import { PALETTES, presetOf, presetsFor, type Correction, type Filters, type ScreenKind, type Upscale } from '../../shaders/filters';
+import { PALETTES, presetOf, presetsFor, type Correction, type Filters, type GhostMode, type ScreenKind, type Upscale } from '../../shaders/filters';
 import { Row, Seg, Slider, SwitchRow } from './parts';
 import { I } from '../icons';
 import { useT } from '../../i18n';
@@ -150,7 +150,7 @@ export function ScreenFilters({ kind, gameId, frame }: { kind: ScreenKind; gameI
       </div>
       {color ? (
         <Row label={t('settings.screen.correction')} sub={t('settings.screen.correctionSub')}>
-          <Seg<Correction> label={t('settings.screen.correction')} value={f.correction} options={[['off', t('settings.screen.off')], ['gbc', t('settings.screen.accurate')]]} set={(correction) => tweak({ correction })} />
+          <Seg<Correction> label={t('settings.screen.correction')} value={f.correction} options={[['off', t('settings.screen.off')], ['gbc', t('settings.screen.gbcLcd')], ['gba', t('settings.screen.gbaLcd')]]} set={(correction) => tweak({ correction })} />
         </Row>
       ) : (
         <div className="row col">
@@ -175,6 +175,11 @@ export function ScreenFilters({ kind, gameId, frame }: { kind: ScreenKind; gameI
         </div>
       )}
       <Slider label={t('settings.screen.ghosting')} sub={t('settings.screen.ghostingSub')} value={pct(f.ghosting)} min={0} max={70} set={(v) => tweak({ ghosting: v / 100 })} />
+      {f.ghosting > 0 && (
+        <Row label={t('settings.screen.ghostMode')} sub={t('settings.screen.ghostModeSub')}>
+          <Seg<GhostMode> label={t('settings.screen.ghostMode')} value={f.ghostMode} options={[['lcd', t('settings.screen.ghostLcd')], ['blend', t('settings.screen.ghostBlend')]]} set={(ghostMode) => tweak({ ghostMode })} />
+        </Row>
+      )}
       <div className="row col">
         <span>{t('settings.screen.upscaling')}<small>{t('settings.screen.upscalingSub')}</small></span>
         <Seg<Upscale> label={t('settings.screen.upscaling')} value={f.upscale} options={[['nearest', t('settings.screen.nearest')], ['scale2x', 'Scale2x'], ['scale3x', 'Scale3x'], ['smooth', t('settings.screen.smoothUp')], ['neural', 'Neural 4×']]} set={(upscale) => tweak({ upscale })} wrap />

@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { correctRgb555, curveLut } from './lcd-curves.ts';
-import { cpuColor, normalizeDisplay, presetOf } from './filters.ts';
+import { cpuColor, normalizeDisplay, presetOf, presetsFor } from './filters.ts';
 
 // Literals printed by SameBoy v1.0.3 itself, never recomputed from the ported tables: Core/display.c
 // lines 314-475 (temperature_tint .. GB_convert_rgb15) compiled standalone with a stub GB_gameboy_t
@@ -67,4 +67,11 @@ test('curveLut holds each channel ramp the colour pass samples', () => {
     assert.equal(lut[16 * 4], correctRgb555(16, 0, 0, mode)[0]);
     assert.equal(lut[16 * 4 + 2], correctRgb555(0, 0, 16, mode)[2]);
   }
+});
+
+test('Color games get a GBA SP preset, and GBC Accurate uses GBC LCD', () => {
+  const sp = presetsFor('cgb').find((p) => p.name === 'gba-sp');
+  assert.equal(sp?.filters.correction, 'gba');
+  assert.equal(presetOf('gbc-accurate')!.filters.correction, 'gbc');
+  assert.equal(presetsFor('dmg').some((p) => p.name === 'gba-sp'), false);
 });

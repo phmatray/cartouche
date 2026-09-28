@@ -1,7 +1,7 @@
 /** The display filter chain: what LcdEngine draws and the Screen / Display controls edit. */
 import { correctRgb555 } from './lcd-curves.ts';
 
-export type PresetName = 'dmg-classic' | 'gb-pocket' | 'gb-light' | 'clean' | 'crt-tv' | 'gbc-accurate' | 'neural';
+export type PresetName = 'dmg-classic' | 'gb-pocket' | 'gb-light' | 'clean' | 'crt-tv' | 'gbc-accurate' | 'gba-sp' | 'neural';
 export type PaletteId = 'original' | 'pea-soup' | 'pocket-grey' | 'backlit' | 'teal' | 'arctic' | 'sunset' | 'grey' | 'custom';
 /** 'gbc' / 'gba': SameBoy's measured Game Boy Color / Game Boy Advance LCD response (lcd-curves.ts). */
 export type Correction = 'off' | 'gbc' | 'gba';
@@ -64,6 +64,8 @@ export const PRESETS: PresetInfo[] = [
     filters: { ...NEUTRAL, palette: 'backlit', correction: 'gbc', ghosting: 0.15, grid: 0.5, brightness: 0.05 } },
   { name: 'gbc-accurate', label: 'GBC Accurate', description: 'Color LCD response', kinds: ['cgb'],
     filters: { ...NEUTRAL, correction: 'gbc', ghosting: 0.2, grid: 0.3 } },
+  { name: 'gba-sp', label: 'GBA SP', description: 'Color games on a front-lit GBA SP', kinds: ['cgb'],
+    filters: { ...NEUTRAL, correction: 'gba', ghosting: 0.1, grid: 0.2 } },
   { name: 'crt-tv', label: 'CRT TV', description: 'Scanlines on a curved tube', kinds: BOTH,
     filters: { ...NEUTRAL, correction: 'gbc', ghosting: 0.1, upscale: 'smooth', scanlines: 0.6, crt: true, brightness: 0.05, saturation: 0.1 } },
   { name: 'neural', label: 'Neural', description: 'Neural 4× upscaling', kinds: BOTH,
