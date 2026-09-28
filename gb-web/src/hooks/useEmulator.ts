@@ -9,6 +9,10 @@ const textDecoder = new TextDecoder();
 const VRAM_SIZE = 0x4000; // both CGB banks, 8 KiB each
 const START = 3; // JoypadButton.Start
 
+/** A view of core memory at `ptr`, or null without a ROM. Valid until the WASM memory grows. */
+const coreView = (ptr: number, len: number): Uint8Array | null =>
+  ptr && wasmMemory ? new Uint8Array(wasmMemory.buffer, ptr, len) : null;
+
 /** `sgb`: a Super Game Boy (only for a cartridge with its functions; `colorize` and `palette` then do not apply). */
 /** `animation`: the start-up animation, 0 none or 1-3 (the index in `STARTUP`). */
 export interface BootOptions { colorize: boolean; palette: number; animation: number; sgb?: boolean }
@@ -373,10 +377,6 @@ export function useEmulator() {
     const obj = view(emu.layer_obj_ptr(), n), info = view(emu.layer_info_ptr(), n);
     return meta && final && bg && win && obj && info ? { meta, final, bg, win, obj, info } : null;
   }, []);
-
-  /** A view of core memory at `ptr`, or null without a ROM. Valid until the WASM memory grows. */
-  const coreView = (ptr: number, len: number): Uint8Array | null =>
-    ptr && wasmMemory ? new Uint8Array(wasmMemory.buffer, ptr, len) : null;
 
   const getOam = useCallback((): Uint8Array | null => {
     const emu = emulatorRef.current;
