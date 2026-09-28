@@ -7,6 +7,12 @@ use crate::trace::{Tracer, LAYER_BG, LAYER_OBJ, LAYER_WIN, LINE_CGB, LINE_RENDER
 /// An OBJ selected for a scanline: (x, OAM slot, y, tile, attributes), raw OAM values.
 type Sprite = (u8, usize, u8, u8, u8);
 
+/// HBlank (its interrupt, HBlank DMA) starts this many dots before mode 3's length
+/// (`Ppu::mode3_length`) runs out, and STAT reads mode 0 from 3 dots later (`read_register`): so a
+/// CPU takes the interrupt, and reads mode 0, at the M-cycle hardware does for every SCX, window
+/// and OBJ (gbmicrotest `hblank_int_scx*`, `ppu_sprite0_scx*`, `sprite_*`, `win*`).
+const MODE0_EARLY: u32 = 2;
+
 pub const PALETTE_COLORS: [[u8; 4]; 4] = [
     [0xE0, 0xF8, 0xD0, 0xFF], // lightest
     [0x88, 0xC0, 0x70, 0xFF], // light
@@ -47,6 +53,8 @@ pub struct Ppu {
     /// First line after the LCD is switched on: no OAM scan (STAT reads mode 0)
     /// and the line is 4 dots short.
     pub(crate) lcd_on_line0: bool,
+    /// Dots mode 3 lasts on the current line (`mode3_length`, set as it starts); HBlank gets the rest.
+    pub mode3_len: u32,
 
     /// The line-by-line picture being drawn.
     pub framebuffer: [u8; FRAMEBUFFER_SIZE],
@@ -99,6 +107,7 @@ impl Ppu {
             window_line_counter: 0,
             window_was_active: false,
             lcd_on_line0: false,
+            mode3_len: 172,
             framebuffer: [0; FRAMEBUFFER_SIZE],
             front: vec![0; FRAMEBUFFER_SIZE],
             frame_ready: false,
@@ -147,7 +156,7 @@ impl Ppu {
                 // ahead of the hardware line, since the CPU samples IF before its opcode fetch.
                 let mode_bits = match self.mode {
                     _ if self.lcdc & 0x80 == 0 => 0,
-                    PpuMode::HBlank if self.mode_clock < 4 => 3,
+                    PpuMode::HBlank if self.mode_clock < 3 => 3, // see MODE0_EARLY
                     PpuMode::Drawing if self.mode_clock < 4 => 2,
                     PpuMode::OamScan if self.mode_clock < 4 && self.ly != 0 => 0,
                     PpuMode::VBlank if self.mode_clock < 4 && self.ly == 144 => 0,
@@ -255,20 +264,21 @@ impl Ppu {
                 if self.mode_clock >= 80 {
                     self.mode_clock -= 80;
                     self.mode = PpuMode::Drawing;
+                    self.mode3_len = if self.lcd_on_line0 { 172 } else { self.mode3_length(self.ly as usize) };
                     self.lcd_on_line0 = false;
                 }
             }
             PpuMode::Drawing => {
-                if self.mode_clock >= 172 {
-                    self.mode_clock -= 172;
+                if self.mode_clock >= self.mode3_len - MODE0_EARLY {
+                    self.mode_clock -= self.mode3_len - MODE0_EARLY;
                     self.mode = PpuMode::HBlank;
                     hblank_entry = true;
                     self.render_scanline();
                 }
             }
             PpuMode::HBlank => {
-                if self.mode_clock >= 204 {
-                    self.mode_clock -= 204;
+                if self.mode_clock >= 376 + MODE0_EARLY - self.mode3_len {
+                    self.mode_clock -= 376 + MODE0_EARLY - self.mode3_len;
                     self.ly += 1;
 
                     if self.ly == 144 {
@@ -309,6 +319,40 @@ impl Ppu {
         self.stat_irq_line = new_stat_line;
 
         (vblank_irq, stat_irq, hblank_entry)
+    }
+
+    /// Mode-3 length of `line` in dots (Pan Docs, "Mode 3 length"): 172, plus the SCX fine-scroll
+    /// discard, plus 6 when the window shows on the line, plus each OBJ's fetch: 6 dots, and for the
+    /// first OBJ (left to right) on a BG/window tile, 5 minus the OBJ's offset in that tile (≥ 0).
+    /// OBJs at OAM X 0 share a tile of their own: the first costs 11 whatever SCX.
+    /// The pixel FIFO (#155) must reproduce these lengths.
+    fn mode3_length(&self, line: usize) -> u32 {
+        let fine = (self.scx % 8) as i32;
+        let window = self.lcdc & 0x20 != 0 && (self.cgb_mode || self.lcdc & 0x01 != 0)
+            && line >= self.wy as usize && self.wx <= 166;
+        let mut len = 172 + fine as u32 + if window { 6 } else { 0 };
+        if self.lcdc & 0x02 == 0 { return len; }
+        let (mut objs, n) = self.select_sprites(line);
+        objs[..n].sort_by_key(|o| o.0); // fetched left to right
+        let mut paid = 0u64; // tiles an OBJ already waited on: BG 0..=21, window 32..=53, X 0 63
+        for &(x, ..) in &objs[..n] {
+            if x >= 168 { continue; } // never reached
+            // Position of the OBJ's leftmost pixel, + 8, in the BG (with the discard) or the window.
+            let from_window = x as i32 + 7 - self.wx as i32;
+            let (tile, offset) = if x == 0 {
+                (63, 0) // off the left edge: a tile of its own, whatever the scroll
+            } else if window && from_window >= 8 {
+                (32 + from_window / 8, from_window % 8)
+            } else {
+                ((x as i32 + fine) / 8, (x as i32 + fine) % 8)
+            };
+            len += 6;
+            if paid & 1 << tile == 0 {
+                paid |= 1 << tile;
+                len += (5 - offset).max(0) as u32;
+            }
+        }
+        len
     }
 
     /// OR of all enabled STAT interrupt sources. Used for rising-edge detection.
@@ -978,6 +1022,51 @@ mod tests {
             let fired = p.step(4).1;
             assert_eq!(fired, p.ly == 1, "line 0 after LCD on skips the OAM scan; line 1 has one");
         }
+    }
+
+    /// Steps line 10 dot by dot from its start: (dot where mode 3's length runs out, dots until LY moves on).
+    fn line_timing(setup: impl Fn(&mut Ppu)) -> (u32, u32) {
+        let mut p = Ppu::new();
+        p.lcdc = 0x83; // LCD, BG, OBJ on
+        p.ly = 10;
+        setup(&mut p);
+        let (mut dot, mut hblank_at) = (0, 0);
+        while p.read_register(0xFF44) == 10 {
+            dot += 1;
+            if p.step(1).2 { hblank_at = dot + MODE0_EARLY; }
+        }
+        (hblank_at, dot)
+    }
+
+    fn objs_at(p: &mut Ppu, xs: &[u8]) {
+        for (i, &x) in xs.iter().enumerate() {
+            p.oam[i * 4..i * 4 + 2].copy_from_slice(&[10 + 16, x]); // top row on line 10
+        }
+    }
+
+    #[test]
+    fn mode3_length_grows_with_scx_window_and_objs() {
+        assert_eq!(line_timing(|_| {}).0, 80 + 172);
+        assert_eq!(line_timing(|p| p.scx = 3).0, 80 + 172 + 3);
+        assert_eq!(line_timing(|p| p.scx = 8).0, 80 + 172, "only the fine scroll counts");
+        assert_eq!(line_timing(|p| { p.lcdc |= 0x20; p.wx = 7; }).0, 80 + 172 + 6);
+        assert_eq!(line_timing(|p| { p.lcdc |= 0x20; p.wx = 7; p.wy = 11; }).0, 80 + 172, "window below the line");
+        // Pan Docs: 6 per OBJ, plus 5 minus its offset in its BG tile for the first OBJ on a tile.
+        assert_eq!(line_timing(|p| objs_at(p, &[8])).0, 80 + 172 + 11);
+        assert_eq!(line_timing(|p| objs_at(p, &[11])).0, 80 + 172 + 8);
+        assert_eq!(line_timing(|p| { objs_at(p, &[8]); p.scx = 2; }).0, 80 + 172 + 2 + 9);
+        assert_eq!(line_timing(|p| { objs_at(p, &[0]); p.scx = 3; }).0, 80 + 172 + 3 + 11, "OAM X 0 costs 11 whatever the scroll");
+        assert_eq!(line_timing(|p| objs_at(p, &[0, 0])).0, 80 + 172 + 11 + 6, "and X 0 OBJs share it");
+        assert_eq!(line_timing(|p| objs_at(p, &[8; 10])).0, 80 + 172 + 11 + 9 * 6, "one tile, one wait");
+        assert_eq!(line_timing(|p| objs_at(p, &[8, 16, 24, 32, 40, 48, 56, 64, 72, 80])).0, 80 + 172 + 10 * 11);
+        assert_eq!(line_timing(|p| { objs_at(p, &[8]); p.lcdc &= !0x02; }).0, 80 + 172, "OBJs off");
+        assert_eq!(line_timing(|p| objs_at(p, &[168])).0, 80 + 172, "past the right edge");
+    }
+
+    #[test]
+    fn line_is_456_dots() {
+        assert_eq!(line_timing(|_| {}).1, 456);
+        assert_eq!(line_timing(|p| { objs_at(p, &[8; 10]); p.scx = 7; p.lcdc |= 0x20; }).1, 456);
     }
 
     /// The shown picture is the last whole frame: stopping mid-frame (as a fixed-length
