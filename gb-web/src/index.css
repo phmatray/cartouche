@@ -904,6 +904,10 @@ a.fact:hover{background:var(--paper);color:#000}
 .toast.m i{background:var(--m)}.toast.c i{background:var(--c)}
 .toast button{border:0;background:none;font:800 12px var(--font);text-transform:uppercase;letter-spacing:.06em;margin-left:8px;text-decoration:underline;text-underline-offset:3px}
 @keyframes tin{from{opacity:0;transform:translateY(10px)}}
+/* An unlocked achievement: its badge is stamped into the toast like a sticker into the manual, once the toast has landed. */
+.toast.ach{padding:10px 16px 10px 10px}
+.toast.ach img{width:44px;height:44px;flex:none;box-shadow:0 0 0 2px var(--paper),0 0 0 5px var(--y);margin:3px;animation:stamp .42s var(--ease) .12s both}
+@keyframes stamp{from{opacity:0;transform:scale(1.45) rotate(-10deg)}55%{opacity:1}}
 @media (max-width:900px){.toasts{left:12px;right:12px;bottom:12px}}
 
 .nf{padding:120px 0}

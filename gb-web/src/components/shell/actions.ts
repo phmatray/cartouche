@@ -17,16 +17,17 @@ export function startInstall() {
 export type Tone = '' | 'm' | 'c';
 /** target: a selector for what the action opens, which gets the focus (its button goes with the toast). */
 export interface ToastAction { label: string; run: () => void; target?: string }
-export interface ToastItem { id: number; msg: string; tone: Tone; action?: ToastAction }
+/** badge: a picture in place of the colour chip (an unlocked achievement's), stamped in. */
+export interface ToastItem { id: number; msg: string; tone: Tone; action?: ToastAction; badge?: string }
 export const useToasts = create<{ list: ToastItem[] }>(() => ({ list: [] }));
 let seq = 0;
 
 export const dismissToast = (id: number) => useToasts.setState((s) => ({ list: s.list.filter((t) => t.id !== id) }));
 
 /** Show a short status message (bottom left). Tone: '' yellow, 'm' magenta, 'c' cyan. */
-export function toast(msg: string, tone: Tone = '', action?: ToastAction) {
+export function toast(msg: string, tone: Tone = '', action?: ToastAction, badge?: string) {
   const id = ++seq;
-  useToasts.setState((s) => ({ list: [...s.list, { id, msg, tone, action }] }));
+  useToasts.setState((s) => ({ list: [...s.list, { id, msg, tone, action, badge }] }));
   // Held while the pointer or the focus is on it (its button stays reachable), then gone 4.2 s later.
   const later = () => setTimeout(() => (document.querySelector(`.toast[data-id="${id}"]:is(:hover,:focus-within)`) ? later() : dismissToast(id)), 4200);
   later();

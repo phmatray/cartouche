@@ -23,8 +23,9 @@ export function useRaSession(power: number, rom: () => Uint8Array | null, peek: 
     if (!data || !getPlay()) return;
     started.current = true;
     const events = (e: RaEvent) => {
-      if (e.type === EV.UNLOCKED) toast(t('ra.unlocked', { title: e.title, count: e.points }), 'c');
-      else if (e.type === EV.COMPLETED) toast(t('ra.mastered', { title: args.current.title }), 'c');
+      if (e.type === EV.UNLOCKED) toast(t('ra.unlocked', { title: e.title, count: e.points }), 'c', undefined, e.badge || undefined);
+      // After the last unlock's own toast has had its moment (it comes in the same frame).
+      else if (e.type === EV.COMPLETED) setTimeout(() => toast(t('ra.mastered', { title: args.current.title }), 'c'), 2500);
       else if (e.type === EV.SERVER_ERROR) toast(t('ra.serverError', { error: e.error }), 'm');
       else if (e.type === EV.DISCONNECTED) toast(t('ra.pending'), 'm');
       else if (e.type === EV.RECONNECTED) toast(t('ra.sent'), 'c');
