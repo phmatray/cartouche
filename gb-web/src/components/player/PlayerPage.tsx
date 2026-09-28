@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import type { GameEntry } from '../../types/game';
 import { fetchRom, recordSession, useGameLibrary } from '../../hooks/useGameLibrary';
@@ -7,6 +7,7 @@ import { useAudio } from '../../hooks/useAudio';
 import { stretch } from '../../audio/AudioEngine';
 import { useGamepad } from '../../hooks/useGamepad';
 import { padNav } from '../../hooks/useGamepadNav';
+import { combine } from '../../lib/held';
 import { useLcdShader } from '../../hooks/useLcdShader';
 import { useRewind } from '../../hooks/useRewind';
 import { useSaveData, warnSaveFailed } from '../../hooks/useSaveData';
@@ -83,6 +84,10 @@ function Player({ game }: { game: GameEntry }) {
   const { isReady, isRunning, setIsRunning, romLoaded, isCgb, loadRom, runFrame, getAudioSamples, pressButton, releaseButton,
     errors, hasBatteryRam, exportSram, importSram, saveState, loadState, framebufferSnapshot, setTraceEnabled, getTrace,
     consoleNow, stateConsole, paletteNow, skipBoot, sgbBorder, sgbSnesMusic, power } = emu;
+  // Keyboard, pad and touch each hold their own buttons: letting go on one keeps what another still holds.
+  const input = useMemo(() => combine(pressButton, releaseButton), [pressButton, releaseButton]);
+  const padPress = useCallback((b: number, p?: number) => input.press('pad', b, p), [input]);
+  const padRelease = useCallback((b: number, p?: number) => input.release('pad', b, p), [input]);
   const keybindings = useSettingsStore((s) => s.keybindings);
   const rewindSeconds = useSettingsStore((s) => s.rewindBufferSeconds);
   const screenSize = useSettingsStore((s) => s.screenSize);
@@ -230,7 +235,7 @@ function Player({ game }: { game: GameEntry }) {
     return () => document.removeEventListener('fullscreenchange', sync);
   }, []);
   // The pad plays the game while it runs; paused, it works the Manual and the page (useGamepadNav).
-  const { connected: gamepad } = useGamepad(pressButton, releaseButton, romLoaded && isRunning, toggleFullscreen);
+  const { connected: gamepad } = useGamepad(padPress, padRelease, romLoaded && isRunning, toggleFullscreen);
 
   // Phones sideways: the top bar takes the row but the deck's width (see index.css).
   useLayoutEffect(() => {
@@ -540,7 +545,7 @@ function Player({ game }: { game: GameEntry }) {
       if (slider && slider !== clicked) return;
       const a = actions.current;
       const b = buttonOf(e.key);
-      if (b !== undefined) { e.preventDefault(); if (!e.repeat) { pressed.set(e.code, b); pressButton(b); } return; }
+      if (b !== undefined) { e.preventDefault(); if (!e.repeat) { pressed.set(e.code, b); input.press('key', b); } return; }
       const k = e.key.toLowerCase();
       const run = { f5: () => a.saveSlot(0), f8: () => a.loadSlot(0), f12: a.screenshot, p: a.togglePlay, m: a.mute, f: a.toggleFullscreen, r: a.startRewind }[k];
       if (!run) return;
@@ -550,11 +555,12 @@ function Player({ game }: { game: GameEntry }) {
     const up = (e: KeyboardEvent) => {
       const b = pressed.get(e.code) ?? buttonOf(e.key);
       pressed.delete(e.code);
-      if (b !== undefined) releaseButton(b);
+      if (b !== undefined) input.release('key', b);
       else if (e.key.toLowerCase() === 'r') actions.current.stopRewind();
     };
-    // A key released in another window never comes back as a keyup: let go of everything when the page loses focus.
-    const releaseAll = () => { pressed.clear(); Object.values(BUTTON_NUMBERS).forEach((n) => releaseButton(n)); actions.current.stopRewind(); };
+    // A key or a finger let go in another window never comes back: let go of theirs when the page loses focus. A pad's
+    // buttons stay, its next poll reads them again.
+    const releaseAll = () => { pressed.clear(); input.clear('key'); input.clear('touch'); actions.current.stopRewind(); };
     const onHidden = () => { if (document.visibilityState === 'hidden') releaseAll(); };
     window.addEventListener('pointerdown', onPointer, true);
     window.addEventListener('focusin', onFocus, true);
@@ -567,7 +573,7 @@ function Player({ game }: { game: GameEntry }) {
       window.removeEventListener('keydown', down); window.removeEventListener('keyup', up);
       window.removeEventListener('blur', releaseAll); document.removeEventListener('visibilitychange', onHidden);
     };
-  }, [keybindings, pressButton, releaseButton, editing]);
+  }, [keybindings, input, editing]);
 
   /** Confirm, then start over with an undo (the Saves page and the pause card). */
   const askStartOver = () => setConfirm({ title: t('player.restart.title'), body: t('player.restart.body'), ok: t('player.restart.ok'), run: startOver });
@@ -583,8 +589,8 @@ function Player({ game }: { game: GameEntry }) {
   const hold = (e: React.PointerEvent<HTMLElement>, now: string[]) => {
     const root = e.currentTarget.closest('.touch');
     const { press, release } = slide(held.current, e.pointerId, now);
-    for (const b of release) { root?.querySelector(`[data-pad="${b}"]`)?.classList.remove('down'); releaseButton(BUTTON_NUMBERS[b]); }
-    for (const b of press) { root?.querySelector(`[data-pad="${b}"]`)?.classList.add('down'); pressButton(BUTTON_NUMBERS[b]); }
+    for (const b of release) { root?.querySelector(`[data-pad="${b}"]`)?.classList.remove('down'); input.release('touch', BUTTON_NUMBERS[b]); }
+    for (const b of press) { root?.querySelector(`[data-pad="${b}"]`)?.classList.add('down'); input.press('touch', BUTTON_NUMBERS[b]); }
     if (press.length && useSettingsStore.getState().haptics) navigator.vibrate?.(8);
   };
   const letGo = (e: React.PointerEvent<HTMLElement>) => hold(e, []);
