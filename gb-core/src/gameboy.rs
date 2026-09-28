@@ -823,7 +823,7 @@ mod tests {
     /// state cut right after KEY0 (before the mapper block existed) still loads.
     fn reload(gb: &GameBoy, rom: &[u8]) -> GameBoy {
         let state = gb.save_state();
-        let cut = state.len() - 2 - gb.bus.cartridge.export_extra().len();
+        let cut = state.len() - TIMING_TAIL_LEN - 2 - gb.bus.cartridge.export_extra().len();
         let mut old = GameBoy::new(rom.to_vec()).unwrap();
         assert!(old.load_state(&state[..cut]), "a state without the mapper block");
         let mut g = GameBoy::new(rom.to_vec()).unwrap();
