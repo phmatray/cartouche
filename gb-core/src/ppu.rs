@@ -2,10 +2,11 @@ pub const SCREEN_WIDTH: usize = 160;
 pub const SCREEN_HEIGHT: usize = 144;
 pub const FRAMEBUFFER_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT * 4;
 
+use crate::fifo::LineState;
 use crate::trace::{Tracer, LAYER_BG, LAYER_OBJ, LAYER_WIN, LINE_CGB, LINE_RENDERED, NO_OBJ};
 
 /// An OBJ selected for a scanline: (x, OAM slot, y, tile, attributes), raw OAM values.
-type Sprite = (u8, usize, u8, u8, u8);
+pub(crate) type Sprite = (u8, usize, u8, u8, u8);
 
 /// HBlank (its interrupt, HBlank DMA) starts this many dots before mode 3's length
 /// (`Ppu::mode3_length`) runs out, and STAT reads mode 0 from 3 dots later (`read_register`): so a
@@ -83,6 +84,8 @@ pub struct Ppu {
     pub trace: Option<Box<Tracer>>,
     /// Traced lines only: `[slot, colour id, attr, drawn]` of the OBJ claiming each dot.
     line_obj: [[u8; 4]; SCREEN_WIDTH],
+    /// DMG: the pixel FIFO of the line in mode 3 (`fifo.rs`); not saved, a loaded state redraws the line.
+    pub(crate) line: LineState,
 }
 
 impl Ppu {
@@ -122,6 +125,7 @@ impl Ppu {
             bg_cgb_priority: [false; SCREEN_WIDTH],
             trace: None,
             line_obj: [[NO_OBJ, 0, 0, 0]; SCREEN_WIDTH],
+            line: LineState::default(),
         }
     }
 
@@ -201,6 +205,7 @@ impl Ppu {
                     self.mode_clock = 0;
                     self.stat_irq_line = false;
                     self.lcd_on_line0 = false;
+                    self.line.active = false;
                 } else if !was_enabled && is_enabled {
                     // Line 0 restarts 4 dots in, without an OAM scan.
                     self.mode = PpuMode::OamScan;
@@ -213,7 +218,10 @@ impl Ppu {
             0xFF43 => self.scx = value,
             0xFF44 => {}
             0xFF45 => self.lyc = value,
-            0xFF47 => self.bgp = value,
+            0xFF47 => {
+                self.line.bgp_old = Some((self.bgp, self.line.dot));
+                self.bgp = value;
+            }
             0xFF48 => self.obp0 = value,
             0xFF49 => self.obp1 = value,
             0xFF4A => self.wy = value,
@@ -265,18 +273,25 @@ impl Ppu {
                     self.mode_clock -= 80;
                     self.mode = PpuMode::Drawing;
                     self.mode3_len = if self.lcd_on_line0 { 172 } else { self.mode3_length(self.ly as usize) };
+                    if !self.cgb_mode { self.start_line(); }
                     self.lcd_on_line0 = false;
                 }
             }
             PpuMode::Drawing => {
+                if !self.cgb_mode {
+                    if !self.line.active { self.start_line(); } // a state loaded in mode 3: redraw the line
+                    self.run_line(self.mode_clock + MODE0_EARLY);
+                }
                 if self.mode_clock >= self.mode3_len - MODE0_EARLY {
                     self.mode_clock -= self.mode3_len - MODE0_EARLY;
                     self.mode = PpuMode::HBlank;
                     hblank_entry = true;
-                    self.render_scanline();
+                    if self.cgb_mode { self.render_scanline(); }
                 }
             }
             PpuMode::HBlank => {
+                // DMG: the FIFO lags behind the mode the CPU sees; the line ends in HBlank.
+                if self.line.active && !self.cgb_mode { self.run_line(self.mode_clock + self.mode3_len); }
                 if self.mode_clock >= 376 + MODE0_EARLY - self.mode3_len {
                     self.mode_clock -= 376 + MODE0_EARLY - self.mode3_len;
                     self.ly += 1;
@@ -429,16 +444,13 @@ impl Ppu {
     fn render_scanline(&mut self) {
         let line = self.ly as usize;
         if line >= SCREEN_HEIGHT { return; }
+        if !self.cgb_mode { return self.draw_line_dmg(); }
         let traced = self.trace.is_some();
         if traced {
             self.line_obj = [[NO_OBJ, 0, 0, 0]; SCREEN_WIDTH];
         }
         let window_line = self.window_line_counter;
-        if self.cgb_mode {
-            self.render_scanline_cgb(line);
-        } else {
-            self.render_scanline_dmg(line);
-        }
+        self.render_scanline_cgb(line);
         if traced {
             self.trace_line(line, window_line);
         }
@@ -503,7 +515,7 @@ impl Ppu {
     }
 
     /// The first 10 OBJs (OAM order) that overlap `line`.
-    fn select_sprites(&self, line: usize) -> ([Sprite; 10], usize) {
+    pub(crate) fn select_sprites(&self, line: usize) -> ([Sprite; 10], usize) {
         let height: i16 = if self.lcdc & 0x04 != 0 { 16 } else { 8 };
         let mut out = [(0, 0, 0, 0, 0); 10];
         let mut n = 0;
@@ -517,169 +529,6 @@ impl Ppu {
             }
         }
         (out, n)
-    }
-
-    fn render_scanline_dmg(&mut self, line: usize) {
-        let line_start = line * SCREEN_WIDTH * 4;
-        let blank = if self.compat { self.get_bg_cram_color(0, 0) } else { PALETTE_COLORS[0] };
-        for x in 0..SCREEN_WIDTH {
-            let offset = line_start + x * 4;
-            self.framebuffer[offset..offset + 4].copy_from_slice(&blank);
-            self.bg_color_ids[x] = 0;
-        }
-
-        if self.lcdc & 0x01 != 0 {
-            self.render_bg_line(line);
-        }
-        self.trace_plane(line, false);
-
-        if self.lcdc & 0x20 != 0 && self.lcdc & 0x01 != 0 && self.ly >= self.wy {
-            self.render_window_line(line);
-        }
-        self.trace_plane(line, true);
-
-        if self.lcdc & 0x02 != 0 {
-            self.render_sprites_line(line);
-        }
-    }
-
-    fn render_bg_line(&mut self, line: usize) {
-        let tile_data_base: u16 = if self.lcdc & 0x10 != 0 { 0x0000 } else { 0x0800 };
-        let tile_map_base: u16 = if self.lcdc & 0x08 != 0 { 0x1C00 } else { 0x1800 };
-        let signed_addressing = self.lcdc & 0x10 == 0;
-
-        let y = self.scy.wrapping_add(line as u8);
-        let tile_row = (y / 8) as u16;
-        let pixel_row = y % 8;
-
-        for screen_x in 0..SCREEN_WIDTH {
-            let x = self.scx.wrapping_add(screen_x as u8);
-            let tile_col = (x / 8) as u16;
-            let pixel_col = x % 8;
-
-            let map_offset = tile_map_base + tile_row * 32 + tile_col;
-            let tile_index = self.vram[map_offset as usize];
-
-            let tile_addr = if signed_addressing {
-                let signed_index = tile_index as i8 as i16;
-                (tile_data_base as i16 + (signed_index + 128) * 16) as u16
-            } else {
-                tile_data_base + tile_index as u16 * 16
-            };
-
-            let color_id = self.get_tile_pixel(tile_addr as usize, pixel_row, pixel_col);
-            self.bg_color_ids[screen_x] = color_id;
-            let color = self.apply_palette(self.bgp, color_id, 0);
-            self.set_pixel(screen_x, line, color);
-        }
-    }
-
-    fn render_window_line(&mut self, line: usize) {
-        if self.wx > 166 || self.wy > 143 {
-            return;
-        }
-
-        let window_x_start = if self.wx < 7 { 0 } else { (self.wx - 7) as usize };
-        if line < self.wy as usize {
-            return;
-        }
-
-        let tile_data_base: u16 = if self.lcdc & 0x10 != 0 { 0x0000 } else { 0x0800 };
-        let tile_map_base: u16 = if self.lcdc & 0x40 != 0 { 0x1C00 } else { 0x1800 };
-        let signed_addressing = self.lcdc & 0x10 == 0;
-
-        let window_y = self.window_line_counter;
-        let tile_row = (window_y / 8) as u16;
-        let pixel_row = window_y % 8;
-
-        let mut rendered = false;
-
-        for screen_x in window_x_start..SCREEN_WIDTH {
-            rendered = true;
-            let window_col = (screen_x - window_x_start) as u8;
-            let tile_col = (window_col / 8) as u16;
-            let pixel_col = window_col % 8;
-
-            let map_offset = tile_map_base + tile_row * 32 + tile_col;
-            let tile_index = self.vram[map_offset as usize];
-
-            let tile_addr = if signed_addressing {
-                let signed_index = tile_index as i8 as i16;
-                (tile_data_base as i16 + (signed_index + 128) * 16) as u16
-            } else {
-                tile_data_base + tile_index as u16 * 16
-            };
-
-            let color_id = self.get_tile_pixel(tile_addr as usize, pixel_row, pixel_col);
-            self.bg_color_ids[screen_x] = color_id;
-            let color = self.apply_palette(self.bgp, color_id, 0);
-            self.set_pixel(screen_x, line, color);
-        }
-
-        if rendered {
-            self.window_line_counter += 1;
-        }
-    }
-
-    fn render_sprites_line(&mut self, line: usize) {
-        let sprite_height: i16 = if self.lcdc & 0x04 != 0 { 16 } else { 8 };
-        let (mut selected, n) = self.select_sprites(line);
-        let sprites_on_line = &mut selected[..n];
-
-        // Highest priority first (DMG: lowest X, then lowest OAM index). The first opaque OBJ
-        // pixel claims the dot even when it then loses to the BG, masking the OBJs behind it.
-        sprites_on_line.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
-        let mut claimed = [false; SCREEN_WIDTH];
-
-        for &mut (sx, oam_idx, sy, tile, flags) in sprites_on_line {
-            let screen_x_start = sx as i16 - 8;
-            let flip_x = flags & 0x20 != 0;
-            let flip_y = flags & 0x40 != 0;
-            let bg_priority = flags & 0x80 != 0;
-            let palette = if flags & 0x10 != 0 { self.obp1 } else { self.obp0 };
-
-            let mut row = (line as i16 - (sy as i16 - 16)) as u8;
-            if flip_y {
-                row = (sprite_height as u8) - 1 - row;
-            }
-
-            let tile_index = if sprite_height == 16 {
-                if row < 8 { tile & 0xFE } else { tile | 0x01 }
-            } else {
-                tile
-            };
-            let tile_row = row % 8;
-            let tile_addr = tile_index as usize * 16;
-
-            for col in 0..8u8 {
-                let px = screen_x_start + col as i16;
-                if px < 0 || px >= SCREEN_WIDTH as i16 {
-                    continue;
-                }
-
-                let actual_col = if flip_x { 7 - col } else { col };
-                let color_id = self.get_tile_pixel(tile_addr, tile_row, actual_col);
-
-                if color_id == 0 || claimed[px as usize] {
-                    continue;
-                }
-                claimed[px as usize] = true;
-                let traced = self.trace.is_some();
-                if traced {
-                    self.line_obj[px as usize] = [oam_idx as u8, color_id, flags, 0];
-                }
-
-                if bg_priority && self.bg_color_ids[px as usize] != 0 {
-                    continue;
-                }
-
-                let color = self.apply_palette(palette, color_id, 1 + (flags >> 4 & 1));
-                self.set_pixel(px as usize, line, color);
-                if traced {
-                    self.line_obj[px as usize][3] = 1;
-                }
-            }
-        }
     }
 
     // CGB rendering
@@ -813,7 +662,7 @@ impl Ppu {
 
     // Helpers
 
-    fn get_tile_pixel(&self, tile_addr: usize, row: u8, col: u8) -> u8 {
+    pub(crate) fn get_tile_pixel(&self, tile_addr: usize, row: u8, col: u8) -> u8 {
         let byte_offset = tile_addr + (row as usize * 2);
         if byte_offset + 1 >= 0x2000 {
             return 0;
@@ -835,7 +684,7 @@ impl Ppu {
     }
 
     /// `which`: 0 BG/window, 1 OBP0, 2 OBP1 (the CRAM palette used in compatibility mode).
-    fn apply_palette(&self, palette: u8, color_id: u8, which: u8) -> [u8; 4] {
+    pub(crate) fn apply_palette(&self, palette: u8, color_id: u8, which: u8) -> [u8; 4] {
         let shade = (palette >> (color_id * 2)) & 0x03;
         match (self.compat, which) {
             (false, _) => PALETTE_COLORS[shade as usize],
@@ -864,7 +713,7 @@ impl Ppu {
         Self::rgb555_to_rgba8888(self.obj_cram[i], self.obj_cram[i + 1])
     }
 
-    fn set_pixel(&mut self, x: usize, y: usize, rgba: [u8; 4]) {
+    pub(crate) fn set_pixel(&mut self, x: usize, y: usize, rgba: [u8; 4]) {
         let offset = (y * SCREEN_WIDTH + x) * 4;
         if offset + 4 <= self.framebuffer.len() {
             self.framebuffer[offset..offset + 4].copy_from_slice(&rgba);
@@ -1087,5 +936,48 @@ mod tests {
         assert!(p.front.chunks(4).all(|px| px == PALETTE_COLORS[0]));
         while !p.frame_ready { p.step(4); }
         assert!(p.front.chunks(4).all(|px| px == PALETTE_COLORS[3]));
+    }
+
+    /// DMG line 10 stepped one dot at a time through `step`; `at(p, dot)` runs before each dot of mode 3.
+    fn run_line10(setup: impl Fn(&mut Ppu), at: impl Fn(&mut Ppu, u32)) -> Ppu {
+        let mut p = Ppu::new();
+        (p.lcdc, p.bgp, p.obp0, p.ly) = (0x91, 0xE4, 0xE4, 10); // LCD, BG on; tiles at $8000
+        setup(&mut p);
+        while p.ly == 10 {
+            if p.mode == PpuMode::Drawing {
+                let dot = p.mode_clock;
+                at(&mut p, dot);
+            }
+            p.step(1);
+        }
+        p
+    }
+
+    fn shades(p: &Ppu, line: usize) -> Vec<u8> {
+        let row = &p.framebuffer[line * SCREEN_WIDTH * 4..(line + 1) * SCREEN_WIDTH * 4];
+        row.chunks(4).map(|c| PALETTE_COLORS.iter().position(|k| k[..] == *c).unwrap() as u8).collect()
+    }
+
+    /// A BGP write partway through mode 3 changes the pixels from where the FIFO is, not the whole line.
+    #[test]
+    fn mid_line_bgp_write() {
+        let switch_at = |dot: u32| {
+            let p = run_line10(|p| p.vram[0..16].fill(0xFF), |p, d| if d == dot { p.write_register(0xFF47, 0x1B) });
+            let s = shades(&p, 10);
+            let x = s.iter().position(|&v| v == 0).expect("the new shade shows");
+            assert!(s[..x].iter().all(|&v| v == 3) && s[x..].iter().all(|&v| v == 0), "{s:?}");
+            x
+        };
+        let x = switch_at(60);
+        assert!((20..60).contains(&x), "switch at {x}");
+        assert_eq!(switch_at(64), x + 4, "4 dots later, 4 pixels later");
+    }
+
+    #[test]
+    fn scx_fine_scroll_discards_pixels() {
+        // Tile 0: only its first column is dark.
+        let p = run_line10(|p| { p.vram[0..16].fill(0x80); p.scx = 3; }, |_, _| {});
+        let dark: Vec<usize> = shades(&p, 10).iter().enumerate().filter(|(_, &v)| v == 3).map(|(x, _)| x).collect();
+        assert_eq!(dark, (0..20).map(|k| 8 * k + 5).collect::<Vec<_>>());
     }
 }
