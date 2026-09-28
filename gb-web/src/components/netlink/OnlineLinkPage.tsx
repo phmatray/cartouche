@@ -41,19 +41,19 @@ export function OnlineLinkPage() {
         <p>{t('online.intro')}</p>
       </div>
       {!online && <p className="nl-warn" role="alert">{t('common.offlineNet')}</p>}
-      {net.phase === 'idle' ? <Doors /> : <Lobby />}
+      {net.phase === 'idle' ? <Doors invite={invited ? '' : q.get('room') ?? ''} /> : <Lobby />}
       <Notes />
     </main>
   );
 }
 
-/** No room yet: host one, or type a code. */
-function Doors() {
+/** No room yet: host one, or type a code. `invite`: the code of an invite link that isn't one (cut short, mistyped), shown to fix. */
+function Doors({ invite }: { invite: string }) {
   const { error } = useNet();
   const online = useOnline();
   const t = useT();
-  const [code, setCode] = useState('');
-  const [bad, setBad] = useState(false);
+  const [code, setCode] = useState(invite);
+  const [bad, setBad] = useState(!!invite);
   const join = (e: FormEvent) => {
     e.preventDefault();
     const c = parseCode(code);
