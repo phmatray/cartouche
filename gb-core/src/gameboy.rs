@@ -912,11 +912,23 @@ mod tests {
         // The pre-change layout ends right after KEY0 (then the mapper block, the timing tail, RP
         // and the mode-3 length).
         let end = state.len() - TIMING_TAIL_LEN - 5;
-        let extra = u16::from_le_bytes([state[end - 135], state[end - 134]]);
-        assert_eq!(extra, 133, "mode, address, result, opcode, 128 bytes of nibbles, IR LED");
-        let old = &state[..end - 135];
-        let mut g = GameBoy::new(rom).unwrap();
+        let extra = u16::from_le_bytes([state[end - 151], state[end - 150]]);
+        assert_eq!(extra, 149, "mode, address, result, opcode, 128 bytes of nibbles, IR LED, clock tail");
+        let old = &state[..end - 151];
+        let mut g = GameBoy::new(rom.clone()).unwrap();
         assert!(g.load_state(old));
+
+        // A state from before the clock tail (#222): a 133-byte block still loads, registers kept.
+        let mut old = state[..end - 151].to_vec();
+        old.extend(133u16.to_le_bytes());
+        old.extend(&state[end - 149..end - 16]);
+        old.extend(&state[end..]);
+        let mut g = GameBoy::new(rom).unwrap();
+        assert!(g.load_state(&old));
+        let c = &mut g.bus.cartridge;
+        c.write_ram(0, 0x10);
+        c.write_rom(0x0000, 0x0C);
+        assert_eq!(c.read_ram(0), 0x97);
     }
 
     /// An MBC7 saved mid-READ (address clocked in, data not yet out) sends the word after a load.

@@ -173,3 +173,70 @@ fn a_real_game_re_run_from_any_frame_matches_a_straight_run() {
         }
     }
 }
+
+/// A ROM of cartridge type `cart_type` that runs `code` from $0150.
+fn rom_with(cart_type: u8, code: &[u8]) -> Vec<u8> {
+    let mut r = vec![0u8; 0x8000];
+    r[0x100..0x104].copy_from_slice(&[0x00, 0xC3, 0x50, 0x01]); // NOP; JP $0150
+    (r[0x147], r[0x149]) = (cart_type, 0x02);
+    r[0x150..0x150 + code.len()].copy_from_slice(code);
+    r[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(r[i]).wrapping_sub(1));
+    r
+}
+
+/// A console on `rom` loaded back at frame 50 from its own state and re-run to frame 110 ends where
+/// a straight run ends. The clock crosses a second at frame 60, so the state has to carry the
+/// mapper clock's position and dots, not catch up to "now" (#222).
+fn assert_rollback_matches_a_straight_run(rom: Vec<u8>) {
+    let boot = || {
+        let mut gb = GameBoy::new(rom.clone()).unwrap();
+        gb.skip_boot_rom();
+        gb.set_emulated_clock(1_700_000_000.0);
+        gb
+    };
+    let mut straight = boot();
+    for _ in 0..110 { straight.run_frame().unwrap(); }
+
+    let mut gb = boot();
+    for _ in 0..50 { gb.run_frame().unwrap(); }
+    let state = gb.save_state();
+    for _ in 50..100 { gb.run_frame().unwrap(); }
+    assert!(gb.load_state(&state));
+    for _ in 50..110 { gb.run_frame().unwrap(); }
+    assert_eq!(gb.bus.read_byte(0xC000), straight.bus.read_byte(0xC000), "what the game read of its clock");
+    assert_eq!(gb.state_hash(), straight.state_hash());
+}
+
+/// HuC3: forever copies the clock to memory (command $60), reads nibble 0 back, stores it to $C000.
+#[test]
+fn a_rolled_back_huc3_clock_matches_a_straight_run() {
+    let code = [
+        0x3E, 0x0B, 0xEA, 0x00, 0x00, // LD A,$0B; LD ($0000),A   command mode
+        // loop:
+        0x3E, 0x60, 0xEA, 0x00, 0xA0, // time to memory
+        0x3E, 0x40, 0xEA, 0x00, 0xA0, // address low nibble 0
+        0x3E, 0x50, 0xEA, 0x00, 0xA0, // address high nibble 0
+        0x3E, 0x10, 0xEA, 0x00, 0xA0, // read memory[0]
+        0x3E, 0x0C, 0xEA, 0x00, 0x00, // result mode
+        0xFA, 0x00, 0xA0, 0xEA, 0x00, 0xC0, // LD A,($A000); LD ($C000),A
+        0x3E, 0x0B, 0xEA, 0x00, 0x00, // command mode
+        0x18, 0xDA, // JR loop
+    ];
+    assert_rollback_matches_a_straight_run(rom_with(0xFE, &code));
+}
+
+/// TAMA5: forever reads clock digit 0 (the seconds' units, command $A) and stores it to $C000.
+#[test]
+fn a_rolled_back_tama5_clock_matches_a_straight_run() {
+    let code = [
+        // loop:
+        0x3E, 0x06, 0xEA, 0x01, 0xA0, // select register 6
+        0x3E, 0x0A, 0xEA, 0x00, 0xA0, // command A: read a clock digit
+        0x3E, 0x07, 0xEA, 0x01, 0xA0, // select register 7
+        0xAF, 0xEA, 0x00, 0xA0, // digit 0: runs the command
+        0x3E, 0x0C, 0xEA, 0x01, 0xA0, // select C: the digit read
+        0xFA, 0x00, 0xA0, 0xEA, 0x00, 0xC0, // LD A,($A000); LD ($C000),A
+        0x18, 0xE0, // JR loop
+    ];
+    assert_rollback_matches_a_straight_run(rom_with(0xFD, &code));
+}
