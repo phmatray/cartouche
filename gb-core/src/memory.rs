@@ -338,16 +338,21 @@ impl MemoryBus {
         self.tick_components();
         self.timer.speed_switch_div_reset(earlier);
         self.double_speed = !self.double_speed;
+        self.ppu.m_cycle_dots = if self.double_speed { 2 } else { 4 };
         self.key1 = 0;
         // Then the CPU halts while the clock settles and everything else runs: $20000 DIV counts,
         // so DIV is back at 0 when it resumes (Age spsw-div, spsw-tima). Like HALT, an interrupt
         // ends it early (Age spsw-interrupts). Back in single speed the PPU comes out one dot
         // behind (Age spsw-mode0: the LCD-to-CPU alignment shifts).
-        let first_dots = if self.double_speed { 2 } else { 3 };
-        self.tick_components_with(first_dots);
-        for _ in 1..0x8000 {
-            if self.interrupts.pending() & !self.late_interrupts() != 0 { break; }
+        let mut behind = !self.double_speed;
+        for _ in 0..0x8000 {
             self.tick_components();
+            // Taken back once the PPU is a dot into a mode, so no mode change is undone.
+            if behind && self.ppu.mode_clock > 0 {
+                self.ppu.mode_clock -= 1;
+                behind = false;
+            }
+            if self.interrupts.pending() & !self.late_interrupts() != 0 { break; }
         }
         true
     }
@@ -375,14 +380,8 @@ impl MemoryBus {
     }
 
     fn tick_components(&mut self) {
-        self.tick_components_with(if self.double_speed { 2 } else { 4 });
-    }
-
-    /// One M-cycle, with the PPU advanced `ppu_dots` (normally 4, 2 in double speed).
-    fn tick_components_with(&mut self, ppu_dots: u32) {
         let ppu_step = if self.double_speed { 2 } else { 4 };
-        self.ppu.m_cycle_dots = ppu_step;
-        let (vblank_irq, stat_irq, hblank_entry) = self.ppu.step(ppu_dots);
+        let (vblank_irq, stat_irq, hblank_entry) = self.ppu.step(ppu_step);
         if vblank_irq {
             self.interrupts.request(VBLANK_BIT);
             if let Some(s) = self.sgb.as_deref_mut() { s.vblank(&self.ppu.framebuffer, self.apu.read_register(0xFF26) & 0x0F != 0); }

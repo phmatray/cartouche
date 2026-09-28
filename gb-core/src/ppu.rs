@@ -55,7 +55,7 @@ pub struct Ppu {
     pub(crate) lcd_on_line0: bool,
     /// Dots mode 3 lasts on the current line (`mode3_length`, set as it starts); HBlank gets the rest.
     pub mode3_len: u32,
-    /// Dots per CPU M-cycle: 4, or 2 in CGB double speed (set by the bus each M-cycle).
+    /// Dots per CPU M-cycle: 4, or 2 in CGB double speed (set by the bus when the speed changes).
     pub m_cycle_dots: u32,
 
     /// The line-by-line picture being drawn.

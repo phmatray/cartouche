@@ -670,6 +670,7 @@ impl GameBoy {
         self.bus.joypad.boot_hold = [0, 0];
         if self.bus.boot_rom_active { self.hold_palette(); } // a state saved during the animation keeps its colours
         self.bus.double_speed = read_u8!() != 0;
+        self.bus.ppu.m_cycle_dots = if self.bus.double_speed { 2 } else { 4 };
         self.double_speed = self.bus.double_speed;
         self.bus.ppu.bg_cram.copy_from_slice(read_bytes!(64));
         self.bus.ppu.obj_cram.copy_from_slice(read_bytes!(64));
