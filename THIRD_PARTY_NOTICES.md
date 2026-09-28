@@ -334,9 +334,15 @@ Cartouche license as `LICENSE.txt`; the in-app Legal page links to all three.
   which Cartouche's core maps while they run.
 - SHA-256: pinned in `scripts/check-no-game-data.sh`, which fails on any other
   boot ROM image.
+- Also from SameBoy (same tag): the Game Boy Color and Game Boy Advance LCD
+  colour curves and the green/blue mixing of its default colour correction
+  (`Core/display.c`: `scale_channel_with_curve`, `scale_channel_with_curve_agb`
+  and `GB_convert_rgb15`), ported to TypeScript and GLSL in
+  `gb-web/src/shaders/lcd-curves.ts` and `color.glsl` for the Screen settings'
+  GBC LCD and GBA LCD colour correction.
 - License: Expat (MIT), which covers every file of the SameBoy repository
   except its `iOS` and `HexFiend` directories, so the boot ROMs this fork is
-  made from:
+  made from and the colour curves:
 
 ```
 Expat License
