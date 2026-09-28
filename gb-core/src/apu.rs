@@ -394,88 +394,193 @@ impl SquareChannel {
 }
 
 // -----------------------------------------------------------------------------
-// SweepUnit (CH1 only)
+// Sweep (CH1 only)
 // -----------------------------------------------------------------------------
 
-pub struct SweepUnit {
-    enabled: bool,
-    frequency_shadow: u16,
-    period: u8,
-    direction: bool, // true = decrease
-    pub shift: u8,
-    timer: u8,
-    /// A calculation in negate mode happened since the last trigger.
-    negate_used: bool,
+/// CH1's frequency sweep. Every 4th DIV-APU event counts `countdown` (in 128 Hz steps). When it
+/// wraps, the frequency takes the last addend, and the next one is computed `NR10 & 7` 1 MHz ticks
+/// later, where the overflow check can silence the channel. A restart holds the shadow frequency
+/// for a few ticks. Times are SameBoy's `Core/apu.c` (CGB-E and DMG-B).
+pub struct Sweep {
+    /// NR10 as written.
+    nr10: u8,
+    countdown: u8,
+    /// 1 MHz ticks until the pending calculation completes (0: none).
+    calculate_countdown: u8,
+    /// 1 MHz ticks before `calculate_countdown` starts counting.
+    reload_timer: u8,
+    addend: u16,
+    shadow: u16,
+    /// The calculation was started with shift 0 (it then runs even with NR10's shift cleared).
+    unshifted: bool,
+    /// A shift-0 calculation completes as soon as its reload timer runs out.
+    instant_done: bool,
+    /// 2 MHz ticks after a restart during which the shadow frequency and addend keep their value.
+    restart_hold: u8,
+    /// The addend of the last completed calculation (an NR10 write checks it).
+    completed_addend: u16,
 }
 
-impl SweepUnit {
+impl Sweep {
     pub fn new() -> Self {
         Self {
-            enabled: false,
-            frequency_shadow: 0,
-            period: 0,
-            direction: false,
-            shift: 0,
-            timer: 0,
-            negate_used: false,
+            nr10: 0,
+            countdown: 0,
+            calculate_countdown: 0,
+            reload_timer: 0,
+            addend: 0,
+            shadow: 0,
+            unshifted: false,
+            instant_done: false,
+            restart_hold: 0,
+            completed_addend: 0,
         }
     }
 
-    /// Returns false when the write must disable the channel: leaving negate mode
-    /// after a negate calculation has been made.
-    pub fn write_nr10(&mut self, value: u8) -> bool {
-        self.period = (value >> 4) & 0x07;
-        self.direction = value & 0x08 != 0;
-        self.shift = value & 0x07;
-        !(self.negate_used && !self.direction)
+    fn shift(&self) -> u8 {
+        self.nr10 & 7
     }
 
-    pub fn read_nr10(&self) -> u8 {
-        0x80 // bit 7 unused, reads 1
-            | (self.period << 4)
-            | if self.direction { 0x08 } else { 0 }
-            | self.shift
+    fn negate(&self) -> bool {
+        self.nr10 & 8 != 0
     }
 
-    pub fn trigger(&mut self, frequency: u16) {
-        self.frequency_shadow = frequency;
-        self.timer = if self.period != 0 { self.period } else { 8 };
-        self.enabled = self.period != 0 || self.shift != 0;
-        self.negate_used = false;
+    /// The overflow check, frequency + addend (APU bug: made with the addend already applied).
+    fn calculation_done(&mut self, ch1: &mut SquareChannel) {
+        if self.restart_hold == 0 {
+            self.shadow = ch1.frequency;
+        }
+        if self.negate() {
+            self.addend ^= 0x7FF;
+        }
+        if self.shadow + self.addend > 0x7FF && !self.negate() {
+            ch1.silence();
+        }
+        self.completed_addend = self.addend;
     }
 
-    pub fn calculate(&mut self) -> (u16, bool) {
-        let delta = self.frequency_shadow >> self.shift;
-        let new_freq = if self.direction {
-            self.negate_used = true;
-            self.frequency_shadow.wrapping_sub(delta)
+    /// The sweep step: the frequency takes the last addend, and the next calculation starts.
+    /// `div_write`: this DIV-APU event came from a DIV write (the reload lands a tick sooner).
+    fn step(&mut self, ch1: &mut SquareChannel, lf_div: u16, double_speed: bool, div_write: bool) {
+        if self.nr10 & 0x70 == 0 || self.countdown != 7 {
+            return;
+        }
+        if self.shift() != 0 {
+            ch1.frequency = (self.addend + self.shadow + self.negate() as u16) & 0x7FF;
+        }
+        if self.restart_hold == 0 {
+            self.addend = ch1.frequency >> self.shift();
+        }
+        self.calculate_countdown = self.shift();
+        self.reload_timer = if !double_speed && div_write { 1 } else { 1 + lf_div as u8 };
+        self.unshifted = self.shift() == 0;
+        self.countdown = ((self.nr10 >> 4) & 7) ^ 7;
+        if self.calculate_countdown == 0 {
+            self.instant_done = true;
+        }
+    }
+
+    /// Every 4th DIV-APU event.
+    fn div_event(&mut self, ch1: &mut SquareChannel, lf_div: u16, double_speed: bool, div_write: bool) {
+        self.countdown = (self.countdown + 1) & 7;
+        self.step(ch1, lf_div, double_speed, div_write);
+    }
+
+    /// `ticks` 2 MHz ticks, after `lf_div` flipped for them.
+    fn tick(&mut self, ch1: &mut SquareChannel, ticks: u32, lf_div: u16) {
+        if self.reload_timer | self.calculate_countdown | self.restart_hold == 0 {
+            return; // nothing pending: the common case, every M-cycle
+        }
+        let mut sweep_ticks = (ticks / 2) as u8 + (ticks & 1 != 0 && lf_div == 0) as u8;
+        if self.reload_timer > sweep_ticks {
+            self.reload_timer -= sweep_ticks;
+            sweep_ticks = 0;
         } else {
-            self.frequency_shadow.wrapping_add(delta)
-        };
-        (new_freq, new_freq > 2047)
+            if self.reload_timer != 0 && self.calculate_countdown == 0 && self.instant_done {
+                self.calculation_done(ch1);
+            }
+            self.instant_done = false;
+            sweep_ticks -= self.reload_timer;
+            self.reload_timer = 0;
+        }
+        // The calculation pauses while NR10's shift is 0 (unless it started that way).
+        if self.calculate_countdown != 0 && (self.shift() != 0 || self.unshifted) {
+            if self.calculate_countdown > sweep_ticks {
+                self.calculate_countdown -= sweep_ticks;
+            } else {
+                self.calculate_countdown = 0;
+                self.calculation_done(ch1);
+            }
+        }
+        self.restart_hold = self.restart_hold.saturating_sub(ticks as u8);
     }
 
-    pub fn clock(&mut self, channel_enabled: &mut bool, frequency: &mut u16) {
-        if self.timer > 0 {
-            self.timer -= 1;
+    /// NR10 write. `cgb`: CGB-E, else DMG-B.
+    fn write_nr10(&mut self, value: u8, ch1: &mut SquareChannel, lf_div: u16, cgb: bool, double_speed: bool) {
+        if self.calculate_countdown != 0 || self.reload_timer != 0 {
+            self.write_glitch(value, ch1, lf_div, cgb, double_speed);
         }
-        if self.timer == 0 {
-            self.timer = if self.period != 0 { self.period } else { 8 };
-            if self.enabled && self.period != 0 {
-                let (new_freq, overflow) = self.calculate();
-                if overflow {
-                    *channel_enabled = false;
-                } else if self.shift != 0 {
-                    self.frequency_shadow = new_freq;
-                    *frequency = new_freq;
-                    // Do overflow check again with new frequency
-                    let (_, overflow2) = self.calculate();
-                    if overflow2 {
-                        *channel_enabled = false;
-                    }
+        // The DMG (like CGB-C and older) checks as if the old value negated.
+        let old_negate = !cgb || self.negate();
+        self.nr10 = value;
+        if self.shadow + self.completed_addend + old_negate as u16 > 0x7FF && value & 8 == 0 {
+            ch1.silence();
+        }
+        self.step(ch1, lf_div, double_speed, false);
+    }
+
+    /// NR10 written while a calculation is pending.
+    fn write_glitch(&mut self, value: u8, ch1: &mut SquareChannel, lf_div: u16, cgb: bool, double_speed: bool) {
+        if cgb {
+            if self.reload_timer == 2 {
+                // The countdown just reloaded: it reloads again.
+                self.calculate_countdown = value & 7;
+                if self.calculate_countdown == 0 {
+                    self.reload_timer = 0;
+                }
+            }
+            if value & 7 != 0 && self.shift() == 0 && lf_div == 0 && self.calculate_countdown > 1 {
+                self.calculate_countdown -= 1;
+                if self.calculate_countdown == 0 {
+                    self.calculation_done(ch1);
+                }
+            }
+        } else if (self.reload_timer == 0 || self.reload_timer == 1 && lf_div != 0) && self.calculate_countdown != 0 {
+            let zombie_step = if self.shift() == 0 {
+                lf_div != 0 && !double_speed || lf_div == 0 && double_speed
+            } else {
+                double_speed && self.calculate_countdown == 1
+            };
+            if zombie_step {
+                self.calculate_countdown -= 1;
+                if self.calculate_countdown <= 1 {
+                    self.calculate_countdown = 0;
+                    self.calculation_done(ch1);
                 }
             }
         }
+    }
+
+    /// CH1 triggered; `was_active`: it already played.
+    fn trigger(&mut self, ch1: &SquareChannel, was_active: bool, lf_div: u16, cgb: bool) {
+        self.instant_done = false;
+        self.shadow = 0;
+        self.completed_addend = 0;
+        if self.shift() != 0 {
+            // APU bug: with a shift, the overflow check also runs after a restart.
+            self.calculate_countdown = self.shift();
+            self.reload_timer = 2 + !was_active as u8;
+            self.unshifted = false;
+            self.addend = ch1.frequency >> self.shift();
+        } else {
+            self.addend = 0;
+        }
+        self.restart_hold = (2 - lf_div + if cgb { 2 } else { 0 }) as u8;
+        self.countdown = ((self.nr10 >> 4) & 7) ^ 7;
+    }
+
+    fn read_nr10(&self) -> u8 {
+        self.nr10 | 0x80
     }
 }
 
@@ -809,7 +914,7 @@ pub struct Apu {
     /// CGB APU quirks (wave RAM access, length counters on power-off). Synced by the bus.
     pub cgb_mode: bool,
     pub ch1: SquareChannel,
-    pub ch1_sweep: SweepUnit,
+    pub ch1_sweep: Sweep,
     pub ch2: SquareChannel,
     pub ch3: WaveChannel,
     pub ch4: NoiseChannel,
@@ -848,7 +953,7 @@ impl Apu {
             enabled: false,
             cgb_mode: false,
             ch1: SquareChannel::new(),
-            ch1_sweep: SweepUnit::new(),
+            ch1_sweep: Sweep::new(),
             ch2: SquareChannel::new(),
             ch3: WaveChannel::new(),
             ch4: NoiseChannel::new(),
@@ -887,6 +992,7 @@ impl Apu {
         }
         self.pending_envelope >>= 1;
         self.lf_div ^= (ticks & 1) as u16;
+        self.ch1_sweep.tick(&mut self.ch1, ticks, self.lf_div);
 
         // Tick channels
         self.ch1.step(ticks);
@@ -914,7 +1020,7 @@ impl Apu {
 
     /// The DIV-APU event: the falling edge of DIV bit 4 (bit 5 in double speed), from the timer's
     /// counting or a DIV write.
-    pub fn div_event(&mut self) {
+    pub fn div_event(&mut self, div_write: bool) {
         if !self.enabled {
             return;
         }
@@ -940,7 +1046,7 @@ impl Apu {
             self.clock_length_all();
         }
         if self.div_divider & 3 == 3 {
-            self.ch1_sweep.clock(&mut self.ch1.enabled, &mut self.ch1.frequency);
+            self.ch1_sweep.div_event(&mut self.ch1, self.lf_div, self.double_speed, div_write);
         }
     }
 
@@ -1140,22 +1246,15 @@ impl Apu {
         let first_half = self.length_first_half();
         match addr {
             // CH1 — Square with sweep
-            0xFF10 => {
-                if !self.ch1_sweep.write_nr10(value) {
-                    self.ch1.enabled = false;
-                }
-            }
+            0xFF10 => self.ch1_sweep.write_nr10(value, &mut self.ch1, self.lf_div, self.cgb_mode, self.double_speed),
             0xFF11 => self.ch1.write_nrx1(value),
             0xFF12 => self.ch1.write_nrx2(value, self.cgb_mode),
             0xFF13 => self.ch1.write_nrx3(value),
             0xFF14 => {
+                let was_active = self.ch1.enabled;
                 self.ch1.write_nrx4(value, first_half, self.lf_div, self.cgb_mode);
                 if value & 0x80 != 0 {
-                    self.ch1_sweep.trigger(self.ch1.frequency);
-                    // Overflow check on trigger if shift != 0
-                    if self.ch1_sweep.shift != 0 && self.ch1_sweep.calculate().1 {
-                        self.ch1.enabled = false;
-                    }
+                    self.ch1_sweep.trigger(&self.ch1, was_active, self.lf_div, self.cgb_mode);
                 }
             }
 
@@ -1269,8 +1368,9 @@ macro_rules! apu_fields {
         $m!(
             $a.enabled, $a.nr50, $a.nr51, $a.div_divider, $a.skip_div_event, $a.lf_div,
             $a.pending_envelope, $a.sample_counter,
-            $a.ch1_sweep.enabled, $a.ch1_sweep.frequency_shadow, $a.ch1_sweep.period,
-            $a.ch1_sweep.direction, $a.ch1_sweep.shift, $a.ch1_sweep.timer, $a.ch1_sweep.negate_used,
+            $a.ch1_sweep.nr10, $a.ch1_sweep.countdown, $a.ch1_sweep.calculate_countdown,
+            $a.ch1_sweep.reload_timer, $a.ch1_sweep.addend, $a.ch1_sweep.shadow, $a.ch1_sweep.unshifted,
+            $a.ch1_sweep.instant_done, $a.ch1_sweep.restart_hold, $a.ch1_sweep.completed_addend,
             $a.ch1.enabled, $a.ch1.dac_enabled, $a.ch1.duty, $a.ch1.length.counter,
             $a.ch1.length.enabled, $a.ch1.nrx2, $a.ch1.volume, $a.ch1.volume_countdown,
             $a.ch1.envelope, $a.ch1.frequency, $a.ch1.countdown, $a.ch1.delay,
@@ -1294,8 +1394,8 @@ macro_rules! apu_fields {
 
 /// The layout of the fields after the registers in a v8+ APU block. Bump it when `apu_fields`
 /// changes: a block of another layout is restored from its registers instead.
-/// 1: #206 (DIV-clocked frame sequencer). 2: #207 (2 MHz square channels).
-const STATE_LAYOUT: u8 = 2;
+/// 1: #206 (DIV-clocked frame sequencer). 2: #207 (2 MHz square channels). 3: #209 (CH1 sweep).
+const STATE_LAYOUT: u8 = 3;
 /// NR10-NR51 as last written, then NR52 as read (power and channel flags), then wave RAM.
 const STATE_REGS_LEN: usize = 0x16 + 1 + 16;
 
@@ -1482,7 +1582,9 @@ impl Apu {
         self.ch3.volume_shift &= 3;
         self.ch4.clock_shift &= 0x0F;
         self.ch4.divisor_code &= 7;
-        self.ch1_sweep.shift &= 7;
+        self.ch1_sweep.countdown &= 7;
+        self.ch1_sweep.addend &= 0x7FF;
+        self.ch1_sweep.shadow &= 0x7FF;
         self.skip_div_event = self.skip_div_event.min(2);
         self.lf_div &= 1;
         self.pending_envelope = self.pending_envelope.min(2);
@@ -1531,7 +1633,7 @@ mod tests {
             apu.write_register(reg, v);
         }
         apu.ch3.wave_ram[5] = 0xA5;
-        apu.div_event();
+        apu.div_event(false);
         let mut state = Vec::new();
         apu.export_state(&mut state);
 

@@ -260,7 +260,7 @@ impl MemoryBus {
                 // An overflow requests the interrupt at once, a TIMA write cancelling the reload withdraws it (Timer::step).
                 let (pending, div) = (self.timer.reload_pending, self.timer.div_counter);
                 self.timer.write(addr, value);
-                self.div_apu_edge(div);
+                self.div_apu_edge(div, true);
                 match (pending, self.timer.reload_pending) {
                     (false, true) => self.interrupts.request(TIMER_BIT),
                     (true, false) => self.interrupts.interrupt_flag &= !TIMER_BIT,
@@ -357,7 +357,7 @@ impl MemoryBus {
         self.tick_components();
         let div = self.timer.div_counter;
         self.timer.speed_switch_div_reset(earlier);
-        self.div_apu_edge(div); // the reset can drop DIV's APU bit, in the old speed
+        self.div_apu_edge(div, true); // the reset can drop DIV's APU bit, in the old speed
         self.double_speed = !self.double_speed;
         self.ppu.m_cycle_dots = if self.double_speed { 2 } else { 4 };
         self.key1 = 0;
@@ -418,7 +418,7 @@ impl MemoryBus {
         if self.timer.step(4) {
             self.interrupts.request(TIMER_BIT);
         }
-        self.div_apu_edge(div);
+        self.div_apu_edge(div, false);
         if self.serial.tick(4) {
             self.interrupts.request(SERIAL_BIT);
         }
@@ -436,11 +436,11 @@ impl MemoryBus {
     }
 
     /// The DIV-APU event: DIV bit 4 (bit 5 in double speed) fell since the counter read `old`,
-    /// whether it counted there or was reset by a write; its rise arms the envelopes.
-    fn div_apu_edge(&mut self, old: u16) {
+    /// whether it counted there or was reset by a `write`; its rise arms the envelopes.
+    fn div_apu_edge(&mut self, old: u16, write: bool) {
         let (new, bit) = (self.timer.div_counter, self.div_apu_bit());
         if old & !new & bit != 0 {
-            self.apu.div_event();
+            self.apu.div_event(write);
         } else if !old & new & bit != 0 {
             self.apu.div_secondary_event();
         }
