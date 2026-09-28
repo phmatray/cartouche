@@ -454,7 +454,15 @@ impl MemoryBus {
     /// The DIV-APU event: DIV bit 4 (bit 5 in double speed) fell since the counter read `old`,
     /// whether it counted there or was reset by a write.
     fn div_apu_edge(&mut self, old: u16) {
-        let mut fell = old & !self.timer.div_counter & self.div_apu_bit() != 0;
+        let fell = old & !self.timer.div_counter & self.div_apu_bit() != 0;
+        if fell || self.apu_event_late {
+            self.deliver_div_event(fell);
+        }
+    }
+
+    /// Kept out of the per-M-cycle path: one event every 2048 or more M-cycles.
+    #[inline(never)]
+    fn deliver_div_event(&mut self, mut fell: bool) {
         if self.apu_event_late {
             fell = std::mem::replace(&mut self.apu_event_due, fell);
         }
