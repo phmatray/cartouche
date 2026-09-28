@@ -14,6 +14,7 @@ pub mod printer;
 pub mod registers;
 pub mod serial;
 pub mod sgb;
+pub mod spc700;
 pub mod timer;
 pub mod trace;
 
