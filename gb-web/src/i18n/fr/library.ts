@@ -7,6 +7,8 @@ export default {
   shelfAll: { one: 'Voir le jeu', other: 'Voir les {count}' },
   shelfEmpty: 'Rien pour l’instant',
   shelfHint: 'Les jeux ajoutés ou joués se rangent ici, du plus récent au plus ancien.',
+  shelfEmptyMore: 'Rien d’autre pour l’instant',
+  shelfHintMore: 'Les autres jeux ajoutés ou joués se rangeront ici, du plus récent au plus ancien.',
   onlyMine: 'Mes jeux seulement',
   free: 'À jouer tout de suite',
   freeSub: 'Aucun fichier requis : des homebrews libres fournis avec l’app',

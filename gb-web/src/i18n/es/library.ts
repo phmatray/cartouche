@@ -7,6 +7,8 @@ export default {
   shelfAll: { one: 'Ver {count}', other: 'Ver los {count}' },
   shelfEmpty: 'Aún no hay nada',
   shelfHint: 'Los juegos que añades o juegas se colocan aquí, del más reciente al más antiguo.',
+  shelfEmptyMore: 'Nada más por ahora',
+  shelfHintMore: 'Los demás juegos que añadas o juegues se colocarán aquí, del más reciente al más antiguo.',
   onlyMine: 'Solo los míos',
   free: 'Juega ahora mismo',
   freeSub: 'Sin archivos: homebrew libre que viene con la app',
