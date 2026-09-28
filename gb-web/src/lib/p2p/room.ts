@@ -72,6 +72,8 @@ export interface P2PRoom<M extends DataPayload> {
   rejoin(): void;
   /** Round trip to a peer in ms, null if it doesn't answer. */
   ping(peer: string): Promise<number | null>;
+  /** At least one matchmaking relay is connected: without one, nobody can find the room. */
+  relays(): boolean;
   leave(): void;
 }
 
@@ -98,6 +100,7 @@ export async function joinRoom<M extends DataPayload>(app: string, code: string)
     onMessage: null, onJoin: null, onLeave: null, onError: null,
     ping: (peer) => (room ? Promise.race([room.ping(peer), new Promise<null>((r) => setTimeout(() => r(null), 4000))]).catch(() => null) : Promise.resolve(null)),
     rejoin: () => { peers.length = 0; schedule(0); },
+    relays: () => Object.values(trystero.getRelaySockets() as Record<string, WebSocket>).some((s) => s.readyState === WebSocket.OPEN),
     leave: () => {
       left = true;
       clearTimeout(retry);
