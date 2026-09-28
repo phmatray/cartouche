@@ -90,7 +90,7 @@ export function useSaveStates(
     return true;
   }, [gameId, loadState, exportSram, profileRef]);
   const load = useCallback(async (k: SlotKey, atBoot = false): Promise<boolean | 'older'> => {
-    const entry = gameId ? await getSaveState(idOf(k)) : undefined;
+    const entry = gameId ? await getSaveState(idOf(k)).catch(() => undefined) : undefined; // storage blocked: nothing to load
     return entry ? loadEntry(entry, k, atBoot) : false;
   }, [gameId, idOf, loadEntry]);
 
