@@ -120,6 +120,43 @@ impl Spc700 {
         cycles
     }
 
+    pub fn export_state(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&[self.a, self.x, self.y, self.sp]);
+        out.extend_from_slice(&self.pc.to_le_bytes());
+        out.extend_from_slice(&[self.psw, self.halted as u8, self.dsp_addr, self.control]);
+        out.extend_from_slice(&self.ports_in);
+        out.extend_from_slice(&self.ports_out);
+        for t in &self.timers {
+            out.extend_from_slice(&[t.target, t.stage, t.out]);
+            out.extend_from_slice(&t.div.to_le_bytes());
+        }
+        out.extend_from_slice(&self.aram[..]);
+    }
+
+    /// Reads what `export_state` wrote at `*pos`; truncated data is rejected and changes nothing.
+    pub fn import_state(&mut self, data: &[u8], pos: &mut usize) -> bool {
+        const LEN: usize = 10 + 8 + 3 * 7 + 0x10000;
+        let Some(d) = data.get(*pos..).and_then(|d| d.get(..LEN)) else { return false };
+        *pos += LEN;
+        [self.a, self.x, self.y, self.sp] = [d[0], d[1], d[2], d[3]];
+        self.pc = u16::from_le_bytes([d[4], d[5]]);
+        [self.psw, self.dsp_addr, self.control] = [d[6], d[8], d[9]];
+        self.halted = d[7] != 0;
+        self.ports_in.copy_from_slice(&d[10..14]);
+        self.ports_out.copy_from_slice(&d[14..18]);
+        for (i, (t, s)) in self.timers.iter_mut().zip(d[18..39].chunks(7)).enumerate() {
+            // Clamped: a damaged state must not leave a timer ticking through billions of periods.
+            *t = Timer {
+                target: s[0],
+                stage: s[1],
+                out: s[2] & 0x0F,
+                div: u32::from_le_bytes([s[3], s[4], s[5], s[6]]).min(TIMER_PERIOD[i] - 1),
+            };
+        }
+        self.aram.copy_from_slice(&d[39..]);
+        true
+    }
+
     pub fn tick_timers(&mut self, cycles: u32) {
         for (i, t) in self.timers.iter_mut().enumerate() {
             t.div += cycles;

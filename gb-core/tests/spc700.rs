@@ -472,6 +472,55 @@ fn timer_loop_program_counts_overflows() {
     assert_eq!(spc.aram[0x10], 10);
 }
 
+// ─── Save states ───
+
+#[test]
+fn state_round_trips_registers_ram_ports_and_timers() {
+    // AC4: run the timer program part-way, save, load into a fresh core, then both run on alike.
+    let program = [0x8F, 0x03, 0xFA, 0x8F, 0x05, 0xF1, 0xE4, 0xFD, 0x60, 0x84, 0x10, 0xC4, 0x10, 0x2F, 0xF7];
+    let (mut spc, mut dsp) = (Spc700::new(), Dsp::default());
+    spc.aram[0x200..0x200 + program.len()].copy_from_slice(&program);
+    spc.aram[0xFFC0] = 0xAB;
+    spc.pc = 0x200;
+    spc.write(0xF2, 0x5C, &mut dsp);
+    spc.write(0xFC, 7, &mut dsp);
+    spc.ports_in = [1, 2, 3, 4];
+    spc.write(0xF5, 0x66, &mut dsp);
+    for _ in 0..137 {
+        spc.step(&mut dsp);
+    }
+    spc.psw = 0xA5;
+
+    let mut state = vec![0xEE]; // a preceding section of the save state
+    spc.export_state(&mut state);
+    let mut loaded = Spc700::new();
+    let mut pos = 1;
+    assert!(loaded.import_state(&state, &mut pos));
+    assert_eq!(pos, state.len());
+    assert_eq!(regs(&loaded), regs(&spc));
+    assert_eq!((loaded.ports_in, loaded.ports_out, loaded.halted), (spc.ports_in, spc.ports_out, spc.halted));
+    assert!(loaded.aram[..] == spc.aram[..]);
+    assert_eq!(loaded.read(0xF2, &mut dsp), 0x5C);
+
+    let mut dsp2 = Dsp::default();
+    for _ in 0..500 {
+        assert_eq!(loaded.step(&mut dsp2), spc.step(&mut dsp));
+    }
+    assert_eq!(regs(&loaded), regs(&spc));
+    assert_eq!(loaded.aram[0x10], spc.aram[0x10]);
+    for r in 0xFD..=0xFF {
+        assert_eq!(loaded.read(r, &mut dsp2), spc.read(r, &mut dsp), "timer {r:02X}");
+    }
+}
+
+#[test]
+fn truncated_state_is_rejected() {
+    let mut state = Vec::new();
+    Spc700::new().export_state(&mut state);
+    state.pop();
+    assert!(!Spc700::new().import_state(&state, &mut 0));
+}
+
 #[test]
 fn a_program_writes_the_dsp() {
     // AC3 through code: MOV $F2,#$4C; MOV $F3,#$01.
