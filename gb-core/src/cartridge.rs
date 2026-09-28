@@ -80,13 +80,17 @@ impl Rtc {
     }
 
     /// Catches up `secs` seconds of wall time (between sessions), unless halted.
-    fn advance(&mut self, secs: u64) {
+    fn advance(&mut self, mut secs: u64) {
         if self.halted() { return; }
-        let valid = self.regs[0] < 60 && self.regs[1] < 60 && self.regs[2] < 24;
-        let days = if valid { secs / 86400 } else { 0 };
+        // Out-of-range registers count back into range first (at most a day and a half), so that
+        // whole days can then be added at once.
+        while secs > 0 && !(self.regs[0] < 60 && self.regs[1] < 60 && self.regs[2] < 24) {
+            self.second();
+            secs -= 1;
+        }
         // Past 1024 days the counter has overflowed (sticky) and wrapped twice: the rest changes nothing.
-        for _ in 0..days.min(1024) { self.day(); }
-        for _ in 0..secs - days * 86400 { self.second(); }
+        for _ in 0..(secs / 86400).min(1024) { self.day(); }
+        for _ in 0..secs % 86400 { self.second(); }
     }
 
     /// Sets the live registers from a total number of seconds (the legacy Cartouche footer).
@@ -1650,6 +1654,13 @@ mod tests {
         let r = read_clock(&mut d);
         assert_eq!((r[1], r[3]), (20, 2), "two days later");
         assert!((3..6).contains(&r[0]));
+
+        // Out-of-range registers stamped at the epoch: decades to catch up, done in whole days.
+        let mut sav = vec![0u8; 0x8000];
+        for v in [63u32, 0, 31, 0, 0, 0, 0, 0, 0, 0] { sav.extend_from_slice(&v.to_le_bytes()); }
+        sav.extend_from_slice(&0u64.to_le_bytes());
+        d.import_sram(&sav);
+        assert_eq!(read_clock(&mut d)[4] & 0x80, 0x80, "the day counter overflowed");
     }
 
     #[test]
