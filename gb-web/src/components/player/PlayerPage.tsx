@@ -15,7 +15,7 @@ import { useAnimationFrame } from '../../hooks/useAnimationFrame';
 import { CHANNEL_KEYS, machineFor, paletteOf, useDisplay, useSettingsStore, type Machine } from '../../store/settingsStore';
 import { parseRomHeader, sgbCartOf } from '../../lib/rom-utils';
 import { presetOf } from '../../shaders/filters';
-import { BUTTON_NUMBERS } from '../../utils/keybindings';
+import { BUTTON_NUMBERS, chord } from '../../utils/keybindings';
 import { dpadAt, slide } from '../../lib/touch-slide';
 import { getActiveProfileId, getSaveState, getSram, resumeStateId } from '../../lib/db';
 import { bootFrom, skipSilentResume } from '../../lib/boot-from';
@@ -506,7 +506,7 @@ function Player({ game }: { game: GameEntry }) {
     const onFocus = (e: FocusEvent) => { if (e.target !== clicked) clicked = null; };
     const down = (e: KeyboardEvent) => {
       // The touch layout editor has the page (arrows and +/- move its parts): the game waits, no shortcut gets through.
-      if (editing || typing() || document.querySelector('dialog[open]') || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (editing || typing() || document.querySelector('dialog[open]') || chord(e)) return;
       // Keys on the camera lens or the printer tray work their own controls (Enter presses the button, not Start).
       if (e.target instanceof Element && e.target.closest('.cdock,.ptray')) return;
       // Enter or Space on a control reached with the keyboard presses it; after a click, the keys stay the game's.

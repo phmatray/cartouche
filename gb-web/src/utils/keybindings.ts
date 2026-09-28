@@ -30,3 +30,10 @@ export const BUTTON_NUMBERS: Record<string, number> = {
   Up: 6,
   Down: 7,
 };
+
+/**
+ * A shortcut chord (Ctrl, ⌘ or Alt with another key): the browser's and the system's, not the game's. The modifier on
+ * its own is a key like any other (a button can be bound to Control), though its own keydown carries its flag.
+ */
+export const chord = (e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey'>) =>
+  (e.ctrlKey && e.key !== 'Control') || (e.metaKey && e.key !== 'Meta') || (e.altKey && e.key !== 'Alt' && e.key !== 'AltGraph');
