@@ -28,16 +28,7 @@ same-suite/apu/channel_1/channel_1_freq_change_timing-cgb0BC.gb  # apu
 same-suite/apu/channel_2/channel_2_extra_length_clocking-cgb0B.gb  # apu
 same-suite/apu/channel_3/channel_3_extra_length_clocking-cgb0.gb  # apu
 same-suite/apu/channel_3/channel_3_extra_length_clocking-cgbB.gb  # apu
-same-suite/apu/channel_4/channel_4_align.gb  # apu
-same-suite/apu/channel_4/channel_4_delay.gb  # apu
-same-suite/apu/channel_4/channel_4_equivalent_frequencies.gb  # apu
 same-suite/apu/channel_4/channel_4_extra_length_clocking-cgb0B.gb  # apu
-same-suite/apu/channel_4/channel_4_freq_change.gb  # apu
-same-suite/apu/channel_4/channel_4_frequency_alignment.gb  # apu
-same-suite/apu/channel_4/channel_4_lfsr_7_15.gb  # apu
-same-suite/apu/channel_4/channel_4_lfsr_restart.gb  # apu
-same-suite/apu/channel_4/channel_4_lfsr_restart_fast.gb  # apu
-same-suite/apu/channel_4/channel_4_volume_div.gb  # apu
 same-suite/sgb/command_mlt_req.gb  # sgb
 same-suite/sgb/command_mlt_req_1_incrementing.gb  # sgb
 age-test-roms/halt/halt-m0-interrupt-dmgC-cgbBCE.gb  # interrupt
@@ -232,8 +223,6 @@ mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_change2.gb@cgb  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change.gb@cgb  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change2.gb@cgb  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_lcdc_win_en_change_multiple.gb@cgb  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_lcdc_win_en_change_multiple.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_lcdc_win_en_change_multiple_wx.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_lcdc_win_map_change.gb@cgb  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_lcdc_win_map_change.gb@dmg  # ppu-mode3
@@ -245,10 +234,7 @@ mealybug-tearoom-tests/ppu/m3_scx_high_5_bits_change2.gb@cgb  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_scx_low_3_bits.gb@cgb  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_scx_low_3_bits.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_scy_change.gb@cgb  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_scy_change.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_scy_change2.gb@cgb  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_window_timing_wx_0.gb@cgb  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_window_timing_wx_0.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_wx_4_change.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_wx_4_change_sprites.gb@cgb  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_wx_4_change_sprites.gb@dmg  # ppu-mode3

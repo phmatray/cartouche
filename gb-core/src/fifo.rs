@@ -15,7 +15,8 @@
 //! An OBJ whose X is reached stops the pixels: the fetcher finishes its current tile, then the OBJ
 //! row is fetched (6 dots) and merged into the OBJ FIFO, where the pixels already there (lower X,
 //! then lower OAM index) keep their place. The window, when x reaches WX - 7, empties the BG FIFO
-//! and restarts the fetcher on the window map (6 dots). These waits add up to the lengths
+//! and restarts the fetcher on the window map (6 dots). It shows once WY has matched LY on a line of
+//! the frame; turned off and on again, it can start over at a later WX match, on its next row. These waits add up to the lengths
 //! `Ppu::mode3_length` predicts (Pan Docs, "Mode 3 length").
 //!
 //! The CGB draws with `render_scanline_cgb` until its own FIFO lands (#156).
@@ -95,6 +96,8 @@ pub(crate) struct LineState {
     pub len: u32,
     /// Next screen x to draw; the line is done at 160.
     pub x: u8,
+    /// SCX % 8, latched as the first fetch ends.
+    pub fine: u8,
     /// BG pixels still to drop at the line start (SCX % 8).
     pub discard: u8,
     /// The OAM X that the next popped pixel reaches (x + 8 once the discard is over).
@@ -115,6 +118,8 @@ pub(crate) struct LineState {
     /// Dots left of the running OBJ fetch.
     pub obj_dots: u8,
     pub window_triggered: bool,
+    /// Window restarts on this line after the first: each moves the window to its next row.
+    pub win_rows: u8,
     /// The OBJs left of the first real tile have been fetched.
     pub left_done: bool,
     /// Window pixels to drop on a WX below 7.
@@ -138,11 +143,13 @@ pub(crate) struct LineState {
 impl Ppu {
     /// Mode 2 → 3 on a DMG: selects the line's OBJs and resets the fetcher.
     pub(crate) fn start_line(&mut self) {
+        if self.ly == self.wy { self.window_was_active = true; }
         let (sprites, nsprites) = if self.lcd_on_line0 { ([(0, 0, 0, 0, 0); 10], 0) } else { self.select_sprites(self.ly as usize) };
         let fine = self.scx & 7;
         self.line = LineState {
             active: true,
             lcdc_prev: self.lcdc,
+            fine,
             discard: fine,
             hit_x: 8 - fine,
             first_fetch: true,
@@ -194,7 +201,7 @@ impl Ppu {
         self.line.active = false;
         let window_line = self.window_line_counter;
         if self.line.window_triggered {
-            self.window_line_counter = self.window_line_counter.wrapping_add(1);
+            self.window_line_counter = self.win_line().wrapping_add(1);
         }
         let (line, rec, win_x) = (self.ly as usize, self.line.record, self.wx.saturating_sub(7));
         let (sprites, n) = (self.line.sprites, rec[11] as usize);
@@ -212,12 +219,21 @@ impl Ppu {
         }
     }
 
+    fn wy_ok(&self) -> bool {
+        self.window_was_active || self.ly == self.wy
+    }
+
+    /// The window row being drawn.
+    fn win_line(&self) -> u8 {
+        self.window_line_counter.wrapping_add(self.line.win_rows)
+    }
+
     fn fetch_tile_row(&self, tile: u8) -> usize {
         if self.lcdc & 0x10 != 0 { tile as usize * 16 } else { (0x1000 + (tile as i8 as i32) * 16) as usize }
     }
 
     fn fetch_row(&self) -> u8 {
-        if self.line.fetcher.window { self.window_line_counter & 7 } else { self.scy.wrapping_add(self.ly) & 7 }
+        if self.line.fetcher.window { self.win_line() & 7 } else { self.scy.wrapping_add(self.ly) & 7 }
     }
 
     /// One dot of the BG/window fetcher.
@@ -231,12 +247,15 @@ impl Ppu {
         match f.step {
             FetchStep::Tile => {
                 let (map, col, row) = if f.window {
-                    (self.lcdc & 0x40, f.tile_x & 31, self.window_line_counter >> 3)
+                    (self.lcdc & 0x40, f.tile_x & 31, self.win_line() >> 3)
                 } else {
                     (self.lcdc & 0x08, (self.scx >> 3).wrapping_add(f.tile_x) & 31, self.scy.wrapping_add(self.ly) >> 3)
                 };
                 let base = if map != 0 { 0x1C00 } else { 0x1800 };
-                self.line.fetcher.tile = self.vram[base + row as usize * 32 + col as usize];
+                // The first tile is fetched twice, but its number is read once (Mealybug `m3_scy_change`).
+                if f.window || f.tile_x != 0 || self.line.first_fetch {
+                    self.line.fetcher.tile = self.vram[base + row as usize * 32 + col as usize];
+                }
                 self.line.fetcher.step = FetchStep::DataLo;
             }
             FetchStep::DataLo => {
@@ -245,6 +264,12 @@ impl Ppu {
             }
             FetchStep::DataHi => {
                 self.line.fetcher.hi = self.vram[self.fetch_tile_row(f.tile) + self.fetch_row() as usize * 2 + 1];
+                if self.line.first_fetch {
+                    // The fine scroll is latched as the first fetch ends (Mealybug `m3_window_timing_wx_0`
+                    // takes a SCX write 2 dots before it, `m3_scx_low_3_bits` leaves one 2 dots after it).
+                    let fine = self.scx & 7;
+                    (self.line.fine, self.line.discard, self.line.hit_x) = (fine, fine, 8 - fine);
+                }
                 self.line.fetcher.step = FetchStep::Push;
             }
             FetchStep::Push => {
@@ -268,9 +293,11 @@ impl Ppu {
                 self.line.fetcher.half = true;
                 if f.window && f.tile_x == 0 {
                     // ponytail: WX 0-6 drops the window's first pixels at no cost (6 dots in all, as
-                    // gbmicrotest win0-3 measure) by starting the next fetch early; the WX 0 / SCX
-                    // glitches of real hardware are not modelled.
-                    for _ in 0..self.line.win_skip.min(5) { self.fetcher_dot(); }
+                    // gbmicrotest win0-3 measure) by starting the next fetch early. With WX 0 and a fine
+                    // scroll, the window comes one dot later (Mealybug `m3_window_timing_wx_0`). WX
+                    // written mid-line below 7 (`m3_wx_4/5/6_change`) is not modelled.
+                    let early = if self.line.win_skip == 7 && self.line.fine != 0 { 4 } else { 5 };
+                    for _ in 0..self.line.win_skip.min(early) { self.fetcher_dot(); }
                 }
             }
         }
@@ -320,7 +347,7 @@ impl Ppu {
     /// pixel: X 0 costs 11 dots, the others 6 plus, for the first, 5 minus X + SCX % 8.
     fn fetch_left_objs(&mut self) -> u32 {
         if self.lcdc & 0x02 == 0 { return 0; }
-        let fine = self.scx & 7;
+        let fine = self.line.fine;
         let mut order: [(u8, usize); 10] = [(0, 0); 10];
         let mut n = 0;
         for i in 0..self.line.nsprites {
@@ -362,7 +389,7 @@ impl Ppu {
 
     fn fifo_dot(&mut self) {
         // WX 0-6 is matched before x = 0 (x = WX - 7), while the first tile is being fetched.
-        if self.wx < 7 && self.line.dot == 6 + self.wx as u32 && self.lcdc & 0x21 == 0x21 && self.ly >= self.wy {
+        if self.wx < 7 && self.line.dot == 6 + self.wx as u32 && self.lcdc & 0x21 == 0x21 && self.wy_ok() {
             self.line.win_skip = 7 - self.wx;
         }
         if self.line.obj_dots > 0 {
@@ -390,9 +417,11 @@ impl Ppu {
         // Window: at x = WX - 7 (x = 0 for WX 0-6), once the line has started and the fine scroll is
         // dropped, the BG FIFO is emptied and the fetcher restarts on the window map.
         let x = self.line.x;
-        if !self.line.window_triggered && self.line.left_done && self.line.discard == 0 && self.lcdc & 0x21 == 0x21
-            && if self.line.win_skip > 0 { x == 0 } else { self.ly >= self.wy && x + 7 == self.wx }
+        if !self.line.fetcher.window && self.line.left_done && self.line.discard == 0 && self.lcdc & 0x21 == 0x21
+            && if self.line.win_skip > 0 { x == 0 } else { self.wy_ok() && x + 7 == self.wx }
         {
+            // Turned off and on again, the window starts over on its next row.
+            if self.line.window_triggered { self.line.win_rows += 1; }
             self.line.window_triggered = true;
             self.line.bg.clear();
             self.line.fetcher = Fetcher { window: true, ..Fetcher::default() };

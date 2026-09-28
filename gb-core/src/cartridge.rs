@@ -210,6 +210,9 @@ impl Huc3Rtc {
 }
 
 const HUC3_FOOTER_LEN: usize = 28;
+/// Where the clock tail starts in the HuC3 / TAMA5 mapper blocks (`export_extra`).
+const HUC3_CLOCK_AT: usize = 133;
+const TAMA5_CLOCK_AT: usize = 18;
 
 pub const MAPPER_STATE_LEN: usize = 7;
 
@@ -959,18 +962,20 @@ impl Cartridge {
     /// mapper block. MBC7: its serial and sensor state (`Mbc7::export`). MMM01: its four registers.
     /// MBC6: RAM enable, RAM banks A/B, ROM banks A/B, flash selects A/B, flash enable and write
     /// enable, then the flash's command state (the flash itself goes with the RAM). TAMA5: its
-    /// registers (`Tama5::export_state`; the clock goes with the RAM).
+    /// registers (`Tama5::export_state`), then its clock tail.
     /// HuC1: its infrared LED. HuC3: mode, address, last result, last opcode, its 256 memory
-    /// nibbles packed two per byte (low nibble first), then its infrared LED. MBC3 with a clock: the
-    /// clock's position (`clock_dots`, u64 LE) and the dots into its current second (u64 LE), so a
-    /// deterministic session re-runs from a state with the clock it had (rollback). Empty for the rest.
+    /// nibbles packed two per byte (low nibble first), its infrared LED, then its clock tail. MBC3
+    /// with a clock: the clock's position (`clock_dots`, u64 LE) and the dots into its current second
+    /// (u64 LE). HuC3/TAMA5's clock tail: `clock_dots` (u64 LE) and the clock's own dots (u64 LE).
+    /// The clock parts let a deterministic session re-run from a state with the clock it had
+    /// (rollback). Empty for the rest.
     pub fn export_extra(&self) -> Vec<u8> {
         if let (MbcType::Mbc3 { .. }, Some(rtc)) = (&self.mbc, &self.rtc) {
             return [self.clock_dots.to_le_bytes(), rtc.sub.to_le_bytes()].concat();
         }
         if let Some(m) = &self.mbc7 { return m.export(); }
         if let MbcType::Mmm01 { regs } = &self.mbc { return regs.to_vec(); }
-        if let Some(t) = &self.tama5 { return t.export_state(); }
+        if let Some(t) = &self.tama5 { return [t.export_state(), self.clock_tail(t.dots)].concat(); }
         if let (MbcType::Mbc6 { ram_enabled, ram_banks, rom_banks, in_flash, flash_enabled, flash_write }, Some(f)) = (&self.mbc, &self.flash) {
             let mut out = vec![*ram_enabled as u8, ram_banks[0], ram_banks[1], rom_banks[0], rom_banks[1]];
             out.extend([in_flash[0], in_flash[1], *flash_enabled, *flash_write].map(u8::from));
@@ -982,7 +987,19 @@ impl Cartridge {
         let mut out = vec![*mode, h.address, h.result, h.last_opcode];
         out.extend(h.memory.chunks(2).map(|p| p[0] & 0xF | p[1] << 4));
         out.push(self.ir_led as u8);
+        out.extend(self.clock_tail(h.dots));
         out
+    }
+
+    fn clock_tail(&self, dots: u64) -> Vec<u8> {
+        [self.clock_dots.to_le_bytes(), dots.to_le_bytes()].concat()
+    }
+
+    /// The clock tail at `at` in a mapper block, only in a deterministic session: solo play keeps
+    /// catching up the wall clock. None in a state saved before the tail existed.
+    fn read_clock_tail(&self, data: &[u8], at: usize) -> Option<(u64, u64)> {
+        let d = data.get(at..)?.first_chunk::<16>().filter(|_| self.emulated_clock)?;
+        Some((u64::from_le_bytes(d[..8].try_into().unwrap()), u64::from_le_bytes(d[8..].try_into().unwrap())))
     }
 
     /// Restores `export_extra`. Anything shorter (a state saved before the block existed) puts the
@@ -1002,7 +1019,11 @@ impl Cartridge {
             *regs = data.first_chunk::<4>().map_or([0; 4], |r| r.map(|b| b & 0x7F));
             return;
         }
-        if let Some(t) = &mut self.tama5 { return t.import_state(data); }
+        let tail = self.read_clock_tail(data, TAMA5_CLOCK_AT);
+        if let Some(t) = &mut self.tama5 {
+            if let Some((clock, dots)) = tail { (self.clock_dots, t.dots) = (clock, dots); }
+            return t.import_state(data);
+        }
         if let (MbcType::Mbc6 { ram_enabled, ram_banks, rom_banks, in_flash, flash_enabled, flash_write }, Some(f)) = (&mut self.mbc, &mut self.flash) {
             let d = data.first_chunk::<12>().copied().unwrap_or([0; 12]);
             *ram_enabled = d[0] != 0;
@@ -1018,6 +1039,9 @@ impl Cartridge {
             return;
         }
         self.ir_led = data.get(132).is_some_and(|b| b & 1 != 0);
+        if let (Some(tail), Some(h)) = (self.read_clock_tail(data, HUC3_CLOCK_AT), &mut self.huc3) {
+            (self.clock_dots, h.dots) = tail;
+        }
         let (MbcType::Huc3 { mode, .. }, Some(h)) = (&mut self.mbc, &mut self.huc3) else { return };
         let Some((regs, packed)) = data.split_first_chunk::<4>().filter(|(_, p)| p.len() >= 128) else {
             (*mode, h.address, h.result, h.last_opcode) = (0, 0, 0, 0);
@@ -1029,9 +1053,15 @@ impl Cartridge {
         }
     }
 
-    /// Whether `import_extra(extra)` put this cartridge's clock back (MBC3, deterministic session).
+    /// Whether `import_extra(extra)` put this cartridge's clock back (MBC3, HuC3, TAMA5 in a
+    /// deterministic session).
     pub fn rewinds_clock(&self, extra: &[u8]) -> bool {
-        self.emulated_clock && self.rtc.is_some() && matches!(self.mbc, MbcType::Mbc3 { .. }) && extra.len() >= 16
+        self.emulated_clock && match self.mbc {
+            MbcType::Mbc3 { .. } => self.rtc.is_some() && extra.len() >= 16,
+            MbcType::Huc3 { .. } => extra.len() >= HUC3_CLOCK_AT + 16,
+            MbcType::Tama5 => extra.len() >= TAMA5_CLOCK_AT + 16,
+            _ => false,
+        }
     }
 
     /// The wall instant the cartridge clock stands at: in step with the wall when the game runs at
