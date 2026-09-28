@@ -36,12 +36,12 @@ export function useOnlineLink(core: RefObject<Core | null>, power: number, code:
     if (!lockstep) {
       emu.set_link_remote(true);
       // The answer came: finish the stalled frame now (running the game only while it plays), and send what it says.
-      const cable = plug(emu, () => {
+      const plugged = plug(emu, () => {
         if (!runningRef.current || document.visibilityState === 'hidden') return;
         emu.run_frame(); // up to the frame's end, or the next transfer (whose answer resumes us again)
-        cable.pump();
+        plugged.pump();
       });
-      c = cable;
+      c = plugged;
     }
     cable.current = c;
     setSeat({ playing: true });

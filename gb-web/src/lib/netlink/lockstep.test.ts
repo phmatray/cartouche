@@ -80,6 +80,8 @@ test('isRomsMsg: SHA-1 lists only, at most 4096', () => {
   assert.equal(isRomsMsg({ t: 'roms', g: C, s: A }), false);
   assert.equal(isRomsMsg({ t: 'roms', g: C, s: Array(4097).fill(A) }), false);
   assert.equal(isRomsMsg({ t: 'roms', g: C, s: Array(4096).fill(A) }), true);
+  assert.equal(isRomsMsg({ t: 'roms', g: C, s: [A], k: true }), true);
+  assert.equal(isRomsMsg({ t: 'roms', g: C, s: [A], k: 1 }), false);
 });
 
 test('isBootMsg: seed, delay and save checked', () => {

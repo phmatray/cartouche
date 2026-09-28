@@ -273,10 +273,11 @@ export function offerLockstep(game: string, have: string[], save?: string) {
   offerAgain();
   decide();
 }
-/** Until it's decided (a lost message, a partner still loading), the offer and the host's boot go again every heartbeat. */
+/** Until the partner's list is here (a lost message, a partner still loading), ours goes again every heartbeat; so does the
+ *  host's boot until answered. `k`: we have theirs (else they answer with theirs). */
 function offerAgain() {
   if (!offer || boot) return;
-  toPartner({ t: 'roms', g: offer.g, s: offer.s });
+  if (!theirs) toPartner({ t: 'roms', g: offer.g, s: offer.s });
   if (hostBoot && useNet.getState().me.host) toPartner(hostBoot);
 }
 /** Both consoles' start, once the handshake is done (`mode` is then 'lockstep'). */
@@ -307,7 +308,8 @@ function lockstepMsg(m: RomsMsg | BootMsg | LockMsg | HashMsg | Echo) {
   }
   else if (m.t === 'roms') {
     if (boot) return; // already running (a reloaded partner starts over in the byte mode: no resume in this slice)
-    theirs = m;
+    theirs = { t: 'roms', g: m.g, s: m.s };
+    if (!m.k && offer) toPartner({ t: 'roms', g: offer.g, s: offer.s, k: true });
     decide();
   } else if (m.seed !== undefined) { // the host's boot, on the guest
     if (useNet.getState().me.host || !offer || !theirs || !both()) return;
