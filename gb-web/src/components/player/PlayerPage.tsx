@@ -521,6 +521,8 @@ function Player({ game }: { game: GameEntry }) {
     padNav.menu = romLoaded && !editing ? () => { if (isRunning) setManual(true); actions.current.togglePlay(); } : undefined;
     return () => { padNav.game = false; padNav.menu = undefined; };
   }, [romLoaded, isRunning, editing]);
+  // Each finger holds what's under it: a thumb rolls across the D-pad (diagonals on the way) or from B onto A.
+  const held = useRef(new Map<number, string[]>());
   useEffect(() => {
     const buttonOf = (key: string) => {
       for (const [b, k] of Object.entries(keybindings)) if (k === key || k.toLowerCase() === key.toLowerCase()) return BUTTON_NUMBERS[b];
@@ -560,7 +562,12 @@ function Player({ game }: { game: GameEntry }) {
     };
     // A key or a finger let go in another window never comes back: let go of theirs when the page loses focus. A pad's
     // buttons stay, its next poll reads them again.
-    const releaseAll = () => { pressed.clear(); input.clear('key'); input.clear('touch'); actions.current.stopRewind(); };
+    const releaseAll = () => {
+      pressed.clear(); input.clear('key'); actions.current.stopRewind();
+      // The fingers' buttons are drawn up too, not only let go (a finger still down presses again as it moves).
+      held.current.clear(); input.clear('touch');
+      document.querySelectorAll('.touch [data-pad].down').forEach((el) => el.classList.remove('down'));
+    };
     const onHidden = () => { if (document.visibilityState === 'hidden') releaseAll(); };
     window.addEventListener('pointerdown', onPointer, true);
     window.addEventListener('focusin', onFocus, true);
@@ -584,8 +591,6 @@ function Player({ game }: { game: GameEntry }) {
   const screenStyle = screenSize === 'fit' ? undefined : { '--sw': `${(bordered ? 256 : 160) * +screenSize + 24}px` } as CSSProperties;
   const disabled = !romLoaded;
   const noStore = disabled || storageError; // save slots and the album need IndexedDB
-  // Each finger holds what's under it: a thumb rolls across the D-pad (diagonals on the way) or from B onto A.
-  const held = useRef(new Map<number, string[]>());
   const hold = (e: React.PointerEvent<HTMLElement>, now: string[]) => {
     const root = e.currentTarget.closest('.touch');
     const { press, release } = slide(held.current, e.pointerId, now);
