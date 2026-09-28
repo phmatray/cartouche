@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.6.0](https://github.com/phmatray/cartouche/compare/v1.5.0...v1.6.0) (2026-09-28)
+
+
+### Added
+
+* **achievements:** unlock RetroAchievements while playing ([ee90635](https://github.com/phmatray/cartouche/commit/ee906352668be86d58cda3deb6b8a686fe5d25f9))
+* **core:** read memory at RetroAchievements' Game Boy addresses ([25d1a76](https://github.com/phmatray/cartouche/commit/25d1a767033e65fd18852bd7ed628fce24f59f41))
+* **relay:** relay RetroAchievements' emulator API for the web app ([87515fa](https://github.com/phmatray/cartouche/commit/87515fa1a5721f9c0dda9f0e292f72e3fad2caa5))
+
+
+### Documentation
+
+* **achievements:** describe unlocking, the relay and what it sends ([7ace36b](https://github.com/phmatray/cartouche/commit/7ace36b93d567adb6751e3a0d09ae661027c211f))
+
 ## [1.5.0](https://github.com/phmatray/cartouche/compare/v1.4.1...v1.5.0) (2026-09-28)
 
 
