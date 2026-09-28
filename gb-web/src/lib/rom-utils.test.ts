@@ -27,9 +27,10 @@ test('a header title names a catalog game by its whole title or a 6+ character s
   assert.equal(headerNames('Some Game', ''), false);
 });
 
-test('HuC1 and HuC3 cartridges can be played, MBC7 not yet', () => {
+test('HuC1, HuC3 and MBC7 cartridges can be played', () => {
   const on = (cartridgeType: string) => mapperSupported({ cartridgeType } as RomMetadata);
   assert.equal(on('HuC1+RAM+BATTERY'), true);
   assert.equal(on('HuC3'), true);
-  assert.equal(on('MBC7+SENSOR+RUMBLE+RAM+BATTERY'), false);
+  assert.equal(on('MBC7+SENSOR+RUMBLE+RAM+BATTERY'), true);
+  assert.equal(on('MMM01'), false);
 });

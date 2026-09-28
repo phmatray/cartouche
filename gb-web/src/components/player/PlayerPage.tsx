@@ -45,6 +45,7 @@ import { usePeripherals } from '../../peripherals/usePeripherals';
 // Cartridge peripherals load only when a cartridge uses them.
 const CameraDock = lazy(() => import('../../peripherals/CameraDock'));
 const PrinterTray = lazy(() => import('../../peripherals/PrinterTray'));
+const TiltDock = lazy(() => import('../../peripherals/TiltDock'));
 import { useOnlineLink } from '../../lib/netlink/useOnlineLink';
 import { LinkCap, LinkWait } from '../netlink/LinkHud';
 
@@ -718,10 +719,11 @@ function Player({ game }: { game: GameEntry }) {
               ))}
             </div>
           </div>
-          {(periph.camera || periph.paper) && (
+          {(periph.camera || periph.tilt || periph.paper) && (
             <div className="periph">
               <Suspense fallback={null}>
                 {periph.camera && <CameraDock feed={periph.feedCamera} running={isRunning} />}
+                {periph.tilt && <TiltDock onMotion={periph.tiltMotion} recenter={periph.recenter} source={periph.tiltSource} />}
                 {periph.paper && <PrinterTray paper={periph.paper} gameId={game.id} title={game.title} onClose={periph.dismiss} />}
               </Suspense>
             </div>
