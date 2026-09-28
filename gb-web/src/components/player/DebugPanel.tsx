@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import type { useEmulator } from '../../hooks/useEmulator';
 import { useT } from '../../i18n';
+import { Disassembly } from './debug/Disassembly';
 
 function hex8(v: number): string {
   return v.toString(16).toUpperCase().padStart(2, '0');
@@ -59,9 +60,9 @@ function renderTiles(canvas: HTMLCanvasElement, vram: Uint8Array, bgp: number) {
 /** Development aid in the manual's Game page: CPU registers, memory, serial output, VRAM tiles. */
 export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmulator>; isRunning: boolean }) {
   const { registers, readMemory, updateRegisters, getSerialOutput, clearSerialOutput, getVramData, getBgp,
-    setIsRunning, stepInstruction, stepFrame, breakReason, breakpoints, addBreakpoint, removeBreakpoint } = emu;
+    setIsRunning, stepInstruction, stepFrame, stepOver, breakReason, breakpoints, addBreakpoint, removeBreakpoint } = emu;
   const [bpInput, setBpInput] = useState('');
-  const [tab, setTab] = useState<'cpu' | 'serial' | 'tiles'>('cpu');
+  const [tab, setTab] = useState<'cpu' | 'disasm' | 'serial' | 'tiles'>('cpu');
   const [memAddr, setMemAddr] = useState(0x0000);
   const [memView, setMemView] = useState<number[]>([]);
   const [serial, setSerial] = useState('');
@@ -88,11 +89,25 @@ export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmula
     if (/^[0-9a-f]{1,4}$/i.test(bpInput) && v <= 0xffff) { addBreakpoint(v); setBpInput(''); }
   };
 
+  const controls = (
+    <>
+      <div role="group" aria-label={t('player.debug.controls')} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+        {isRunning
+          ? <button className="sbtn" onClick={() => setIsRunning(false)}>{t('player.debug.pause')}</button>
+          : <button className="sbtn" onClick={() => setIsRunning(true)}>{t('player.debug.continue')}</button>}
+        <button className="sbtn" disabled={isRunning} onClick={() => { stepInstruction(); refresh(); }}>{t('player.debug.step')}</button>
+        <button className="sbtn" disabled={isRunning} onClick={() => { stepFrame(); refresh(); }}>{t('player.debug.stepFrame')}</button>
+        <button className="sbtn" disabled={isRunning} onClick={() => { stepOver(); refresh(); }}>{t('player.debug.stepOver')}</button>
+      </div>
+      {breakReason && !isRunning && <p role="status" style={{ margin: '0 0 8px' }}>{t('player.debug.stoppedAt', { reason: breakReason })}</p>}
+    </>
+  );
+
   const mono = { font: '600 12px/1.5 ui-monospace,Menlo,monospace' };
   return (
     <div style={{ marginTop: 16 }}>
       <div className="seg" role="group" aria-label={t('player.debug.view')} style={{ marginBottom: 14 }}>
-        {(['cpu', 'serial', 'tiles'] as const).map((v) => <button key={v} aria-pressed={tab === v} onClick={() => setTab(v)}>{t(`player.debug.${v}`)}</button>)}
+        {(['cpu', 'disasm', 'serial', 'tiles'] as const).map((v) => <button key={v} aria-pressed={tab === v} onClick={() => setTab(v)}>{t(`player.debug.${v}`)}</button>)}
       </div>
       {tab === 'cpu' && (
         <div style={mono}>
@@ -106,14 +121,7 @@ export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmula
               </div>
             </>
           ) : <p>{t('player.debug.noRom')}</p>}
-          <div role="group" aria-label={t('player.debug.controls')} style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
-            {isRunning
-              ? <button className="sbtn" onClick={() => setIsRunning(false)}>{t('player.debug.pause')}</button>
-              : <button className="sbtn" onClick={() => setIsRunning(true)}>{t('player.debug.continue')}</button>}
-            <button className="sbtn" disabled={isRunning} onClick={() => { stepInstruction(); refresh(); }}>{t('player.debug.step')}</button>
-            <button className="sbtn" disabled={isRunning} onClick={() => { stepFrame(); refresh(); }}>{t('player.debug.stepFrame')}</button>
-          </div>
-          {breakReason && !isRunning && <p role="status" style={{ margin: '0 0 8px' }}>{t('player.debug.stoppedAt', { reason: breakReason })}</p>}
+          {controls}
           <form style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }} onSubmit={(e) => { e.preventDefault(); addBp(); }}>
             <label htmlFor="debug-bp">{t('player.debug.breakpoints')} 0x</label>
             <input id="debug-bp" className="field" style={{ width: 90, height: 34 }} value={bpInput} maxLength={4}
@@ -138,6 +146,12 @@ export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmula
             {Array.from({ length: 16 }, (_, row) => `${hex16((memAddr + row * 16) & 0xffff)}: ${Array.from({ length: 16 }, (_, c) => (memView[row * 16 + c] !== undefined ? hex8(memView[row * 16 + c]) : '--')).join(' ')}`).join('\n')}
           </pre>
         </div>
+      )}
+      {tab === 'disasm' && (
+        <>
+          {controls}
+          {registers ? <Disassembly emu={emu} pc={registers.pc} /> : <p>{t('player.debug.noRom')}</p>}
+        </>
       )}
       {tab === 'serial' && (
         <>
