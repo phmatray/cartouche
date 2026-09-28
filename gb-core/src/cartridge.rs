@@ -304,6 +304,8 @@ pub struct Cartridge {
     clock_dots: u64,
     /// A deterministic session (`set_emulated_clock`): the wall clock is never read again.
     emulated_clock: bool,
+    /// HuC1/HuC3 infrared LED: bit 0 of the last value written while A000-BFFF was the IR port.
+    ir_led: bool,
 }
 
 impl Cartridge {
@@ -427,6 +429,7 @@ impl Cartridge {
             clock_epoch: unix_seconds(),
             clock_dots: 0,
             emulated_clock: false,
+            ir_led: false,
         })
     }
 
@@ -741,6 +744,16 @@ impl Cartridge {
     }
 
     pub fn read_ram(&self, offset: u16) -> u8 {
+        self.read_ram_lit(offset, false)
+    }
+
+    /// Whether the HuC1/HuC3 infrared LED is lit (it stays lit outside IR mode).
+    pub fn ir_led(&self) -> bool {
+        self.ir_led
+    }
+
+    /// `read_ram`, with `light` what a HuC1/HuC3 IR port reads: $C1 when it sees light, $C0 otherwise.
+    pub fn read_ram_lit(&self, offset: u16, light: bool) -> u8 {
         match &self.mbc {
             MbcType::NoMbc => self.ram.get(offset as usize).copied().unwrap_or(0xFF),
 
@@ -807,19 +820,18 @@ impl Cartridge {
                 self.ram.get(addr).copied().unwrap_or(0xFF)
             }
 
-            // ponytail: no infrared link, so the IR receiver never sees light.
-            MbcType::Huc1 { ir_mode: true, .. } => 0xC0,
+            MbcType::Huc1 { ir_mode: true, .. } => 0xC0 | light as u8,
             MbcType::Huc1 { ram_bank, .. } => {
                 if self.ram.is_empty() { return 0xFF; }
                 self.ram[self.ram_index(*ram_bank as usize, offset)]
             }
 
-            // ponytail: the speaker and IR are not emulated; IR reads no light.
+            // ponytail: the speaker is not emulated.
             MbcType::Huc3 { mode, ram_bank, .. } => match mode {
                 0x0 | 0xA if !self.ram.is_empty() => self.ram[self.ram_index(*ram_bank as usize, offset)],
                 0xC => self.huc3.as_ref().map_or(0xFF, Huc3Rtc::read),
                 0xD => 0x01,
-                0xE => 0xC0,
+                0xE => 0xC0 | light as u8,
                 _ => 0xFF,
             },
 
@@ -1147,7 +1159,7 @@ impl Cartridge {
                     *byte = value;
                 }
             }
-            MbcType::Huc1 { .. } => {}
+            MbcType::Huc1 { .. } => self.ir_led = value & 1 != 0,
             &MbcType::Huc3 { mode: 0xA, ram_bank, .. } => {
                 let addr = self.ram_index(ram_bank as usize, offset);
                 if let Some(byte) = self.ram.get_mut(addr) {
@@ -1157,6 +1169,7 @@ impl Cartridge {
             MbcType::Huc3 { mode: 0xB, .. } => {
                 if let Some(huc3) = &mut self.huc3 { huc3.command(value); }
             }
+            MbcType::Huc3 { mode: 0xE, .. } => self.ir_led = value & 1 != 0,
             MbcType::Huc3 { .. } => {}
             MbcType::Mbc7 { ram_enable_1: true, ram_enable_2: true, .. } if offset < 0x1000 => {
                 if let Some(m) = &mut self.mbc7 { m.write_reg(&mut self.ram, offset, value); }
