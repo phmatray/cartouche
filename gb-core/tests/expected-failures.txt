@@ -1,0 +1,50 @@
+# Conformance ROMs that fail today (tests/conformance.rs), one per line: <suite root>/<ROM path>,
+# with `@dmg`/`@cgb`/`@<subtest>` when a ROM runs more than once, then `# <area>`.
+# Every ROM here still runs; CI fails when one passes. Remove a line with the fix that makes it pass.
+# Areas: boot, cpu-timing, interrupt, timer, oam-dma, hdma, stat, ppu, ppu-mode3, double-speed,
+# apu, mbc, rtc, sgb, serial, other.
+
+mooneye-test-suite/acceptance/add_sp_e_timing.gb  # cpu-timing
+mooneye-test-suite/acceptance/boot_div-S.gb  # boot
+mooneye-test-suite/acceptance/boot_div-dmg0.gb  # boot
+mooneye-test-suite/acceptance/boot_div-dmgABCmgb.gb  # boot
+mooneye-test-suite/acceptance/boot_div2-S.gb  # boot
+mooneye-test-suite/acceptance/boot_hwio-S.gb  # boot
+mooneye-test-suite/acceptance/boot_hwio-dmg0.gb  # boot
+mooneye-test-suite/acceptance/boot_hwio-dmgABCmgb.gb  # boot
+mooneye-test-suite/acceptance/boot_regs-dmg0.gb  # boot
+mooneye-test-suite/acceptance/boot_regs-mgb.gb  # boot
+mooneye-test-suite/acceptance/boot_regs-sgb.gb  # boot
+mooneye-test-suite/acceptance/boot_regs-sgb2.gb  # boot
+mooneye-test-suite/acceptance/call_cc_timing.gb  # cpu-timing
+mooneye-test-suite/acceptance/call_cc_timing2.gb  # cpu-timing
+mooneye-test-suite/acceptance/call_timing.gb  # cpu-timing
+mooneye-test-suite/acceptance/call_timing2.gb  # cpu-timing
+mooneye-test-suite/acceptance/interrupts/ie_push.gb  # interrupt
+mooneye-test-suite/acceptance/jp_cc_timing.gb  # cpu-timing
+mooneye-test-suite/acceptance/jp_timing.gb  # cpu-timing
+mooneye-test-suite/acceptance/ld_hl_sp_e_timing.gb  # cpu-timing
+mooneye-test-suite/acceptance/oam_dma/reg_read.gb  # oam-dma
+mooneye-test-suite/acceptance/oam_dma/sources-GS.gb  # oam-dma
+mooneye-test-suite/acceptance/oam_dma_restart.gb  # oam-dma
+mooneye-test-suite/acceptance/oam_dma_start.gb  # oam-dma
+mooneye-test-suite/acceptance/oam_dma_timing.gb  # oam-dma
+mooneye-test-suite/acceptance/ppu/hblank_ly_scx_timing-GS.gb  # stat
+mooneye-test-suite/acceptance/ppu/intr_2_mode0_timing.gb  # stat
+mooneye-test-suite/acceptance/ppu/intr_2_mode0_timing_sprites.gb  # stat
+mooneye-test-suite/acceptance/ppu/intr_2_mode3_timing.gb  # ppu-mode3
+mooneye-test-suite/acceptance/ppu/intr_2_oam_ok_timing.gb  # stat
+mooneye-test-suite/acceptance/ppu/lcdon_timing-GS.gb  # stat
+mooneye-test-suite/acceptance/ppu/lcdon_write_timing-GS.gb  # stat
+mooneye-test-suite/acceptance/ppu/stat_lyc_onoff.gb  # stat
+mooneye-test-suite/acceptance/ppu/vblank_stat_intr-GS.gb  # stat
+mooneye-test-suite/acceptance/push_timing.gb  # cpu-timing
+mooneye-test-suite/acceptance/ret_cc_timing.gb  # cpu-timing
+mooneye-test-suite/acceptance/ret_timing.gb  # cpu-timing
+mooneye-test-suite/acceptance/reti_timing.gb  # cpu-timing
+mooneye-test-suite/acceptance/rst_timing.gb  # cpu-timing
+mooneye-test-suite/acceptance/serial/boot_sclk_align-dmgABCmgb.gb  # boot
+mooneye-test-suite/acceptance/timer/tima_reload.gb  # timer
+mooneye-test-suite/acceptance/timer/tima_write_reloading.gb  # timer
+mooneye-test-suite/acceptance/timer/tma_write_reloading.gb  # timer
+mooneye-test-suite/emulator-only/mbc1/multicart_rom_8Mb.gb  # mbc
