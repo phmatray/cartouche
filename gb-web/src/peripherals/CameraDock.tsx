@@ -28,7 +28,9 @@ export default function CameraDock({ feed, running }: { feed: (lum: Uint8Array) 
   const still = useRef<Uint8Array | null>(null);
   const supported = !!navigator.mediaDevices?.getUserMedia;
 
-  const stop = useCallback(() => { stream.current?.getTracks().forEach((tr) => tr.stop()); stream.current = null; }, []);
+  // Bumped by every stop: a camera granted after it (the lens left, or asked again, while the prompt was up) is let go at once.
+  const asked = useRef(0);
+  const stop = useCallback(() => { asked.current++; stream.current?.getTracks().forEach((tr) => tr.stop()); stream.current = null; }, []);
   useEffect(() => stop, [stop]);
   useEffect(() => {
     const on = () => setVisible(document.visibilityState === 'visible');
@@ -38,12 +40,14 @@ export default function CameraDock({ feed, running }: { feed: (lum: Uint8Array) 
 
   const start = useCallback(async (id?: string) => {
     stop();
+    const ask = asked.current;
     setState('asking');
     try {
       const s = await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: id ? { deviceId: { exact: id }, width: { ideal: 640 } } : { facingMode: 'user', width: { ideal: 640 } },
       });
+      if (ask !== asked.current) { s.getTracks().forEach((tr) => tr.stop()); return; }
       stream.current = s;
       const track = s.getVideoTracks()[0];
       const set = track?.getSettings();
