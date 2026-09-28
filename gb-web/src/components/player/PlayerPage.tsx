@@ -713,7 +713,7 @@ function Player({ game }: { game: GameEntry }) {
             {SPEEDS.map((s) => <button key={s} aria-pressed={speed === s} onClick={() => setSpeed(s)}>{s === 0.5 ? '½' : s}×</button>)}
           </div>
           {/* Narrow phones: one button steps through the speeds (the group doesn't fit). */}
-          <button className="dk spd" onClick={() => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length])} aria-label={t('player.deck.speedChange', { x: String(speed) })}>{speed === 0.5 ? '½' : speed}×</button>
+          <button className="dk spd" onClick={() => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length])} aria-label={t('player.deck.speedChange', { x: speed })}>{speed === 0.5 ? '½' : speed}×</button>
           <span className="gap" />
         </>}
         <button className="dk" onClick={() => saveSlot(0)} disabled={noStore} aria-label={t('player.deck.saveF5')}>{I.save}<span className="lbl">{t('common.save')}</span><span className="k">F5</span></button>
