@@ -48,6 +48,8 @@ const CameraDock = lazy(() => import('../../peripherals/CameraDock'));
 const PrinterTray = lazy(() => import('../../peripherals/PrinterTray'));
 const TiltDock = lazy(() => import('../../peripherals/TiltDock'));
 import { useOnlineLink } from '../../lib/netlink/useOnlineLink';
+import { useLockstep } from '../../lib/netlink/useLockstep';
+import { useNet } from '../../lib/netlink/session';
 import { LinkCap, LinkWait } from '../netlink/LinkHud';
 
 const FPS = 4194304 / 70224; // 59.73 Hz, the Game Boy's real frame rate
@@ -80,7 +82,7 @@ export function PlayerPage() {
 
 function Player({ game }: { game: GameEntry }) {
   const [q, setQ] = useSearchParams();
-  const { savedIds, storageError, deleteGame } = useGameLibrary();
+  const { games, savedIds, storageError, deleteGame } = useGameLibrary();
   const navigate = useNavigate();
   const t = useT();
   const emu = useEmulator();
@@ -88,7 +90,18 @@ function Player({ game }: { game: GameEntry }) {
     errors, hasBatteryRam, exportSram, importSram, saveState, loadState, framebufferSnapshot, setTraceEnabled, getTrace,
     consoleNow, stateConsole, paletteNow, skipBoot, sgbBorder, sgbSnesMusic, power, steps } = emu;
   // Keyboard, pad and touch each hold their own buttons: letting go on one keeps what another still holds.
-  const input = useMemo(() => combine(pressButton, releaseButton), [pressButton, releaseButton]);
+  // Online in lockstep, this player's buttons go to both consoles a few frames later (useLockstep).
+  const romData = useRef<Uint8Array | null>(null);
+  // Both players hold both games: this browser runs both consoles in lockstep, switched on the same way on both sides.
+  const lockstepPower = useCallback((save?: Uint8Array) => {
+    const data = romData.current;
+    if (!data || !loadRom(data)) return false;
+    if (save) importSram(save);
+    return true;
+  }, [loadRom, importSram]);
+  const lock = useLockstep({ core: emu.coreRef, code: q.get('online'), running: isRunning, games, power: lockstepPower,
+    rom: () => romData.current, save: () => (hasBatteryRam() ? exportSram() : null), pressButton, releaseButton });
+  const input = useMemo(() => combine(lock.press, lock.release), [lock.press, lock.release]);
   const padPress = useCallback((b: number, p?: number) => input.press('pad', b, p), [input]);
   const padRelease = useCallback((b: number, p?: number) => input.release('pad', b, p), [input]);
   const keybindings = useSettingsStore((s) => s.keybindings);
@@ -158,7 +171,6 @@ function Player({ game }: { game: GameEntry }) {
 
   // ---- the console: an original Game Boy cartridge runs on the Game Boy or, colourised, on the Game Boy Color; one with
   // Super Game Boy functions on the Super Game Boy ----
-  const romData = useRef<Uint8Array | null>(null);
   const [running, setRunning] = useState<Machine | null>(null); // what the core was powered on with
   const switchOk = useRef(false); // only the resume at start-up may follow its state onto another console
   const refused = useRef(false); // the last load was a state from another console (already explained)
@@ -174,12 +186,13 @@ function Player({ game }: { game: GameEntry }) {
   const peekRa = useCallback((a: number) => coreRef.current?.read_memory_ra(a) ?? 0, [coreRef]);
   // Cheat codes: the core gets the ones on at once, and unlocking goes off while any is.
   const codes = useSettingsStore((s) => activeCodes(s.gameCheats[game.id] ?? []));
+  const lockstep = useNet((s) => s.mode === 'lockstep');
   const { setCheats } = emu;
   // setCheats changes at each power-on, so codes stored with no game running are checked by the core then.
   useEffect(() => {
-    const refused = setCheats(codes);
+    const refused = setCheats(lockstep ? '' : codes); // in lockstep they would change one browser's game only
     if (refused !== null) toast(tNow('player.codes.refused', { error: refused }), 'm', { label: tNow('player.tabs.codes'), target: '#mt-codes', run: () => { setTab('codes'); setManual(true); } });
-  }, [codes, setCheats]);
+  }, [codes, setCheats, lockstep]);
   const ra = useRaSession(power, () => romData.current, peekRa, game.title, codes !== '');
   const raJumped = ra.jumped, raFrame = ra.frame;
 
@@ -237,6 +250,8 @@ function Player({ game }: { game: GameEntry }) {
   // Online link cable (?online=<room>): real time only, so no speed change, rewind or state loading while plugged in.
   const online = useOnlineLink(emu.coreRef, power, q.get('online'), isRunning);
   const linkPump = online.pump;
+  const lockStep = lock.active ? lock.step : null, lockDue = lock.active ? lock.due : null;
+  const link = lock.active ? { ...online, waiting: lock.waiting, frames: lock.frames, desync: lock.desync, inStep: true } : online;
 
   // No Fullscreen API on iPhone (nor in its Home Screen apps): "immersive" hides the chrome instead and gives the screen all the room.
   const [immersive, setImmersive] = useState(false);
@@ -377,13 +392,13 @@ function Player({ game }: { game: GameEntry }) {
   useEffect(() => { speedRef.current = speed; }, [speed]);
   const { tick: periphTick, stop: periphStop } = periph;
   const runOne = useCallback(() => {
-    const fb = runFrame();
+    const fb = lockStep ? lockStep(runFrame) : runFrame();
     if (fb) raFrame();
     linkPump();
     const samples = getAudioSamples(); // always drained; only played at ≤ 1× (stretched to fill the device at ½×)
     if (samples && speedRef.current <= 1) feedSamples(stretch(samples, speedRef.current));
     return fb;
-  }, [runFrame, getAudioSamples, feedSamples, linkPump, raFrame]);
+  }, [runFrame, getAudioSamples, feedSamples, linkPump, raFrame, lockStep]);
   // Display refresh rate, from the time between animation frames (median of the last 31).
   const refresh = useRef<number[]>([]);
   const onFrame = useCallback(() => {
@@ -395,6 +410,7 @@ function Player({ game }: { game: GameEntry }) {
     p.acc += dt * FPS * speedRef.current;
     let n: number;
     [n, p.acc] = take(p.acc, 8);
+    if (lockDue) n = lockDue(now); // in lockstep, frames a wait held back are caught up (both consoles keep the pace)
     if (isRewinding) n = 1; // rewind runs at its own pace, whatever the speed
     // Smooth motion only where it makes sense: a display faster than the Game Boy (or forced), normal speed, no rewind.
     const hz = refresh.current.length >= 15 ? 1 / [...refresh.current].sort((a, b) => a - b)[refresh.current.length >> 1] : 60;
@@ -412,7 +428,7 @@ function Player({ game }: { game: GameEntry }) {
     // Online, the resume point stays the solo game's: a mid-link state is no place to come back to alone.
     if (n) { played.current += dt; if (!online.on) dirty.current = true; }
     periphTick(isRewinding ? 0 : n);
-  }, [wrapRunFrame, runOne, renderFrame, isRewinding, smoothMotion, smoothMotionForce, setTraceEnabled, getTrace, setMotion, drawMotion, usesTrace, periphTick, online.on, consoleNow, syncBorder]);
+  }, [wrapRunFrame, runOne, renderFrame, isRewinding, smoothMotion, smoothMotionForce, setTraceEnabled, getTrace, setMotion, drawMotion, usesTrace, periphTick, online.on, consoleNow, syncBorder, lockDue]);
   const looping = romLoaded && (isRunning || isRewinding);
   useEffect(() => { if (!looping) { pace.current.last = 0; refresh.current = []; periphStop(); } }, [looping, periphStop]);
   useAnimationFrame(onFrame, looping);
@@ -709,7 +725,7 @@ function Player({ game }: { game: GameEntry }) {
                   <FileButton className="btn y" accept={fileAccept('.gb,.gbc,.zip')}
                     onFiles={async ([f]) => { const data = await linkRom(f); if (data) boot(data); }}>{I.cart}{t('game.loadRom')}</FileButton>
                 </div>
-              ) : online.on && online.waiting && isRunning ? <LinkWait link={online} /> : romLoaded && !booting && !isRunning && !isRewinding && !editing && (errors.at(-1)?.detail ? (
+              ) : online.on && (lock.desync || (link.waiting && isRunning)) ? <LinkWait link={link} /> : romLoaded && !booting && !isRunning && !isRewinding && !editing && (errors.at(-1)?.detail ? (
                 <div className="overlay">
                   <b>{t('player.crashed.title')}</b>
                   <p>{t('player.crashed.body')}</p>
@@ -738,7 +754,7 @@ function Player({ game }: { game: GameEntry }) {
             </div>
           )}
           <div className="cap">
-            <span>{display.custom ? t('settings.screen.custom') : t(`settings.screen.presets.${presetOf(display.cfg.preset)!.name}.label`)}</span><i /><span>{t('player.speed', { x: speed === 0.5 ? '½' : String(speed) })}</span><i />{online.on ? <LinkCap link={online} /> : <span>{t('player.rewindReady', { s: String(Math.round(bufferFill * rewindSeconds)) })}</span>}
+            <span>{display.custom ? t('settings.screen.custom') : t(`settings.screen.presets.${presetOf(display.cfg.preset)!.name}.label`)}</span><i /><span>{t('player.speed', { x: speed === 0.5 ? '½' : String(speed) })}</span><i />{online.on ? <LinkCap link={link} /> : <span>{t('player.rewindReady', { s: String(Math.round(bufferFill * rewindSeconds)) })}</span>}
           </div>
         </main>
 

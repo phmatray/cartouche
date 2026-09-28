@@ -97,6 +97,7 @@ export default {
     joining: 'Connexion au salon',
     waiting: 'En attente du joueur {p}',
     bytes: { one: '{count} octet', other: '{count} octets' },
+    inStep: 'en phase',
   },
   wait: {
     lostT: 'Connexion perdue',
@@ -111,5 +112,15 @@ export default {
     wait: 'Chaque octet du câble fait un aller-retour par internet.',
     unplug: 'Débrancher le câble',
     gaveUp: 'Aucune réponse du joueur {p} depuis 20 s : le jeu a vu le câble débranché',
+    inStep: 'Les deux jeux tournent en phase ici : celui-ci attend les boutons du joueur {p}.',
+  },
+  mode: {
+    lockstep: 'Vous avez tous les deux les deux jeux : les deux consoles tournent désormais en phase, à pleine vitesse',
+    abort: 'Le mode en phase n’a pas pu démarrer ici (le jeu du joueur {p} ne s’est pas chargé) : retour au câble habituel',
+    partnerAbort: 'Le mode en phase n’a pas pu démarrer chez le joueur {p} : retour au câble habituel',
+  },
+  desync: {
+    title: 'Désynchronisé',
+    body: 'Les deux parties ne correspondent plus. Débranchez le câble pour continuer seul.',
   },
 } satisfies Messages['online'];
