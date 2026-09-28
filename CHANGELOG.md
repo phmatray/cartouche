@@ -4,6 +4,46 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.5.0](https://github.com/phmatray/cartouche/compare/v1.4.1...v1.5.0) (2026-09-28)
+
+
+### Added
+
+* **library:** give the four hosted GB Studio games their title screens as covers ([0e74989](https://github.com/phmatray/cartouche/commit/0e749893db4a2894c34d50ae94ab63e3d28940c1))
+* **library:** show the itch.io covers of the other GB Studio games with box-art consent ([2798b8f](https://github.com/phmatray/cartouche/commit/2798b8f3be6f1c333c837c73ad02bbf77fcebea8))
+
+
+### Fixed
+
+* **backup:** export a few thousand save states without a string overflow ([795b2b4](https://github.com/phmatray/cartouche/commit/795b2b43e70f8535731ebfca4299b4d3f76524e5))
+* **backup:** restore thousands of save states without holding them all ([aa8b9e4](https://github.com/phmatray/cartouche/commit/aa8b9e4a5cc7d2f9b010594f8101b42602f767ea))
+* **backup:** say a backup with a missing or unknown version isn't valid ([4f0f7ec](https://github.com/phmatray/cartouche/commit/4f0f7ec00964b254efcc3b85a28e145a493484d8))
+* **core:** clamp a damaged save state's serial transfer length ([f992458](https://github.com/phmatray/cartouche/commit/f992458b4d5632b62ad9eef94940c81fef92d611))
+* **core:** find a .sav's clock footer from the end of the file ([f0f4391](https://github.com/phmatray/cartouche/commit/f0f4391b9c549b62274b9222522eb22e1023e840))
+* **core:** keep KEY0 in save states ([1165eea](https://github.com/phmatray/cartouche/commit/1165eea69c15f3d2862086dbd8204336eb88b41c))
+* **core:** STOP enters stop mode until a selected button is pressed ([87c8f68](https://github.com/phmatray/cartouche/commit/87c8f684fd57d016f9042af8ff467b1f90a507df))
+* **game:** keep a big album from burying the game's saves ([0afee5e](https://github.com/phmatray/cartouche/commit/0afee5e43966bf900116068b85c0f048a7b7f19f))
+* **gamepad:** B in the touch layout editor is Done, not back a page ([93dfa61](https://github.com/phmatray/cartouche/commit/93dfa612e21a6d756cbda195b37edf8d2eee20ca))
+* **input:** bind buttons to physical keys, so Select + a digit plays ([3973b90](https://github.com/phmatray/cartouche/commit/3973b907edc97f8d4af6260b2fb0601fbfe953fc))
+* **library:** forget a removed ROM's own screen settings ([2299128](https://github.com/phmatray/cartouche/commit/229912817244a0e73050c37c162297c9e7706944))
+* **library:** keep the shelf rail short with a big collection ([2d5d616](https://github.com/phmatray/cartouche/commit/2d5d616d194f8d54afc19b4bd547516f29a45144))
+* **library:** load a big collection without a quadratic merge ([9944b4c](https://github.com/phmatray/cartouche/commit/9944b4c4334fd13f16a5fdf68e95ef5d4b8445ce))
+* **library:** move focus to the game an A–Z jump lands on in list view ([8ef115e](https://github.com/phmatray/cartouche/commit/8ef115e71b69c15498e2b497a8d0425feee976a7))
+* **library:** reach the footer and draw the catalog fast with thousands of games ([e96363c](https://github.com/phmatray/cartouche/commit/e96363cd86eac2c82e8396c8e4dabe8e2cb8f564))
+* **player:** a button stays down while any input still holds it ([f13b8a2](https://github.com/phmatray/cartouche/commit/f13b8a26a21eee5e1bd51d7093afa473d010f679))
+* **player:** a touch button held when the window loses focus no longer looks stuck ([4eb34ca](https://github.com/phmatray/cartouche/commit/4eb34ca681e0eb7c6a79b0d114ec4b35f9fbaf56))
+* **player:** don't flash the Paused card while a game launches ([2cb6f9c](https://github.com/phmatray/cartouche/commit/2cb6f9c264fdd1cf4534b648e02e03fb46a489a2))
+* **player:** don't leak a console when leaving before the core loads ([96c9e8d](https://github.com/phmatray/cartouche/commit/96c9e8dd09cf0bd31ad7c953020ccdad4619649d))
+* **settings:** a key rebound with Shift held binds the key, and dead keys don't bind ([d230793](https://github.com/phmatray/cartouche/commit/d2307937fddfb089e95a159eec4776c4f7f87860))
+* **storage:** measure a big library without loading every save state ([81001c0](https://github.com/phmatray/cartouche/commit/81001c09572af75b07dcb28c51d2f827f5e5991d))
+* **storage:** show backup progress and run one export at a time ([1f96416](https://github.com/phmatray/cartouche/commit/1f964161e027766999b94e4367f6a0181887fed3))
+* **storage:** wrap a long title in the "Largest" line on a phone ([2961465](https://github.com/phmatray/cartouche/commit/29614653000b6e22eb9c7fe01b983e89334e4f4f))
+* **sync:** deletions stay deleted on paired devices ([1868980](https://github.com/phmatray/cartouche/commit/186898041a4d673f60cd20d7b44ca59470357b31))
+* **sync:** say when pairing can't reach any matchmaking relay ([93358cd](https://github.com/phmatray/cartouche/commit/93358cde6eb754ec42e1a131564c0c43725dcef0))
+* **sync:** the default device name follows the language ([5d577f2](https://github.com/phmatray/cartouche/commit/5d577f20fd96a9264b8d088fbbb5db1a1b1ecf2b))
+* **ui:** focus the confirm dialog's intended button ([58843bb](https://github.com/phmatray/cartouche/commit/58843bb68b87306189d7a1190a13c2b16181348a))
+* **ui:** keep keyboard focus after a toast's action ([4c06db4](https://github.com/phmatray/cartouche/commit/4c06db45c7c255e5e628f5f273bf1442a5f2ce74))
+
 ## [1.4.1](https://github.com/phmatray/cartouche/compare/v1.4.0...v1.4.1) (2026-09-28)
 
 
