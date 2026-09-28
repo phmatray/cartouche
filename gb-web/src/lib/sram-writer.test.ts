@@ -133,4 +133,11 @@ test('a clock that only ran on is no change; RAM or a clock the game set is', as
   const w2 = new SramWriter(io);
   await w2.check('h');
   assert.equal(w2.write('h', rtc(0, 5, 2000), 'Main'), null);
+  // A clock cartridge without RAM: the 48-byte clock is the whole save, and it is kept.
+  const w3 = new SramWriter(io);
+  await w3.check('k');
+  const clockOnly = rtc(0, 3600, 2000).slice(512);
+  assert.notEqual(w3.write('k', clockOnly, 'Main', 7), null);
+  assert.deepEqual(db.get('k')!.sram, clockOnly);
+  assert.equal(w3.write('k', clockOnly, 'Main'), null); // then only a change is written
 });

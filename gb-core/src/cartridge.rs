@@ -532,8 +532,9 @@ impl Cartridge {
         self.rom.get(0x0143).map_or(false, |&b| b & 0x80 != 0)
     }
 
+    /// Something to keep across sessions: cartridge RAM, or the clock (MBC3+TIMER+BATTERY without RAM).
     pub fn has_battery(&self) -> bool {
-        !self.ram.is_empty()
+        !self.ram.is_empty() || self.rtc.is_some()
     }
 
     /// SRAM, plus on MBC3+TIMER the 48-byte clock footer used by VBA-M, BGB, mGBA and SameBoy:
@@ -853,6 +854,20 @@ mod tests {
         c.write_rom(0x4000, 0x0C);
         c.write_ram(0, 0x41); // carry cleared
         assert_eq!(read_clock(&mut c), [0x10, 0, 0, 0x05, 0x41]);
+    }
+
+    #[test]
+    fn a_clock_cart_without_ram_still_keeps_its_clock() {
+        let mut c = cart(0x0F, 0x00);
+        assert!(c.has_battery(), "the clock is the save");
+        c.write_rom(0x0000, 0x0A);
+        for (reg, v) in [(0x0C, 0x40), (0x09, 30)] { c.write_rom(0x4000, reg); c.write_ram(0, v); }
+        let sav = c.export_sram();
+        assert_eq!(sav.len(), 48);
+        let mut d = cart(0x0F, 0x00);
+        d.import_sram(&sav);
+        assert_eq!(read_clock(&mut d), [0, 30, 0, 0, 0x40]);
+        assert!(!cart(0x11, 0x00).has_battery());
     }
 
     #[test]

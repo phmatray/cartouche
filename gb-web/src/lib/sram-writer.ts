@@ -70,7 +70,9 @@ export class SramWriter {
     const k = this.known;
     if (k?.id !== id) return 'unknown';
     // Nothing new since it was loaded or written; or no save yet and the RAM still blank (the core powers it on zeroed).
-    if (!k.lost && (k.rec ? same(k.rec.sram, sram) : (footerOf(sram) ? sram.subarray(0, -FOOTER) : sram).every((x) => x === 0))) return null;
+    // A clock cartridge without RAM keeps only its clock: that is its save, never blank.
+    const ram = footerOf(sram) ? sram.subarray(0, -FOOTER) : sram;
+    if (!k.lost && (k.rec ? same(k.rec.sram, sram) : ram.length > 0 && ram.every((x) => x === 0))) return null;
     const base = k.fork ?? k.rec ?? { id, gameId: id.split('~')[0], name, created: now };
     const to: StoredSave = { ...base, sram: sram.slice(), timestamp: now };
     this.known = { id: to.id, rec: to, mine: true };
