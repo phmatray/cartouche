@@ -302,6 +302,8 @@ pub struct Cartridge {
     /// (a paused or closed tab) catches up the wall time it missed at the next `.sav` load.
     clock_epoch: u64,
     clock_dots: u64,
+    /// A deterministic session (`set_emulated_clock`): the wall clock is never read again.
+    emulated_clock: bool,
 }
 
 impl Cartridge {
@@ -424,6 +426,7 @@ impl Cartridge {
             tama5: (cart_type == 0xFD).then(|| Box::new(crate::tama5::Tama5::new())),
             clock_epoch: unix_seconds(),
             clock_dots: 0,
+            emulated_clock: false,
         })
     }
 
@@ -978,10 +981,17 @@ impl Cartridge {
         self.clock_epoch + self.clock_dots / DOTS_PER_SECOND
     }
 
+    /// From now on the cartridge clock stands at `epoch` (unix seconds) plus the emulated time since,
+    /// and never reads the wall clock: a `.sav` loaded later catches up to that instant, not to the
+    /// wall. Two consoles given the same seed and inputs then keep the same clock (lockstep link).
+    pub fn set_emulated_clock(&mut self, epoch: u64) {
+        (self.clock_epoch, self.clock_dots, self.emulated_clock) = (epoch, 0, true);
+    }
+
     pub fn import_sram(&mut self, data: &[u8]) {
         let ram_len = self.ram.len();
-        let now = unix_seconds();
-        (self.clock_epoch, self.clock_dots) = (now, 0);
+        let now = if self.emulated_clock { self.clock_now() } else { unix_seconds() };
+        if !self.emulated_clock { (self.clock_epoch, self.clock_dots) = (now, 0); }
         // Standard clock footer (44 B with a u32 time, 48 B with a u64): ten u32 registers, all < 256.
         // The legacy Cartouche layout starts with an f64 ms timestamp, whose bytes 1-3 are never all 0.
         // Found from the end of the file, after a RAM part of any cartridge RAM size: other emulators

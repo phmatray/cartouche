@@ -400,6 +400,17 @@ impl Emulator {
         self.gb.as_ref().map_or(Vec::new(), |gb| gb.save_state())
     }
 
+    /// A deterministic session (lockstep link): the cartridge clock starts at `epoch_seconds` (unix
+    /// time) and only advances with emulated time. Nothing without a ROM.
+    pub fn set_emulated_clock(&mut self, epoch_seconds: f64) {
+        if let Some(gb) = &mut self.gb { gb.set_emulated_clock(epoch_seconds); }
+    }
+
+    /// FNV-1a hash of `save_state()`: two consoles in step have the same one. 0 without a ROM.
+    pub fn state_hash(&self) -> u32 {
+        self.gb.as_ref().map_or(0, |gb| gb.state_hash())
+    }
+
     pub fn load_state(&mut self, data: &[u8]) -> bool {
         if let Some(gb) = &mut self.gb {
             gb.load_state(data)
