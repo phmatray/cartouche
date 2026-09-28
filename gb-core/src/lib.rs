@@ -8,6 +8,7 @@ pub mod error;
 pub mod gameboy;
 pub mod interrupts;
 pub mod joypad;
+pub mod mbc7;
 pub mod memory;
 pub mod ppu;
 pub mod printer;
