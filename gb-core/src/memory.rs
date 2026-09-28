@@ -29,11 +29,15 @@ pub struct MemoryBus {
     pub wram_bank: u8,
     pub hram: [u8; 0x7F],
     pub cycle_count: u32,
-    // OAM DMA state
+    // OAM DMA state: a $FF46 write starts a transfer after one M-cycle, which then copies one
+    // byte per M-cycle for 160 M-cycles; the bus is blocked (`dma_active`) while bytes move.
     pub(crate) dma_active: bool,
-    pub(crate) dma_cycles_remaining: u8,
-    /// Page the running OAM DMA reads from (not in save states: a load mid-DMA assumes page 0).
-    dma_source: u8,
+    /// M-cycles until a written transfer (re)starts: 2 on the write, 0 when none is pending.
+    pub(crate) dma_delay: u8,
+    /// Next byte of the running transfer (160 = the last one moved; it ends on the next M-cycle).
+    pub(crate) dma_index: u8,
+    /// Last value written to $FF46: the page the transfer reads from.
+    pub(crate) dma_source: u8,
     /// Whether the ROM is CGB compatible
     pub cgb_mode: bool,
     /// KEY1 speed-switch register (bit 0 = switch armed)
@@ -71,8 +75,9 @@ impl MemoryBus {
             hram: [0; 0x7F],
             cycle_count: 0,
             dma_active: false,
-            dma_cycles_remaining: 0,
-            dma_source: 0,
+            dma_delay: 0,
+            dma_index: 0,
+            dma_source: 0xFF, // DMA reads $FF at power-on
             cgb_mode,
             key1: 0,
             double_speed: false,
@@ -141,6 +146,11 @@ impl MemoryBus {
         if self.dma_active && self.dma_conflict(addr) {
             return 0xFF;
         }
+        self.peek(addr)
+    }
+
+    /// The byte at `addr`, ignoring a running OAM DMA.
+    fn peek(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x7FFF => {
                 if self.boot_rom_active && (addr < 0x100 || (0x200..self.boot_rom.len()).contains(&(addr as usize))) {
@@ -164,6 +174,7 @@ impl MemoryBus {
             0xFF04..=0xFF07 => self.timer.read(addr),
             0xFF0F => self.interrupts.interrupt_flag | 0xE0, // bits 5-7 unused, read as 1
             0xFF10..=0xFF3F => self.apu.read_register(addr),
+            0xFF46 => self.dma_source,
             0xFF40..=0xFF4B => self.ppu.read_register(addr),
             0xFF4D => {
                 if self.cgb_mode {
@@ -191,6 +202,9 @@ impl MemoryBus {
     }
 
     pub fn write_byte(&mut self, addr: u16, value: u8) {
+        if self.dma_active && (0xFE00..=0xFEFF).contains(&addr) {
+            return; // OAM belongs to the running DMA
+        }
         match addr {
             0x0000..=0x7FFF => self.cartridge.write_rom(addr, value),
             0x8000..=0x9FFF => self.ppu.write_vram(addr - 0x8000, value),
@@ -209,16 +223,22 @@ impl MemoryBus {
             0xFF01 => self.serial.write(addr, value),
             0xFF02 => self.serial.write(addr, if self.cgb_mode { value } else { value & !0x02 }),
             0xFF04..=0xFF07 => {
-                if self.timer.write(addr, value) { self.interrupts.request(TIMER_BIT); }
+                // An overflow requests the interrupt at once, a TIMA write cancelling the reload withdraws it (Timer::step).
+                let pending = self.timer.reload_pending;
+                self.timer.write(addr, value);
+                match (pending, self.timer.reload_pending) {
+                    (false, true) => self.interrupts.request(TIMER_BIT),
+                    (true, false) => self.interrupts.interrupt_flag &= !TIMER_BIT,
+                    _ => {}
+                }
             }
             0xFF0F => self.interrupts.interrupt_flag = value & 0x1F,
             0xFF10..=0xFF3F => self.apu.write_register(addr, value),
             0xFF40..=0xFF4B => {
                 if addr == 0xFF46 {
-                    self.dma_transfer(value);
+                    // A write during a transfer restarts it; the old one holds the bus meanwhile.
                     self.dma_source = value;
-                    self.dma_active = true;
-                    self.dma_cycles_remaining = 160;
+                    self.dma_delay = 2;
                 } else {
                     self.ppu.write_register(addr, value);
                 }
@@ -288,6 +308,11 @@ impl MemoryBus {
         }
         self.double_speed = !self.double_speed;
         self.key1 = 0;
+        // Pan Docs, "CGB Registers": DIV resets and the CPU waits 2050 M-cycles for the clock to settle.
+        self.timer.write(0xFF04, 0);
+        for _ in 0..2050 {
+            self.stop_tick();
+        }
         true
     }
 
@@ -337,13 +362,31 @@ impl MemoryBus {
         self.apu.step(ppu_step);
         self.cycle_count += ppu_step;
 
-        if self.dma_active {
-            if self.dma_cycles_remaining > 0 {
-                self.dma_cycles_remaining -= 1;
-            } else {
-                self.dma_active = false;
+        self.dma_tick();
+    }
+
+    /// One M-cycle of OAM DMA.
+    fn dma_tick(&mut self) {
+        if self.dma_delay > 0 {
+            self.dma_delay -= 1;
+            if self.dma_delay > 0 {
+                return; // the start-up M-cycle: nothing moves
             }
+            self.dma_active = true;
+            self.dma_index = 0;
         }
+        if !self.dma_active {
+            return;
+        }
+        if self.dma_index >= 0xA0 {
+            self.dma_active = false;
+            return;
+        }
+        // Pages $E0-$FF read work RAM, like echo RAM.
+        let src = (self.dma_source as u16) << 8 | self.dma_index as u16;
+        let byte = self.peek(if src >= 0xE000 { src - 0x2000 } else { src });
+        self.ppu.write_oam(self.dma_index as u16, byte);
+        self.dma_index += 1;
     }
 
     pub fn cycle_tick(&mut self) {
@@ -375,14 +418,6 @@ impl MemoryBus {
     pub fn cycle_idu(&mut self, addr: u16) {
         self.tick_components();
         if (0xFE00..=0xFEFF).contains(&addr) { self.ppu.oam_bug_write(); }
-    }
-
-    fn dma_transfer(&mut self, value: u8) {
-        let source = (value as u16) << 8;
-        for i in 0..0xA0u16 {
-            let byte = self.read_byte(source + i);
-            self.ppu.write_oam(i, byte);
-        }
     }
 
     /// Handle writes to HDMA5 (0xFF55) — triggers GDMA or starts HDMA.
@@ -441,5 +476,72 @@ impl MemoryBus {
         } else {
             self.hdma5 = (self.hdma_remaining - 1) & 0x7F; // active (bit 7 = 0)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bus() -> MemoryBus {
+        let mut rom = vec![0u8; 0x8000];
+        rom[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(rom[i]).wrapping_sub(1));
+        let mut bus = MemoryBus::new(Cartridge::from_rom(rom).unwrap(), false);
+        bus.boot_rom_active = false;
+        for i in 0..0xA0 {
+            bus.write_byte(0xC000 + i, i as u8 + 1);
+            bus.write_byte(0xC100 + i, 0x80 | i as u8);
+        }
+        bus
+    }
+
+    #[test]
+    fn oam_dma_copies_one_byte_per_m_cycle_after_a_delay() {
+        let mut bus = bus();
+        bus.write_byte(0xFF46, 0xC0);
+        assert_eq!(bus.read_byte(0xFF46), 0xC0);
+        bus.cycle_tick();
+        assert_eq!(bus.read_byte(0xFE00), 0x00, "start-up M-cycle: OAM still readable, nothing copied");
+        bus.cycle_tick();
+        assert_eq!(bus.read_byte(0xFE00), 0xFF, "transfer running: OAM blocked");
+        assert_eq!(bus.ppu.read_oam(0), 0x01);
+        assert_eq!(bus.ppu.read_oam(1), 0x00);
+        for _ in 0..9 { bus.cycle_tick(); }
+        assert_eq!(bus.ppu.read_oam(9), 0x0A);
+        assert_eq!(bus.ppu.read_oam(10), 0x00);
+        for _ in 0..150 { bus.cycle_tick(); }
+        assert_eq!(bus.ppu.read_oam(159), 0xA0);
+        assert_eq!(bus.read_byte(0xFE00), 0xFF, "the M-cycle of the last byte is still blocked");
+        bus.cycle_tick();
+        assert_eq!(bus.read_byte(0xFE00), 0x01, "done");
+    }
+
+    #[test]
+    fn speed_switch_resets_div_and_pauses() {
+        let mut bus = bus();
+        bus.cgb_mode = true;
+        for _ in 0..100 { bus.cycle_tick(); }
+        assert_ne!(bus.read_byte(0xFF04), 0);
+        bus.write_byte(0xFF4D, 0x01);
+        assert_eq!(bus.read_byte(0xFF4D), 0x7F, "armed, normal speed");
+        bus.cycle_count = 0;
+        assert!(bus.try_speed_switch());
+        assert_eq!(bus.read_byte(0xFF4D), 0xFE, "double speed, disarmed");
+        assert_eq!(bus.read_byte(0xFF04), 0, "DIV reset, and still while the clock settles");
+        assert_eq!(bus.cycle_count, 2050 * 2, "2050 M-cycles at the new speed");
+    }
+
+    #[test]
+    fn oam_dma_restart_starts_over() {
+        let mut bus = bus();
+        bus.write_byte(0xFF46, 0xC0);
+        for _ in 0..12 { bus.cycle_tick(); }
+        bus.write_byte(0xFF46, 0xC1);
+        bus.cycle_tick();
+        assert_eq!(bus.read_byte(0xFE00), 0xFF, "the old transfer holds the bus during the new start-up");
+        bus.cycle_tick();
+        assert_eq!(bus.ppu.read_oam(0), 0x80, "restarted from byte 0 with the new page");
+        for _ in 0..160 { bus.cycle_tick(); }
+        assert_eq!(bus.read_byte(0xFE9F), 0x80 | 0x9F);
     }
 }

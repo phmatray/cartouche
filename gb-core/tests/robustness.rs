@@ -37,10 +37,12 @@ fn dma_from_vram_leaves_rom_fetches_alone() {
 fn dma_conflicts_only_on_its_own_bus() {
     let mut gb = boot(&[0x18, 0xFE], &[]);
     gb.bus.write_byte(0xFF46, 0x80); // from VRAM
+    for _ in 0..2 { gb.bus.cycle_tick(); } // start-up M-cycle, then the first byte
     assert_ne!(gb.bus.read_byte(0x0100), 0xFF, "ROM is on the other bus");
     assert_eq!(gb.bus.read_byte(0x8000), 0xFF, "VRAM is busy");
     assert_eq!(gb.bus.read_byte(0xFE00), 0xFF, "OAM is busy");
     gb.bus.write_byte(0xFF46, 0xC0); // from WRAM
+    for _ in 0..2 { gb.bus.cycle_tick(); }
     assert_eq!(gb.bus.read_byte(0x0100), 0xFF, "ROM shares the external bus");
     gb.bus.write_byte(0xFF80, 0x5A);
     assert_eq!(gb.bus.read_byte(0xFF80), 0x5A, "HRAM stays reachable");
@@ -199,8 +201,8 @@ fn stop_mode_waits_for_a_button_from_the_web_side() {
     let state = emu.save_state();
     let mut old = gb_core::Emulator::new();
     assert!(old.load_rom(&rom(&STOP, &[])));
-    // Cut the tail: stop mode and KEY0, then the (empty) mapper block's u16 length.
-    assert!(old.load_state(&state[..state.len() - 4]));
+    // Cut the tail: stop mode and KEY0, the (empty) mapper block's u16 length, the timing bytes.
+    assert!(old.load_state(&state[..state.len() - 8]));
     old.run_frame();
     assert_ne!(old.get_pc(), 0x0106, "an older state is not in stop mode");
     assert!(emu.load_state(&state));
