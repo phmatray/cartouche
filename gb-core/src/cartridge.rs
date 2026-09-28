@@ -121,8 +121,8 @@ impl Rtc {
 /// protocol (Pan Docs HuC3). Its 256 nibbles of memory hold the time at 0x00-0x05 (after 0x60) and
 /// the alarm at 0x58-0x5F.
 pub struct Huc3Rtc {
-    /// Wall clock (ms since epoch) at which the clock read 0 days, 00:00.
-    base_timestamp: f64,
+    /// Emulated time since the clock read 0 days, 00:00, in dots (`DOTS_PER_SECOND`).
+    dots: u64,
     memory: [u8; 256],
     address: u8,
     result: u8,
@@ -131,17 +131,17 @@ pub struct Huc3Rtc {
 
 impl Huc3Rtc {
     fn new() -> Self {
-        Self { base_timestamp: now_ms(), memory: [0; 256], address: 0, result: 0, last_opcode: 0 }
+        Self { dots: 0, memory: [0; 256], address: 0, result: 0, last_opcode: 0 }
     }
 
     fn minutes_and_days(&self) -> (u16, u16) {
-        let total = ((now_ms() - self.base_timestamp) / 60000.0).max(0.0) as u64;
+        let total = self.dots / DOTS_PER_SECOND / 60;
         ((total % 1440) as u16, (total / 1440 % 4096) as u16)
     }
 
     fn set(&mut self, minutes: u16, days: u16) {
-        let total = (minutes % 1440) as f64 + (days % 4096) as f64 * 1440.0;
-        self.base_timestamp = now_ms() - total * 60000.0;
+        let total = (minutes % 1440) as u64 + (days % 4096) as u64 * 1440;
+        self.dots = total * 60 * DOTS_PER_SECOND;
     }
 
     /// Reads `n` nibbles of memory from `at`, low nibble first.
@@ -189,16 +189,16 @@ impl Huc3Rtc {
         let words = [minutes as u32, days as u32, self.nibbles(0x58, 3), self.nibbles(0x5B, 4), self.nibbles(0x5F, 1) & 1];
         let mut out = [0; HUC3_FOOTER_LEN];
         for (i, w) in words.iter().enumerate() { out[i * 4..i * 4 + 4].copy_from_slice(&w.to_le_bytes()); }
-        out[20..].copy_from_slice(&((now_ms() / 1000.0) as u64).to_le_bytes());
+        out[20..].copy_from_slice(&unix_seconds().to_le_bytes());
         out
     }
 
     /// Restores the footer; the clock goes on by the wall time elapsed since it was written.
     fn import_footer(&mut self, f: &[u8]) {
         let word = |i: usize| u32::from_le_bytes(f[i * 4..i * 4 + 4].try_into().unwrap());
-        let saved_at = u64::from_le_bytes(f[20..28].try_into().unwrap()) as f64;
-        let elapsed = (word(0) % 1440) as f64 * 60.0 + (word(1) % 4096) as f64 * 86400.0;
-        self.base_timestamp = (saved_at - elapsed) * 1000.0;
+        let saved_at = u64::from_le_bytes(f[20..28].try_into().unwrap());
+        let secs = (word(0) % 1440) as u64 * 60 + (word(1) % 4096) as u64 * 86400;
+        self.dots = (secs + unix_seconds().saturating_sub(saved_at)) * DOTS_PER_SECOND;
         self.set_nibbles(0x58, 3, word(2));
         self.set_nibbles(0x5B, 4, word(3));
         self.set_nibbles(0x5F, 1, word(4) & 1);
@@ -684,10 +684,12 @@ impl Cartridge {
         }
     }
 
-    /// Advances the cartridge's clock (MBC3) by `dots` of emulated real time: 4 per
+    /// Advances the cartridge's clock (MBC3, HuC3, TAMA5) by `dots` of emulated real time: 4 per
     /// M-cycle at single speed, 2 at double speed, also while the CPU is stopped.
     pub fn tick_clock(&mut self, dots: u64) {
         if let Some(rtc) = &mut self.rtc { rtc.tick(dots); }
+        if let Some(h) = &mut self.huc3 { h.dots += dots; }
+        if let Some(t) = &mut self.tama5 { t.tick(dots); }
     }
 
     /// Whether the cartridge has a rumble motor (types 0x1C-0x1E).
@@ -1648,6 +1650,21 @@ mod tests {
         let r = read_clock(&mut d);
         assert_eq!((r[1], r[3]), (20, 2), "two days later");
         assert!((3..6).contains(&r[0]));
+    }
+
+    #[test]
+    fn huc3_and_tama5_clocks_tick_on_emulated_time() {
+        let mut c = cart(0xFE, 0x03);
+        huc3_set_clock(&mut c, 615, 3);
+        c.tick_clock(60 * DOTS_PER_SECOND);
+        assert_eq!(huc3_clock(&mut c), (616, 3));
+
+        let mut rom = vec![0u8; 0x80000];
+        header(&mut rom, 0, 0xFD, 0x00);
+        let mut t = Cartridge::from_rom(rom).unwrap();
+        assert_eq!(tama5_hour(&mut t), 0);
+        t.tick_clock(3600 * DOTS_PER_SECOND);
+        assert_eq!(tama5_hour(&mut t), 1);
     }
 
     #[test]
