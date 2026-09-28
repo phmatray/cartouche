@@ -538,7 +538,11 @@ impl MemoryBus {
         self.tick_components();
         if (0xFE00..=0xFEFF).contains(&addr) { self.ppu.oam_bug_write(); }
         if let Some(w) = &mut self.watch { w.record(addr, value, true); }
-        if !self.ppu.cpu_locked(addr, true) { self.write_byte(addr, value); }
+        if !self.ppu.cpu_locked(addr, true) {
+            self.write_byte(addr, value);
+        } else if addr >= 0xFF00 && self.cgb_mode {
+            self.ppu.palette_index_step(addr); // a dropped BCPD/OCPD write still steps the index
+        }
     }
 
     /// Internal M-cycle in which the 16-bit IDU increments/decrements `addr`
@@ -622,6 +626,33 @@ mod tests {
             bus.write_byte(0xC100 + i, 0x80 | i as u8);
         }
         bus
+    }
+
+    #[test]
+    fn cgb_palette_ram_locked_in_mode3() {
+        let mut rom = vec![0u8; 0x8000];
+        rom[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(rom[i]).wrapping_sub(1));
+        let mut bus = MemoryBus::new(Cartridge::from_rom(rom).unwrap(), true);
+        bus.boot_rom_active = false;
+        bus.write_byte(0xFF40, 0x80);
+        let stat_mode = |b: &MemoryBus| b.read_byte(0xFF41) & 3;
+        for (idx, data) in [(0xFF68u16, 0xFF69u16), (0xFF6A, 0xFF6B)] {
+            // Mode 3: the write is dropped, the index still steps, a read gives $FF.
+            while stat_mode(&bus) != 3 { bus.cycle_tick(); }
+            bus.cycle_write(idx, 0x80 | 4);
+            bus.cycle_write(data, 0x5A);
+            assert_eq!(stat_mode(&bus), 3);
+            let cram = |b: &MemoryBus| if data == 0xFF69 { b.ppu.bg_cram[4] } else { b.ppu.obj_cram[4] };
+            assert_ne!(cram(&bus), 0x5A, "{data:04X} write in mode 3");
+            assert_eq!(bus.read_byte(idx) & 0x3F, 5, "{idx:04X} steps on a dropped write");
+            bus.cycle_write(idx, 4);
+            assert_eq!(bus.cycle_read(data), 0xFF, "{data:04X} read in mode 3");
+            // Mode 0: the write lands and the read sees it.
+            while stat_mode(&bus) != 0 { bus.cycle_tick(); }
+            bus.cycle_write(data, 0x5A);
+            assert_eq!(cram(&bus), 0x5A, "{data:04X} write in mode 0");
+            assert_eq!(bus.cycle_read(data), 0x5A);
+        }
     }
 
     #[test]
