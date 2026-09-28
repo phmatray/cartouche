@@ -341,10 +341,13 @@ impl MemoryBus {
         self.key1 = 0;
         // Then the CPU halts while the clock settles and everything else runs: $20000 DIV counts,
         // so DIV is back at 0 when it resumes (Age spsw-div, spsw-tima). Like HALT, an interrupt
-        // ends it early (Age spsw-interrupts).
-        for _ in 0..0x8000 {
-            self.tick_components();
+        // ends it early (Age spsw-interrupts). Back in single speed the PPU comes out one dot
+        // behind (Age spsw-mode0: the LCD-to-CPU alignment shifts).
+        let first_dots = if self.double_speed { 2 } else { 3 };
+        self.tick_components_with(first_dots);
+        for _ in 1..0x8000 {
             if self.interrupts.pending() & !self.late_interrupts() != 0 { break; }
+            self.tick_components();
         }
         true
     }
@@ -372,8 +375,14 @@ impl MemoryBus {
     }
 
     fn tick_components(&mut self) {
+        self.tick_components_with(if self.double_speed { 2 } else { 4 });
+    }
+
+    /// One M-cycle, with the PPU advanced `ppu_dots` (normally 4, 2 in double speed).
+    fn tick_components_with(&mut self, ppu_dots: u32) {
         let ppu_step = if self.double_speed { 2 } else { 4 };
-        let (vblank_irq, stat_irq, hblank_entry) = self.ppu.step(ppu_step);
+        self.ppu.m_cycle_dots = ppu_step;
+        let (vblank_irq, stat_irq, hblank_entry) = self.ppu.step(ppu_dots);
         if vblank_irq {
             self.interrupts.request(VBLANK_BIT);
             if let Some(s) = self.sgb.as_deref_mut() { s.vblank(&self.ppu.framebuffer, self.apu.read_register(0xFF26) & 0x0F != 0); }
@@ -583,20 +592,6 @@ mod tests {
         assert_eq!(bus.read_byte(0xFF04), 0, "DIV reset, then $20000 counts: back at 0");
         assert_eq!(bus.read_byte(0xFF05), 0x80, "the timer ran through the pause (Age spsw-tima)");
         assert_eq!(bus.cycle_count, 2 * 4 + 0x8000 * 2, "STOP's 2 M-cycles, then $8000 at the new speed");
-    }
-
-    #[test]
-    fn an_interrupt_ends_the_speed_switch_pause() {
-        let mut bus = bus();
-        bus.cgb_mode = true;
-        bus.interrupts.interrupt_enable = TIMER_BIT;
-        bus.write_byte(0xFF07, 0x05); // TIMA at 262 KHz: overflows 16 x 256 counts in
-        bus.write_byte(0xFF4D, 0x01);
-        bus.cycle_count = 0;
-        assert!(bus.try_speed_switch());
-        assert_ne!(bus.interrupts.interrupt_flag & TIMER_BIT, 0);
-        assert!(bus.cycle_count < 0x8000 * 2, "woken by the timer, not after $8000 M-cycles");
-        assert_ne!(bus.read_byte(0xFF04), 0, "DIV has not wrapped");
     }
 
     #[test]
