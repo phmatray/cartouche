@@ -96,6 +96,8 @@ export function letterOf(g: GameEntry): string {
   const c = sortTitle(g.title).charAt(0).normalize('NFD').charAt(0).toUpperCase(); // 'Ō' files under O, where it sorts
   return /[A-Z]/.test(c) ? c : '#';
 }
+/** How many of a paged list to show so that item `i` is in it: whole pages of `page`. */
+export const pageThrough = (i: number, page: number) => (Math.floor(i / page) + 1) * page;
 /**
  * Name order ('The' aside), with every '#' title (digits, symbols such as 'µ', other scripts) first, in one run the
  * A–Z bar's '#' reaches: plain localeCompare would file some symbols after Z.

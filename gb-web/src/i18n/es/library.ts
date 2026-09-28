@@ -27,6 +27,7 @@ export default {
   noFav: 'Aún no hay favoritos: marca un juego con la estrella en su página o en la vista de lista.',
   noMatch: 'Ningún juego coincide con este filtro.',
   showAll: 'Mostrar todos',
+  showMore: { one: '{count} más · quedan {left}', other: '{count} más · quedan {left}' },
   col: { title: 'Título', played: 'Jugado', last: 'Última partida', status: 'Estado' },
   storageBlocked: 'Este navegador bloquea el almacenamiento. Puedes explorar y jugar los juegos incluidos, pero no se pueden conservar ROM ni partidas guardadas.',
   favorite: 'Favorito',
