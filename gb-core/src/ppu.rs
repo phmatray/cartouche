@@ -1032,4 +1032,54 @@ mod tests {
         };
         assert!(first_new(100) < first_new(140));
     }
+
+    /// Steps a frame from line 0 and checks the FIFO's measured mode-3 length on every line.
+    fn assert_fifo_matches_formula(step: &mut dyn FnMut() -> (bool, bool, u32, u32, u8), what: &str) {
+        let (mut was_active, mut lines) = (false, 0);
+        loop {
+            let (active, frame_done, len, predicted, ly) = step();
+            if was_active && !active {
+                assert_eq!(len, predicted, "{what}: line {ly}");
+                lines += 1;
+            }
+            was_active = active;
+            if frame_done { break; }
+        }
+        assert_eq!(lines, SCREEN_HEIGHT, "{what}");
+    }
+
+    #[test]
+    fn fifo_mode3_matches_formula() {
+        // Synthetic frames: 40 OBJs spread over the lines and columns, the window on from line 20.
+        for (scx, wx) in [(0, 7), (3, 0), (5, 3), (7, 30), (1, 166), (2, 167), (6, 88)] {
+            let mut p = Ppu::new();
+            (p.lcdc, p.scx, p.wx, p.wy) = (0xF3, scx, wx, 20);
+            for i in 0..40 {
+                p.oam[i * 4..i * 4 + 2].copy_from_slice(&[(i * 7 % 160) as u8, (i * 37 % 170) as u8]);
+            }
+            let mut step = || {
+                p.step(4);
+                (p.line.active, p.frame_ready, p.line.len, p.mode3_len, p.ly)
+            };
+            assert_fifo_matches_formula(&mut step, &format!("SCX {scx}, WX {wx}"));
+        }
+        // Every line of a dmg-acid2 frame.
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("test-roms/dmg-acid2.gb");
+        let Ok(rom) = std::fs::read(&path) else {
+            assert!(std::env::var_os("CARTOUCHE_REQUIRE_ROMS").is_none(), "{} not found", path.display());
+            return;
+        };
+        let mut gb = crate::gameboy::GameBoy::new(rom).unwrap();
+        gb.skip_boot_rom();
+        for _ in 0..10 { gb.run_frame().unwrap(); }
+        assert!(!gb.bus.ppu.cgb_mode);
+        while gb.bus.ppu.ly != 0 || gb.bus.ppu.mode != PpuMode::OamScan { gb.bus.cycle_tick(); }
+        gb.bus.ppu.frame_ready = false;
+        let mut step = || {
+            gb.bus.cycle_tick();
+            let p = &gb.bus.ppu;
+            (p.line.active, p.frame_ready, p.line.len, p.mode3_len, p.ly)
+        };
+        assert_fifo_matches_formula(&mut step, "dmg-acid2");
+    }
 }
