@@ -240,6 +240,9 @@ export const useSettingsStore = create<SettingsState>()(
   )
 );
 
+// Another tab changed a setting: take it, or this tab's next change writes its stale copy over it.
+if (typeof window !== 'undefined') window.addEventListener('storage', (e) => { if (e.key === 'gb-settings' && e.newValue) void useSettingsStore.persist.rehydrate(); });
+
 /** The v4 `display` for settings saved before v4 (a `shaderPreset` + `pixelGrid` pair): the store migration and old backups. */
 export function displayFromV3(shaderPreset?: unknown, pixelGrid?: unknown): Record<ScreenKind, DisplayConfig> {
   const preset = presetOf(typeof shaderPreset === 'string' ? shaderPreset : undefined) ?? presetOf(DEFAULT_DISPLAY.dmg.preset)!;
