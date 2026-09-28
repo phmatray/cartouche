@@ -82,6 +82,7 @@ export default {
   bundledErase: 'Fourni avec l’app. Ses sauvegardes peuvent être effacées.',
   removed: '{title} retiré',
   erased: 'Sauvegardes effacées',
+  openElsewhere: 'Ce jeu est ouvert dans un autre onglet : fermez-le d’abord, sinon il réécrirait ses sauvegardes.',
   remove: {
     title: 'Retirer cette ROM ?',
     ok: 'Retirer la ROM et les sauvegardes',

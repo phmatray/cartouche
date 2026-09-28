@@ -88,11 +88,15 @@ function GameDetails({ game }: { game: GameEntry }) {
   const remove = () => setConfirm(game.isLocal ? {
     title: t('game.remove.title'), danger: true, ok: t('game.remove.ok'),
     body: t('game.remove.body', { title: game.title }),
-    run: async () => { await deleteGame(game.id); toast(tNow('game.removed', { title: game.title }), 'm'); navigate('/'); },
+    run: async () => {
+      if (!(await deleteGame(game.id))) return toast(tNow('game.openElsewhere'), 'm');
+      toast(tNow('game.removed', { title: game.title }), 'm');
+      navigate('/');
+    },
   } : {
     title: t('game.erase.title'), danger: true, ok: t('game.erase.ok'),
     body: t('game.erase.body', { title: game.title }),
-    run: async () => { await eraseSaves(game.id); toast(tNow('game.erased'), 'm'); },
+    run: async () => { toast(tNow((await eraseSaves(game.id)) ? 'game.erased' : 'game.openElsewhere'), 'm'); },
   });
 
   return (

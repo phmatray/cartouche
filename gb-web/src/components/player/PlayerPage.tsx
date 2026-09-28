@@ -241,7 +241,8 @@ function Player({ game }: { game: GameEntry }) {
   }, []);
   useEffect(() => { document.title = t('common.docTitle', { page: game.title }); }, [game.title, t]);
   // Sync in another tab leaves this game's saves alone while it's open (lib/play-lock).
-  useEffect(() => holdGame(game.id), [game.id]);
+  // A ROM the core refused never runs: nothing to protect (and its Remove button, below, must not see it as busy).
+  useEffect(() => (badRom ? undefined : holdGame(game.id)), [game.id, badRom]);
   // Settings › Audio › Channels (applied again after each power-on: a restart builds a new console).
   const { setChannelMuted } = emu;
   useEffect(() => {
@@ -638,7 +639,7 @@ function Player({ game }: { game: GameEntry }) {
                   <b>{t('player.bad.title')}</b>
                   <p>{t('player.bad.body')}</p>
                   <div className="acts">
-                    {game.isLocal && <button className="btn y" onClick={async () => { await deleteGame(game.id); toast(tNow('game.removed', { title: game.title }), 'm'); navigate('/'); }}>{t('player.bad.remove')}</button>}
+                    {game.isLocal && <button className="btn y" onClick={async () => { if (!(await deleteGame(game.id))) return toast(tNow('game.openElsewhere'), 'm'); toast(tNow('game.removed', { title: game.title }), 'm'); navigate('/'); }}>{t('player.bad.remove')}</button>}
                     <Link className="btn line" to={paths.game(game.id)}>{t('common.back')}</Link>
                   </div>
                 </div>

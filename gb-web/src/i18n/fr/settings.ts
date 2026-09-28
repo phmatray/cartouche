@@ -239,6 +239,7 @@ export default {
     kept: { one: '{count} jeu inclus reste dans la bibliothèque, sans ses sauvegardes.', other: '{count} jeux inclus restent dans la bibliothèque, sans leurs sauvegardes.' },
     frees: 'Libère environ <b>{size}</b>. Action irréversible : exportez d’abord une copie de sauvegarde pour pouvoir les récupérer.',
     deleted: 'Supprimé : {games} · {size} libérés',
+    openElsewhere: 'L’un de ces jeux est ouvert dans un autre onglet : fermez-le d’abord, sinon il réécrirait ses sauvegardes. Rien n’a été supprimé.',
     measuring: 'Mesure…',
     none: 'Aucune ROM ni sauvegarde stockée pour l’instant.',
     games: 'Jeux',
