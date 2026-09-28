@@ -403,7 +403,7 @@ function Player({ game }: { game: GameEntry }) {
     const seconds = Math.floor(played.current);
     if (seconds >= 1) {
       played.current -= seconds;
-      recordSession(game.id, seconds, !sessionCounted.current);
+      recordSession(game.id, seconds, !sessionCounted.current).catch(() => {}); // storage blocked: play time isn't kept
       sessionCounted.current = true;
     }
     return wrote;
