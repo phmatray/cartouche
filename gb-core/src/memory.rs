@@ -272,8 +272,7 @@ impl MemoryBus {
                 let was_on = self.apu.is_on();
                 self.apu.write_register(addr, value);
                 // Powered on while DIV's APU bit is set: the first DIV-APU event is skipped.
-                let bit = if self.double_speed { 0x2000 } else { 0x1000 };
-                if !was_on && self.apu.is_on() && self.timer.div_counter & bit != 0 {
+                if !was_on && self.apu.is_on() && self.timer.div_counter & self.div_apu_bit() != 0 {
                     self.apu.skip_first_div_event();
                 }
             }
@@ -423,10 +422,14 @@ impl MemoryBus {
     /// The DIV-APU event: DIV bit 4 (bit 5 in double speed) fell since the counter read `old`,
     /// whether it counted there or was reset by a write.
     fn div_apu_edge(&mut self, old: u16) {
-        let bit = if self.double_speed { 0x2000 } else { 0x1000 };
-        if old & !self.timer.div_counter & bit != 0 {
+        if old & !self.timer.div_counter & self.div_apu_bit() != 0 {
             self.apu.div_event();
         }
+    }
+
+    /// DIV bit 4 (bit 5 in double speed), in the timer's internal counter.
+    fn div_apu_bit(&self) -> u16 {
+        if self.double_speed { 0x2000 } else { 0x1000 }
     }
 
     /// One M-cycle of OAM DMA.
