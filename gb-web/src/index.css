@@ -207,6 +207,8 @@ canvas.lcd{aspect-ratio:10/9}
 .gbs-all{margin-top:22px;display:flex;align-items:center;gap:12px;font:700 14px var(--font);color:var(--mute)}
 .gbs-all span{display:inline-flex;align-items:center;gap:8px}
 .gbs-all .btn:disabled{opacity:.5;cursor:default}
+.cat-more{margin-top:48px;display:flex;justify-content:center}
+@media (max-width:640px){.cat-more .btn{flex:1;white-space:normal;height:auto;min-height:44px;padding-block:10px}}
 @media (max-width:640px){.gbs-all .btn{flex:1;white-space:normal;height:auto;min-height:44px;padding-block:10px}}
 /* one-tap download: the button fills as the ROM arrives */
 .btn.dl{font-variant-numeric:tabular-nums}

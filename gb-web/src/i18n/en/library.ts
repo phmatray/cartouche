@@ -26,6 +26,7 @@ export default {
   noFav: 'No favorites yet: star a game on its page or in the list view.',
   noMatch: 'No games match this filter.',
   showAll: 'Show all',
+  showMore: { one: 'Show {count} more · {left} left', other: 'Show {count} more · {left} left' },
   col: { title: 'Title', played: 'Played', last: 'Last played', status: 'Status' },
   storageBlocked: 'This browser is blocking storage. You can browse and play the bundled games, but ROMs and saves can’t be kept.',
   favorite: 'Favorite',

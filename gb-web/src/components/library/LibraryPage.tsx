@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Link, useNavigate } from 'react-router';
 import { useGameLibrary, useSearchIndex } from '../../hooks/useGameLibrary';
 import { formatQuery, search, type Filter as SearchFilter } from '../../lib/search';
 import type { GameEntry } from '../../types/game';
-import { byName, letterOf, motion, owned, paths, playsNow, searchState, TEST_CATEGORY } from '../../lib/ui';
+import { byName, letterOf, motion, owned, pageThrough, paths, playsNow, searchState, TEST_CATEGORY } from '../../lib/ui';
 import { I } from '../icons';
 import { ContinueHero, FirstHero } from './Heroes';
 import { queueDownloads, useImports } from '../../lib/import-queue';
@@ -24,6 +25,11 @@ const SORTS: [Sort, Key][] = [['name', 'library.sort.name'], ['recent', 'library
 const LETTERS = '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 /** Boxes on the shelf rail: the rest are one tap away in the catalog (a rail of 5,000 is thousands of DOM nodes nobody scrolls to). */
 const SHELF_MAX = 24;
+/**
+ * Boxes the catalog shows at first, and adds per "Show more": a collection of thousands would otherwise be one page of
+ * over 100,000 DOM nodes, seconds to draw, with the footer (language, legal) a quarter of a kilometre down.
+ */
+const PAGE = 96;
 
 const COMPARE: Record<Sort, (a: GameEntry, b: GameEntry) => number> = {
   name: byName,
@@ -42,6 +48,13 @@ function useKept<T extends string>(key: string, options: readonly T[]) {
   });
   const keep = (v: T) => { set(v); try { sessionStorage.setItem(key, v); } catch { /* storage blocked: kept for this visit only */ } };
   return [value, keep] as const;
+}
+
+/** How much of the catalog shows, kept like the filter (coming back from a game finds the same page, scrolled where it was). */
+function useLimit() {
+  const [n, set] = useState(() => { try { return Math.max(PAGE, Number(sessionStorage.getItem('lib.limit')) || 0); } catch { return PAGE; } });
+  const keep = (v: number) => { set(v); try { sessionStorage.setItem('lib.limit', String(v)); } catch { /* kept for this visit only */ } };
+  return [n, keep] as const;
 }
 
 /** Arrow keys move focus between boxes (TV / gamepad-style spatial navigation). */
@@ -65,6 +78,7 @@ function useSpatialFocus() {
         const dist = Math.abs(dx) + Math.abs(dy) * 2;
         if (dist < bestDist) { bestDist = dist; best = it; }
       }
+      if (!best && dir[1] > 0) best = document.querySelector<HTMLElement>('.cat-more button'); // past the last box: "Show more"
       if (best) {
         best.focus({ preventScroll: true });
         best.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: motion() });
@@ -83,6 +97,7 @@ export function LibraryPage() {
   const [sort, setSort] = useKept<Sort>('lib.sort', SORTS.map(([s]) => s));
   const [view, setView] = useKept('lib.view', ['grid', 'list'] as const);
   const [letter, setLetter] = useState<string | null>(null);
+  const [limit, setLimit] = useLimit();
   const catalogRef = useRef<HTMLElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
   useSpatialFocus();
@@ -112,13 +127,23 @@ export function LibraryPage() {
   const list = useMemo(() => search(index, { text: '', filters: FILTERS[filter][1] }).sort(COMPARE[sort]), [index, filter, sort]);
   const present = useMemo(() => new Set(list.map(letterOf)), [list]);
 
+  const pickSort = (v: Sort) => { setSort(v); setLimit(PAGE); };
   const pickFilter = (f: Filter, jump = false) => {
     setFilter(f);
     setLetter(null);
+    setLimit(PAGE);
     if (jump) catalogRef.current?.scrollIntoView({ behavior: motion() });
+  };
+  // The next page, with focus on its first box (a keyboard or gamepad player carries on from there).
+  const showMore = () => {
+    flushSync(() => setLimit(limit + PAGE));
+    const el = bodyRef.current?.querySelectorAll<HTMLElement>('[data-letter]')[limit];
+    (el?.matches('a') ? el : el?.querySelector<HTMLElement>('.t a'))?.focus();
   };
   const jumpTo = (l: string) => {
     setLetter(l);
+    const i = list.findIndex((g) => letterOf(g) === l);
+    if (i >= limit) flushSync(() => setLimit(pageThrough(i, PAGE))); // the letter is on a page not shown yet
     const el = bodyRef.current?.querySelector<HTMLElement>(`[data-letter="${l}"]`);
     if (!el) return;
     // Off-screen rows and boxes have estimated heights (content-visibility) until drawn, so a smooth scroll lands off
@@ -152,7 +177,7 @@ export function LibraryPage() {
           {shelf.length ? (
             <div className="shelf rail">
               {shelf.slice(0, SHELF_MAX).map((g) => <Item key={g.id} game={g} saved={savedIds} />)}
-              {shelf.length > SHELF_MAX && <button type="button" className="item more" onClick={() => { setSort('recent'); pickFilter('mine', true); }}>{I.next}{t('library.shelfAll', { count: shelf.length + 1 })}</button>}
+              {shelf.length > SHELF_MAX && <button type="button" className="item more" onClick={() => { pickSort('recent'); pickFilter('mine', true); }}>{I.next}{t('library.shelfAll', { count: shelf.length + 1 })}</button>}
             </div>
           ) : (
             <>
@@ -203,7 +228,7 @@ export function LibraryPage() {
             </div>
             <div className="right">
               <label className="sel">{t('library.sortLabel')}
-                <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+                <select value={sort} onChange={(e) => pickSort(e.target.value as Sort)}>
                   {SORTS.map(([v, l]) => <option key={v} value={v}>{t(l)}</option>)}
                 </select>
               </label>
@@ -226,12 +251,17 @@ export function LibraryPage() {
                 {t(filter === 'fav' ? 'library.noFav' : 'library.noMatch')} <button className="linkbtn" onClick={() => pickFilter('all')}>{t('library.showAll')}</button>
               </div>
             ) : view === 'grid' ? (
-              <div className="shelf cat">{list.map((g) => <Item key={g.id} game={g} saved={savedIds} />)}</div>
+              <div className="shelf cat">{list.slice(0, limit).map((g) => <Item key={g.id} game={g} saved={savedIds} />)}</div>
             ) : (
               <>
                 <div className="lhead"><span /><span>{t('library.col.title')}</span><span className="c">{t('library.col.played')}</span><span className="c">{t('library.col.last')}</span><span>{t('library.col.status')}</span><span /></div>
-                <div className="list">{list.map((g) => <ListRow key={g.id} game={g} saved={savedIds} onFavorite={toggleFavorite} />)}</div>
+                <div className="list">{list.slice(0, limit).map((g) => <ListRow key={g.id} game={g} saved={savedIds} onFavorite={toggleFavorite} />)}</div>
               </>
+            )}
+            {list.length > limit && (
+              <div className="cat-more">
+                <button className="btn line" onClick={showMore}>{I.plus}{t('library.showMore', { count: Math.min(PAGE, list.length - limit), left: list.length - limit })}</button>
+              </div>
             )}
           </div>
         </section>
