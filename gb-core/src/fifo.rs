@@ -158,6 +158,11 @@ pub(crate) struct LineState {
     pub bgp_old: Option<(u8, u32)>,
     /// A register that sets mode 3's length (LCDC, SCX, WY, WX) was written: `measure_len` asks the FIFO again.
     pub relength: bool,
+    /// The x the window last started at.
+    pub win_x: u8,
+    /// WX before the last write, and the last dot the window still compares it (`wx_seen`).
+    pub wx_old: u8,
+    pub wx_dot: u32,
 }
 
 impl Ppu {
@@ -267,6 +272,13 @@ impl Ppu {
         self.lcdc & 0x20 != 0 && (self.cgb_mode || self.lcdc & 0x01 != 0)
     }
 
+    /// WX as the window compares it: a write reaches it one dot late (Mealybug `m3_wx_5_change`,
+    /// `m3_wx_6_change`).
+    #[inline]
+    fn wx_seen(&self) -> u8 {
+        if self.line.dot <= self.line.wx_dot { self.line.wx_old } else { self.wx }
+    }
+
     /// The window row being drawn.
     #[inline]
     fn win_line(&self) -> u8 {
@@ -358,8 +370,8 @@ impl Ppu {
                 if f.window && f.tile_x == 0 {
                     // ponytail: WX 0-6 drops the window's first pixels at no cost (6 dots in all, as
                     // gbmicrotest win0-3 measure) by starting the next fetch early. With WX 0 and a fine
-                    // scroll, the window comes one dot later (Mealybug `m3_window_timing_wx_0`). WX
-                    // written mid-line below 7 (`m3_wx_4/5/6_change`) is not modelled.
+                    // scroll, the window comes one dot later (Mealybug `m3_window_timing_wx_0`). A WX
+                    // 0-6 written mid-line is matched on its dot (`fifo_dot`), not per invisible pixel.
                     let early = if self.line.win_skip == 7 && self.line.fine != 0 && !self.cgb_mode { 4 } else { 5 };
                     for _ in 0..self.line.win_skip.min(early) { self.fetcher_dot(); }
                 }
@@ -473,9 +485,13 @@ impl Ppu {
 
     #[inline]
     fn fifo_dot(&mut self) {
-        // WX 0-6 is matched before x = 0 (x = WX - 7), while the first tile is being fetched.
-        if self.wx < 7 && self.line.dot == 6 + self.wx as u32 && self.win_on() && self.wy_ok() {
-            self.line.win_skip = 7 - self.wx;
+        // WX 0-6 is matched before x = 0 (x = WX - 7), while the first tile is being fetched; the
+        // first match holds (a later WX 0-6 match on the same line is no new start).
+        if self.line.dot <= 12 && self.line.win_skip == 0 {
+            let wx = self.wx_seen();
+            if wx < 7 && self.line.dot == 6 + wx as u32 && self.win_on() && self.wy_ok() {
+                self.line.win_skip = 7 - wx;
+            }
         }
         if self.line.obj_dots > 0 {
             self.line.obj_dots -= 1;
@@ -504,13 +520,21 @@ impl Ppu {
         // dropped, the BG FIFO is emptied and the fetcher restarts on the window map.
         let x = self.line.x;
         if !self.line.fetcher.window && self.line.left_done && self.line.discard == 0 && self.win_on()
-            && if self.line.win_skip > 0 { x == 0 } else { self.wy_ok() && x + 7 == self.wx }
+            && if self.line.win_skip > 0 { x == 0 } else { self.wy_ok() && x + 7 == self.wx_seen() }
         {
             // Turned off and on again, the window starts over on its next row.
             if self.line.window_triggered { self.line.win_rows += 1; }
             self.line.window_triggered = true;
+            self.line.win_x = x;
             self.line.bg.clear();
             self.line.fetcher = Fetcher { window: true, ..Fetcher::default() };
+        } else if self.line.fetcher.window && self.line.bg.len == 0 && x + 7 == self.wx_seen() && x != self.line.win_x && self.win_on() {
+            // WX matched again while the window runs: between two of its tiles, the LCD gets one
+            // colour-0 pixel and the window goes on a pixel later (Mealybug `m3_wx_4_change`,
+            // `m3_wx_5_change`); inside a tile nothing shows.
+            let bg = &mut self.line.bg;
+            bg.px[0] = Pixel::default();
+            (bg.head, bg.len) = (0, 1);
         } else if self.line.fetcher.window && self.lcdc & 0x20 == 0 {
             self.line.fetcher.window = false; // window switched off: back to the BG map
         }

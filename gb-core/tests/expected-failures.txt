@@ -171,11 +171,6 @@ mealybug-tearoom-tests/ppu/m3_obp0_change.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_scx_low_3_bits.gb@cgb  # ppu-mode3: the pixels @dmg fails on
 mealybug-tearoom-tests/ppu/m3_scx_low_3_bits.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_scy_change2.gb@cgb  # ppu-mode3: CGB C reference only; the fetcher latches the tile row with the tile number, as a CGB D does (m3_scy_change passes)
-mealybug-tearoom-tests/ppu/m3_wx_4_change.gb@dmg  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_wx_4_change_sprites.gb@cgb  # ppu-mode3: the pixels @dmg fails on
-mealybug-tearoom-tests/ppu/m3_wx_4_change_sprites.gb@dmg  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_wx_5_change.gb@dmg  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_wx_6_change.gb@dmg  # ppu-mode3
 age-test-roms/m3-bg-bgp/m3-bg-bgp.gb@dmgC  # ppu-mode3
 age-test-roms/m3-bg-bgp/m3-bg-bgp.gb@ncmBC  # ppu-mode3
 age-test-roms/m3-bg-scx/m3-bg-scx-ds.gb@cgbBCE  # double-speed
