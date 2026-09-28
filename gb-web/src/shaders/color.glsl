@@ -1,4 +1,5 @@
-// Pass 1, at 160x144 (at 640x576 after Neural 4x or Smooth motion): DMG palette or GBC colour correction, adjustments, then LCD persistence.
+// Pass 1, at 160x144 (at 640x576 after Neural 4x or Smooth motion): DMG palette or GBC/GBA LCD colour correction, adjustments, then
+// ghosting: a mix with u_hist, the previous output (LCD response) or the previous unghosted frame (frame blending, see LcdEngine).
 // Keep in step with cpuColor() in filters.ts (the Canvas2D fallback).
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
@@ -7,10 +8,11 @@ precision mediump float;
 #endif
 varying vec2 v_uv;
 uniform sampler2D u_frame;
-uniform sampler2D u_hist;   // this pass's previous output
+uniform sampler2D u_hist;   // the previous frame to mix in
 uniform float u_mode;       // 0 raw, 1 DMG palette, 2 colour correction
 uniform vec3 u_pal[4];      // lightest to darkest
-uniform float u_corr;       // correction strength: 1 accurate, 0.5 vivid
+uniform sampler2D u_curve;  // 32x1: each channel's LCD curve by 5-bit value (curveLut in lcd-curves.ts)
+uniform float u_green;      // parts green to one part blue in the displayed green: 3 GBC, 5 GBA
 uniform float u_adjOn;
 uniform vec3 u_adj;         // brightness, contrast, saturation (0 = neutral)
 uniform float u_ghost;
@@ -19,15 +21,19 @@ uniform float u_lerp;       // 1 after an upscaler that blends shades (Neural 4x
 const vec3 LUMA = vec3(0.299, 0.587, 0.114);
 // Luma of the core's four DMG shades, lightest first.
 const vec4 SHADE_L = vec4(0.926525, 0.651514, 0.338824, 0.078933);
-// GBC LCD response: gamma 2.2 and the channel mixing of the widely used gbc-color model, each row
-// scaled to sum to 1 so white stays white (no green tint, no dimming).
-const mat3 GBC = mat3(0.86638, 0.02429, 0.1325,  0.13362, 0.70857, 0.13379,  0.0, 0.26714, 0.73371);
+// SameBoy's balanced LCD modes mix green and blue at gamma 1.6 (correctRgb555 in lcd-curves.ts).
+const float MIX_GAMMA = 1.6;
 
 void main() {
   vec3 c = texture2D(u_frame, v_uv).rgb;
   if (u_mode > 1.5) {
-    vec3 lcd = pow(clamp(GBC * pow(c, vec3(2.2)), 0.0, 1.0), vec3(1.0 / 2.2));
-    c = mix(c, lcd, u_corr);
+    // The core draws 5-bit colour as c5 * 255 / 31: back to c5 (between two after Neural 4x, which the LUT interpolates).
+    vec3 x = c * 31.0;
+    if (u_lerp < 0.5) x = floor(x + 0.5);
+    x = (x + 0.5) / 32.0;
+    c = vec3(texture2D(u_curve, vec2(x.r, 0.5)).r, texture2D(u_curve, vec2(x.g, 0.5)).g, texture2D(u_curve, vec2(x.b, 0.5)).b);
+    vec2 gb = pow(c.gb, vec2(MIX_GAMMA));
+    c.g = pow((gb.x * u_green + gb.y) / (u_green + 1.0), 1.0 / MIX_GAMMA);
   } else if (u_mode > 0.5) {
     // The core draws the four DMG shades in fixed colours; the midpoints of their luma pick the shade.
     float l = dot(c, LUMA);
