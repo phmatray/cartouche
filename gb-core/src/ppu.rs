@@ -51,12 +51,9 @@ pub struct Ppu {
     pub mode_clock: u32,
     pub window_line_counter: u8,
     pub(crate) window_was_active: bool,
-    /// First line after the LCD is switched on: no OAM scan (STAT reads mode 0)
-    /// and the line is 4 dots short.
+    /// First line after the LCD is switched on, until its HBlank: no OAM scan (STAT reads mode 0),
+    /// the line is 4 dots short, and its mode 3 shows late and ends late.
     pub(crate) lcd_on_line0: bool,
-    /// Mode 3 of that line (`cpu_locked`). Not in save states: it only moves the VRAM/OAM lock
-    /// by one M-cycle on that one line.
-    pub(crate) lcd_on_drawing: bool,
     /// Dots mode 3 lasts on the current line (`mode3_length`, set as it starts; on a DMG, the pixel
     /// FIFO's length after a mid-line LCDC/WY/WX write); HBlank gets the rest.
     pub mode3_len: u32,
@@ -116,7 +113,6 @@ impl Ppu {
             window_line_counter: 0,
             window_was_active: false,
             lcd_on_line0: false,
-            lcd_on_drawing: false,
             mode3_len: 172,
             m_cycle_dots: 4,
             framebuffer: [0; FRAMEBUFFER_SIZE],
@@ -171,12 +167,12 @@ impl Ppu {
             return false;
         }
         let shown = match self.read_register(0xFF41) & 3 {
-            2 if self.lcd_on_drawing => 0,
+            2 if self.lcd_on_line0 && self.mode == PpuMode::Drawing => 0,
             m => m,
         };
         let internal = match self.mode {
             PpuMode::OamScan if !self.lcd_on_line0 => 2,
-            PpuMode::Drawing if !self.lcd_on_drawing => 3,
+            PpuMode::Drawing if !self.lcd_on_line0 => 3,
             _ => 0,
         };
         let from = if addr >= 0xFE00 { 2 } else { 3 };
@@ -198,10 +194,14 @@ impl Ppu {
                 let mode_bits = match self.mode {
                     _ if self.lcdc & 0x80 == 0 => 0,
                     PpuMode::HBlank if self.mode_clock < 5 - m / 2 => 3, // see MODE0_EARLY
+                    // The first line after LCD on has no mode 2, and its mode 3 shows 4 dots late.
+                    PpuMode::OamScan if self.lcd_on_line0 => 0,
+                    PpuMode::Drawing if self.lcd_on_line0 && self.mode_clock < 4 => 0,
                     PpuMode::Drawing if self.mode_clock < m => 2,
-                    PpuMode::OamScan if self.mode_clock < m => 0,
+                    // Line 0 after VBlank: 0 like the other lines in single speed, still 1 in double
+                    // speed (Age stat-mode, CGB B/C).
+                    PpuMode::OamScan if self.mode_clock < m => if self.ly == 0 && m == 2 { 1 } else { 0 },
                     PpuMode::VBlank if self.mode_clock < m && self.ly == 144 => 0,
-                    _ if self.lcd_on_line0 => 0,
                     mode => mode as u8,
                 };
                 // With the LCD off the coincidence bit is frozen at its LCD-off value
@@ -247,7 +247,6 @@ impl Ppu {
                     self.mode_clock = 0;
                     self.stat_irq_line = false;
                     self.lcd_on_line0 = false;
-                    self.lcd_on_drawing = false;
                     self.line.active = false;
                     self.window_was_active = false;
                 } else if !was_enabled && is_enabled {
@@ -316,10 +315,9 @@ impl Ppu {
                 if self.mode_clock >= 80 {
                     self.mode_clock -= 80;
                     self.mode = PpuMode::Drawing;
-                    self.mode3_len = if self.lcd_on_line0 { 172 } else { self.mode3_length(self.ly as usize) };
-                    self.lcd_on_drawing = self.lcd_on_line0;
+                    // After LCD on, line 0 has no OBJs (no OAM scan) and its mode 3 ends 2 dots later.
+                    self.mode3_len = if self.lcd_on_line0 { self.mode3_length(0, false) + 2 } else { self.mode3_length(self.ly as usize, true) };
                     if !self.cgb_mode { self.start_line(); }
-                    self.lcd_on_line0 = false;
                 }
             }
             PpuMode::Drawing => {
@@ -334,7 +332,7 @@ impl Ppu {
                 if self.mode_clock >= self.mode3_len - MODE0_EARLY {
                     self.mode_clock -= self.mode3_len - MODE0_EARLY;
                     self.mode = PpuMode::HBlank;
-                    self.lcd_on_drawing = false;
+                    self.lcd_on_line0 = false;
                     hblank_entry = true;
                     if self.cgb_mode { self.render_scanline(); }
                 }
@@ -391,13 +389,13 @@ impl Ppu {
     /// first OBJ (left to right) on a BG/window tile, 5 minus the OBJ's offset in that tile (≥ 0).
     /// OBJs at OAM X 0 share a tile of their own: the first costs 11 whatever SCX.
     /// The pixel FIFO (#155) must reproduce these lengths.
-    fn mode3_length(&self, line: usize) -> u32 {
+    fn mode3_length(&self, line: usize, objs: bool) -> u32 {
         let fine = (self.scx % 8) as i32;
         let window = self.lcdc & 0x20 != 0 && (self.cgb_mode || self.lcdc & 0x01 != 0)
             && (if self.cgb_mode { line >= self.wy as usize } else { self.window_was_active || line == self.wy as usize }) && self.wx <= 166;
         let mut len = 172 + fine as u32 + if window { 6 } else { 0 };
         if window && self.wx == 0 && fine > 0 && !self.cgb_mode { len += 1; }
-        if self.lcdc & 0x02 == 0 { return len; }
+        if self.lcdc & 0x02 == 0 || !objs { return len; }
         let (mut objs, n) = self.select_sprites(line);
         objs[..n].sort_by_key(|o| o.0); // fetched left to right
         let mut paid = 0u64; // tiles an OBJ already waited on: BG 0..=21, window 32..=53, X 0 63
@@ -423,7 +421,7 @@ impl Ppu {
 
     /// OR of all enabled STAT interrupt sources. Used for rising-edge detection.
     fn compute_stat_line(&self) -> bool {
-        let hblank = (self.mode == PpuMode::HBlank || self.lcd_on_line0) && self.stat & 0x08 != 0;
+        let hblank = (self.mode == PpuMode::HBlank || self.lcd_on_line0 && self.mode == PpuMode::OamScan) && self.stat & 0x08 != 0;
         let vblank = self.mode == PpuMode::VBlank  && self.stat & 0x10 != 0;
         // Line 144 starts with the mode 2 source too, for one M-cycle.
         let oam    = (self.mode == PpuMode::OamScan && !self.lcd_on_line0 || self.mode == PpuMode::VBlank && self.ly == 144 && self.mode_clock < 4) && self.stat & 0x20 != 0;
@@ -924,6 +922,50 @@ mod tests {
         }
     }
 
+    /// Line 0 after LCD on: mode 3 ends 2 dots later than on other lines, SCX extension included,
+    /// and shows 4 dots in (2 dots later than other lines in double speed). Age stat-mode.
+    #[test]
+    fn lcd_on_line_0_mode3_timing() {
+        for (m_cycle_dots, shows_late) in [(4, 0), (2, 2)] {
+            for scx in [0, 5] {
+                let mut p = Ppu::new();
+                (p.scx, p.m_cycle_dots) = (scx, m_cycle_dots);
+                p.write_register(0xFF40, 0x81);
+                // Per line, dots from the line start until STAT reads 3, then until it reads 0.
+                let mut edges = [[0u32; 2]; 2];
+                let mut t = 4; // line 0 starts 4 dots in
+                let mut prev = 0;
+                while p.ly < 2 {
+                    let line = p.ly as usize;
+                    p.step(1);
+                    t += 1;
+                    let mode = p.read_register(0xFF41) & 3;
+                    let dot = t - 456 * line as u32;
+                    if mode == 3 && prev != 3 { edges[line][0] = dot; }
+                    if mode == 0 && prev == 3 { edges[line][1] = dot; }
+                    prev = if p.ly as usize != line { 0 } else { mode };
+                }
+                let what = format!("{m_cycle_dots} dots per M-cycle, SCX {scx}: {edges:?}");
+                assert_eq!(edges[0][0], edges[1][0] + shows_late, "{what}");
+                assert_eq!(edges[0][1], edges[1][1] + 2, "{what}");
+            }
+        }
+    }
+
+    /// The first M-cycle of line 0 after VBlank reads mode 0 in single speed, still 1 in double
+    /// speed (Age stat-mode, CGB B/C).
+    #[test]
+    fn line_0_after_vblank_first_m_cycle() {
+        for (m_cycle_dots, mode) in [(4, 0), (2, 1)] {
+            let mut p = Ppu::new();
+            (p.lcdc, p.mode, p.ly, p.mode_clock, p.m_cycle_dots) = (0x81, PpuMode::VBlank, 153, 400, m_cycle_dots);
+            while p.mode == PpuMode::VBlank { p.step(1); }
+            assert_eq!(p.read_register(0xFF41) & 3, mode, "{m_cycle_dots} dots per M-cycle");
+            while p.mode_clock < m_cycle_dots { p.step(1); }
+            assert_eq!(p.read_register(0xFF41) & 3, 2);
+        }
+    }
+
     /// STAT reads mode 3 for a few dots after mode 3 runs out (see MODE0_EARLY): 3 in single
     /// speed, 4 (two M-cycles) in double speed (Age stat-mode-ds, spsw-mode0).
     #[test]
@@ -1120,7 +1162,7 @@ mod tests {
         for xs in lines {
             for scx in 0..8 {
                 let p = run_line10(|p| { p.lcdc |= 0x02; objs_at(p, xs); p.scx = scx; }, |_, _| {});
-                assert_eq!(p.line.len, p.mode3_length(10), "OBJs at {xs:?}, SCX {scx}");
+                assert_eq!(p.line.len, p.mode3_length(10, true), "OBJs at {xs:?}, SCX {scx}");
             }
         }
     }

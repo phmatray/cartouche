@@ -9,7 +9,6 @@ mooneye-test-suite/acceptance/boot_div-dmg0.gb  # boot: DMG-CPU 0 (the first DMG
 mooneye-test-suite/acceptance/boot_hwio-dmg0.gb  # boot: DMG-CPU 0 (the first DMG revision) is not emulated
 mooneye-test-suite/acceptance/boot_regs-dmg0.gb  # boot: DMG-CPU 0 (the first DMG revision) is not emulated
 mooneye-test-suite/acceptance/ppu/hblank_ly_scx_timing-GS.gb  # stat
-mooneye-test-suite/acceptance/ppu/lcdon_timing-GS.gb  # stat
 mooneye-test-suite/acceptance/ppu/stat_lyc_onoff.gb  # stat
 mooneye-test-suite/emulator-only/mbc1/multicart_rom_8Mb.gb  # mbc
 same-suite/apu/channel_1/channel_1_extra_length_clocking-cgb0B.gb  # apu
@@ -29,7 +28,6 @@ age-test-roms/ly/ly-dmgC-cgbBC.gb  # ppu
 age-test-roms/ly/ly-ncmE.gb  # ppu
 age-test-roms/oam/oam-read-cgbE.gb  # ppu
 age-test-roms/oam/oam-read-dmgC-cgbBC.gb  # ppu
-age-test-roms/oam/oam-read-ncmBC.gb  # ppu
 age-test-roms/oam/oam-read-ncmE.gb  # ppu
 age-test-roms/oam/oam-write-cgbBCE.gb  # ppu
 age-test-roms/oam/oam-write-dmgC.gb  # ppu
@@ -45,12 +43,8 @@ age-test-roms/stat-mode-window/stat-mode-window-dmgC.gb  # stat
 age-test-roms/stat-mode-window/stat-mode-window-ds-cgbBCE.gb  # double-speed
 age-test-roms/stat-mode-window/stat-mode-window-ncmBCE.gb  # stat
 age-test-roms/stat-mode/stat-mode-cgbE.gb  # stat
-age-test-roms/stat-mode/stat-mode-dmgC-cgbBC.gb  # stat
-age-test-roms/stat-mode/stat-mode-ds-cgbBCE.gb  # double-speed
-age-test-roms/stat-mode/stat-mode-ncmBC.gb  # stat
 age-test-roms/stat-mode/stat-mode-ncmE.gb  # stat
 age-test-roms/vram/vram-read-cgbBCE.gb  # ppu
-age-test-roms/vram/vram-read-dmgC.gb  # ppu
 age-test-roms/vram/vram-read-ncmBCE.gb  # ppu
 gbmicrotest/000-oam_lock.gb  # no-verdict
 gbmicrotest/000-write_to_x8000.gb  # no-verdict
@@ -110,7 +104,6 @@ gbmicrotest/int_oam_nops.gb  # ppu
 gbmicrotest/lcdon_to_oam_int_l0.gb  # ppu
 gbmicrotest/lcdon_to_oam_int_l1.gb  # ppu
 gbmicrotest/lcdon_to_oam_int_l2.gb  # ppu
-gbmicrotest/lcdon_to_stat3_a.gb  # stat
 gbmicrotest/lcdon_write_timing.gb  # no-verdict
 gbmicrotest/line_144_oam_int_b.gb  # ppu
 gbmicrotest/line_144_oam_int_c.gb  # ppu
