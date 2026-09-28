@@ -1,4 +1,5 @@
 // The touch controls' DOM side shared by the player and its (lazy) layout editor.
+import { useSyncExternalStore } from 'react';
 import { useSettingsStore } from '../../store/settingsStore';
 import { overlaps, SHELLS, SKINS, type Rect } from '../../lib/touch-layout';
 
@@ -7,6 +8,15 @@ export function useSkin() {
   const skin = useSettingsStore((s) => s.touchSkin);
   const shell = useSettingsStore((s) => s.touchShell);
   return { skin: SKINS.includes(skin) ? skin : 'box', shell: SHELLS.includes(shell) ? shell : 'raspberry' };
+}
+
+/** Whether a media query matches, kept up to date (a phone turned, a window resized). */
+export function useMedia(q: string) {
+  return useSyncExternalStore((cb) => {
+    const m = matchMedia(q);
+    m.addEventListener('change', cb);
+    return () => m.removeEventListener('change', cb);
+  }, () => matchMedia(q).matches);
 }
 
 /**

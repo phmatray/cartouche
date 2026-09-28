@@ -32,6 +32,7 @@ import { ConfirmDialog, type ConfirmRequest } from '../shell/ConfirmDialog';
 import { useAlbum, useLinkRom, useRomHeader } from '../../hooks/useGameExtras';
 import { Manual, type Tab } from './Manual';
 import { TouchControls } from './TouchControls';
+import { useMedia } from './touch-dom';
 import { fileAccept } from '../../lib/pwa';
 import { holdGame } from '../../lib/play-lock';
 import { t as tNow, useT } from '../../i18n';
@@ -51,7 +52,8 @@ const ON = ['Dmg', 'Gbc', 'Gbc', 'Sgb'] as const;
 const machineOf = (data: Uint8Array, gameId: string) => machineFor(useSettingsStore.getState(), gameId, sgbCartOf(parseRomHeader(data)));
 const SPEEDS = [0.5, 1, 2, 4];
 /** Phones, upright or sideways: the Manual is a sheet over the controls, not a page beside the game (see index.css). */
-const sheetCovers = () => matchMedia('(max-width:900px),(orientation:landscape) and (max-height:500px)').matches;
+const SHEET = '(max-width:900px),(orientation:landscape) and (max-height:500px)';
+const sheetCovers = () => matchMedia(SHEET).matches;
 /** What Enter and Space press when it has the focus. */
 const CONTROL = 'button,a[href],summary,[role=tab],[role=button],label[tabindex]';
 /** Text is being typed: a slider, a switch or a button keeping focus leaves the keys to the game (Enter: see `down`). */
@@ -436,10 +438,12 @@ function Player({ game }: { game: GameEntry }) {
   }, [isRunning, setIsRunning, play]);
   // Phones: nobody plays a game under the Manual (the sheet hides the controls), and it must not run on its own there
   // and write over the resume point. It pauses while the sheet is open, and plays on when it closes if it was running.
+  // A tablet turned upright with the Manual open beside the game gets the sheet: the same then.
+  const covers = useMedia(SHEET);
   useEffect(() => {
-    if (manual && isRunning && sheetCovers()) { heldBySheet.current = true; setIsRunning(false); }
-    else if (!manual && heldBySheet.current) { heldBySheet.current = false; if (!editing) play(); }
-  }, [manual, isRunning, editing, play, setIsRunning]);
+    if (manual && isRunning && covers) { heldBySheet.current = true; setIsRunning(false); }
+    else if ((!manual || !covers) && heldBySheet.current) { heldBySheet.current = false; if (!editing) play(); }
+  }, [manual, covers, isRunning, editing, play, setIsRunning]);
   /** Switch the console off and on with the game's chosen one: the battery save carries over, like the cartridge. */
   const restart = useCallback(() => {
     const data = romData.current;
