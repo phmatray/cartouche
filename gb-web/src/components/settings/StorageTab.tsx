@@ -73,7 +73,7 @@ export function StorageTab() {
   // Covers are measured again when a download ends, box art is switched, or the library changes.
   useEffect(() => {
     let live = true;
-    Promise.all([boxArtBytes(), boxArtPerGame(games)]).then(([bytes, per]) => live && setArt({ bytes, games: new Set(per.keys()) }));
+    Promise.all([boxArtBytes(), boxArtPerGame(games)]).then(([bytes, per]) => live && setArt({ bytes, games: new Set(per.keys()) }), () => {});
     return () => { live = false; };
   }, [artProgress.of, showBoxArt, games]);
   const covered = shelf.filter((g) => g.coverArt || art.games.has(g.id)).length;
@@ -87,9 +87,10 @@ export function StorageTab() {
   useEffect(() => {
     if (!loaded) return;
     let live = true;
-    measure(gamesRef.current).then((u) => live && setUsage(u));
-    navigator.storage?.estimate?.().then((e) => live && setQuota({ usage: e.usage ?? 0, quota: e.quota ?? 0 }));
-    navigator.storage?.persisted?.().then((p) => live && setPersisted(p));
+    // Storage blocked (private browsing, site data off): nothing to measure (the shell says storage is blocked).
+    measure(gamesRef.current).then((u) => live && setUsage(u), () => {});
+    navigator.storage?.estimate?.().then((e) => live && setQuota({ usage: e.usage ?? 0, quota: e.quota ?? 0 }), () => {});
+    navigator.storage?.persisted?.().then((p) => live && setPersisted(p), () => {});
     return () => { live = false; };
   }, [loaded, artProgress.of]);
 
