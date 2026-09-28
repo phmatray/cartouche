@@ -7,7 +7,6 @@
 
 mooneye-test-suite/acceptance/boot_div-S.gb  # boot
 mooneye-test-suite/acceptance/boot_div-dmg0.gb  # boot
-mooneye-test-suite/acceptance/boot_div-dmgABCmgb.gb  # boot
 mooneye-test-suite/acceptance/boot_div2-S.gb  # boot
 mooneye-test-suite/acceptance/boot_hwio-S.gb  # boot
 mooneye-test-suite/acceptance/boot_hwio-dmg0.gb  # boot
@@ -16,7 +15,6 @@ mooneye-test-suite/acceptance/boot_regs-dmg0.gb  # boot
 mooneye-test-suite/acceptance/boot_regs-mgb.gb  # boot
 mooneye-test-suite/acceptance/boot_regs-sgb.gb  # boot
 mooneye-test-suite/acceptance/boot_regs-sgb2.gb  # boot
-mooneye-test-suite/acceptance/interrupts/ie_push.gb  # interrupt
 mooneye-test-suite/acceptance/ppu/hblank_ly_scx_timing-GS.gb  # stat
 mooneye-test-suite/acceptance/ppu/intr_2_oam_ok_timing.gb  # stat
 mooneye-test-suite/acceptance/ppu/lcdon_timing-GS.gb  # stat
@@ -94,10 +92,8 @@ same-suite/apu/div_write_trigger_volume.gb  # apu
 same-suite/apu/div_write_trigger_volume_10.gb  # apu
 same-suite/dma/hdma_lcd_off.gb  # hdma
 same-suite/dma/hdma_mode0.gb  # hdma
-same-suite/interrupt/ei_delay_halt.gb  # interrupt
 same-suite/sgb/command_mlt_req.gb  # sgb
 same-suite/sgb/command_mlt_req_1_incrementing.gb  # sgb
-age-test-roms/halt/ei-halt-dmgC-cgbBCE.gb  # interrupt
 age-test-roms/halt/halt-m0-interrupt-dmgC-cgbBCE.gb  # interrupt
 age-test-roms/lcd-align-ly/lcd-align-ly-cgbBC.gb  # ppu
 age-test-roms/lcd-align-ly/lcd-align-ly-cgbE.gb  # ppu
@@ -151,7 +147,6 @@ gbmicrotest/audio_testbench.gb  # no-verdict
 gbmicrotest/cpu_bus_1.gb  # no-verdict
 gbmicrotest/dma_basic.gb  # oam-dma
 gbmicrotest/flood_vram.gb  # no-verdict
-gbmicrotest/halt_bug.gb  # interrupt
 gbmicrotest/halt_op_dupe_delay.gb  # interrupt
 gbmicrotest/hblank_int_if_a.gb  # stat
 gbmicrotest/hblank_int_l0.gb  # stat
@@ -188,17 +183,8 @@ gbmicrotest/int_hblank_nops_scx4.gb  # ppu-mode3
 gbmicrotest/int_hblank_nops_scx5.gb  # ppu-mode3
 gbmicrotest/int_hblank_nops_scx6.gb  # ppu-mode3
 gbmicrotest/int_hblank_nops_scx7.gb  # ppu-mode3
-gbmicrotest/int_lyc_halt.gb  # stat
-gbmicrotest/int_lyc_nops.gb  # stat
-gbmicrotest/int_oam_halt.gb  # ppu
 gbmicrotest/int_oam_incs.gb  # ppu
 gbmicrotest/int_oam_nops.gb  # ppu
-gbmicrotest/int_timer_halt.gb  # timer
-gbmicrotest/int_timer_halt_div_b.gb  # timer
-gbmicrotest/int_vblank1_halt.gb  # stat
-gbmicrotest/int_vblank1_nops.gb  # stat
-gbmicrotest/int_vblank2_halt.gb  # stat
-gbmicrotest/int_vblank2_nops.gb  # stat
 gbmicrotest/lcdon_to_oam_int_l0.gb  # ppu
 gbmicrotest/lcdon_to_oam_int_l1.gb  # ppu
 gbmicrotest/lcdon_to_oam_int_l2.gb  # ppu
@@ -240,7 +226,6 @@ gbmicrotest/oam_write_l1_b.gb  # ppu
 gbmicrotest/oam_write_l1_d.gb  # ppu
 gbmicrotest/oam_write_l1_e.gb  # ppu
 gbmicrotest/poweron.gb  # no-verdict
-gbmicrotest/poweron_div_004.gb  # boot
 gbmicrotest/poweron_joy_000.gb  # boot
 gbmicrotest/poweron_oam_006.gb  # boot
 gbmicrotest/poweron_oam_069.gb  # boot
@@ -269,16 +254,6 @@ gbmicrotest/stat_write_glitch_l154_b.gb  # stat
 gbmicrotest/stat_write_glitch_l154_d.gb  # stat
 gbmicrotest/stat_write_glitch_l1_b.gb  # stat
 gbmicrotest/stat_write_glitch_l1_c.gb  # stat
-gbmicrotest/timer_tima_phase_a.gb  # timer
-gbmicrotest/timer_tima_phase_b.gb  # timer
-gbmicrotest/timer_tima_phase_c.gb  # timer
-gbmicrotest/timer_tima_phase_d.gb  # timer
-gbmicrotest/timer_tima_phase_e.gb  # timer
-gbmicrotest/timer_tima_phase_f.gb  # timer
-gbmicrotest/timer_tima_phase_g.gb  # timer
-gbmicrotest/timer_tima_phase_h.gb  # timer
-gbmicrotest/timer_tima_phase_i.gb  # timer
-gbmicrotest/timer_tima_phase_j.gb  # timer
 gbmicrotest/toggle_lcdc.gb  # no-verdict
 gbmicrotest/vblank2_int_if_a.gb  # stat
 gbmicrotest/vblank2_int_if_c.gb  # stat

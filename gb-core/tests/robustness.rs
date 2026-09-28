@@ -225,3 +225,54 @@ fn stop_with_a_button_held_does_not_stop() {
     assert!(!gb.cpu.stopped && gb.cpu.halted, "HALT instead, nothing pending");
     assert_ne!(gb.bus.read_byte(0xFF04), 0);
 }
+
+/// The dispatch picks its vector after pushing PC's high byte: when that push lands on IE ($FFFF)
+/// and disables the pending interrupt, the dispatch is cancelled and jumps to $0000 (Mooneye
+/// ie_push). The low-byte push comes after the choice, so it cannot cancel.
+#[test]
+fn an_ie_write_by_the_high_byte_push_cancels_the_dispatch() {
+    let dispatch = |sp: u16| {
+        let mut gb = boot(&[0x18, 0xFE], &[0x18, 0xFE]);
+        gb.cpu.regs.pc = 0x0200;
+        gb.cpu.regs.sp = sp;
+        gb.cpu.ime = true;
+        gb.bus.interrupts.interrupt_enable = 0x01;
+        gb.bus.interrupts.interrupt_flag = 0x01;
+        gb.cpu.handle_interrupts(&mut gb.bus);
+        gb
+    };
+    let gb = dispatch(0x0000); // high byte $02 goes to $FFFF: VBlank disabled
+    assert_eq!(gb.cpu.regs.pc, 0x0000, "cancelled");
+    assert_eq!(gb.bus.interrupts.interrupt_flag & 0x01, 0x01, "IF left as it was");
+    let gb = dispatch(0x0001); // low byte $00 goes to $FFFF, after the vector is chosen
+    assert_eq!(gb.cpu.regs.pc, 0x0040);
+    assert_eq!(gb.bus.interrupts.interrupt_flag & 0x01, 0);
+}
+
+/// A halted CPU samples IF mid-M-cycle. The timer raises its line with the TIMA reload, at the
+/// end of the overflow M-cycle, so it wakes HALT one M-cycle later than a VBlank raised in that
+/// same M-cycle (gbmicrotest int_timer_halt).
+#[test]
+fn a_timer_overflow_wakes_halt_one_m_cycle_after_a_vblank() {
+    let halted_on_overflow = |also_vblank: bool| {
+        let mut gb = boot(&[0x76, 0x00, 0x18, 0xFE], &[]); // HALT; NOP; JR -2
+        gb.bus.interrupts.interrupt_enable = 0x05; // VBlank, timer
+        gb.bus.interrupts.interrupt_flag = 0;
+        gb.step_instruction().unwrap();
+        assert!(gb.cpu.halted);
+        // TAC 5 (16 cycles), DIV one M-cycle before the falling edge of bit 3: TIMA overflows.
+        gb.bus.timer.tima = 0xFF;
+        gb.bus.timer.tac = 0x05;
+        gb.bus.timer.div_counter = 0x000C;
+        gb.cpu.step(&mut gb.bus).unwrap();
+        if also_vblank { gb.bus.interrupts.request(0x01); }
+        gb.cpu.handle_interrupts(&mut gb.bus);
+        gb
+    };
+    assert!(!halted_on_overflow(true).cpu.halted, "VBlank: awake at once");
+    let mut gb = halted_on_overflow(false);
+    assert!(gb.cpu.halted, "timer: not yet");
+    gb.cpu.step(&mut gb.bus).unwrap();
+    gb.cpu.handle_interrupts(&mut gb.bus);
+    assert!(!gb.cpu.halted, "timer: one M-cycle later");
+}
