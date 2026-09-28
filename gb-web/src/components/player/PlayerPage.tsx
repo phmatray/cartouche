@@ -273,8 +273,11 @@ function Player({ game }: { game: GameEntry }) {
     return () => events.forEach((e) => window.removeEventListener(e, start));
   }, [ensureStarted]);
 
+  // The console is on but its saves are still loading: not paused (the Paused card would flash for a few frames).
+  const [booting, setBooting] = useState(false);
   /** Boot a ROM: cartridge save first, then the requested resume point or slot, then run. */
   const boot = useCallback(async (data: Uint8Array) => {
+    setBooting(true);
     const s = useSettingsStore.getState();
     const slot = q.get('slot');
     const resume = await getSaveState(resumeStateId(game.id)).catch(() => undefined);
@@ -286,7 +289,7 @@ function Player({ game }: { game: GameEntry }) {
     if (fresh) setQ((p) => { p.delete('new'); return p; }, { replace: true });
     // A state replaces the start-up at once: an animation then costs nothing (and plays if the state is gone).
     const animation = STARTUP.indexOf(s.startupAnimation);
-    if (!powerOn(data, machineOf(data, game.id), from !== null ? Math.max(animation, 1) : animation)) { setBadRom(true); return; }
+    if (!powerOn(data, machineOf(data, game.id), from !== null ? Math.max(animation, 1) : animation)) { setBadRom(true); setBooting(false); return; }
     setNeedsRom(false);
     // Moved to the Game Boy for its SNES music (see syncBorder): a resume point made on the Super Game Boy would bring the
     // silence back, so the game starts again on the Game Boy, from its cartridge save. "Resume there" still goes back to it.
@@ -321,6 +324,7 @@ function Player({ game }: { game: GameEntry }) {
     }
     if (fresh && resume) offerUndo(resume);
     // Opened on a page of the Manual on a phone (Save slots from the library, say): the game waits until it closes.
+    setBooting(false); // in the same render as the one that starts it running
     if (manualRef.current && sheetCovers()) heldBySheet.current = true;
     else setIsRunning(q.get('edit') !== 'controls');
   }, [powerOn, hasBatteryRam, importSram, game.id, q, setQ, saves, setIsRunning, consoleNow, skipBoot, saveWriter, stateConsole, offerUndo]);
@@ -662,7 +666,7 @@ function Player({ game }: { game: GameEntry }) {
                   <FileButton className="btn y" accept={fileAccept('.gb,.gbc,.zip')}
                     onFiles={async ([f]) => { const data = await linkRom(f); if (data) boot(data); }}>{I.cart}{t('game.loadRom')}</FileButton>
                 </div>
-              ) : online.on && online.waiting && isRunning ? <LinkWait link={online} /> : romLoaded && !isRunning && !isRewinding && !editing && (errors.at(-1)?.detail ? (
+              ) : online.on && online.waiting && isRunning ? <LinkWait link={online} /> : romLoaded && !booting && !isRunning && !isRewinding && !editing && (errors.at(-1)?.detail ? (
                 <div className="overlay">
                   <b>{t('player.crashed.title')}</b>
                   <p>{t('player.crashed.body')}</p>
