@@ -142,3 +142,31 @@ fn emulator_disassembles_and_steps_over_without_side_effects() {
     assert!(emu.debug_step_over());
     assert_eq!(emu.get_pc(), 0x0103);
 }
+
+/// A 64 KB (4-bank) cartridge of `mbc` type whose program selects ROM bank 3 through $2000.
+fn banked(mbc: u8) -> GameBoy {
+    // LD A, $03; LD [$2000], A; JR -2 (spin).
+    let mut data = rom(&[0x3E, 0x03, 0xEA, 0x00, 0x20, 0x18, 0xFE]);
+    data.resize(0x10000, 0);
+    data[0x0147] = mbc;
+    data[0x0148] = 0x01;
+    let mut checksum: u8 = 0;
+    for addr in 0x0134..=0x014C {
+        checksum = checksum.wrapping_sub(data[addr]).wrapping_sub(1);
+    }
+    data[0x014D] = checksum;
+    let mut gb = GameBoy::new(data).unwrap();
+    gb.skip_boot_rom();
+    gb
+}
+
+#[test]
+fn current_rom_bank_is_the_bank_last_written_to_2000() {
+    for mbc in [0x01, 0x11, 0x19] {
+        let mut gb = banked(mbc);
+        assert_eq!(gb.bus.cartridge.current_rom_bank(), 1, "MBC ${mbc:02X} starts on bank 1");
+        gb.run_frame().unwrap();
+        assert_eq!(gb.bus.cartridge.current_rom_bank(), 3, "MBC ${mbc:02X}");
+    }
+    assert_eq!(gameboy().bus.cartridge.current_rom_bank(), 1, "no MBC: bank 1 is fixed");
+}
