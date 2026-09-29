@@ -140,6 +140,8 @@ pub(crate) struct LineState {
     pub discard: u8,
     /// The dot the fine-scroll drop compares its first pixel with SCX (`drop_dot`); 0 once settled.
     pub drop_from: u8,
+    /// The last dot of the line's start (`fifo_dot`): 19, later while the drop is pending.
+    pub start_end: u32,
     /// The OAM X that the next popped pixel reaches (x + 8 once the discard is over).
     pub hit_x: u8,
     pub fetcher: Fetcher,
@@ -214,6 +216,7 @@ impl Ppu {
             discard: 255,
             // After LCD on, line 0's mode 3 runs 2 dots late (`measure_len`).
             drop_from: DROP_FROM[if self.m_cycle_dots == 2 { 2 } else { (self.cgb_mode || self.compat) as usize }] + 2 * self.lcd_on_line0 as u8,
+            start_end: 19,
             hit_x: 8 - fine,
             first_fetch: true,
             sprites,
@@ -543,7 +546,10 @@ impl Ppu {
         let k = (self.line.dot - self.line.drop_from as u32) as u8;
         // ponytail: a SCX chasing k for 200 dots is settled there, so the line always ends (and the
         // pending count, 255 minus the pixels popped, never runs out); hardware would chase on.
-        if k & 7 != self.scx & 7 && k < 200 { return; }
+        if k & 7 != self.scx & 7 && k < 200 {
+            self.line.start_end = self.line.start_end.max(self.line.dot + 1);
+            return;
+        }
         let old = self.line.fine;
         let discard = self.line.discard - (255 - k); // pixels popped while it was pending are gone
         (self.line.fine, self.line.discard, self.line.hit_x, self.line.drop_from) = (self.scx & 7, discard, 8u8.wrapping_sub(discard), 0);
@@ -682,12 +688,12 @@ impl Ppu {
 
     #[inline(always)]
     fn fifo_dot(&mut self) {
-        if self.line.drop_from != 0 && self.line.dot >= self.line.drop_from as u32 {
-            self.drop_dot();
-        }
         // WX 0-6 is matched before x = 0 (x = WX - 7), while the first tile is being fetched; the
         // first match holds (a later WX 0-6 match on the same line is no new start).
-        if self.line.dot <= 19 {
+        if self.line.dot <= self.line.start_end {
+            if self.line.drop_from != 0 && self.line.dot >= self.line.drop_from as u32 {
+                self.drop_dot();
+            }
             if self.line.dot == 4 && std::mem::take(&mut self.win_carry) && self.win_on() {
                 // DMG, WX = 166 on the line before (`end_line`): the window runs from the line's
                 // first tile, its second column (SameBoy's `window_tile_x = 1`, MIT; Gambatte
