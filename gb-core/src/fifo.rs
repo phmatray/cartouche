@@ -299,6 +299,17 @@ impl Ppu {
         if self.lcdc & 0x10 != 0 { tile as usize * 16 } else { (0x1000 + (tile as i8 as i32) * 16) as usize }
     }
 
+    /// The BG map column of a tile fetch: SCX's coarse bits for the first tile, then SCX (all of it)
+    /// plus the x the pixels have reached, so a mid-line SCX write moves the next tile by its fine
+    /// bits too. A CGB counts one pixel less, except while an OBJ waits for the tile (SameBoy's
+    /// `during_object_fetch`; Age m3-bg-scx on DMG, CGB, non-CGB mode and double speed).
+    #[inline]
+    fn bg_col(&self, tile_x: u8) -> u8 {
+        if tile_x == 0 { return self.scx >> 3; }
+        let late = if (self.cgb_mode || self.compat) && self.line.obj_pending.is_none() { 7 } else { 8 };
+        ((self.scx as u16 + self.line.x as u16 + late) >> 3) as u8 & 31
+    }
+
     /// VRAM address of the fetched tile's row (CGB: in the attribute's bank, flipped by it).
     #[inline]
     fn fetch_addr(&self) -> usize {
@@ -328,7 +339,7 @@ impl Ppu {
                 let (map, col, row) = if f.window {
                     (self.lcdc & 0x40, f.tile_x & 31, self.win_line() >> 3)
                 } else {
-                    (self.lcdc & 0x08, (self.scx >> 3).wrapping_add(f.tile_x) & 31, self.scy.wrapping_add(self.ly) >> 3)
+                    (self.lcdc & 0x08, self.bg_col(f.tile_x), self.scy.wrapping_add(self.ly) >> 3)
                 };
                 let base = if map != 0 { 0x1C00 } else { 0x1800 };
                 // The first tile is fetched twice, but its number is read once (Mealybug `m3_scy_change`).
@@ -636,9 +647,14 @@ impl Ppu {
             bg_color = self.get_bg_cram_color(bg.palette, bg_id);
         } else {
             // A DMG shows the dot of a BGP write with both values mixed, a CGB (compatibility mode)
-            // the new one (Mealybug `m3_bgp_change`).
+            // the new one (Mealybug `m3_bgp_change`), a CGB B/C still the old one (Age m3-bg-bgp:
+            // its ncmBC reference is one pixel right of the ncmE one, on every line).
             let bgp = match self.line.bgp_old.take() {
-                Some((old, dot)) if dot + 1 >= self.line.dot && !self.compat => self.bgp | old,
+                Some((old, dot)) if dot + 1 >= self.line.dot => match (self.compat, self.rev) {
+                    (false, _) => self.bgp | old,
+                    (true, Revision::CgbB | Revision::CgbC) => old,
+                    _ => self.bgp,
+                },
                 _ => self.bgp,
             };
             // BG enable reaches the LCD one dot after BGP does, two on a CGB (`m3_lcdc_bg_en_change`).

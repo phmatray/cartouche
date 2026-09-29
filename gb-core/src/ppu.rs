@@ -1032,6 +1032,37 @@ mod tests {
         assert_eq!(switch_at(64), x + 4, "4 dots later, 4 pixels later");
     }
 
+    /// Non-CGB mode: a CGB B/C shows a BGP write one pixel later than a CGB E (Age m3-bg-bgp,
+    /// ncmBC vs ncmE references).
+    #[test]
+    fn cgb_bc_shows_bgp_write_a_pixel_later() {
+        let switch_x = |rev: Revision| {
+            let p = run_line10(|p| {
+                (p.compat, p.rev) = (true, rev);
+                p.vram[0..16].fill(0xFF);
+                p.bg_cram[6..8].copy_from_slice(&0x001Fu16.to_le_bytes()); // shade 3: red, the others black
+            }, |p, d| if d == 60 { p.write_register(0xFF47, 0x1B) });
+            let row = &p.framebuffer[10 * SCREEN_WIDTH * 4..11 * SCREEN_WIDTH * 4];
+            row.chunks(4).position(|c| c != &row[..4]).expect("the new shade shows")
+        };
+        assert_eq!(switch_x(Revision::CgbC), switch_x(Revision::CgbE) + 1);
+    }
+
+    /// A mid-line SCX write moves the next tile fetch by all of SCX, fine bits too: the map column
+    /// is (SCX + x + 8) / 8 (SameBoy; Age m3-bg-scx). SCX 15 reaches a map column 8 pixels before
+    /// SCX 8 does, though both have coarse bits 1.
+    #[test]
+    fn mid_line_scx_write_moves_the_next_tile_by_its_fine_bits() {
+        let black_from = |scx: u8| {
+            let p = run_line10(|p| {
+                p.vram[16..32].fill(0xFF); // tile 1: colour 3
+                for col in 12..32 { p.vram[0x1800 + 32 + col] = 1; } // map row 1 (line 10), columns 12+
+            }, |p, d| if d == 60 { p.write_register(0xFF43, scx) });
+            shades(&p, 10).iter().position(|&v| v == 3).expect("black shows")
+        };
+        assert_eq!(black_from(15) + 8, black_from(8));
+    }
+
     #[test]
     fn scx_fine_scroll_discards_pixels() {
         // Tile 0: only its first column is dark.
