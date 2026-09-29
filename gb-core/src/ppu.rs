@@ -1793,6 +1793,23 @@ mod tests {
     }
 
     #[test]
+    fn scx_lowered_mid_drop_wraps() {
+        // SCX 7, then 5 once the drop has counted past 5: it wraps, 13 pixels dropped instead of 7.
+        let mode3 = |write: bool| {
+            let mut p = Ppu::new();
+            (p.lcdc, p.ly, p.scx) = (0x91, 10, 7);
+            let mut dots = 0;
+            while p.ly == 10 {
+                if write && p.mode == PpuMode::Drawing && p.line.dot == 10 { p.write_register(0xFF43, 5); }
+                dots += (p.mode == PpuMode::Drawing) as u32;
+                p.step(1);
+            }
+            dots
+        };
+        assert_eq!(mode3(true), mode3(false) + 6);
+    }
+
+    #[test]
     fn scx_fine_scroll_discards_pixels() {
         // Tile 0: only its first column is dark.
         let p = run_line10(|p| { p.vram[0..16].fill(0x80); p.scx = 3; }, |_, _| {});
@@ -1925,7 +1942,9 @@ mod tests {
         let last = (0..20).rev().find(|&d| first_px(0, d) == 3).expect("an early write moves it");
         assert!(first_px(0, 0) == 3 && first_px(0, last + 1) == 0);
         assert_eq!(last, 6 + 2 - 1);
-        // SCX 3 → 0 (a shorter drop): the first tile moves up to 3 dots later.
+        // SCX 3 → 0 (a shorter drop): the first pixel takes the new column up to the drop's third
+        // compare (`drop_dot`): before the first, the drop ends at once on the new tile; after it,
+        // the drop wraps and drops the old tile whole.
         let last3 = (0..20).rev().find(|&d| {
             let p = run_line10(|p| {
                 p.vram[16..32].fill(0xFF);
@@ -1934,7 +1953,7 @@ mod tests {
             }, |p, dot| if dot == d { p.write_register(0xFF43, 0x60) });
             shades(&p, 10)[0] == 3
         }).unwrap();
-        assert_eq!(last3, last + 3);
+        assert_eq!(last3, last + 2);
     }
 
     /// A CGB's palettes stay locked 4 dots after STAT shows mode 0 (2 in double speed).
