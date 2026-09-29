@@ -311,6 +311,17 @@ impl Emulator {
         self.gb.as_ref().map_or(0, |gb| gb.cpu.regs.pc)
     }
 
+    /// The CPU locked up on an invalid opcode, like hardware: the screen and sound run on, the
+    /// game never will (only a reset or a state load gets out). Not an error.
+    pub fn cpu_locked(&self) -> bool {
+        self.gb.as_ref().is_some_and(|gb| gb.cpu.locked)
+    }
+
+    /// Address of the invalid opcode that locked the CPU (0 while not locked).
+    pub fn locked_pc(&self) -> u16 {
+        self.gb.as_ref().map_or(0, |gb| gb.cpu.locked_pc)
+    }
+
     /// The ROM bank mapped at $4000-$7FFF now (1 with no ROM), so banked symbols resolve.
     pub fn rom_bank(&self) -> u16 {
         self.gb.as_ref().map_or(1, |gb| gb.bus.cartridge.current_rom_bank())

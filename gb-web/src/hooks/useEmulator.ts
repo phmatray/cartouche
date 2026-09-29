@@ -2,6 +2,7 @@ import { t } from '../i18n';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import type { RegisterState, EmulatorError } from '../types/emulator';
 import type { FrameTrace } from '../neural/trace';
+import { toast } from '../components/shell/actions';
 
 // These will be dynamically imported from the WASM module
 let wasmMemory: WebAssembly.Memory | null = null;
@@ -33,6 +34,7 @@ export function useEmulator() {
   const [watchpoints, setWatchpoints] = useState<{ addr: number; kind: number }[]>([]);
   const wpRef = useRef<{ addr: number; kind: number }[]>([]);
   const cheatsRef = useRef(''); // the cheat codes on, one per line: each load builds a new console that needs them again
+  const locked = useRef(false); // the CPU lock was already announced (re-armed once it runs again: load, state, rewind)
   const stopped = useRef(false); // no frame runs past a break, even the rest of this animation frame's batch
   const setIsRunning = useCallback((on: boolean) => {
     if (on) { stopped.current = false; setBreakReason(null); }
@@ -99,6 +101,7 @@ export function useEmulator() {
       }
       setPower((n) => n + 1);
       stopped.current = false;
+      locked.current = false; // a new console: a lock in its first frame is news too
       setBreakReason(null);
       bpRef.current.forEach((a) => emu.debug_add_breakpoint(a)); // each load builds a new console
       wpRef.current.forEach((w) => emu.debug_add_watchpoint(w.addr, w.kind));
@@ -139,6 +142,11 @@ export function useEmulator() {
       if (err) addError(t('player.error.crashed'), err);
       setRunning(false);
       return null;
+    }
+    // An invalid opcode locked the CPU, as on hardware: picture and sound run on, the game never will. Say so, once.
+    if (emu.cpu_locked() !== locked.current) {
+      locked.current = !locked.current;
+      if (locked.current) toast(t('player.toast.locked', { pc: '$' + emu.locked_pc().toString(16).toUpperCase().padStart(4, '0') }), 'm');
     }
     if (emu.link_stalled()) return null; // online link cable: the frame goes on once the other player's byte arrives
     const reason = emu.debug_break_reason();
@@ -297,6 +305,7 @@ export function useEmulator() {
       hl: emu.get_hl(),
       sp: emu.get_sp(),
       pc: emu.get_pc(),
+      locked: emu.cpu_locked() ? emu.locked_pc() : null,
       flags: {
         z: (af & 0x80) !== 0,
         n: (af & 0x40) !== 0,
