@@ -69,7 +69,9 @@ impl Cpu {
         }
         let pc = self.regs.pc;
         bus.cycle_tick(); // M1: the fetch at PC, discarded
-        if bus.hdma_on && crate::memory::knob(10) != 0 {
+        if bus.hdma_on {
+            // A VRAM DMA due runs after it as after any opcode fetch, before the pushes
+            // (Gambatte `irq_precedence/hdma_vs_m0_*`, `late_hdma_vs_ei/ie/tima_*`).
             bus.hdma_run();
         }
         bus.cycle_tick(); // M2: PC--
@@ -121,10 +123,8 @@ impl Cpu {
         if self.halted {
             bus.cycle_tick();
             let grace = std::mem::take(&mut self.halt_grace);
-            if grace { bus.dma_hold = true; }
-            if bus.hdma_on && grace && bus.ppu.mode_clock as i32 - bus.hdma_at_pub() >= crate::memory::knob(13) - 1 && crate::memory::knob(13) != 0 { bus.hdma_run(); }
-            if bus.hdma_on { bus.hdma_missed = true; }
-            bus.hdma_on = false; // an HBlank block while halted waits for the wake (`MemoryBus::hdma_halt`)
+            if grace { bus.dma_hold = true; bus.hdma_halt(); }
+            if bus.hdma_active { bus.hdma_halted(); }
             return Ok(4);
         }
 
@@ -361,7 +361,6 @@ impl Cpu {
                 // halt-m0-interrupt, SCX 0-2).
                 if ime || bus.interrupts.pending() == 0 {
                     (self.halted, self.halt_grace) = (true, true);
-                    bus.hdma_halt();
                 } else {
                     // HALT bug: IME=0 but interrupt pending — don't halt,
                     // and the next instruction byte will be read twice

@@ -606,8 +606,10 @@ impl GameBoy {
         let b = &self.bus;
         data.extend_from_slice(&b.hdma_source.to_le_bytes());
         data.extend_from_slice(&b.hdma_dest.to_le_bytes());
-        // The HDMA byte: bit 0 an HBlank DMA on, bit 1 a transfer due (`hdma_on`), bit 2 `hdma_wake`.
-        let hdma = b.hdma_active as u8 | (b.hdma_on as u8) << 1 | (b.hdma_wake as u8) << 2;
+        // The HDMA byte: bit 0 an HBlank DMA on, bit 1 a transfer due (`hdma_on`), bits 2-4 the
+        // HALT flags (`hdma_wake`, `hdma_missed`, `hdma_skip`); states before these load them clear.
+        let hdma = b.hdma_active as u8 | (b.hdma_on as u8) << 1 | (b.hdma_wake as u8) << 2
+            | (b.hdma_missed as u8) << 3 | (b.hdma_skip as u8) << 4;
         data.extend_from_slice(&[b.hdma_remaining, hdma, b.hdma5, b.key1]);
         data.extend_from_slice(&[b.dma_active as u8, 0xA0u8.saturating_sub(b.dma_index)]);
         data.extend_from_slice(&[b.ppu.wy_latch as u8 | (b.ppu.win_carry as u8) << 1 | (b.ppu.wy_check_in.min(7)) << 2, b.ppu.lcd_on_line0 as u8, b.ppu.stat_irq_line as u8]);
@@ -821,7 +823,7 @@ impl GameBoy {
         let blocks = self.bus.hdma_remaining > 0;
         self.bus.hdma_active = hdma & 1 != 0 && blocks;
         self.bus.hdma_on = hdma & 2 != 0 && blocks;
-        self.bus.hdma_wake = hdma & 4 != 0;
+        (self.bus.hdma_wake, self.bus.hdma_missed, self.bus.hdma_skip) = (hdma & 4 != 0, hdma & 8 != 0, hdma & 16 != 0);
         self.bus.hdma5 = read_u8!();
         self.bus.key1 = read_u8!();
         self.bus.dma_active = read_u8!() != 0;
