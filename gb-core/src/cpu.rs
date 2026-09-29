@@ -6,6 +6,8 @@ use crate::registers::Registers;
 pub struct Cpu {
     pub regs: Registers,
     pub halted: bool,
+    /// HALT's first M-cycle is still to run: the OAM DMA copies on through it (`MemoryBus::dma_hold`).
+    pub(crate) halt_grace: bool,
     pub ime: bool,
     pub ime_pending: bool,
     pub stopped: bool,
@@ -21,6 +23,7 @@ impl Cpu {
         Self {
             regs: Registers::default(),
             halted: false,
+            halt_grace: false,
             ime: false,
             ime_pending: false,
             stopped: false,
@@ -41,7 +44,7 @@ impl Cpu {
             if self.locked || pending & !bus.late_interrupts() == 0 {
                 return;
             }
-            self.halted = false;
+            (self.halted, self.halt_grace, bus.dma_hold) = (false, false, false);
         }
         if self.ime {
             self.dispatch(bus);
@@ -113,6 +116,7 @@ impl Cpu {
 
         if self.halted {
             bus.cycle_tick();
+            if std::mem::take(&mut self.halt_grace) { bus.dma_hold = true; }
             return Ok(4);
         }
 
@@ -344,7 +348,7 @@ impl Cpu {
                 // An interrupt raised in this opcode fetch is pending already: the bug (Age
                 // halt-m0-interrupt, SCX 0-2).
                 if ime || bus.interrupts.pending() == 0 {
-                    self.halted = true;
+                    (self.halted, self.halt_grace) = (true, true);
                 } else {
                     // HALT bug: IME=0 but interrupt pending — don't halt,
                     // and the next instruction byte will be read twice
