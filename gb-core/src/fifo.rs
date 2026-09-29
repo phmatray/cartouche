@@ -353,14 +353,15 @@ impl Ppu {
                 if self.line.first_fetch {
                     self.line.first_fetch = false;
                 } else {
+                    // The tile rides in `oam_index` for the layer trace. Read here from `self`, not
+                    // `f`: as `f.tile`, the compiler loads it on every fetcher dot, not once a push.
+                    let tile = self.line.fetcher.tile;
                     let bg = &mut self.line.bg;
                     let (palette, bg_priority) = (f.attr & 7, f.attr & 0x80 != 0);
-                    // The tile rides in `oam_index` for the layer trace. Read from `self`, not `f`: as
-                    // `f.tile`, the compiler loads it on every fetcher dot instead of at the push.
                     for i in 0..8 {
                         let bit = if f.attr & 0x20 != 0 { i } else { 7 - i };
                         let color = (f.hi >> bit & 1) << 1 | (f.lo >> bit & 1);
-                        bg.px[i as usize] = Pixel { color, palette, bg_priority, oam_index: self.line.fetcher.tile };
+                        bg.px[i as usize] = Pixel { color, palette, bg_priority, oam_index: tile };
                     }
                     (bg.head, bg.len) = (0, 8);
                     if f.window && f.tile_x == 0 {
