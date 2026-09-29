@@ -15,8 +15,8 @@ Never add, attach, paste or link to:
 
 This applies to code, tests, issues, pull requests, discussions and commit
 history, down to a single tile: no test fixture may hold boot ROM or logo
-bytes, not even the 8 bytes of the ® glyph. Such content is removed without discussion. If you need a game to
-reproduce a bug, name it (title, region, revision and the SHA-1 of your own
+bytes, not even the 8 bytes of the ® glyph. Such content is removed without
+discussion. If you need a game to reproduce a bug, name it (title, region, revision and the SHA-1 of your own
 dump) instead of sharing it.
 
 Homebrew is welcome in the catalog only if its license clearly allows it and
