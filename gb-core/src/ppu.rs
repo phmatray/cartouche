@@ -390,9 +390,34 @@ impl Ppu {
         (vblank_irq, stat_irq, hblank_entry)
     }
 
+    /// Dots since the mode-0 STAT interrupt line rose, when it rose in the M-cycle just run
+    /// (HBlank's `mode_clock` starts at the edge). `None` otherwise.
+    #[inline]
+    fn mode0_edge_age(&self) -> Option<u32> {
+        let rose = self.lcdc & 0x80 != 0 && self.mode == PpuMode::HBlank && self.stat & 0x08 != 0;
+        (rose && self.mode_clock < self.m_cycle_dots).then_some(self.mode_clock)
+    }
+
+    /// The mode-0 interrupt rose in the M-cycle just run: an IF read in that M-cycle does not see
+    /// it yet, although the next opcode fetch dispatches it (gbmicrotest `hblank_int_scx0..7_if_a/b/c`,
+    /// `hblank_scx3_if_a/b`, `hblank_int_if_a/b`: for every SCX, so for the edge at any dot).
+    pub(crate) fn mode0_edge_now(&self) -> bool {
+        self.mode0_edge_age().is_some()
+    }
+
+    /// The mode-0 interrupt rose in the second half of the M-cycle just run, after a halted CPU
+    /// sampled IF: HALT wakes one M-cycle later than a running CPU dispatches. With the edge at
+    /// Pan Docs' mode-3 length (+2 dots on the line after LCD on), this gives the SCX groups the
+    /// halted CPU sees on a normal line, 0 | 1-4 | 5-7 (Mooneye `hblank_ly_scx_timing-GS`, Age
+    /// `halt-m0-interrupt`), and on the line after LCD on, 0-2 | 3-6 | 7 (gbmicrotest
+    /// `int_hblank_halt_scx0..7`), where a running CPU sees 0 | 1-4 | 5-7 (`int_hblank_nops/incs_scx0..7`).
+    pub(crate) fn mode0_edge_late(&self) -> bool {
+        self.mode0_edge_age().is_some_and(|age| age < self.m_cycle_dots / 2)
+    }
+
     /// OR of all enabled STAT interrupt sources. Used for rising-edge detection.
     fn compute_stat_line(&self) -> bool {
-        let hblank = (self.mode == PpuMode::HBlank || self.lcd_on_line0 && self.mode == PpuMode::OamScan) && self.stat & 0x08 != 0;
+        let hblank = self.mode == PpuMode::HBlank && self.stat & 0x08 != 0;
         let vblank = self.mode == PpuMode::VBlank  && self.stat & 0x10 != 0;
         // Line 144 starts with the mode 2 source too, for one M-cycle.
         let oam    = (self.mode == PpuMode::OamScan && !self.lcd_on_line0 || self.mode == PpuMode::VBlank && self.ly == 144 && self.mode_clock < 4) && self.stat & 0x20 != 0;
@@ -676,6 +701,18 @@ mod tests {
             let fired = p.step(4).1;
             assert_eq!(fired, p.ly == 1, "line 0 after LCD on skips the OAM scan; line 1 has one");
         }
+    }
+
+    /// Line 0 after LCD on reads mode 0 until mode 3, but its mode-0 interrupt comes only at its
+    /// HBlank (gbmicrotest `hblank_int_l0`, `int_hblank_incs/nops_scx*`: 61 M-cycles or more after LCD on).
+    #[test]
+    fn lcd_on_line_0_mode0_irq_only_at_hblank() {
+        let mut p = Ppu::new();
+        p.write_register(0xFF41, 0x08); // mode 0 interrupt
+        p.write_register(0xFF40, 0x80);
+        let mut m = 1;
+        while !p.step(4).1 { m += 1; }
+        assert_eq!((p.mode, m), (PpuMode::HBlank, 62), "the first edge is its HBlank's");
     }
 
     /// Line 0 after LCD on: mode 3 ends 2 dots later than on other lines, SCX extension included,
