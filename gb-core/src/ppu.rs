@@ -1396,8 +1396,12 @@ mod tests {
             let mut p = Ppu::new();
             let m = if ds { 2 } else { 4 };
             (p.m_cycle_dots, p.cgb_mode, p.stat) = (m, ds, 0x20);
-            if window { (p.lcdc, p.wy, p.wx) = (0xA0, 8, 7) } else { p.lcdc = 0x82 }
-            p.oam[0..2].copy_from_slice(&[24, 8]); // row 0 on line 8, X 8
+            if window {
+                (p.lcdc, p.wy, p.wx) = (0xA0, 8, 7); // no OBJ: a CGB fetches it with LCDC.1 off too
+            } else {
+                p.lcdc = 0x82;
+                p.oam[0..2].copy_from_slice(&[24, 8]); // row 0 on line 8, X 8
+            }
             (p.ly, p.mode, p.mode_clock) = (7, PpuMode::OamScan, 40);
             while !p.step(m).1 {}
             assert_eq!((p.ly, p.mode), (7, PpuMode::HBlank), "the interrupt comes in line 7's last M-cycle");
@@ -1450,6 +1454,20 @@ mod tests {
         assert_eq!(line_timing(|p| objs_at(p, &[8, 16, 24, 32, 40, 48, 56, 64, 72, 80])).0, 80 + 172 + 10 * 11);
         assert_eq!(line_timing(|p| { objs_at(p, &[8]); p.lcdc &= !0x02; }).0, 80 + 172, "OBJs off");
         assert_eq!(line_timing(|p| objs_at(p, &[168])).0, 80 + 172, "past the right edge");
+    }
+
+    /// A CGB pays for the OBJs on the line with LCDC.1 off too, in both speeds; a DMG does not
+    /// (Gambatte `oamdma/late_sp*_ds_*`, `sprites/late_disable_ds_*`).
+    #[test]
+    fn cgb_fetches_objs_with_lcdc1_off() {
+        for (cgb, ds) in [(true, false), (true, true), (false, false)] {
+            let len = line_timing(|p| {
+                objs_at(p, &[8]);
+                p.lcdc &= !0x02;
+                (p.cgb_mode, p.m_cycle_dots) = (cgb, if ds { 2 } else { 4 });
+            }).0;
+            assert_eq!(len, 80 + 172 + if cgb { 11 } else { 0 }, "cgb {cgb}, double speed {ds}");
+        }
     }
 
     #[test]
