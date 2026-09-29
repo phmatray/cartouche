@@ -476,6 +476,12 @@ impl Ppu {
     /// halted CPU sees on a normal line, 0 | 1-4 | 5-7 (Mooneye `hblank_ly_scx_timing-GS`, Age
     /// `halt-m0-interrupt`), and on the line after LCD on, 0-2 | 3-6 | 7 (gbmicrotest
     /// `int_hblank_halt_scx0..7`), where a running CPU sees 0 | 1-4 | 5-7 (`int_hblank_nops/incs_scx0..7`).
+    /// The mode-0 interrupt rose in the first dot of the M-cycle just run, before the CPU's write
+    /// in it (which comes after its read): an IF write there clears it, an IF read misses it.
+    pub(crate) fn mode0_edge_first_dot(&self) -> bool {
+        self.mode0_edge_age().is_some_and(|age| age + 1 == self.m_cycle_dots)
+    }
+
     pub(crate) fn mode0_edge_late(&self) -> bool {
         self.mode0_edge_age().is_some_and(|age| age < self.m_cycle_dots / 2)
     }

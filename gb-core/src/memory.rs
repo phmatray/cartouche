@@ -269,12 +269,19 @@ impl MemoryBus {
                 if before & !self.joypad.read() & 0x0F != 0 { self.interrupts.request(JOYPAD_BIT); }
                 if let Some(s) = self.sgb.as_deref_mut() { s.write_p1(value); }
             }
-            0xFF01 => self.serial.write(addr, value, self.timer.div_counter),
-            0xFF02 => self.serial.write(addr, if self.cgb_mode { value } else { value & !0x02 }, self.timer.div_counter),
+            0xFF01 => { self.serial.write(addr, value, self.timer.div_counter); }
+            0xFF02 => {
+                // Stopped before its 8th edge: the request of this M-cycle is withdrawn.
+                if self.serial.write(addr, if self.cgb_mode { value } else { value & !0x02 }, self.timer.div_counter) {
+                    self.interrupts.interrupt_flag &= !(self.if_late & SERIAL_BIT);
+                    self.if_late &= !SERIAL_BIT;
+                }
+            }
             0xFF04..=0xFF07 => {
                 // An overflow requests the interrupt at once, a TIMA write cancelling the reload withdraws it (Timer::step).
                 let (pending, div) = (self.timer.reload_pending, self.timer.div_counter);
                 self.timer.write(addr, value);
+                if addr == 0xFF04 { self.serial.div_reset(div); }
                 self.div_apu_edge(div, true);
                 match (pending, self.timer.reload_pending) {
                     (false, true) => self.interrupts.request(TIMER_BIT),
@@ -282,7 +289,10 @@ impl MemoryBus {
                     _ => {}
                 }
             }
-            0xFF0F => self.interrupts.interrupt_flag = value & 0x1F | self.if_hidden(),
+            0xFF0F => {
+                let seen = if self.ppu.mode0_edge_first_dot() { STAT_BIT } else { 0 };
+                self.interrupts.interrupt_flag = value & 0x1F | self.if_hidden() & !seen;
+            }
             0xFF10..=0xFF3F => {
                 let was_on = self.apu.is_on();
                 self.apu.write_register(addr, value);
@@ -977,6 +987,50 @@ mod tests {
             assert_eq!(cpu.regs.pc, 0x50, "M{m}: dispatched");
             assert_eq!(bus.timer.tima, 0x00, "M{m}: overflowed during the dispatch");
             assert_eq!(bus.interrupts.interrupt_flag & TIMER_BIT != 0, retriggers, "overflow in M{m}, CGB {cgb}");
+        }
+    }
+
+    /// An IF write comes later in its M-cycle than a read: a mode-0 edge in the M-cycle's first
+    /// dot (SCX 3) is missed by a read but cleared by a write; a later one (SCX 4) survives it
+    /// (Gambatte `m2int_m0irq_scx3_ifw_1..4`, `_ds_1/2`).
+    #[test]
+    fn if_write_sees_a_mode0_edge_of_the_first_dot() {
+        for (scx, cleared) in [(3, true), (4, false)] {
+            let mut bus = line10_mode0_irq(scx);
+            while bus.interrupts.interrupt_flag & STAT_BIT == 0 { bus.cycle_tick(); }
+            assert_eq!(bus.read_byte(0xFF0F) & STAT_BIT, 0, "SCX {scx}: a read misses it");
+            bus.write_byte(0xFF0F, 0);
+            bus.cycle_tick();
+            assert_eq!(bus.read_byte(0xFF0F) & STAT_BIT == 0, cleared, "SCX {scx}");
+        }
+    }
+
+    /// SC's unused bits read 1, and bit 1 (the fast clock) only exists in Color mode: $FF/$FD
+    /// while a transfer runs, $7F/$7D once done. The last M-cycle of a transfer still reads it
+    /// running, and stopping it there (SC bit 7 or bit 0 cleared) keeps its interrupt from firing
+    /// (Gambatte `start_wait_read_sc_1/2`, `start_wait_stop_read_if_1/2`, `start_wait_sc80_read_if_1/2`).
+    #[test]
+    fn sc_reads_unused_bits_per_model() {
+        for (cgb, busy, done) in [(false, 0xFF, 0x7F), (true, 0xFD, 0x7D)] {
+            let last_cycle = || {
+                let mut bus = bus();
+                bus.cgb_mode = cgb;
+                (bus.serial.control, bus.serial.remaining) = (0x81, 4);
+                bus.cycle_tick();
+                bus
+            };
+            let mut bus = last_cycle();
+            assert_eq!(bus.read_byte(0xFF02), busy, "CGB {cgb}: the last M-cycle");
+            bus.cycle_tick();
+            assert_eq!(bus.read_byte(0xFF02), done, "CGB {cgb}: done");
+            assert_ne!(bus.interrupts.interrupt_flag & SERIAL_BIT, 0);
+            for stop in [0x01, 0x80] {
+                let mut bus = last_cycle();
+                bus.write_byte(0xFF02, stop);
+                bus.cycle_tick();
+                assert_eq!(bus.interrupts.interrupt_flag & SERIAL_BIT, 0, "CGB {cgb}: SC = {stop:#x} in the last M-cycle");
+                assert_eq!(bus.read_byte(0xFF01), 0x7F, "7 bits in");
+            }
         }
     }
 
