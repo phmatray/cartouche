@@ -431,9 +431,10 @@ impl MemoryBus {
         self.serial.clear_serial_output();
     }
 
-    fn tick_components(&mut self) {
-        let ppu_step = if self.double_speed { 2 } else { 4 };
-        let (vblank_irq, stat_irq, hblank_entry) = self.ppu.step(ppu_step);
+    /// The PPU's interrupt requests of this M-cycle, and which of them are fresh (`ppu_fresh`).
+    /// Kept out of the per-M-cycle path: a few calls per line.
+    #[inline(never)]
+    fn ppu_irqs(&mut self, vblank_irq: bool, stat_irq: bool) {
         let before = self.interrupts.interrupt_flag;
         if vblank_irq {
             self.interrupts.request(VBLANK_BIT);
@@ -443,6 +444,14 @@ impl MemoryBus {
             self.interrupts.request(STAT_BIT);
         }
         self.ppu_fresh = self.interrupts.interrupt_flag & !before;
+    }
+
+    fn tick_components(&mut self) {
+        let ppu_step = if self.double_speed { 2 } else { 4 };
+        let (vblank_irq, stat_irq, hblank_entry) = self.ppu.step(ppu_step);
+        if vblank_irq | stat_irq || self.ppu_fresh != 0 {
+            self.ppu_irqs(vblank_irq, stat_irq);
+        }
         if hblank_entry && self.hdma_active {
             self.hdma_step();
             self.dma_stall();
