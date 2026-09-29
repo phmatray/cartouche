@@ -220,7 +220,6 @@ impl MemoryBus {
     /// Returns whether the write was taken.
     fn dma_write_conflict(&mut self, addr: u16, value: u8) -> bool {
         let cgb = self.cgb_mode || self.ppu.compat; // Color hardware, whatever the mode
-        if cgb { return false; }
         let (bus, dma_bus) = (bus_of(addr, cgb), self.dma_bus(cgb));
         let i = self.dma_index.saturating_sub(1);
         if bus == Bus::Wram && dma_bus == Bus::External {
@@ -626,7 +625,8 @@ impl MemoryBus {
             self.dma_active = false;
             return;
         }
-        let byte = self.peek(self.dma_src(self.dma_index));
+        let cgb = self.cgb_mode || self.ppu.compat;
+        let byte = if cgb && self.dma_source >= 0xE0 { 0xFF } else { self.peek(self.dma_src(self.dma_index)) };
         self.ppu.write_oam(self.dma_index as u16, byte);
         self.dma_index += 1;
     }
@@ -915,6 +915,34 @@ mod tests {
         for _ in 0..160 { bus.cycle_tick(); }
         assert_eq!(bus.ppu.read_oam(3), 0x0A, "from ROM: the written value");
         assert_eq!(bus.read_byte(0xC001), 0x02);
+    }
+
+    /// A CGB write on the DMA's bus: OAM gets the value (external bus), $00 (VRAM) or keeps the
+    /// DMA's byte (work RAM), and the target is untouched. A work RAM write during a DMA from the
+    /// external bus lands in the bank the DMA's address bit 12 picks; from $E000+ the DMA reads $FF.
+    #[test]
+    fn cgb_write_during_dma_same_bus() {
+        let run = |page: u8, addr: u16, value: u8| {
+            let mut bus = bus();
+            (bus.cgb_mode, bus.ppu.cgb_mode) = (true, true);
+            bus.write_byte(0x8001, 0x77);
+            bus.write_byte(0xFF46, page);
+            for _ in 0..4 { bus.cycle_tick(); }
+            bus.cycle_write(addr, value); // the DMA copies byte 3 this M-cycle
+            for _ in 0..160 { bus.cycle_tick(); }
+            bus
+        };
+        let b = run(0x00, 0x2000, 0x42);
+        assert_eq!(b.ppu.read_oam(3), 0x42, "external bus: the written value");
+        let b = run(0x80, 0x8001, 0x42);
+        assert_eq!((b.ppu.read_oam(3), b.read_byte(0x8001)), (0x00, 0x77), "VRAM: $00, target untouched");
+        let b = run(0xC0, 0xC001, 0x42);
+        assert_eq!((b.ppu.read_oam(3), b.read_byte(0xC001)), (0x04, 0x02), "work RAM: the DMA's byte, target untouched");
+        let b = run(0x00, 0xD223, 0x42);
+        assert_eq!((b.read_byte(0xC223), b.read_byte(0xD223)), (0x42, 0x00), "from $00xx: bank $C000");
+        let b = run(0x7F, 0xC223, 0x42);
+        assert_eq!((b.read_byte(0xC223), b.read_byte(0xD223)), (0x00, 0x42), "from $7Fxx: bank $D000");
+        assert_eq!(run(0xE0, 0xFF80, 0).ppu.read_oam(3), 0xFF, "from $E000: $FF");
     }
 
     #[test]
