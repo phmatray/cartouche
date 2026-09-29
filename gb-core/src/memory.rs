@@ -454,6 +454,7 @@ impl MemoryBus {
 
     /// The DIV-APU event: DIV bit 4 (bit 5 in double speed) fell since the counter read `old`,
     /// whether it counted there or was reset by a `write`; its rise arms the envelopes.
+    #[inline]
     fn div_apu_edge(&mut self, old: u16, write: bool) {
         let (new, bit) = (self.timer.div_counter, self.div_apu_bit());
         let fell = old & !new & bit != 0;
