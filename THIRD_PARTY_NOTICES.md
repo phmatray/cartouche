@@ -364,7 +364,10 @@ Cartouche license as `LICENSE.txt`; the in-app Legal page links to all three.
   line starts and after WY and LCDC writes (`wy_check`), the WX 0 match range,
   and WX 166 (the next line's window from its second tile on a Game Boy, the
   early mode-0 interrupt on a Game Boy Color: `wx_166_interrupt_glitch`),
-  ported to Rust in `gb-core/src/ppu.rs` and `gb-core/src/fifo.rs`.
+  ported to Rust in `gb-core/src/ppu.rs` and `gb-core/src/fifo.rs`; and the
+  pixels still to drop counted as x below 0 in the BG map column
+  (`position_in_line`), and the Game Boy Color palettes' lock after mode 3
+  (`cgb_palettes_blocked`).
 - License: Expat (MIT), which covers every file of the SameBoy repository
   except its `iOS` and `HexFiend` directories, so the boot ROMs this fork is
   made from, the colour curves and the APU timing:
