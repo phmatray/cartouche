@@ -188,7 +188,7 @@ crash. They are not counted in the score.
 | Age | PPU, STAT, OAM/VRAM access and double-speed timing | 49/51 |
 | gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 487/489 ² |
 | rtc3test | The MBC3 real-time clock | 6/6 |
-| Gambatte hwtests | STAT and LYC interrupts, mode 3 length, window, OAM DMA, HDMA, HALT, speed switch and sound, checked on a DMG and a CGB | DMG 1650/1873, CGB 2768/3352 ⁵ |
+| Gambatte hwtests | STAT and LYC interrupts, mode 3 length, window, OAM DMA, HDMA, HALT, speed switch and sound, checked on a DMG and a CGB | DMG 1663/1873, CGB 2798/3352 ⁵ |
 
 ¹ Test 7 runs inside the combined `oam_bug.gb`. Run on its own, that ROM
 overruns its 8 KB text log and overwrites its own code, so it cannot finish on

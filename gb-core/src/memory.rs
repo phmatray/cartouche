@@ -406,8 +406,10 @@ impl MemoryBus {
                 let was_on = self.apu.is_on();
                 self.apu.write_register(addr, value);
                 if !self.apu.is_on() { (self.apu_event_late, self.apu_event_due) = (false, None); }
-                // Powered on while DIV's APU bit is set: the first DIV-APU event is skipped.
-                if !was_on && self.apu.is_on() && self.timer.div_counter & self.div_apu_bit() != 0 {
+                // Powered on while DIV's APU bit is set, as this M-cycle ends: the first DIV-APU
+                // event is skipped (Gambatte `ch2_init_reset_env_counter_timing_5/7`,
+                // `ch2_late_reset_nr52_*2b`: a power-on the M-cycle before the bit rises skips).
+                if !was_on && self.apu.is_on() && self.timer.div_counter.wrapping_add(4) & self.div_apu_bit() != 0 {
                     self.apu.skip_first_div_event();
                 }
             }
