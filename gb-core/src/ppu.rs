@@ -467,7 +467,7 @@ impl Ppu {
 
         // Compute combined STAT interrupt signal and fire only on rising edge.
         // This prevents re-firing when the condition was already active (STAT blocking).
-        let new_stat_line = self.compute_stat_line(false, true);
+        let new_stat_line = self.compute_stat_line(MODE2_PULSE, true);
         let stat_irq = new_stat_line && !prev_stat_line;
         self.stat_irq_line = new_stat_line;
 
@@ -531,16 +531,16 @@ impl Ppu {
     /// compares like the line's own edge (`ly_compare`'s `edge`), a STAT write with the flag.
     fn stat_line_written(&mut self, forced: bool, lyc_write: bool) {
         if self.lcdc & 0x80 == 0 { return; }
-        let line = forced || self.compute_stat_line(true, lyc_write);
+        let line = forced || self.compute_stat_line(4 - self.m_cycle_dots / 2, lyc_write);
         self.stat_write_irq = line && !self.stat_irq_line;
         self.stat_write_drop = !line && self.stat_irq_line;
         self.stat_irq_line = line;
     }
 
-    /// OR of all enabled STAT interrupt sources. Used for rising-edge detection. `write`: for a
-    /// STAT or LYC write (`stat_line_written`); `lyc_lead`: see `ly_compare`'s `edge`.
+    /// OR of all enabled STAT interrupt sources. Used for rising-edge detection. `pulse`: the dots
+    /// mode 2's source counts from the line start (a write catches fewer); `lyc_lead`: see `ly_compare`'s `edge`.
     #[inline]
-    fn compute_stat_line(&self, write: bool, lyc_lead: bool) -> bool {
+    fn compute_stat_line(&self, pulse: u32, lyc_lead: bool) -> bool {
         if self.stat & 0x78 == 0 { return false; } // no source enabled: every term below is false
         let hblank = self.mode == PpuMode::HBlank && self.mode_clock >= self.mode0_irq_delay() && self.stat & 0x08 != 0;
         let vblank = self.mode == PpuMode::VBlank  && self.stat & 0x10 != 0;
@@ -550,7 +550,7 @@ impl Ppu {
         // dots, 3 in double speed: on the CPU's M-cycle grid that is the line's first M-cycle, off
         // it (a CGB after a speed switch) no more (Gambatte `m2enable/late_enable_*lcdoffset*`).
         let oam    = ((self.mode == PpuMode::OamScan && !self.lcd_on_line0 || self.mode == PpuMode::VBlank && self.ly == 144)
-            && self.mode_clock < if !write { MODE2_PULSE } else { 4 - self.m_cycle_dots / 2 } || self.mode2_early())
+            && self.mode_clock < pulse || self.mode2_early())
             && self.stat & 0x20 != 0;
         // No comparator blank at a line start: the interrupt is requested one M-cycle ahead of the
         // line (the CPU samples IF before its opcode fetch).
