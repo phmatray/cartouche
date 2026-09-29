@@ -14,6 +14,13 @@ pub(crate) type Sprite = (u8, usize, u8, u8, u8);
 /// CPU takes the interrupt, and reads mode 0, at the M-cycle hardware does for every SCX, window
 /// and OBJ (gbmicrotest `hblank_int_scx*`, `ppu_sprite0_scx*`, `sprite_*`, `win*`).
 const MODE0_EARLY: u32 = 2;
+/// Dots the mode-2 STAT source stays high from a line's start: it rises with the line and falls
+/// again early in mode 2, so a STAT write enabling it later in mode 2 raises nothing and the next
+/// interrupt comes with the next line (gbmicrotest `oam_int_if_level_c/d`: a write landing in the
+/// line's first M-cycle fires, one M-cycle later doesn't; `oam_int_nops_b`, `oam_int_halt_a/b`).
+/// Its 4 dots, plus one M-cycle: the STAT line is sampled once per M-cycle, before a CPU write of
+/// that M-cycle is seen (`Ppu::step`).
+const MODE2_PULSE: u32 = 4;
 /// The longest mode 3 a line can have (172 + 7 fine scroll + 6 window + 10 OBJs of 11 dots): what
 /// `mode3_len` holds until the FIFO measures the line (`measure_len`).
 const MODE3_MAX: u32 = 295;
@@ -419,8 +426,10 @@ impl Ppu {
     fn compute_stat_line(&self) -> bool {
         let hblank = self.mode == PpuMode::HBlank && self.stat & 0x08 != 0;
         let vblank = self.mode == PpuMode::VBlank  && self.stat & 0x10 != 0;
-        // Line 144 starts with the mode 2 source too, for one M-cycle.
-        let oam    = (self.mode == PpuMode::OamScan && !self.lcd_on_line0 || self.mode == PpuMode::VBlank && self.ly == 144 && self.mode_clock < 4) && self.stat & 0x20 != 0;
+        // Mode 2 is a pulse at the line start, not a level (`MODE2_PULSE`). Line 144 has it too;
+        // line 0 after LCD on doesn't.
+        let oam    = (self.mode == PpuMode::OamScan && !self.lcd_on_line0 || self.mode == PpuMode::VBlank && self.ly == 144)
+            && self.mode_clock < MODE2_PULSE + self.m_cycle_dots && self.stat & 0x20 != 0;
         // No comparator blank at a line start: the interrupt is requested one M-cycle ahead of the
         // line (the CPU samples IF before its opcode fetch).
         let lyc    = self.ly_compare(true) == Some(self.lyc) && self.stat & 0x40 != 0;
@@ -700,6 +709,24 @@ mod tests {
         while p.ly == 0 {
             let fired = p.step(4).1;
             assert_eq!(fired, p.ly == 1, "line 0 after LCD on skips the OAM scan; line 1 has one");
+        }
+    }
+
+    /// The mode-2 source is a pulse: STAT bit 5 written in a line's first M-cycle raises the
+    /// interrupt, written one M-cycle later it raises nothing until the next line (gbmicrotest
+    /// `oam_int_if_level_c/d`).
+    #[test]
+    fn mode2_stat_source_is_a_pulse() {
+        for (m_cycle, fires) in [(0, true), (1, false), (20, false)] {
+            let mut p = Ppu::new();
+            (p.lcdc, p.ly, p.mode, p.mode_clock) = (0x81, 9, PpuMode::HBlank, 0);
+            while p.ly == 9 { p.step(4); }
+            for _ in 0..m_cycle { p.step(4); }
+            p.write_register(0xFF41, 0x20);
+            assert_eq!(p.step(4).1, fires, "STAT written in M-cycle {m_cycle} of mode 2");
+            let mut next_line = false;
+            while !next_line { next_line = p.step(4).1; }
+            assert_eq!((p.ly, p.mode), (11, PpuMode::OamScan), "then with the next line");
         }
     }
 
