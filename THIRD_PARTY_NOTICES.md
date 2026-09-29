@@ -352,7 +352,8 @@ Cartouche license as `LICENSE.txt`; the in-app Legal page links to all three.
   a DMA from $E000+ reads and the work RAM bank a CPU read or write lands in,
   and the per-revision $FEA0-$FEFF area (`GB_read_oam`, `write_oam`), ported to
   Rust in `gb-core/src/memory.rs`; and (`Core/sm83_cpu.c`) the M-cycles in which
-  the interrupt dispatch pushes PC, in `gb-core/src/cpu.rs`.
+  the interrupt dispatch pushes PC, in `gb-core/src/cpu.rs`; and (`GB_dma_run`)
+  the OAM DMA waiting while the CPU is halted.
 - License: Expat (MIT), which covers every file of the SameBoy repository
   except its `iOS` and `HexFiend` directories, so the boot ROMs this fork is
   made from, the colour curves and the APU timing:
