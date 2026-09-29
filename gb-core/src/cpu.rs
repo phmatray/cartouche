@@ -47,7 +47,11 @@ impl Cpu {
         }
     }
 
-    /// The 5 M-cycle interrupt dispatch.
+    /// The 5 M-cycle interrupt dispatch: the fetch at PC it discards, PC back, SP down, then
+    /// the two pushes (as SameBoy's `GB_cpu_run`, MIT: the pushes land in M-cycles 4 and 5, where
+    /// Gambatte's hwtest `oamdma_src0000_busyint0002` sees them hit a running OAM DMA, one
+    /// M-cycle after `busyrst0002`'s RST pushes from the same point), and the handler's first
+    /// fetch at the vector.
     #[inline(never)]
     fn dispatch(&mut self, bus: &mut MemoryBus) {
         self.ime = false;
@@ -59,17 +63,17 @@ impl Cpu {
             self.regs.pc = self.regs.pc.wrapping_sub(1);
         }
         let pc = self.regs.pc;
-        bus.cycle_tick(); // M1: internal
-        bus.cycle_idu(self.regs.sp); // M2: SP--
+        bus.cycle_tick(); // M1: the fetch at PC, discarded
+        bus.cycle_tick(); // M2: PC--
+        bus.cycle_idu(self.regs.sp); // M3: SP--
         self.regs.sp = self.regs.sp.wrapping_sub(1);
-        bus.cycle_write(self.regs.sp, (pc >> 8) as u8); // M3: push PC high
+        bus.cycle_write(self.regs.sp, (pc >> 8) as u8); // M4: push PC high
         // The vector is picked from IE & IF only now: a push that wrote IE ($FFFF) can
         // redirect the dispatch, or cancel it to $0000 (Mooneye ie_push).
         let vector = bus.interrupts.acknowledge().unwrap_or(0x0000);
         self.regs.sp = self.regs.sp.wrapping_sub(1);
-        bus.cycle_write(self.regs.sp, pc as u8); // M4: push PC low
+        bus.cycle_write(self.regs.sp, pc as u8); // M5: push PC low, PC = vector
         self.regs.pc = vector;
-        bus.cycle_tick(); // M5: jump to vector
     }
 
     /// Execute one instruction. Returns the number of T-cycles consumed.
