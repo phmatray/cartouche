@@ -453,11 +453,9 @@ impl Ppu {
         (rose && self.mode_clock < self.m_cycle_dots).then_some(self.mode_clock)
     }
 
-    /// The mode-0 interrupt rose in the M-cycle just run: an IF read in that M-cycle does not see
-    /// it yet, although the next opcode fetch dispatches it (gbmicrotest `hblank_int_scx0..7_if_a/b/c`,
-    /// `hblank_scx3_if_a/b`, `hblank_int_if_a/b`: for every SCX, so for the edge at any dot).
-    pub(crate) fn mode0_edge_now(&self) -> bool {
-        self.mode0_edge_age().is_some()
+    /// Mode 2 started in the M-cycle just run (its STAT edge, when there is one).
+    pub(crate) fn mode2_edge_now(&self) -> bool {
+        self.mode == PpuMode::OamScan && self.mode_clock < self.m_cycle_dots
     }
 
     /// The mode-0 interrupt rose in the second half of the M-cycle just run, after a halted CPU
