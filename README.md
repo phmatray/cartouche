@@ -184,7 +184,7 @@ crash. They are not counted in the score.
 | Mooneye acceptance | Timers, DMA, interrupts, PPU and instruction timing | 70/75 |
 | Mooneye emulator-only MBC | MBC1, MBC2 and MBC5 banking | 28/28 |
 | Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 26/51 ³ |
-| SameSuite | APU, HDMA and interrupt edge cases (CGB) | 69/78 |
+| SameSuite | APU, HDMA and interrupt edge cases (CGB), SGB multiplayer | 71/78 |
 | Age | PPU, STAT, OAM/VRAM access and double-speed timing | 19/51 |
 | gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 420/490 ² |
 | rtc3test | The MBC3 real-time clock | 6/6 |
