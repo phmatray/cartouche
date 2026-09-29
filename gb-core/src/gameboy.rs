@@ -606,7 +606,11 @@ impl GameBoy {
         let b = &self.bus;
         data.extend_from_slice(&b.hdma_source.to_le_bytes());
         data.extend_from_slice(&b.hdma_dest.to_le_bytes());
-        data.extend_from_slice(&[b.hdma_remaining, b.hdma_active as u8, b.hdma5, b.key1]);
+        // The HDMA byte: bit 0 an HBlank DMA on, bit 1 a transfer due (`hdma_on`), bits 2-4 the
+        // HALT flags (`hdma_wake`, `hdma_missed`, `hdma_skip`); states before these load them clear.
+        let hdma = b.hdma_active as u8 | (b.hdma_on as u8) << 1 | (b.hdma_wake as u8) << 2
+            | (b.hdma_missed as u8) << 3 | (b.hdma_skip as u8) << 4;
+        data.extend_from_slice(&[b.hdma_remaining, hdma, b.hdma5, b.key1]);
         data.extend_from_slice(&[b.dma_active as u8, 0xA0u8.saturating_sub(b.dma_index)]);
         data.extend_from_slice(&[b.ppu.wy_latch as u8 | (b.ppu.win_carry as u8) << 1 | (b.ppu.wy_check_in.min(7)) << 2, b.ppu.lcd_on_line0 as u8, b.ppu.stat_irq_line as u8]);
         data.extend_from_slice(&[self.cpu.ime_pending as u8, self.cpu.stopped as u8]);
@@ -812,10 +816,14 @@ impl GameBoy {
         let mapper: &[u8; MAPPER_STATE_LEN] = read_bytes!(MAPPER_STATE_LEN).try_into().unwrap();
         self.bus.cartridge.import_state(mapper);
         self.bus.hdma_source = read_u16!() & 0xFFF0;
-        self.bus.hdma_dest = read_u16!() & 0x1FF0;
+        self.bus.hdma_dest = read_u16!() & 0xFFF0;
         self.bus.hdma_remaining = read_u8!().min(0x80);
         // An HBlank DMA with no block left would copy 255 more over VRAM.
-        self.bus.hdma_active = read_u8!() != 0 && self.bus.hdma_remaining > 0;
+        let hdma = read_u8!();
+        let blocks = self.bus.hdma_remaining > 0;
+        self.bus.hdma_active = hdma & 1 != 0 && blocks;
+        self.bus.hdma_on = hdma & 2 != 0 && blocks;
+        (self.bus.hdma_wake, self.bus.hdma_missed, self.bus.hdma_skip) = (hdma & 4 != 0, hdma & 8 != 0, hdma & 16 != 0);
         self.bus.hdma5 = read_u8!();
         self.bus.key1 = read_u8!();
         self.bus.dma_active = read_u8!() != 0;
@@ -987,7 +995,7 @@ mod tests {
         assert!(g.load_state(&state));
         assert!(g.bus.ppu.ly <= 143 && g.bus.ppu.mode_clock < 456);
         assert!(!g.bus.hdma_active);
-        assert_eq!(g.bus.hdma_dest, 0x1FF0);
+        assert_eq!(g.bus.hdma_dest, 0xFFF0);
         assert!(g.bus.serial.remaining <= 8 * 512);
         g.run_frame().unwrap();
     }

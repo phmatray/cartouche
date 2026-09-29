@@ -38,25 +38,27 @@ fn dmg_cart_still_runs_the_boot_rom() {
 #[test]
 fn hdma_cancel_then_restart_resumes_from_counters() {
     let mut gb = cgb();
-    let bus = &mut gb.bus;
     for i in 0..0x40u16 {
-        bus.write_byte(0xC000 + i, i as u8 ^ 0xA5);
+        gb.bus.write_byte(0xC000 + i, i as u8 ^ 0xA5);
     }
-    bus.write_byte(0xFF40, 0x00); // LCD off: the PPU sits in mode 0
-    bus.write_byte(0xFF51, 0xC0);
-    bus.write_byte(0xFF52, 0x00);
-    bus.write_byte(0xFF53, 0x00);
-    bus.write_byte(0xFF54, 0x00);
+    gb.bus.write_byte(0xFF40, 0x00); // LCD off: the PPU sits in mode 0
+    gb.bus.write_byte(0xFF51, 0xC0);
+    gb.bus.write_byte(0xFF52, 0x00);
+    gb.bus.write_byte(0xFF53, 0x00);
+    gb.bus.write_byte(0xFF54, 0x00);
 
-    bus.write_byte(0xFF55, 0x83); // HBlank DMA, 4 blocks: first block goes at once (mode 0)
-    assert_eq!(bus.read_byte(0xFF55), 0x02, "active: bit 7 clear, 3 blocks left -> 2");
-    bus.write_byte(0xFF55, 0x00); // cancel
-    assert_eq!(bus.read_byte(0xFF55), 0x80, "cancelled: bit 7 set, the length bits are the written ones (SameSuite hdma_lcd_off)");
+    // HBlank DMA, 4 blocks: the first goes at once (mode 0), after the CPU's next opcode fetch.
+    gb.bus.write_byte(0xFF55, 0x83);
+    gb.step_instruction().unwrap();
+    assert_eq!(gb.bus.read_byte(0xFF55), 0x02, "active: bit 7 clear, 3 blocks left -> 2");
+    gb.bus.write_byte(0xFF55, 0x00); // cancel
+    assert_eq!(gb.bus.read_byte(0xFF55), 0x80, "cancelled: bit 7 set, the length bits are the written ones (SameSuite hdma_lcd_off)");
 
-    bus.write_byte(0xFF55, 0x02); // GDMA 3 blocks, HDMA1-4 NOT rewritten: must continue at $C010
-    assert_eq!(bus.read_byte(0xFF55), 0xFF);
+    gb.bus.write_byte(0xFF55, 0x02); // GDMA 3 blocks, HDMA1-4 NOT rewritten: must continue at $C010
+    gb.step_instruction().unwrap();
+    assert_eq!(gb.bus.read_byte(0xFF55), 0xFF);
     for i in 0..0x40u16 {
-        assert_eq!(bus.read_byte(0x8000 + i), i as u8 ^ 0xA5, "VRAM byte {i:#x}");
+        assert_eq!(gb.bus.read_byte(0x8000 + i), i as u8 ^ 0xA5, "VRAM byte {i:#x}");
     }
 }
 

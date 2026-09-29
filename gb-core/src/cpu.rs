@@ -45,6 +45,7 @@ impl Cpu {
                 return;
             }
             (self.halted, self.halt_grace, bus.dma_hold) = (false, false, false);
+            bus.hdma_unhalt();
         }
         if self.ime {
             self.dispatch(bus);
@@ -68,6 +69,11 @@ impl Cpu {
         }
         let pc = self.regs.pc;
         bus.cycle_tick(); // M1: the fetch at PC, discarded
+        if bus.hdma_on {
+            // A VRAM DMA due runs after it as after any opcode fetch, before the pushes
+            // (Gambatte `irq_precedence/hdma_vs_m0_*`, `late_hdma_vs_ei/ie/tima_*`).
+            bus.hdma_run();
+        }
         bus.cycle_tick(); // M2: PC--
         bus.cycle_idu(self.regs.sp); // M3: SP--
         self.regs.sp = self.regs.sp.wrapping_sub(1);
@@ -116,11 +122,16 @@ impl Cpu {
 
         if self.halted {
             bus.cycle_tick();
-            if std::mem::take(&mut self.halt_grace) { bus.dma_hold = true; }
+            let grace = std::mem::take(&mut self.halt_grace);
+            if grace { bus.dma_hold = true; bus.hdma_halt(); }
+            if bus.hdma_active { bus.hdma_halted(); }
             return Ok(4);
         }
 
         let opcode = self.fetch_byte(bus);
+        if bus.hdma_on {
+            bus.hdma_run();
+        }
 
         match opcode {
             // === NOP ===
@@ -278,6 +289,7 @@ impl Cpu {
                     if !pending {
                         self.regs.pc = self.regs.pc.wrapping_add(1);
                         self.halted = true;
+                        bus.hdma_halt();
                     }
                 } else {
                     if !pending { self.regs.pc = self.regs.pc.wrapping_add(1); }
