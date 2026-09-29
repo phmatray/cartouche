@@ -17,7 +17,8 @@
 //!   - attr: OAM attribute byte of the claiming OBJ
 //! - `tile`: 1 byte per pixel, the BG/window tile number the pixel was fetched with (after any
 //!   mid-line SCX/SCY/LCDC write, as the fetcher read the map). 0 where no tile was fetched (the
-//!   colour-0 pixel of a WX re-match). The VRAM bank (CGB attribute bit 3) is not recorded.
+//!   colour-0 pixel of a WX re-match), or the OBJ's tile when a CGB TILE_SEL write fed the
+//!   fetch an OBJ row. The VRAM bank (CGB attribute bit 3) is not recorded.
 //! - `meta`: `META_LEN` bytes. Header (`HEADER_LEN`): "CTRC", version, cgb, rendered line count,
 //!   compat (a DMG cartridge coloured by a CGB: BGP picks from BG CRAM palette 0), frame number
 //!   (u32 LE). Then one `LINE_LEN` record per scanline (see [`line`]), then the
@@ -71,6 +72,9 @@ pub mod line {
     /// 5-byte records `[slot, y, x, tile, attr]` in OAM order (raw OAM values).
     pub const NSPR: usize = 11;
     pub const SPRITES: usize = 12;
+    /// LCDC with every bit it had at some dot of the line's mode 3 (the value at the first dot,
+    /// ORed with each mid-line write): bit 4 set means some fetch may have used $8000-$8FFF.
+    pub const LCDC_SEEN: usize = 62;
 }
 pub const LINE_RENDERED: u8 = 1;
 pub const LINE_CGB: u8 = 2;
