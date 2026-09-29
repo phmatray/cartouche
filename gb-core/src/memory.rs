@@ -516,6 +516,8 @@ impl MemoryBus {
         // STOP's second M-cycle reads the byte after it; DIV resets at the end of the next one.
         self.tick_components();
         let earlier = self.timer.div_counter;
+        // From here the pause holds the OAM DMA's copying as HALT does (`dma_hold`).
+        let hold = std::mem::replace(&mut self.dma_hold, true);
         self.tick_components();
         let div = self.timer.div_counter;
         let cgb_e = self.rev == crate::gameboy::Revision::CgbE;
@@ -537,6 +539,7 @@ impl MemoryBus {
         // `OFS_B`).
         if self.interrupts.pending() & !self.late_interrupts() != 0 {
             self.timer.div_hold = if cgb_e { 1 } else { 2 };
+            self.dma_hold = hold;
             return true;
         }
         let mut behind = !self.double_speed;
@@ -549,6 +552,7 @@ impl MemoryBus {
             }
             if self.interrupts.pending() & !self.late_interrupts() != 0 { break; }
         }
+        self.dma_hold = hold;
         true
     }
 
@@ -1176,6 +1180,25 @@ mod tests {
         assert_eq!(bus.read_byte(0xFF04), 0, "DIV reset, then $20000 counts: back at 0");
         assert_eq!(bus.read_byte(0xFF05), 0x80, "the timer ran through the pause (Age spsw-tima)");
         assert_eq!(bus.cycle_count, 2 * 4 + 0x8000 * 2, "STOP's 2 M-cycles, then $8000 at the new speed");
+    }
+
+    /// The speed-switch pause holds the OAM DMA from STOP's second M-cycle on, as HALT does: a DMA
+    /// with its last byte still to copy then keeps OAM through the pause (Gambatte
+    /// `oamdma/oamdma_late_speedchange_stat_1/_2`, `oamdmasrcC0_speedchange_readC000`).
+    #[test]
+    fn speed_switch_pause_holds_the_oam_dma() {
+        for (left, held) in [(2u8, true), (1, false)] {
+            let mut bus = bus();
+            bus.cgb_mode = true;
+            (bus.dma_active, bus.dma_index) = (true, 0xA0 - left);
+            bus.write_byte(0xFF4D, 0x01);
+            assert!(bus.try_speed_switch());
+            assert_eq!(bus.dma_active, held, "{left} byte(s) left at STOP");
+            assert!(!bus.dma_hold);
+            bus.cycle_tick();
+            bus.cycle_tick();
+            assert!(!bus.dma_active, "done once the CPU runs again");
+        }
     }
 
     #[test]
