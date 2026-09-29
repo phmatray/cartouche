@@ -518,7 +518,9 @@ impl Ppu {
     }
 
     /// OR of all enabled STAT interrupt sources. Used for rising-edge detection.
+    #[inline]
     fn compute_stat_line(&self) -> bool {
+        if self.stat & 0x78 == 0 { return false; } // no source enabled: every term below is false
         let hblank = self.mode == PpuMode::HBlank && self.mode_clock >= self.mode0_irq_delay() && self.stat & 0x08 != 0;
         let vblank = self.mode == PpuMode::VBlank  && self.stat & 0x10 != 0;
         // Mode 2 is a pulse at the line start, not a level (`MODE2_PULSE`). Line 144 has it too;
