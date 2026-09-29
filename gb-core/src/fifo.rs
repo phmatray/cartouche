@@ -569,10 +569,20 @@ impl Ppu {
         obj.len = obj.len.max(8 - shift);
     }
 
-    /// The first OBJ still to fetch at the current X, in OAM order.
+    /// OBJs are fetched on this dot: LCDC.1 on, or always on a CGB (see `obj_hit`).
+    #[inline]
+    fn objs_fetched(&self) -> bool {
+        self.lcdc & 0x02 != 0 || self.cgb_mode || self.compat
+    }
+
+    /// The first OBJ still to fetch at the current X, in OAM order. A CGB fetches OBJs, and pays
+    /// their mode-3 dots, with LCDC.1 off too: the bit only hides them on the LCD (`output_pixel`;
+    /// SameBoy's OBJ fetch loop, MIT: `LCDC & OBJ_EN || GB_is_cgb`). Gambatte hwtests
+    /// `oamdma/late_sp*_ds_*` and `sprites/late_disable_ds_*`, whose OBJ lengthens mode 3 with
+    /// LCDC $91 on a CGB C.
     #[inline]
     fn obj_hit(&self) -> Option<usize> {
-        if self.lcdc & 0x02 == 0 { return None; }
+        if !self.objs_fetched() { return None; }
         let l = &self.line;
         if l.obj_xs[l.hit_x as usize >> 6] & 1 << (l.hit_x & 63) == 0 { return None; }
         (0..l.nsprites).find(|&i| l.fetched & 1 << i == 0 && l.sprites[i].0 == l.hit_x)
@@ -582,7 +592,7 @@ impl Ppu {
     /// pixel: X 0 costs 11 dots, the others 6 plus, for the first, 5 minus X + SCX % 8.
     #[inline(never)]
     fn fetch_left_objs(&mut self) -> u32 {
-        if self.lcdc & 0x02 == 0 { return 0; }
+        if !self.objs_fetched() { return 0; }
         let fine = self.line.fine;
         let mut order: [(u8, usize); 10] = [(0, 0); 10];
         let mut n = 0;
