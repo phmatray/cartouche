@@ -49,6 +49,9 @@ pub struct MemoryBus {
     pub(crate) apu_event_late: bool,
     /// A DIV-APU event held back that M-cycle (`Some(from a DIV write)`), delivered with the next one.
     pub(crate) apu_event_due: Option<bool>,
+    /// M-cycles the APU hasn't run yet: it catches up (`apu_catch_up`) where it can be seen or
+    /// changed, not on every M-cycle (#298). Always 0 between `GameBoy` calls.
+    pub(crate) apu_pending: u32,
     // CGB HDMA/GDMA
     pub hdma5: u8,
     pub(crate) hdma_active: bool,
@@ -69,6 +72,8 @@ pub struct MemoryBus {
     pub watch: Option<Box<crate::debug::WatchSet>>,
     /// The hardware revision (`GameBoy::set_revision`), for subsystems to read as a plain field.
     pub rev: crate::gameboy::Revision,
+    /// The CPU is halted past HALT's first M-cycle: the OAM DMA waits (`dma_tick`).
+    pub(crate) dma_hold: bool,
     /// The RAM a Game Boy Color up to revision D has at $FEA0-$FEFF (`fea0_index`).
     pub(crate) fea0: [u8; 0x30],
 }
@@ -125,6 +130,7 @@ impl MemoryBus {
             double_speed: false,
             apu_event_late: false,
             apu_event_due: None,
+            apu_pending: 0,
             hdma5: 0xFF,
             hdma_active: false,
             hdma_source: 0,
@@ -136,6 +142,7 @@ impl MemoryBus {
             cheats: Default::default(),
             watch: None,
             rev: crate::gameboy::Revision::Default,
+            dma_hold: false,
             fea0: [0; 0x30],
         }
     }
@@ -414,6 +421,7 @@ impl MemoryBus {
                 self.interrupts.interrupt_flag = value & 0x1F | self.if_hidden() & !seen;
             }
             0xFF10..=0xFF3F => {
+                self.apu_catch_up();
                 let was_on = self.apu.is_on();
                 self.apu.write_register(addr, value);
                 if !self.apu.is_on() { (self.apu_event_late, self.apu_event_due) = (false, None); }
@@ -492,6 +500,7 @@ impl MemoryBus {
     /// (VBK, SVBK, palette RAM, HDMA, KEY1) and the PPU draws like a DMG, with BGP/OBP0/OBP1
     /// picking colours from the palettes the boot ROM left in BG palette 0 and OBJ palettes 0-1.
     pub(crate) fn enter_compat(&mut self) {
+        self.apu_catch_up();
         self.cgb_mode = false;
         self.ppu.cgb_mode = false;
         self.ppu.compat = true;
@@ -514,6 +523,7 @@ impl MemoryBus {
         // The reset can drop DIV's APU bit (old speed), seen one M-cycle late like the 4 KHz timer
         // input: a bit that only just rose does not count (Age spsw-ch2-lc-delay).
         self.div_apu_edge(div & earlier, true);
+        self.apu_catch_up(); // at the old speed's ticks per M-cycle
         self.double_speed = !self.double_speed;
         if self.double_speed && self.apu.is_on() { self.apu_event_late = !self.apu_event_late; }
         self.ppu.m_cycle_dots = if self.double_speed { 2 } else { 4 };
@@ -551,6 +561,7 @@ impl MemoryBus {
     /// An M-cycle in stop mode: the clock is off (no PPU, timer, DMA or sound), only time passes.
     pub fn stop_tick(&mut self) {
         let t = if self.double_speed { 2 } else { 4 };
+        self.apu_catch_up();
         self.apu.silence(t);
         self.cartridge.tick_clock(t as u64);
         self.cycle_count += t;
@@ -582,7 +593,11 @@ impl MemoryBus {
         let before = self.interrupts.interrupt_flag;
         if vblank_irq {
             self.interrupts.request(VBLANK_BIT);
-            if let Some(s) = self.sgb.as_deref_mut() { s.vblank(&self.ppu.framebuffer, self.apu.read_register(0xFF26) & 0x0F != 0); }
+            if self.sgb.is_some() {
+                self.apu_catch_up();
+                let playing = self.apu.read_register(0xFF26) & 0x0F != 0;
+                if let Some(s) = self.sgb.as_deref_mut() { s.vblank(&self.ppu.framebuffer, playing); }
+            }
         }
         if stat_irq {
             self.interrupts.request(STAT_BIT);
@@ -613,9 +628,10 @@ impl MemoryBus {
         self.apu.cgb_mode = self.cgb_mode || self.ppu.compat; // CGB hardware, whatever the mode
         self.apu.double_speed = self.double_speed;
         if let Some((l, r)) = self.sgb.as_deref_mut().and_then(|s| s.audio.run(ppu_step)) {
+            self.apu_catch_up();
             self.apu.mix_external(l, r);
         }
-        self.apu.step(ppu_step / 2); // 2 MHz ticks
+        self.apu_pending += 1;
         self.cycle_count += ppu_step;
 
         self.dma_tick();
@@ -632,6 +648,7 @@ impl MemoryBus {
         }
         // The rise is not held back: only the falling edge is measured late (spsw-ch2-lc-delay).
         if !old & new & bit != 0 {
+            self.apu_catch_up();
             self.apu.div_secondary_event();
         }
     }
@@ -643,8 +660,26 @@ impl MemoryBus {
             event = std::mem::replace(&mut self.apu_event_due, event);
         }
         if let Some(write) = event {
+            self.apu_catch_up();
             self.apu.div_event(write);
         }
+    }
+
+    /// Runs the M-cycles the APU is behind on, at this speed's ticks each: before anything reads or
+    /// changes it (registers, DIV-APU edges, the Super Game Boy's sound, a speed switch, stop
+    /// mode) and whenever `GameBoy` hands back control.
+    #[inline]
+    pub(crate) fn apu_catch_up(&mut self) {
+        if self.apu_pending != 0 {
+            let m = std::mem::take(&mut self.apu_pending);
+            self.apu.run(m, if self.double_speed { 1 } else { 2 });
+        }
+    }
+
+    /// An APU register (NRxx, wave RAM, PCM12/PCM34) is read at `addr`.
+    #[inline]
+    fn reads_apu(addr: u16) -> bool {
+        matches!(addr, 0xFF10..=0xFF3F | 0xFF76 | 0xFF77)
     }
 
     /// DIV bit 4 (bit 5 in double speed), in the timer's internal counter.
@@ -661,12 +696,20 @@ impl MemoryBus {
             }
             self.dma_active = true;
             self.dma_index = 0;
+            self.ppu.set_oam_dma(true);
         }
         if !self.dma_active {
             return;
         }
+        // HALT holds the DMA's copying after its first M-cycle, not its end once the last byte
+        // is in (as SameBoy's `GB_dma_run`, MIT; Gambatte hwtests `oamdmasrc80_halt_m2irq/lycirq_read8000`:
+        // a DMA started before HALT is still copying after it, `oamdma_late_halt_stat_1/_2`).
+        if self.dma_hold && self.dma_index < 0xA0 {
+            return;
+        }
         if self.dma_index >= 0xA0 {
             self.dma_active = false;
+            self.ppu.set_oam_dma(false);
             return;
         }
         let cgb = self.cgb_mode || self.ppu.compat;
@@ -716,9 +759,11 @@ impl MemoryBus {
         self.tick_components();
     }
 
+
     pub fn cycle_read(&mut self, addr: u16) -> u8 {
         self.tick_components();
         if (0xFE00..=0xFEFF).contains(&addr) { self.ppu.oam_bug_read(); }
+        if Self::reads_apu(addr) { self.apu_catch_up(); }
         let value = if self.ppu.cpu_locked(addr, false) { 0xFF } else { self.read_byte(addr) };
         if self.dma_active { self.dma_read_clobber(addr); }
         if let Some(w) = &mut self.watch { w.record(addr, value, false); }
@@ -730,6 +775,7 @@ impl MemoryBus {
     pub fn cycle_read_inc(&mut self, addr: u16) -> u8 {
         self.tick_components();
         if (0xFE00..=0xFEFF).contains(&addr) { self.ppu.oam_bug_read_inc(); }
+        if Self::reads_apu(addr) { self.apu_catch_up(); }
         let value = if self.ppu.cpu_locked(addr, false) { 0xFF } else { self.read_byte(addr) };
         if self.dma_active { self.dma_read_clobber(addr); }
         if let Some(w) = &mut self.watch { w.record(addr, value, false); }
@@ -1045,6 +1091,20 @@ mod tests {
         for _ in 0..160 { bus.cycle_tick(); }
         let oam: Vec<u8> = (5..9).map(|i| bus.ppu.read_oam(i)).collect();
         assert_eq!(oam, [0x00, 0xFF, 0x94, 0x00], "PC high in M-cycle 4 (byte 6), low in 5 (byte 7)");
+    }
+
+    /// HALT holds the OAM DMA after its first M-cycle: a VRAM read after 50 halted M-cycles still
+    /// sees the byte copied in that first one.
+    #[test]
+    fn oam_dma_from_vram_while_halted() {
+        let mut bus = bus();
+        for i in 0..0xA0 { bus.write_byte(0x8000 + i, 0xA0 - i as u8); }
+        bus.write_byte(0xFF46, 0x80);
+        for _ in 0..4 { bus.cycle_tick(); } // bytes 0-2 copied
+        let mut cpu = crate::cpu::Cpu::new();
+        (cpu.halted, cpu.halt_grace) = (true, true);
+        for _ in 0..50 { cpu.step(&mut bus).unwrap(); }
+        assert_eq!(bus.read_byte(0x8000), 0xA0 - 3, "byte 3, copied in HALT's first M-cycle");
     }
 
     /// A DMA from $FE00 copies work RAM's $DE00 page on a DMG, $FF on a CGB (the external bus).
