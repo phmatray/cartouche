@@ -8,15 +8,7 @@
 # rule-blocked = the reference needs data Cartouche may not ship (#240), in its own section at the end.
 
 mooneye-test-suite/acceptance/ppu/stat_lyc_onoff.gb  # stat
-age-test-roms/lcd-align-ly/lcd-align-ly-cgbBC.gb  # ppu
-age-test-roms/lcd-align-ly/lcd-align-ly-cgbE.gb  # ppu
-age-test-roms/ly/ly-cgbE.gb  # ppu
-age-test-roms/ly/ly-dmgC-cgbBC.gb  # ppu
-age-test-roms/ly/ly-ncmE.gb  # ppu
-age-test-roms/oam/oam-read-dmgC-cgbBC.gb  # ppu
-age-test-roms/oam/oam-write-cgbBCE.gb  # ppu
 age-test-roms/oam/oam-write-dmgC.gb  # ppu
-age-test-roms/oam/oam-write-ncmBCE.gb  # ppu
 age-test-roms/stat-interrupt/stat-int-dmgC-cgbBCE.gb  # stat
 age-test-roms/stat-interrupt/stat-int-ncmBCE.gb  # stat
 age-test-roms/stat-mode-sprites/stat-mode-sprites-dmgC-cgbBCE.gb  # stat
@@ -25,8 +17,6 @@ age-test-roms/stat-mode-window/stat-mode-window-cgbBCE.gb  # stat
 age-test-roms/stat-mode-window/stat-mode-window-dmgC.gb  # stat
 age-test-roms/stat-mode-window/stat-mode-window-ds-cgbBCE.gb  # double-speed
 age-test-roms/stat-mode-window/stat-mode-window-ncmBCE.gb  # stat
-age-test-roms/vram/vram-read-cgbBCE.gb  # ppu
-age-test-roms/vram/vram-read-ncmBCE.gb  # ppu
 gbmicrotest/halt_op_dupe_delay.gb  # rom-defect: https://github.com/aappleby/gbmicrotest/issues/3 expects DIV $55 ~60 M-cycles after a DIV reset; the HALT bug gives $01, as SameBoy (#215)
 gbmicrotest/int_oam_incs.gb  # ppu
 gbmicrotest/int_oam_nops.gb  # ppu
