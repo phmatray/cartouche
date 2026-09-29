@@ -93,7 +93,7 @@ fn a_refused_state_leaves_the_machine_untouched() {
     gb.bus.wram[0] = 0xA5;
     let (sram, now) = (gb.bus.cartridge.export_sram(), gb.save_state());
 
-    assert!(!gb.load_state(&old[..old.len() - 40]), "cut short in the APU fields");
+    assert!(!gb.load_state(&old[..old.len() - 40 - 0x30]), "cut short in the APU fields");
     assert_eq!(gb.bus.cartridge.export_sram(), sram, "battery save kept");
     assert_eq!(gb.save_state(), now, "whole machine kept");
     assert!(gb.load_state(&old));
@@ -204,8 +204,8 @@ fn stop_mode_waits_for_a_button_from_the_web_side() {
     let mut old = gb_core::Emulator::new();
     assert!(old.load_rom(&rom(&STOP, &[])));
     // Cut the tail: stop mode and KEY0, the (empty) mapper block's u16 length, the timing bytes, RP,
-    // the mode-3 length, the speed-switch byte, OPRI, the revision, the CPU lock.
-    assert!(old.load_state(&state[..state.len() - 19]));
+    // the mode-3 length, the speed-switch byte, OPRI, the revision, the CPU lock, the $FEA0 RAM.
+    assert!(old.load_state(&state[..state.len() - 19 - 0x30]));
     old.run_frame();
     assert_ne!(old.get_pc(), 0x0106, "an older state is not in stop mode");
     assert!(emu.load_state(&state));
@@ -355,7 +355,7 @@ fn a_locked_cpu_stays_locked_through_a_state_and_an_older_state_loads_unlocked()
     assert!(other.load_state(&state));
     assert!(other.cpu.locked);
     assert_eq!(other.cpu.locked_pc, 0x0151);
-    assert!(other.load_state(&state[..state.len() - 3]), "a state from before the lock bytes");
+    assert!(other.load_state(&state[..state.len() - 3 - 0x30]), "a state from before the lock bytes");
     assert!(!other.cpu.locked);
     assert_eq!(other.cpu.locked_pc, 0);
 }

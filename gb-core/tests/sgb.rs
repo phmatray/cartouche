@@ -578,7 +578,7 @@ fn previous(state: &[u8], version: u8) -> Vec<u8> {
     let mut reloaded = sgb();
     assert!(reloaded.load_state(state));
     let resaved = reloaded.save_state();
-    (state.len() - 64..state.len()).rev().find_map(|i| {
+    (state.len() - 64 - 0x30..state.len()).rev().find_map(|i| {
         let mut old = state.to_vec();
         old.remove(i);
         old[4] = version - 1;
