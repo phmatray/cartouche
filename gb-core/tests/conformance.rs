@@ -177,10 +177,11 @@ fn compare_screen(gb: &GameBoy, hw: Hw, reference: &Path) -> Verdict {
 
 /// The screen pixels (160x144, row-major) drawn from tile 25 ($8190): where the Nintendo boot ROM
 /// leaves its ® and Cartouche's boot ROMs leave nothing. OBJs whose tile at that row is 25 (the
-/// 8x16 half included) and BG/window cells whose map entry is 25 with LCDC.4 set: a structural
-/// footprint from OAM, the tile maps and each line's LCDC, SCX, SCY and window position (the layer
-/// trace's per-line record of the shown frame, else the registers), never the glyph's bytes. It
-/// never turns a fail into a pass: it only tells a ®-only fail from one with a real gap.
+/// 8x16 half included) and BG/window pixels fetched from tile 25 with LCDC.4 set: a structural
+/// footprint from OAM, the layer trace's per-pixel tile record and per-line registers of the shown
+/// frame (in CGB mode, or untraced, the tile maps with each line's SCX, SCY and window position),
+/// never the glyph's bytes. It never turns a fail into a pass: it only tells a ®-only fail from one
+/// with a real gap.
 fn tile25_footprint(gb: &GameBoy) -> Vec<bool> {
     let p = &gb.bus.ppu;
     let traced = p.trace.as_deref().map(|t| &t.done);
@@ -215,6 +216,14 @@ fn tile25_footprint(gb: &GameBoy) -> Vec<bool> {
             let at = if lcdc & bit != 0 { 0x1C00 } else { 0x1800 } + cy / 8 % 32 * 32 + cx / 8 % 32;
             p.vram[at] == 25 && !(p.cgb_mode && p.vram[0x2000 + at] & 0x08 != 0)
         };
+        // Traced outside CGB mode: the tile each pixel was fetched with, wherever a mid-line write
+        // moved it. (In CGB mode the trace has no VRAM bank, so the per-line map lookup stays.)
+        if let Some(t) = traced.filter(|t| t.rendered(y) && !p.cgb_mode) {
+            for x in 0..160 {
+                fp[y * 160 + x] |= t.tile[y * 160 + x] == 25;
+            }
+            continue;
+        }
         for x in 0..160 {
             fp[y * 160 + x] |= if win_line != 0xFF && x >= win_x as usize {
                 map(0x40, x - win_x as usize, win_line as usize)

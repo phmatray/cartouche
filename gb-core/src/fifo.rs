@@ -76,6 +76,8 @@ pub(crate) struct Pixel {
     pub palette: u8,
     /// OBJ: behind BG colours 1-3; BG (CGB): over OBJs.
     pub bg_priority: bool,
+    /// OBJ: its OAM index. BG: the tile number it was fetched with (read only by the layer trace;
+    /// it rides here so normal play pays nothing for it).
     pub oam_index: u8,
 }
 
@@ -353,12 +355,15 @@ impl Ppu {
                 if self.line.first_fetch {
                     self.line.first_fetch = false;
                 } else {
+                    // The tile rides in `oam_index` for the layer trace. Read here from `self`, not
+                    // `f`: as `f.tile`, the compiler loads it on every fetcher dot, not once a push.
+                    let tile = self.line.fetcher.tile;
                     let bg = &mut self.line.bg;
                     let (palette, bg_priority) = (f.attr & 7, f.attr & 0x80 != 0);
                     for i in 0..8 {
                         let bit = if f.attr & 0x20 != 0 { i } else { 7 - i };
                         let color = (f.hi >> bit & 1) << 1 | (f.lo >> bit & 1);
-                        bg.px[i as usize] = Pixel { color, palette, bg_priority, oam_index: 0 };
+                        bg.px[i as usize] = Pixel { color, palette, bg_priority, oam_index: tile };
                     }
                     (bg.head, bg.len) = (0, 8);
                     if f.window && f.tile_x == 0 {
@@ -611,13 +616,15 @@ impl Ppu {
         let line = self.ly as usize;
         self.set_pixel(x, line, if shown { obj_color.unwrap() } else { bg_color });
         if self.trace.is_some() {
-            self.trace_pixel(x, window, bg_id | (bg.bg_priority as u8) << 2, bg_color, obj, obj_color, shown);
+            self.trace_pixel(x, window, bg_id | (bg.bg_priority as u8) << 2, bg.oam_index, bg_color, obj, obj_color, shown);
         }
     }
 
     /// Traced lines: the planes and info of the pixel just drawn (layout in `trace.rs`).
-    /// `ids`: the BG colour id, and in bit 2 the CGB tile's priority over OBJs.
-    fn trace_pixel(&mut self, x: usize, window: bool, ids: u8, bg_color: [u8; 4], obj: Pixel, obj_color: Option<[u8; 4]>, shown: bool) {
+    /// `ids`: the BG colour id, and in bit 2 the CGB tile's priority over OBJs; `tile`: the BG/window
+    /// tile number it was fetched with.
+    #[allow(clippy::too_many_arguments)]
+    fn trace_pixel(&mut self, x: usize, window: bool, ids: u8, tile: u8, bg_color: [u8; 4], obj: Pixel, obj_color: Option<[u8; 4]>, shown: bool) {
         // The BG plane runs under the window too: sample it where the window covers it.
         let under = if window && (self.cgb_mode || self.lcdc & 0x01 != 0) {
             let (sx, sy) = (self.scx.wrapping_add(x as u8), self.scy.wrapping_add(self.ly));
@@ -643,5 +650,6 @@ impl Ppu {
         let slot = if obj_color.is_some() { obj.oam_index } else { NO_OBJ };
         let cid = if obj_color.is_some() { obj.color } else { 0 };
         b.info[p..p + 4].copy_from_slice(&[layer, slot, ids | cid << 4, attr]);
+        b.tile[p / 4] = tile;
     }
 }

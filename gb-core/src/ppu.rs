@@ -927,6 +927,23 @@ mod tests {
         assert_eq!(s.iter().position(|&v| v == 3), Some(93));
     }
 
+    /// The layer trace records each pixel's BG tile as fetched: a mid-line SCX write moves the map
+    /// column from the next fetch on, which the line-start SCX cannot place.
+    #[test]
+    fn trace_records_the_fetched_tile_per_pixel() {
+        let p = run_line10(
+            |p| {
+                p.set_tracing(true);
+                (0..32).for_each(|c| p.vram[0x1800 + 32 + c] = c as u8); // map row 1 (line 10): tile = column
+            },
+            |p, d| if d == 80 { p.write_register(0xFF43, 16) },
+        );
+        let tiles = &p.trace.as_ref().unwrap().building.tile[10 * SCREEN_WIDTH..11 * SCREEN_WIDTH];
+        let switch = (0..SCREEN_WIDTH).find(|&x| tiles[x] as usize != x / 8).expect("the SCX write shows");
+        assert!(switch % 8 == 0 && (40..120).contains(&switch), "switch at {switch}: {tiles:?}");
+        assert!((switch..SCREEN_WIDTH).all(|x| tiles[x] as usize == (x + 16) / 8), "{tiles:?}");
+    }
+
     /// WX matched again while the window runs: between two window tiles the LCD gets one colour-0
     /// pixel and the window goes on a pixel later; inside a tile nothing shows. The window compares
     /// WX one dot late, so a write lands one dot after the FIFO would first see it.
