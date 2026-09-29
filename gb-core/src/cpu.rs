@@ -42,6 +42,7 @@ impl Cpu {
                 return;
             }
             self.halted = false;
+            bus.hdma_unhalt();
         }
         if self.ime {
             self.dispatch(bus);
@@ -65,6 +66,9 @@ impl Cpu {
         }
         let pc = self.regs.pc;
         bus.cycle_tick(); // M1: the fetch at PC, discarded
+        if bus.hdma_on && crate::memory::knob(10) != 0 {
+            bus.hdma_run();
+        }
         bus.cycle_tick(); // M2: PC--
         bus.cycle_idu(self.regs.sp); // M3: SP--
         self.regs.sp = self.regs.sp.wrapping_sub(1);
@@ -112,11 +116,18 @@ impl Cpu {
         }
 
         if self.halted {
-            bus.cycle_tick();
+            if bus.hdma_on && bus.hdma_grace && bus.ppu.mode_clock as i32 - bus.hdma_at_pub() >= crate::memory::knob(13) - 1 { bus.hdma_run(); }
+            if bus.hdma_on && bus.hdma_grace { bus.hdma_run(); }
+            bus.hdma_grace = false;
+            if bus.hdma_on { bus.hdma_missed = true; }
+            bus.hdma_on = false; // an HBlank block while halted waits for the wake (`MemoryBus::hdma_halt`)
             return Ok(4);
         }
 
         let opcode = self.fetch_byte(bus);
+        if bus.hdma_on {
+            bus.hdma_run();
+        }
 
         match opcode {
             // === NOP ===
@@ -274,6 +285,7 @@ impl Cpu {
                     if !pending {
                         self.regs.pc = self.regs.pc.wrapping_add(1);
                         self.halted = true;
+                        bus.hdma_halt();
                     }
                 } else {
                     if !pending { self.regs.pc = self.regs.pc.wrapping_add(1); }
@@ -345,6 +357,7 @@ impl Cpu {
                 // halt-m0-interrupt, SCX 0-2).
                 if ime || bus.interrupts.pending() == 0 {
                     self.halted = true;
+                    bus.hdma_halt();
                 } else {
                     // HALT bug: IME=0 but interrupt pending — don't halt,
                     // and the next instruction byte will be read twice
