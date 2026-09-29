@@ -71,7 +71,7 @@ gambatte/dmgpalette_during_m3/scx3/dmgpalette_during_m3_4.gb@dmg  # ppu-mode3: D
 gambatte/dmgpalette_during_m3/scx3/dmgpalette_during_m3_5.gb@dmg  # ppu-mode3: DMG: a BGP write over the line's first pixels shows its mixed pixel one pixel left of Cartouche's (#317)
 gambatte/enable_display/ly0_late_scx7_m3stat_scx0_2_dmg08_out87_cgb04c_out84.gbc@dmg  # ppu: the line after LCD on samples SCX's fine bits at another dot (#317)
 gambatte/enable_display/ly0_late_scx7_m3stat_scx1_1_dmg08_cgb04c_out87.gbc@cgb  # ppu: the line after LCD on samples SCX's fine bits at another dot (#317)
-gambatte/lycEnable/lyc_ff45_trigger_delay_2_dmg08_out0_cgb04c_out2.gbc@cgb  # stat
+gambatte/lycEnable/lyc_ff45_trigger_delay_2_dmg08_out0_cgb04c_out2.gbc@cgb  # stat: a CGB LYC write's interrupt is taken an M-cycle before a STAT write's, before the write's M-cycle ends; one ROM, no rule (#321)
 gambatte/m0enable/enable_wxA6_2x_spxA7_1_dmg08_cgb04c_out2.gbc@cgb  # stat
 gambatte/m0enable/enable_wxA6_2x_spxA7_ds_1_cgb04c_out2.gbc@cgb  # stat
 gambatte/m0enable/enable_wxA6_2x_spxA7_ds_2_cgb04c_out2.gbc@cgb  # stat
