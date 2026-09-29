@@ -1,5 +1,5 @@
 use crate::error::CpuError;
-use crate::interrupts::{SERIAL_BIT, TIMER_BIT};
+use crate::interrupts::{SERIAL_BIT, STAT_BIT, TIMER_BIT};
 use crate::memory::MemoryBus;
 use crate::registers::Registers;
 
@@ -87,7 +87,10 @@ impl Cpu {
         // `start_wait_trigger_int8_read_if_2/_ds_2`: $E0 on the CGB, $E4/$E8 on the DMG); in double
         // speed the PPU's rise after it (`*_late_retrigger_ds_1`).
         let div = if bus.cgb_mode || bus.ppu.compat { TIMER_BIT | SERIAL_BIT } else { 0 };
-        let late = if bus.double_speed { !div } else { bus.late_interrupts() & !div };
+        // In double speed a mode-0 edge on M5's first dot is still absorbed; on its second it
+        // retriggers (Gambatte `irq_precedence/late_m0irq_retrigger_ds_1/_2`, `_scx1_ds_1/_2`).
+        let m0_first = if bus.ppu.mode0_edge_first_dot() { STAT_BIT } else { 0 };
+        let late = if bus.double_speed { !div & !m0_first } else { bus.late_interrupts() & !div };
         let kept = bit & bus.if_late & late;
         // A push that writes IF ($FF0F) doesn't change the pick, but the pick's bit is cleared
         // from what it wrote (Gambatte irq_precedence `late_if_via_sp_if_1/2`, `if_and_ie_0_vector_1..4`).

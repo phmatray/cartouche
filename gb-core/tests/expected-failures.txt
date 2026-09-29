@@ -190,7 +190,6 @@ gambatte/irq_precedence/late_hdma_vs_tima_scx1_2_cgb04c_out11E9.gbc@cgb  # inter
 gambatte/irq_precedence/late_hdma_vs_tima_scx1_halt_2_cgb04c_out11C9.gbc@cgb  # interrupt
 gambatte/irq_precedence/late_hdma_vs_tima_scx2_2_cgb04c_out11E9.gbc@cgb  # interrupt
 gambatte/irq_precedence/late_hdma_vs_tima_scx2_halt_2_cgb04c_out11C9.gbc@cgb  # interrupt
-gambatte/irq_precedence/late_m0irq_retrigger_scx1_ds_2_cgb04c_outE0.gbc@cgb  # interrupt
 gambatte/lcd_offset/offset1_lyc99int_m0stat_count_scx2_1_cgb04c_out90.gbc@cgb  # stat
 gambatte/lcd_offset/offset1_lyc99int_m0stat_count_scx3_1_cgb04c_out90.gbc@cgb  # stat
 gambatte/lcd_offset/offset1_lyc99int_m2irq_count_1_cgb04c_out98.gbc@cgb  # stat
