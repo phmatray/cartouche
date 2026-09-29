@@ -280,6 +280,7 @@ impl Ppu {
                 let was_enabled = self.lcdc & 0x80 != 0;
                 let tile_sel = (self.lcdc ^ value) & 0x10 != 0;
                 self.lcdc = value;
+                self.line.win_was_on |= value & 0x20 != 0;
                 if tile_sel { self.tile_sel_switch(); }
                 let is_enabled = self.lcdc & 0x80 != 0;
                 if was_enabled && !is_enabled {
@@ -1105,8 +1106,8 @@ mod tests {
             p.vram[32..35].fill(0xFF);
         };
         let p = run_line10(setup, |p, d| match d {
-            90 => { p.write_register(0xFF40, 0xD1); p.write_register(0xFF4B, 100); }
-            110 => p.write_register(0xFF40, 0xF1),
+            86 => { p.write_register(0xFF40, 0xD1); p.write_register(0xFF4B, 100); }
+            106 => p.write_register(0xFF40, 0xF1),
             _ => {}
         });
         let s = shades(&p, 10);
@@ -1160,6 +1161,22 @@ mod tests {
         assert!(s[43..51].iter().all(|&v| v == 3) && s[51] == 0 && s[52..].iter().all(|&v| v == 3), "{s:?}");
         let s = at(61); // x = 54: inside it
         assert!(s[43..].iter().all(|&v| v == 3), "{s:?}");
+    }
+
+    /// DMG, WX 2-6: LCDC.5 turned off during the window's first tile leaves that tile with its
+    /// 7 - WX pixels dropped, WX + 1 window pixels, and no second tile (Mealybug
+    /// `m3_lcdc_win_en_change_multiple_wx`, lines 2-6). Returns the window widths seen for
+    /// writes swept across the line start.
+    #[test]
+    fn wx_0_6_window_off_in_first_tile() {
+        for wx in 2..=6u8 {
+            let widths: Vec<usize> = (0..40).map(|dot| {
+                let s = shades(&run_line10(|p| { window_setup(p); p.wx = wx; }, |p, d| if d == dot { p.write_register(0xFF40, 0xD1) }), 10);
+                s.iter().take_while(|&&v| v == 3).count()
+            }).collect();
+            assert!(widths.contains(&(wx as usize + 1)), "WX {wx}: {widths:?}");
+            assert!(!widths.contains(&8), "WX {wx}: never a whole first tile: {widths:?}");
+        }
     }
 
     /// Pan Docs' "Mode 3 length" of the current line with the registers as they are: 172, plus the
@@ -1479,6 +1496,36 @@ mod tests {
         assert!(colours(Revision::CgbC).contains(&2), "CGB C mixes two rows");
         assert!(!colours(Revision::CgbD).contains(&2), "CGB D latches one row");
         assert!(!colours(Revision::Default).contains(&2));
+    }
+
+    /// CGB: LCDC.4 set on the dot a tile data read lands on gives that read the high byte of the
+    /// last OBJ row fetched ($A5 here: colours 1,0,1,0,0,1,0,1 as a low byte). The BG tile is blank
+    /// at $8800 and at $8000; the OBJ (X 8, tile 1) is fetched before the first pixel.
+    #[test]
+    fn cgb_tile_sel_set_takes_last_obj_row() {
+        let patterns = |cgb: bool, obj: bool| -> Vec<Vec<u8>> {
+            (16..80).map(|dot| {
+                let p = run_line10(|p| {
+                    (p.cgb_mode, p.lcdc) = (cgb, 0x83);
+                    if obj { p.oam[0..4].copy_from_slice(&[10 + 16, 8, 1, 0]); }
+                    p.vram[0x11] = 0xA5; // tile 1, row 0: high byte
+                    for (c, rgb) in [0x7FFFu16, 0x001F, 0x03E0, 0x7C00].iter().enumerate() {
+                        p.bg_cram[c * 2..c * 2 + 2].copy_from_slice(&rgb.to_le_bytes());
+                    }
+                }, |p, d| if d == dot { p.write_register(0xFF40, 0x93) });
+                let ids: Vec<u8> = if cgb {
+                    let row = &p.framebuffer[10 * SCREEN_WIDTH * 4..11 * SCREEN_WIDTH * 4];
+                    row.chunks(4).map(|c| [[255, 255, 255], [255, 0, 0], [0, 255, 0], [0, 0, 255]].iter().position(|k| k[..] == c[..3]).unwrap_or(9) as u8).collect()
+                } else {
+                    shades(&p, 10)
+                };
+                ids[8..].chunks(8).find(|t| t.iter().any(|&c| c != 0)).map_or(vec![], |t| t.to_vec())
+            }).collect()
+        };
+        let obj_row = vec![1, 0, 1, 0, 0, 1, 0, 1];
+        assert!(patterns(true, true).contains(&obj_row), "{:?}", patterns(true, true));
+        assert!(!patterns(true, false).contains(&obj_row), "no OBJ fetched: the tile number rule");
+        assert!(!patterns(false, true).contains(&obj_row), "a DMG reads plainly");
     }
 
     /// CGB tile attributes: map entry 0 uses bank 1 and flips X and Y; its tile has one dark

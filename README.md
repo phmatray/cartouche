@@ -183,7 +183,7 @@ crash. They are not counted in the score.
 | Infrared (CGB, HuC1, HuC3) | Light between the two consoles of the link page | ✅ |
 | Mooneye acceptance | Timers, DMA, interrupts, PPU and instruction timing | 74/75 |
 | Mooneye emulator-only MBC | MBC1, MBC2 and MBC5 banking | 28/28 |
-| Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 29/51 ³ |
+| Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 30/51 ³ |
 | SameSuite | APU, HDMA and interrupt edge cases (CGB), SGB multiplayer | 78/78 ⁴ |
 | Age | PPU, STAT, OAM/VRAM access and double-speed timing | 49/51 |
 | gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 468/490 ² |
@@ -196,7 +196,7 @@ any emulator. The details are in [CHANGELOG.md](CHANGELOG.md).
 ² Plus 23 probes with no verdict (not a test), which run without an emulator
 error and are not counted.
 
-³ 16 of the 22 failures are rule-blocked: their reference screenshots show the
+³ 18 of the 21 failures are rule-blocked: their reference screenshots show the
 ® that Nintendo's boot ROM leaves in video memory, which Cartouche does not ship,
 and every pixel that differs is where that tile is drawn. They stay counted as
 failures, in their own section of `expected-failures.txt`.

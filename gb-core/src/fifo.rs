@@ -71,6 +71,12 @@ pub(crate) struct Fetcher {
     /// A DMG and a CGB C read SCY again for each data byte.
     pub row: u8,
     pub window: bool,
+    /// The tile the layer trace records for the pushed pixels: `tile`, or the OBJ's tile when a
+    /// CGB TILE_SEL write gave one of the reads that OBJ's data (`tile_sel_switch`).
+    pub trace_tile: u8,
+    /// A data byte came from $8000-$8FFF (LCDC.4 set at its read, or an OBJ row): with
+    /// `trace_tile`, which tile the layer trace records (bit 3 of its `ids`).
+    pub from_8000: bool,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -155,6 +161,10 @@ pub(crate) struct LineState {
     pub left_done: bool,
     /// Window pixels to drop on a WX below 7.
     pub win_skip: u8,
+    /// WX 0-6: LCDC.5 was on at dot 13 + WX, where the window's second tile fetch starts.
+    pub win_second: bool,
+    /// LCDC.5 was on at some dot of this line so far.
+    pub win_was_on: bool,
     /// Traced lines: the line record's registers, taken at the first dot.
     pub record: [u8; 12],
     /// Popped pixels on their way to the LCD, by the dot they were popped (mod 4): (BG, OBJ,
@@ -173,6 +183,8 @@ pub(crate) struct LineState {
     /// WX before the last write, and the last dot the window still compares it (`wx_seen`).
     pub wx_old: u8,
     pub wx_dot: u32,
+    /// The high byte of the last OBJ row fetched (kept from line to line), and its tile.
+    pub sel_obj: Option<(u8, u8)>,
 }
 
 impl Ppu {
@@ -186,6 +198,7 @@ impl Ppu {
         self.line = LineState {
             active: true,
             lcdc_prev: self.lcdc as u16 * 0x101,
+            win_was_on: self.lcdc & 0x20 != 0,
             fine,
             discard: fine,
             hit_x: 8 - fine,
@@ -196,6 +209,7 @@ impl Ppu {
             lag: FIFO_LAG[(self.cgb_mode || self.compat) as usize] + 4 - self.m_cycle_dots, // see FIFO_LAG
             out_delay: OUT_DELAY[(self.cgb_mode || self.compat) as usize],
             obj_lo_at: OBJ_LO_AT[(self.cgb_mode || self.compat) as usize],
+            sel_obj: self.line.sel_obj,
             ..LineState::default()
         };
         if self.trace.is_some() {
@@ -288,6 +302,30 @@ impl Ppu {
         if self.line.dot <= self.line.wx_dot { self.line.wx_old } else { self.wx }
     }
 
+    /// Window switched off: the window tile it was fetching ends it, the next tile number read
+    /// takes the BG map (Mealybug's PPU notes, WIN_EN; an LCDC.5 write during a tile's fetch after
+    /// its number was read leaves that tile to the window). A WX 0-6 window reads its first tile
+    /// number on the dot after the match (the match needs LCDC.5) and its second on dot 13 + WX
+    /// (`win_second`), earlier than the FIFO, which starts it at x = 0, fetches them.
+    #[inline]
+    fn win_tile_on(&self, tile_x: u8) -> bool {
+        match tile_x {
+            0 if self.line.win_skip > 0 => true,
+            1 if self.line.win_skip > 0 => self.line.win_second,
+            _ => self.lcdc & 0x20 != 0,
+        }
+    }
+
+    /// WX matches x: at x = WX - 7 (on a DMG not WX 166), or on a DMG one pixel later when the window could not start
+    /// there (LCDC.5 still off) and WX was not just written (SameBoy's model; Mealybug
+    /// `m3_lcdc_win_en_change_multiple_wx` lines 16 and 44, LCDC.5 back on one pixel after the match).
+    #[inline]
+    fn wx_match(&self, x: u8, dmg: bool) -> bool {
+        let wx = self.wx_seen();
+        // A DMG never matches WX 166 in mode 3: no window, no penalty (Age stat-mode-window).
+        x + 7 == wx && !(dmg && x == 159) || dmg && x + 6 == wx && self.line.dot != self.line.wx_dot + 1
+    }
+
     /// The window row being drawn.
     #[inline]
     fn win_line(&self) -> u8 {
@@ -336,6 +374,10 @@ impl Ppu {
         self.line.fetcher.half = false;
         match f.step {
             FetchStep::Tile => {
+                let mut f = f;
+                if f.window && !self.win_tile_on(f.tile_x) {
+                    (f.window, self.line.fetcher.window) = (false, false);
+                }
                 let (map, col, row) = if f.window {
                     (self.lcdc & 0x40, f.tile_x & 31, self.win_line() >> 3)
                 } else {
@@ -349,14 +391,17 @@ impl Ppu {
                     if self.cgb_mode { self.line.fetcher.attr = self.vram[0x2000 + at]; }
                     self.line.fetcher.row = self.bg_row();
                 }
+                self.line.fetcher.trace_tile = self.line.fetcher.tile;
                 self.line.fetcher.step = FetchStep::DataLo;
             }
             FetchStep::DataLo => {
                 self.line.fetcher.lo = self.vram[self.fetch_addr()];
+                self.line.fetcher.from_8000 = self.lcdc & 0x10 != 0;
                 self.line.fetcher.step = FetchStep::DataHi;
             }
             FetchStep::DataHi => {
                 self.line.fetcher.hi = self.vram[self.fetch_addr() + 1];
+                self.line.fetcher.from_8000 |= self.lcdc & 0x10 != 0;
                 self.line.fetcher.half = true; // at Push: the high byte was read on the last dot
                 if self.line.first_fetch {
                     // The fine scroll is latched as the first fetch ends (Mealybug `m3_window_timing_wx_0`
@@ -373,9 +418,10 @@ impl Ppu {
                 } else {
                     // The tile rides in `oam_index` for the layer trace. Read here from `self`, not
                     // `f`: as `f.tile`, the compiler loads it on every fetcher dot, not once a push.
-                    let tile = self.line.fetcher.tile;
+                    let tile = self.line.fetcher.trace_tile;
                     let bg = &mut self.line.bg;
-                    let (palette, bg_priority) = (f.attr & 7, f.attr & 0x80 != 0);
+                    // Bit 3 of a BG pixel's palette: `from_8000`, for the layer trace.
+                    let (palette, bg_priority) = (f.attr & 7 | (f.from_8000 as u8) << 3, f.attr & 0x80 != 0);
                     for i in 0..8 {
                         let bit = if f.attr & 0x20 != 0 { i } else { 7 - i };
                         let color = (f.hi >> bit & 1) << 1 | (f.lo >> bit & 1);
@@ -407,21 +453,37 @@ impl Ppu {
     /// address. Fitted to Mealybug `m3_lcdc_tile_sel_change` (CGB D) and Age `m3-bg-lcdc`
     /// (CGB B-E), both directions; a write one dot later or earlier reads plainly, and so does
     /// every write in double speed (Age `m3-bg-lcdc-ds`), which lands elsewhere in the dot.
+    /// A write that sets LCDC.4 once an OBJ has been fetched gives instead the high byte of the
+    /// last OBJ row fetched, on any line before (Matt Currie's PPU notes, TILE_SEL: "bitplane 1
+    /// data from the most recently drawn sprite"). Mealybug `m3_lcdc_tile_sel_change` and
+    /// `m3_lcdc_tile_sel_win_change` (CGB D: the tile row beside the first line of an OBJ, which
+    /// takes the previous line's OBJ row), `m3_lcdc_tile_sel_change2` and
+    /// `m3_lcdc_tile_sel_win_change2` (CGB C: 126 and 109 pixels fewer differ).
     pub(crate) fn tile_sel_switch(&mut self) {
         if !(self.cgb_mode || self.compat) || self.m_cycle_dots != 4 || !self.line.active || self.mode != crate::ppu::PpuMode::Drawing {
             return;
         }
         let f = self.line.fetcher;
-        match (f.step, f.half) {
-            (FetchStep::DataHi, false) => self.line.fetcher.lo = f.tile & self.vram[self.fetch_addr()],
-            (FetchStep::Push, true) => self.line.fetcher.hi = f.tile & self.vram[self.fetch_addr() + 1],
-            _ => {}
-        }
+        let hi = match (f.step, f.half) {
+            (FetchStep::DataHi, false) => false,
+            (FetchStep::Push, true) => true,
+            _ => return,
+        };
+        let byte = match self.line.sel_obj {
+            // Set: the high byte of the last OBJ row fetched.
+            Some((obj_hi, obj_tile)) if self.lcdc & 0x10 != 0 => {
+                (self.line.fetcher.trace_tile, self.line.fetcher.from_8000) = (obj_tile, true);
+                obj_hi
+            }
+            _ => f.tile & self.vram[self.fetch_addr() + hi as usize],
+        };
+        if hi { self.line.fetcher.hi = byte } else { self.line.fetcher.lo = byte }
     }
 
     /// The OBJ fetch: reads the OBJ's row and merges it into the OBJ FIFO, `shift` pixels already past.
     fn fetch_obj(&mut self, i: usize, shift: u8) {
         let a = self.obj_row(i);
+        self.line.sel_obj = Some((self.vram[a + 1], (a >> 4) as u8));
         self.merge_obj(i, shift, self.vram[a], self.vram[a + 1]);
     }
 
@@ -453,6 +515,7 @@ impl Ppu {
     fn obj_hi(&mut self, i: u8, lo: u8) {
         self.line.obj_fetch = None;
         let a = self.obj_row(i as usize);
+        self.line.sel_obj = Some((self.vram[a + 1], (a >> 4) as u8));
         self.merge_obj(i as usize, 0, lo, self.vram[a + 1]);
     }
 
@@ -530,10 +593,16 @@ impl Ppu {
     fn fifo_dot(&mut self) {
         // WX 0-6 is matched before x = 0 (x = WX - 7), while the first tile is being fetched; the
         // first match holds (a later WX 0-6 match on the same line is no new start).
-        if self.line.dot <= 12 && self.line.win_skip == 0 {
-            let wx = self.wx_seen();
-            if wx < 7 && self.line.dot == 6 + wx as u32 && self.win_on() && self.wy_ok() {
-                self.line.win_skip = 7 - wx;
+        if self.line.dot <= 19 {
+            if self.line.win_skip == 0 {
+                let wx = self.wx_seen();
+                if wx < 7 && self.line.dot == 6 + wx as u32 && self.win_on() && self.wy_ok() {
+                    self.line.win_skip = 7 - wx;
+                }
+            } else if self.line.dot == 20 - self.line.win_skip as u32 {
+                // Dot 13 + WX: from the match (dot 6 + WX), a tile fetch, the push, and the second
+                // window tile's number read (`win_tile_on`).
+                self.line.win_second = self.lcdc & 0x20 != 0;
             }
         }
         if self.line.obj_dots > 0 && self.obj_abort() {
@@ -568,9 +637,9 @@ impl Ppu {
         // Window: at x = WX - 7 (x = 0 for WX 0-6), once the line has started and the fine scroll is
         // dropped, the BG FIFO is emptied and the fetcher restarts on the window map.
         let x = self.line.x;
+        let dmg = !(self.cgb_mode || self.compat);
         if !self.line.fetcher.window && self.line.left_done && self.line.discard == 0 && self.win_on()
-            && if self.line.win_skip > 0 { x == 0 } else { self.wy_ok() && x + 7 == self.wx_seen() && (x < 159 || self.cgb_mode || self.compat) }
-            // (A DMG never matches WX 166 in mode 3: no window, no penalty. Age stat-mode-window.)
+            && if self.line.win_skip > 0 { x == 0 } else { self.wy_ok() && self.wx_match(x, dmg) }
         {
             // Turned off and on again, the window starts over on its next row.
             if self.line.window_triggered { self.line.win_rows += 1; }
@@ -585,8 +654,20 @@ impl Ppu {
             let bg = &mut self.line.bg;
             bg.px[0] = Pixel::default();
             (bg.head, bg.len) = (0, 1);
-        } else if self.line.fetcher.window && self.lcdc & 0x20 == 0 {
-            self.line.fetcher.window = false; // window switched off: back to the BG map
+        } else if dmg && self.lcdc & 0x20 == 0 && !self.line.fetcher.window && self.line.bg.len == 0 && self.line.fetcher.step == FetchStep::Push
+            && self.line.left_done && self.line.discard == 0 && self.wy_ok() && x + 7 == self.wx_seen() && !(self.line.window_triggered && self.line.win_x == x) && self.line.win_was_on
+        {
+            // DMG, window off: a WX match where the next tile is about to be pushed gives the LCD
+            // one colour-0 pixel, and the BG goes on a pixel later (SameBoy's model and issue #278:
+            // Star Trek 25th Anniversary's BG one pixel right on hardware; Mealybug
+            // `m3_lcdc_win_en_change_multiple_wx` lines 15 and 39).
+            // ponytail: only on a line where LCDC.5 was on at some dot. SameBoy applies it on every
+            // line once WY matched, which moves the OBJ penalties off Pan Docs' mode-3 formula
+            // (dmg-acid2 lines 40 and 66, `fifo_mode3_matches_formula`); widen it once a timing ROM
+            // measures mode 3 on such a line.
+            let bg = &mut self.line.bg;
+            bg.px[0] = Pixel::default();
+            (bg.head, bg.len) = (0, 1);
         }
         self.fetcher_dot();
         if self.line.bg.len == 0 { return; }
@@ -644,7 +725,7 @@ impl Ppu {
             bg_id = bg.color;
             shown = obj_on && (self.lcdc & 0x01 == 0 || bg_id == 0 || !(obj.bg_priority || bg.bg_priority));
             obj_color = obj_on.then(|| self.get_obj_cram_color(obj.palette, obj.color));
-            bg_color = self.get_bg_cram_color(bg.palette, bg_id);
+            bg_color = self.get_bg_cram_color(bg.palette & 7, bg_id);
         } else {
             // A DMG shows the dot of a BGP write with both values mixed, a CGB (compatibility mode)
             // the new one (Mealybug `m3_bgp_change`), a CGB B/C still the old one (Age m3-bg-bgp:
@@ -667,7 +748,7 @@ impl Ppu {
         let line = self.ly as usize;
         self.set_pixel(x, line, if shown { obj_color.unwrap() } else { bg_color });
         if self.trace.is_some() {
-            self.trace_pixel(x, window, bg_id | (bg.bg_priority as u8) << 2, bg.oam_index, bg_color, obj, obj_color, shown);
+            self.trace_pixel(x, window, bg_id | (bg.bg_priority as u8) << 2 | bg.palette & 8, bg.oam_index, bg_color, obj, obj_color, shown);
         }
     }
 
