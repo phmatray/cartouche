@@ -179,7 +179,7 @@ listed, not hidden, in `gb-core/tests/expected-failures.txt`.
 | Infrared (CGB, HuC1, HuC3) | Light between the two consoles of the link page | ✅ |
 | Mooneye acceptance | Timers, DMA, interrupts, PPU and instruction timing | 70/75 |
 | Mooneye emulator-only MBC | MBC1, MBC2 and MBC5 banking | 27/28 |
-| Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 26/51 |
+| Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 26/51 ² |
 | SameSuite | APU, HDMA and interrupt edge cases (CGB) | 69/78 |
 | Age | PPU, STAT, OAM/VRAM access and double-speed timing | 19/51 |
 | gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 413/513 |
@@ -188,6 +188,11 @@ listed, not hidden, in `gb-core/tests/expected-failures.txt`.
 ¹ Test 7 runs inside the combined `oam_bug.gb`. Run on its own, that ROM
 overruns its 8 KB text log and overwrites its own code, so it cannot finish on
 any emulator. The details are in [CHANGELOG.md](CHANGELOG.md).
+
+² 13 of the 25 failures are rule-blocked: their reference screenshots show the
+® that Nintendo's boot ROM leaves in video memory, which Cartouche does not ship,
+and every pixel that differs is where that tile is drawn. They stay counted as
+failures, in their own section of `expected-failures.txt`.
 
 ```bash
 ./scripts/fetch-test-roms.sh                  # downloads the test ROMs (not stored in this repo)
