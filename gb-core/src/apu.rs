@@ -1409,6 +1409,61 @@ impl Apu {
         }
     }
 
+    /// `m` M-cycles of `ticks` 2 MHz ticks each: exactly `m` calls of `step(ticks)`, the bus's
+    /// lazy catch-up (#298). While nothing ticks per M-cycle (no sweep calculation, delayed
+    /// envelope, DMG noise start or fresh trigger), the channels run in one batch up to each
+    /// sample, and the sample clock still adds up M-cycle by M-cycle, so every sample and every
+    /// register read comes out as with single steps.
+    #[inline(never)]
+    pub fn run(&mut self, mut m: u32, ticks: u32) {
+        let cycles = ticks * 2;
+        while m > 0 {
+            if !self.enabled {
+                for _ in 0..m {
+                    self.silence(cycles);
+                }
+                return;
+            }
+            let sweep = &self.ch1_sweep;
+            if self.triggered | self.pending_envelope | self.ch4.dmg_delayed_start != 0
+                || sweep.reload_timer | sweep.calculate_countdown | sweep.restart_hold != 0
+            {
+                self.step(ticks);
+                m -= 1;
+                continue;
+            }
+            // lf_div only feeds the sweep, idle here: its flips add up.
+            self.lf_div ^= (ticks & m & 1) as u16;
+            let mut behind = 0; // M-cycles the channels still owe
+            for _ in 0..m {
+                behind += 1;
+                self.sample_counter += cycles as f64;
+                if self.sample_counter >= CYCLES_PER_SAMPLE {
+                    self.step_channels(behind * ticks);
+                    behind = 0;
+                    while self.sample_counter >= CYCLES_PER_SAMPLE {
+                        self.sample_counter -= CYCLES_PER_SAMPLE;
+                        self.generate_sample();
+                    }
+                }
+            }
+            self.step_channels(behind * ticks);
+            return;
+        }
+    }
+
+    /// The four channels' timers, `ticks` 2 MHz ticks at once (their steps batch exactly).
+    fn step_channels(&mut self, mut ticks: u32) {
+        while ticks > 0 {
+            let n = ticks.min(128); // the noise channel counts in a u8
+            self.ch1.step(n);
+            self.ch2.step(n);
+            self.ch3.step(n * 2);
+            self.ch4.step(n);
+            ticks -= n;
+        }
+    }
+
     /// Time passes with no sound (APU off, or the CPU in stop mode): silent samples keep the
     /// host's audio buffer in sync.
     pub fn silence(&mut self, cycles: u32) {
@@ -2092,6 +2147,66 @@ mod tests {
         }
         assert_eq!(other.ch1.frequency, 0x742);
         assert_eq!(other.ch3.wave_ram[5], 0xA5);
+    }
+
+    /// `run(m, t)` is `m` calls of `step(t)`: random register writes, DIV-APU events and batch
+    /// sizes, in both speeds, on a DMG and a CGB; every register read, every sample and the save
+    /// state agree (#298).
+    #[test]
+    fn batched_ticks_match_single_ticks() {
+        let mut seed = 0x2545_F491_4F6C_DD1Du64;
+        let mut rand = |n: u32| {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed % n as u64) as u32
+        };
+        for round in 0..64 {
+            let (cgb, ticks) = (round & 1 != 0, 1 + (round >> 1 & 1) as u32);
+            let [mut single, mut batched] = [Apu::new(), Apu::new()];
+            for apu in [&mut single, &mut batched] {
+                (apu.cgb_mode, apu.double_speed) = (cgb, ticks == 1);
+                apu.write_register(0xFF26, 0x80);
+            }
+            for _ in 0..400 {
+                match rand(8) {
+                    0..=3 => {
+                        // Mostly the square and noise registers, whose timers batch.
+                        let addr = [0xFF10, 0xFF11, 0xFF12, 0xFF13, 0xFF14, 0xFF16, 0xFF17, 0xFF18, 0xFF19,
+                            0xFF1A, 0xFF1C, 0xFF1D, 0xFF1E, 0xFF21, 0xFF22, 0xFF23, 0xFF24, 0xFF25, 0xFF30][rand(19) as usize];
+                        let value = rand(256) as u8 | if matches!(addr, 0xFF12 | 0xFF17 | 0xFF21) { 0x10 } else { 0 };
+                        single.write_register(addr, value);
+                        batched.write_register(addr, value);
+                    }
+                    4 => {
+                        let write = rand(2) == 0;
+                        single.div_event(write);
+                        batched.div_event(write);
+                    }
+                    5 => {
+                        single.div_secondary_event();
+                        batched.div_secondary_event();
+                    }
+                    _ => {
+                        let m = 1 + rand(300);
+                        for _ in 0..m {
+                            single.step(ticks);
+                        }
+                        batched.run(m, ticks);
+                        assert!(single.sample_buffer.iter().map(|x| x.to_bits()).eq(batched.sample_buffer.iter().map(|x| x.to_bits())), "round {round}: samples");
+                        single.clear_samples();
+                        batched.clear_samples();
+                    }
+                }
+                for addr in (0xFF10..=0xFF3F).chain([0xFF76, 0xFF77]) {
+                    assert_eq!(single.read_register(addr), batched.read_register(addr), "round {round}, {addr:#06x}");
+                }
+            }
+            let [mut a, mut b] = [Vec::new(), Vec::new()];
+            single.export_state(&mut a);
+            batched.export_state(&mut b);
+            assert_eq!(a, b, "round {round}: state");
+        }
     }
 
     /// The latched duty bits and fresh triggers ride in an optional tail: a block written before
