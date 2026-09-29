@@ -607,11 +607,11 @@ fn synthetic(code: &[u8]) -> GameBoy {
     gb
 }
 
+/// An invalid opcode locks the CPU like hardware, and the machine runs on: not an emulator error.
 #[test]
-fn runs_verdict_fails_on_emulator_error() {
+fn runs_verdict_passes_a_rom_that_locks_the_cpu() {
     assert_eq!(run(synthetic(&[0x18, 0xFE]), Hw::Dmg, &Protocol::Runs, 1), Verdict::Pass); // JR -2
-    let v = run(synthetic(&[0xD3]), Hw::Dmg, &Protocol::Runs, 1); // an invalid opcode
-    assert!(matches!(&v, Verdict::Fail(why) if why.starts_with("emulator error")), "{v:?}");
+    assert_eq!(run(synthetic(&[0xD3]), Hw::Dmg, &Protocol::Runs, 1), Verdict::Pass); // an invalid opcode
 }
 
 /// A probe with an oracle would otherwise run under Probe yet be counted as a probe without one.

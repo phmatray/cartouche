@@ -47,6 +47,7 @@ export default {
     ok: 'Écraser',
   },
   toast: {
+    locked: 'Le processeur s’est bloqué sur une instruction invalide en {pc}.',
     resumed: 'Reprise là où la partie s’était arrêtée',
     loadedSlot: 'Emplacement {n} chargé',
     loadedResume: 'Point de reprise chargé',
@@ -203,6 +204,7 @@ export default {
     debugSub: 'Registres, code, mémoire, sortie série et tuiles, pour le développement',
   },
   debug: {
+    locked: 'Processeur bloqué en {pc} (instruction invalide)',
     view: 'Vue de débogage',
     cpu: 'cpu',
     serial: 'série',

@@ -9,6 +9,10 @@ pub struct Cpu {
     pub ime_pending: bool,
     pub stopped: bool,
     pub halt_bug: bool,
+    /// Locked up by an invalid opcode, like hardware: `halted` for good, no interrupt wakes it.
+    pub locked: bool,
+    /// Address of the invalid opcode that locked it (0 while not locked).
+    pub locked_pc: u16,
 }
 
 impl Cpu {
@@ -20,6 +24,8 @@ impl Cpu {
             ime_pending: false,
             stopped: false,
             halt_bug: false,
+            locked: false,
+            locked_pc: 0,
         }
     }
 
@@ -30,7 +36,8 @@ impl Cpu {
             return; // only a button wakes stop mode (see `step`)
         }
         if self.halted {
-            if pending & !bus.late_interrupts() == 0 {
+            // Off the hot path: only a halted CPU with an interrupt pending gets here.
+            if self.locked || pending & !bus.late_interrupts() == 0 {
                 return;
             }
             self.halted = false;
@@ -523,11 +530,14 @@ impl Cpu {
             0xCB => self.execute_cb(bus),
 
             // === Invalid opcodes ===
+            // They lock the CPU (Pan Docs, CPU instruction set): it never fetches again, and
+            // nothing but a reset wakes it; the PPU, APU and timers run on. It sleeps through the
+            // `halted` path, `handle_interrupts` keeps it there.
             0xD3 | 0xDB | 0xDD | 0xE3 | 0xE4 | 0xEB | 0xEC | 0xED | 0xF4 | 0xFC | 0xFD => {
-                Err(CpuError::InvalidOpcode {
-                    opcode,
-                    pc: self.regs.pc.wrapping_sub(1),
-                })
+                self.locked = true;
+                self.locked_pc = self.regs.pc.wrapping_sub(1);
+                self.halted = true;
+                Ok(4)
             }
         }
     }

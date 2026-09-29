@@ -107,6 +107,7 @@ export function DebugPanel({ emu, isRunning }: { emu: ReturnType<typeof useEmula
               <div style={{ margin: '8px 0 12px' }}>
                 {t('player.debug.flags')} {(['z', 'n', 'h', 'c'] as const).map((f) => <b key={f} style={{ opacity: registers.flags[f] ? 1 : 0.25, marginRight: 8 }}>{f.toUpperCase()}</b>)}
               </div>
+              {registers.locked !== null && <p style={{ margin: '0 0 12px' }}>{t('player.debug.locked', { pc: `$${hex16(registers.locked)}` })}</p>}
             </>
           ) : <p>{t('player.debug.noRom')}</p>}
           {controls}
