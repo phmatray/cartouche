@@ -1,0 +1,32 @@
+# gbmicrotest probes whose upstream source records no hardware value (tests/conformance.rs).
+# One per line: <suite root>/<ROM path>, then `# <evidence>` from aappleby/gbmicrotest tests/<name>.s
+# at 463eb6b. They never write a $FF82 verdict, so there is nothing to compare: each one still runs
+# for its whole time budget and must finish without an emulator error. They are not counted as
+# passes (README shows them apart from the score).
+# CI fails when an entry has no ROM behind it, or is also in expected-failures.txt.
+# A probe leaves this list only for PROBE_ORACLES in conformance.rs, when its source is found to
+# record the value it should leave behind. Never guess a hardware value.
+
+gbmicrotest/004-tima_cycle_timer.gb  # sums four TIMA reads after $55 nops, `sub OVERHEAD` (l.32); no result stated
+gbmicrotest/007-lcd_on_stat.gb  # l.5-11 record STAT after LCD on, but the code stores LY (the STAT read is commented out, l.39)
+gbmicrotest/400-dma.gb  # l.3-9 describe what reads during DMA; nothing is stored, ends at `jr end` (l.54)
+gbmicrotest/500-scx-timing.gb  # stores a sum of four TIMA reads; l.5-9 list per-SCX deltas, not that sum
+gbmicrotest/800-ppu-latch-scx.gb  # l.5-10 "scroll / no scroll": the screen only, no stored value
+gbmicrotest/801-ppu-latch-scy.gb  # l.5-10 "scrolled columns": the screen only, no stored value
+gbmicrotest/802-ppu-latch-tileselect.gb  # toggles LCDC.4 in the STAT handler; no result
+gbmicrotest/803-ppu-latch-bgdisplay.gb  # toggles LCDC.0 in the STAT handler; no result
+gbmicrotest/audio_testbench.gb  # triggers the noise channel, ends at `jr -2` (l.22); no result
+gbmicrotest/cpu_bus_1.gb  # writes $55 to $FF80 forever (l.8-9); no result
+gbmicrotest/dma_basic.gb  # starts OAM DMA and ends at `jp $ff80` (l.25); no result
+gbmicrotest/flood_vram.gb  # fills VRAM with $FF (l.10-13); l.3 is a comment copied from 000-write_to_x8000
+gbmicrotest/lcdon_write_timing.gb  # l.5-24 table is for the AGS only; this ROM is built for the DMG
+gbmicrotest/ly_while_lcd_off.gb  # stores LY read with the LCD off (l.13-23); no value recorded
+gbmicrotest/minimal.gb  # a copy of 500-scx-timing.s; no result
+gbmicrotest/oam_sprite_trashing.gb  # l.14-31 "move / no move": the screen only, no stored value
+gbmicrotest/ppu_scx_vs_bgp.gb  # raster test bench, draws a frame; no result
+gbmicrotest/ppu_sprite_testbench.gb  # raster test bench, draws a frame; no result
+gbmicrotest/ppu_spritex_vs_scx.gb  # raster test bench, draws a frame; no result
+gbmicrotest/ppu_win_vs_wx.gb  # raster test bench, draws a frame; no result
+gbmicrotest/ppu_wx_early.gb  # raster test bench, draws a frame; no result
+gbmicrotest/toggle_lcdc.gb  # `RESULT $91` (l.5) is never used; toggles LCDC and loops (l.42)
+gbmicrotest/wave_write_to_0xC003.gb  # writes $55 to $C003 forever (l.6-7); no result

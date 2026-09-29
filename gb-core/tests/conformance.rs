@@ -13,7 +13,7 @@ mod common;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{LazyLock, Mutex};
 
 use common::{cgb_to_rgb, dmg_to_grey, load_png_rgb};
 use gb_core::gameboy::{GameBoy, Model, Revision, CYCLES_PER_FRAME};
@@ -42,6 +42,12 @@ enum Protocol {
     Fibonacci,
     /// gbmicrotest: $FF82 becomes $01 (pass) or $FF (fail).
     Hram,
+    /// A gbmicrotest probe (no $FF82 verdict) whose source records the hardware value: each
+    /// (address, byte) must hold when the run's budget ends.
+    Probe { checks: &'static [(u16, u8)] },
+    /// A gbmicrotest probe whose source records no value (probes-without-verdict.txt): passes when
+    /// it runs its whole budget without an emulator error.
+    Runs,
     /// Stops on `LD B,B`; the frame must match the reference PNG pixel for pixel.
     Screenshot(PathBuf),
     /// rtc3test: presses `presses` in the menu, runs `secs` emulated seconds, then compares the
@@ -127,6 +133,27 @@ fn hram_verdict(byte: u8) -> Option<Verdict> {
     }
 }
 
+/// VRAM is read directly, so a probe's result is seen whatever mode the PPU is in.
+fn probe_byte(gb: &GameBoy, addr: u16) -> u8 {
+    match addr {
+        0x8000..=0x9FFF => gb.bus.ppu.vram[(addr - 0x8000) as usize],
+        _ => gb.bus.read_byte(addr),
+    }
+}
+
+fn probe_verdict(gb: &GameBoy, checks: &[(u16, u8)]) -> Verdict {
+    let wrong: Vec<String> = checks
+        .iter()
+        .filter(|&&(addr, want)| probe_byte(gb, addr) != want)
+        .map(|&(addr, want)| format!("${addr:04X} = ${:02X}, source records ${want:02X}", probe_byte(gb, addr)))
+        .collect();
+    if wrong.is_empty() {
+        Verdict::Pass
+    } else {
+        Verdict::Fail(wrong.join(", "))
+    }
+}
+
 /// The frame being drawn against the reference, in the suites' colours: the four DMG greys, or
 /// CGB RGB555 expanded with (x<<3)|(x>>2), as acid2.rs compares.
 fn compare_screen(gb: &GameBoy, hw: Hw, reference: &Path) -> Verdict {
@@ -173,10 +200,13 @@ fn run_rom(path: &Path, hw: Hw, protocol: &Protocol, timeout_secs: u64) -> Verdi
         Protocol::Screenshot(png) => png,
         _ => path,
     });
-    let mut gb = match boot(path, hw, rev) {
-        Ok(gb) => gb,
-        Err(e) => return Verdict::Fail(e),
-    };
+    match boot(path, hw, rev) {
+        Ok(gb) => run(gb, hw, protocol, timeout_secs),
+        Err(e) => Verdict::Fail(e),
+    }
+}
+
+fn run(mut gb: GameBoy, hw: Hw, protocol: &Protocol, timeout_secs: u64) -> Verdict {
     if let Protocol::Scripted { presses, secs, reference } = protocol {
         return run_scripted(&mut gb, hw, presses, *secs, reference).unwrap_or_else(|e| Verdict::Fail(format!("emulator error: {e}")));
     }
@@ -206,10 +236,15 @@ fn run_rom(path: &Path, hw: Hw, protocol: &Protocol, timeout_secs: u64) -> Verdi
             Err(e) => return Verdict::Fail(format!("emulator error: {e}")),
         }
     }
-    Verdict::Fail("timeout".into())
+    match protocol {
+        Protocol::Probe { checks } => probe_verdict(&gb, checks),
+        Protocol::Runs => Verdict::Pass,
+        _ => Verdict::Fail("timeout".into()),
+    }
 }
 
-/// The entries of expected-failures.txt: `#` starts a comment, blank lines are ignored.
+/// The entries of expected-failures.txt or probes-without-verdict.txt: `#` starts a comment, blank
+/// lines are ignored.
 fn parse_expected(text: &str) -> BTreeSet<String> {
     text.lines()
         .map(|l| l.split('#').next().unwrap().trim())
@@ -219,11 +254,26 @@ fn parse_expected(text: &str) -> BTreeSet<String> {
 }
 
 /// Pass or listed fail is green; an unlisted fail, a listed pass or a listed entry with no ROM
-/// behind it is red. Ok((passed, total)).
-fn reconcile(suite: &str, results: &[(String, Verdict)], expected: &BTreeSet<String>) -> Result<(usize, usize), String> {
+/// behind it is red. A ROM in `no_verdict` only has to run (Protocol::Runs) and never counts as a
+/// pass: it may not also be in `expected`. Ok((passed, total, ran without a verdict)).
+fn reconcile(
+    suite: &str,
+    results: &[(String, Verdict)],
+    expected: &BTreeSet<String>,
+    no_verdict: &BTreeSet<String>,
+) -> Result<(usize, usize, usize), String> {
     let mut errors = Vec::new();
     let mut passed = 0;
+    let mut runs = 0;
     for (label, verdict) in results {
+        if no_verdict.contains(label) {
+            match verdict {
+                _ if expected.contains(label) => errors.push(format!("in both expected-failures.txt and probes-without-verdict.txt: {label}")),
+                Verdict::Pass => runs += 1,
+                Verdict::Fail(why) => errors.push(format!("probe without a verdict failed to run: {label} ({why})")),
+            }
+            continue;
+        }
         match (verdict, expected.contains(label)) {
             (Verdict::Pass, false) => passed += 1,
             (Verdict::Pass, true) => errors.push(format!("now passes: remove from expected-failures.txt: {label}")),
@@ -232,14 +282,21 @@ fn reconcile(suite: &str, results: &[(String, Verdict)], expected: &BTreeSet<Str
         }
     }
     let ran: BTreeSet<&str> = results.iter().map(|(l, _)| l.as_str()).collect();
-    for entry in expected.iter().filter(|e| !ran.contains(e.as_str())) {
+    for entry in expected.union(no_verdict).filter(|e| !ran.contains(e.as_str())) {
         errors.push(format!("stale entry: {entry}"));
     }
     if errors.is_empty() {
-        Ok((passed, results.len()))
+        Ok((passed, results.len() - runs, runs))
     } else {
         Err(format!("{suite}: {} problem(s)\n{}", errors.len(), errors.join("\n")))
     }
+}
+
+/// The entries of a record file in tests/.
+fn record(name: &str) -> BTreeSet<String> {
+    let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join(name))
+        .unwrap_or_else(|e| panic!("read tests/{name}: {e}"));
+    parse_expected(&text)
 }
 
 /// Every .gb/.gbc under `dir`, sorted.
@@ -297,14 +354,14 @@ fn run_suite(suite: &str, root: &str, dirs: &[&str], timeout_secs: u64, pick: fn
     let mut results = results.into_inner().unwrap();
     results.sort_by(|a, b| a.0.cmp(&b.0));
 
-    let list = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/expected-failures.txt"))
-        .expect("read tests/expected-failures.txt");
-    let expected: BTreeSet<String> = parse_expected(&list)
-        .into_iter()
-        .filter(|e| prefixes.iter().any(|p| e.starts_with(&format!("{p}/"))))
-        .collect();
-    match reconcile(suite, &results, &expected) {
-        Ok((passed, total)) => println!("| {suite} | {passed}/{total} |"),
+    let in_suite = |set: BTreeSet<String>| -> BTreeSet<String> {
+        set.into_iter().filter(|e| prefixes.iter().any(|p| e.starts_with(&format!("{p}/")))).collect()
+    };
+    let expected = in_suite(record("expected-failures.txt"));
+    let no_verdict = in_suite(record("probes-without-verdict.txt"));
+    match reconcile(suite, &results, &expected, &no_verdict) {
+        Ok((passed, total, 0)) => println!("| {suite} | {passed}/{total} |"),
+        Ok((passed, total, runs)) => println!("| {suite} | {passed}/{total} | + {runs} probes without a verdict ran |"),
         Err(e) => panic!("{e}"),
     }
 }
@@ -400,9 +457,37 @@ fn age_all() {
     run_suite("Age", "age-test-roms", &[""], 30, age);
 }
 
+/// gbmicrotest probes that write no $FF82 verdict but whose source (aappleby/gbmicrotest
+/// tests/<stem>.s, commit 463eb6b, built with -DDMG) records what the hardware leaves behind. Each
+/// probe loops storing its result to $8000; "dots" in a source table is that pattern, $55, and
+/// "black" is $FF (tile 0's low bitplane read through the boot BGP $FC).
+const PROBE_ORACLES: &[(&str, &[(u16, u8)])] = &[
+    // l.15 "69 - black" with l.32 DELAY 69: OAM reads $FF while locked
+    ("000-oam_lock", &[(0x8000, 0xFF)]),
+    // l.3 "We should be able to write our dotted line pattern to vram on startup."
+    ("000-write_to_x8000", &[(0x8000, 0x55)]),
+    // l.5 "3  - dots" with l.8 DELAY 3
+    ("001-vram_unlocked", &[(0x8000, 0x55)]),
+    // l.19 "71 - stat 10000100 - hblank line 0 starts here" with l.81 DELAY 71 (DMG)
+    ("002-vram_locked", &[(0x8000, 0x84)]),
+    // l.10 PASS 10 (DMG), l.31 `add $55 - PASS`: the four TIMA reads sum to 10, leaving $55
+    ("004-tima_boot_phase", &[(0x8000, 0x55)]),
+    // l.3-4 "correct - 54 - black" with l.11 DELAY 54: OAM still locked, reads $FF
+    ("mode2_stat_int_to_oam_unlock", &[(0x8000, 0xFF)]),
+    // l.4 "NR10 FF10 0b10000000" (read mask): $00 written to NR10 reads back $80
+    ("poweron", &[(0x8000, 0x80)]),
+];
+
+static NO_VERDICT: LazyLock<BTreeSet<String>> = LazyLock::new(|| record("probes-without-verdict.txt"));
+
 /// gbmicrotest runs on the DMG it was checked on (DMG-CPU B/C).
 fn gbmicrotest(rom: &Path, rel: &str) -> Vec<Job> {
-    vec![Job { label: rel.to_string(), rom: rom.to_path_buf(), hw: Hw::Dmg, protocol: Protocol::Hram }]
+    let protocol = match PROBE_ORACLES.iter().find(|(s, _)| *s == stem(rom)) {
+        Some(&(_, checks)) => Protocol::Probe { checks },
+        None if NO_VERDICT.contains(rel) => Protocol::Runs,
+        None => Protocol::Hram,
+    };
+    vec![Job { label: rel.to_string(), rom: rom.to_path_buf(), hw: Hw::Dmg, protocol }]
 }
 
 #[test]
@@ -415,6 +500,39 @@ fn hram_verdict_decoding() {
     assert_eq!(hram_verdict(0x00), None);
     assert_eq!(hram_verdict(0x01), Some(Verdict::Pass));
     assert!(matches!(hram_verdict(0xFF), Some(Verdict::Fail(_))));
+}
+
+/// A 32 KB DMG cartridge running `code` from $0100, past its boot ROM.
+fn synthetic(code: &[u8]) -> GameBoy {
+    let mut rom = vec![0; 0x8000];
+    rom[0x100..0x100 + code.len()].copy_from_slice(code);
+    rom[0x14D] = 0xE7; // header checksum of an all-zero header
+    let mut gb = GameBoy::new(rom).unwrap();
+    gb.skip_boot_rom();
+    gb
+}
+
+#[test]
+fn runs_verdict_fails_on_emulator_error() {
+    assert_eq!(run(synthetic(&[0x18, 0xFE]), Hw::Dmg, &Protocol::Runs, 1), Verdict::Pass); // JR -2
+    let v = run(synthetic(&[0xD3]), Hw::Dmg, &Protocol::Runs, 1); // an invalid opcode
+    assert!(matches!(&v, Verdict::Fail(why) if why.starts_with("emulator error")), "{v:?}");
+}
+
+/// A probe with an oracle would otherwise run under Probe yet be counted as a probe without one.
+#[test]
+fn probes_with_an_oracle_are_not_listed_without_a_verdict() {
+    for (stem, _) in PROBE_ORACLES {
+        assert!(!NO_VERDICT.contains(&format!("gbmicrotest/{stem}.gb")), "{stem} has an oracle: remove it from probes-without-verdict.txt");
+    }
+}
+
+#[test]
+fn probe_verdict_compares_bytes() {
+    let mut gb = synthetic(&[]);
+    gb.bus.ppu.vram[0] = 0x55;
+    assert_eq!(probe_verdict(&gb, &[(0x8000, 0x55)]), Verdict::Pass);
+    assert!(matches!(probe_verdict(&gb, &[(0x8000, 0x55), (0x8001, 0x01)]), Verdict::Fail(_)));
 }
 
 /// Mealybug Tearoom ships one expected screenshot per model next to each ROM. The DMG one
@@ -494,14 +612,27 @@ fn reconcile_states() {
     let listed = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<BTreeSet<_>>();
     let results = vec![("s/pass.gb".to_string(), Verdict::Pass), ("s/fail.gb".to_string(), fail())];
 
-    assert_eq!(reconcile("s", &results, &listed(&["s/fail.gb"])), Ok((1, 2)));
+    let none = listed(&[]);
+    assert_eq!(reconcile("s", &results, &listed(&["s/fail.gb"]), &none), Ok((1, 2, 0)));
 
-    let err = reconcile("s", &results, &listed(&[])).unwrap_err();
+    let err = reconcile("s", &results, &none, &none).unwrap_err();
     assert!(err.contains("regression: s/fail.gb"), "{err}");
 
-    let err = reconcile("s", &results, &listed(&["s/fail.gb", "s/pass.gb"])).unwrap_err();
+    let err = reconcile("s", &results, &listed(&["s/fail.gb", "s/pass.gb"]), &none).unwrap_err();
     assert!(err.contains("now passes: remove from expected-failures.txt: s/pass.gb"), "{err}");
 
-    let err = reconcile("s", &results, &listed(&["s/fail.gb", "s/gone.gb"])).unwrap_err();
+    let err = reconcile("s", &results, &listed(&["s/fail.gb", "s/gone.gb"]), &none).unwrap_err();
+    assert!(err.contains("stale entry: s/gone.gb"), "{err}");
+
+    // A probe without a verdict that runs clean is counted apart, never as a pass.
+    assert_eq!(reconcile("s", &results, &listed(&["s/fail.gb"]), &listed(&["s/pass.gb"])), Ok((0, 1, 1)));
+
+    let err = reconcile("s", &results, &none, &listed(&["s/fail.gb"])).unwrap_err();
+    assert!(err.contains("probe without a verdict failed to run: s/fail.gb"), "{err}");
+
+    let err = reconcile("s", &results, &listed(&["s/fail.gb"]), &listed(&["s/fail.gb"])).unwrap_err();
+    assert!(err.contains("in both expected-failures.txt and probes-without-verdict.txt: s/fail.gb"), "{err}");
+
+    let err = reconcile("s", &results, &listed(&["s/fail.gb"]), &listed(&["s/gone.gb"])).unwrap_err();
     assert!(err.contains("stale entry: s/gone.gb"), "{err}");
 }
