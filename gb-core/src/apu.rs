@@ -185,6 +185,9 @@ pub struct SquareChannel {
     /// The start delay the current countdown carries from a trigger, in ticks.
     delay: u16,
     duty_position: u8,
+    /// The duty bit the last duty step latched: an NRx1 duty change is only heard from the next
+    /// step on (Gambatte `ch1_duty0_to_duty3_pos3*`).
+    high: bool,
     /// Until the first duty step after starting, the output holds 0.
     suppressed: bool,
     /// The last tick reloaded the countdown: an NRx3/NRx4 write lands on the new period.
@@ -214,6 +217,7 @@ impl SquareChannel {
             countdown: 0xFFFF,
             delay: 0,
             duty_position: 0,
+            high: false,
             suppressed: false,
             just_reloaded: false,
             did_tick: false,
@@ -238,6 +242,7 @@ impl SquareChannel {
             left -= self.countdown + 1;
             self.countdown = self.period() + 1;
             self.duty_position = (self.duty_position + 1) & 7;
+            self.latch_duty();
             self.suppressed = false;
             self.did_tick = true;
             self.rose = self.sample == 0;
@@ -253,9 +258,13 @@ impl SquareChannel {
         if !self.enabled || glitch && self.just_reloaded && self.rose { 0 } else { self.sample }
     }
 
+    fn latch_duty(&mut self) {
+        self.high = DUTY_TABLE[self.duty as usize][self.duty_position as usize] != 0;
+    }
+
     fn update_sample(&mut self) {
         if !self.suppressed {
-            self.sample = if DUTY_TABLE[self.duty as usize][self.duty_position as usize] != 0 { self.volume } else { 0 };
+            self.sample = if self.high { self.volume } else { 0 };
         }
     }
 
@@ -344,6 +353,7 @@ impl SquareChannel {
             && self.did_tick && self.countdown >> 1 == self.frequency ^ 0x7FF
         {
             self.duty_position = self.duty_position.wrapping_sub(1) & 7;
+            self.latch_duty();
             self.suppressed = false;
         }
         let old_frequency = self.frequency;
@@ -361,6 +371,7 @@ impl SquareChannel {
             if !self.enabled {
                 if cgb && value & 4 == 0 && steps(self.countdown, self.delay) {
                     self.duty_position = (self.duty_position + 1) & 7;
+                    self.latch_duty();
                     force_unsuppressed = true;
                 }
                 self.delay = 6 - lf_div;
@@ -369,6 +380,7 @@ impl SquareChannel {
                 if cgb {
                     if !self.just_reloaded && value & 4 == 0 && steps(self.countdown.wrapping_sub(1), self.delay) {
                         self.duty_position = (self.duty_position + 1) & 7;
+                        self.latch_duty();
                         self.suppressed = false;
                     } else if self.frequency == 0x7FF && old_frequency != 0x7FF && self.suppressed {
                         extra = 2;
@@ -1292,6 +1304,13 @@ pub struct Apu {
     pending_envelope: u8,
     /// The CPU runs in double speed (synced by the bus).
     pub double_speed: bool,
+    /// Channels (bit n: CH n+1) triggered since the last M-cycle's ticks: a DIV-APU event on the
+    /// next M-cycle doesn't count their envelope or sweep down, the trigger's reload lands after
+    /// it (Gambatte `ch2_init_reset_env_counter_timing_11/15`, `ch1_init_reset_sweep_counter_timing_4`).
+    /// On a CGB the sweep's reload lands one M-cycle later still (bit 4: CH1 the M-cycle before;
+    /// `ch1_init_reset_sweep_counter_timing_9/10` pin both sides, SameBoy holds a CGB restart 2
+    /// ticks longer too).
+    triggered: u8,
     sample_counter: f64,
     sample_buffer: Vec<f32>,
     pub channel_muted: [bool; 4],
@@ -1323,6 +1342,7 @@ impl Apu {
             lf_div: 1,
             pending_envelope: 0,
             double_speed: false,
+            triggered: 0,
             sample_counter: 0.0,
             sample_buffer: Vec::with_capacity(AUDIO_BUFFER_SIZE),
             channel_muted: [false; 4],
@@ -1330,6 +1350,22 @@ impl Apu {
             charged: false,
             external: [0.0; 2],
         }
+    }
+
+    /// The APU as the boot ROM hands over. The boot sound's last note is still running: CH1 on at
+    /// $7C1 (NR13 $C1, NR14 $07), silent (its envelope ran down), with the duty step and 2 MHz
+    /// countdown the boot ROM left it at. Gambatte's `ch1_init_pos_1..8` pin them per model: a
+    /// retrigger reads the duty step, and each pair of variants sits one M-cycle apart on both
+    /// sides of two steps.
+    pub fn hand_over_boot_sound(&mut self, cgb: bool) {
+        self.write_register(0xFF13, 0xC1);
+        self.write_register(0xFF14, 0x07);
+        self.ch1.enabled = true;
+        (self.ch1.duty_position, self.ch1.countdown) = if cgb { (6, 75) } else { (2, 13) };
+        self.ch1.latch_duty();
+        // DIV-APU events since the boot ROM powered the APU on, as DIV's bits 13-15 count them (DMG:
+        // on at $8xxx, handed over at $ABC8), pinned by `ch2_init_env_counter_timing_1..4`.
+        self.div_divider = if cgb { 0 } else { 1 };
     }
 
     pub fn set_channel_muted(&mut self, channel: u8, muted: bool) {
@@ -1345,6 +1381,7 @@ impl Apu {
             return self.silence(cycles);
         }
 
+        self.triggered = self.triggered << 4 & 0x10; // CH1's, one M-cycle more, for the CGB sweep
         if self.pending_envelope == 1 {
             self.tick_envelopes();
         }
@@ -1397,9 +1434,10 @@ impl Apu {
             _ => self.div_divider = self.div_divider.wrapping_add(1),
         }
         if self.div_divider & 7 == 7 {
-            self.ch1.count_envelope();
-            self.ch2.count_envelope();
-            self.ch4.count_envelope();
+            let t = self.triggered;
+            if t & 1 == 0 { self.ch1.count_envelope(); }
+            if t & 2 == 0 { self.ch2.count_envelope(); }
+            if t & 8 == 0 { self.ch4.count_envelope(); }
         }
         if self.double_speed && self.cgb_mode {
             self.pending_envelope = 2;
@@ -1409,7 +1447,7 @@ impl Apu {
         if self.div_divider & 1 == 1 {
             self.clock_length_all();
         }
-        if self.div_divider & 3 == 3 {
+        if self.div_divider & 3 == 3 && self.triggered & if self.cgb_mode { 0x11 } else { 1 } == 0 {
             self.ch1_sweep.div_event(&mut self.ch1, self.lf_div, self.double_speed, div_write);
         }
     }
@@ -1617,6 +1655,9 @@ impl Apu {
         let old = old_length(self.cgb_mode, self.rev);
         // The square channels' NRx4 quirks as on a CGB D/E.
         let de = self.cgb_mode && !matches!(self.rev, Revision::Cgb0 | Revision::CgbA | Revision::CgbB | Revision::CgbC | Revision::Agb);
+        if value & 0x80 != 0 {
+            self.triggered |= match addr { 0xFF14 => 1, 0xFF19 => 2, 0xFF23 => 8, _ => 0 };
+        }
         match addr {
             // CH1 — Square with sweep
             0xFF10 => self.ch1_sweep.write_nr10(value, &mut self.ch1, self.lf_div, self.cgb_mode, self.double_speed),
@@ -1804,6 +1845,8 @@ impl Apu {
             let out = &mut block;
             macro_rules! put { ($($f:expr),*) => { $( $f.put(out); )* }; }
             apu_fields!(put, self);
+            // The tail (#286): optional, a block without it loads with the old model's values.
+            out.extend_from_slice(&[self.ch1.high as u8 | (self.ch2.high as u8) << 1, self.triggered]);
         }
         out.extend_from_slice(&(block.len() as u16).to_le_bytes());
         out.extend_from_slice(&block);
@@ -1831,6 +1874,17 @@ impl Apu {
             .is_some()
         };
         if parsed {
+            match block.get(p..p + 2) {
+                Some(&[high, triggered]) => {
+                    (self.ch1.high, self.ch2.high) = (high & 1 != 0, high & 2 != 0);
+                    self.triggered = triggered;
+                }
+                _ => {
+                    self.ch1.latch_duty();
+                    self.ch2.latch_duty();
+                    self.triggered = 0;
+                }
+            }
             self.regs.copy_from_slice(&regs[..0x16]);
             self.after_import();
         } else {
@@ -1935,6 +1989,7 @@ impl Apu {
                 ch.enabled = nr52 & (1 << i) != 0 && ch.dac_enabled;
                 ch.volume = ch.nrx2 >> 4;
                 ch.countdown = ch.period() + 1;
+                ch.latch_duty();
             }
             self.ch3.enabled = nr52 & 4 != 0 && self.ch3.dac_enabled;
             self.ch4.enabled = nr52 & 8 != 0 && self.ch4.dac_enabled;
@@ -2072,6 +2127,89 @@ mod tests {
         apu.div_event(false); // next event won't clock length: the first half
         assert_ne!(apu.read_register(0xFF26) & bit, 0, "{rev:?}: playing");
         (1..=3).find(|_| { apu.write_register(nrx4, 0x00); apu.read_register(0xFF26) & bit == 0 }).unwrap_or(0)
+    }
+
+    /// CH1's digital output after a retrigger `ticks` 2 MHz ticks after the hand-over (the NR12
+    /// write holds the DAC on without zombie steps, a retrigger shows the latched duty bit).
+    fn retrigger_after(cgb: bool, ticks: u32) -> u8 {
+        let mut apu = Apu::new();
+        apu.cgb_mode = cgb;
+        apu.rev = Revision::CgbC; // Gambatte's CGB (on a CGB D/E, NR14 bit 2 clear adds a step)
+        apu.write_register(0xFF26, 0x80);
+        apu.write_register(0xFF11, 0x80); // duty 2: 1 0 0 0 0 1 1 1
+        apu.write_register(0xFF12, 0x80);
+        apu.hand_over_boot_sound(cgb);
+        apu.step(ticks);
+        apu.write_register(0xFF14, 0x80);
+        apu.ch1.sample
+    }
+
+    /// The hand-over leaves CH1 two duty steps into its note on a DMG (step 4 to 5 two ticks after
+    /// the countdown's 13), six on a CGB: a retrigger reads the step it is on (Gambatte
+    /// `ch1_init_pos_*`). A duty written between steps is only heard from the next step.
+    #[test]
+    fn trigger_duty_position_per_phase() {
+        // DMG: steps every 126 ticks, 2 -> 3 at tick 14, 4 -> 5 at 14 + 2 * 126 = 266.
+        assert_eq!(retrigger_after(false, 264), 0, "DMG, step 4 (duty bit 0)");
+        assert_eq!(retrigger_after(false, 266), 8, "DMG, step 5 (duty bit 1)");
+        // CGB: 6 -> 7 at tick 76, 7 -> 0 at 202, 0 -> 1 at 328.
+        assert_eq!(retrigger_after(true, 326), 8, "CGB, step 0 (duty bit 1)");
+        assert_eq!(retrigger_after(true, 328), 0, "CGB, step 1 (duty bit 0)");
+
+        let mut apu = Apu::new();
+        for (reg, v) in [(0xFF26, 0x80), (0xFF11, 0x00), (0xFF12, 0x80), (0xFF13, 0xC0), (0xFF14, 0x87)] {
+            apu.write_register(reg, v);
+        }
+        apu.step(131 + 1 + 128 * 2); // the start delay, then steps 1 to 3 at duty 0
+        apu.write_register(0xFF11, 0xC0); // duty 3 has step 3 high
+        apu.write_register(0xFF14, 0x87); // a restart shows the latched bit at the new volume
+        assert_eq!(apu.ch1.sample, 0, "step 3 latched duty 0's low bit");
+        apu.step(126 + 3 + 1); // the restart's period and delay
+        assert_eq!(apu.ch1.sample, 8, "step 4 takes duty 3's high bit");
+    }
+
+    /// CH2's volume after a trigger `before` M-cycles ahead of the DIV-APU event that counts the
+    /// envelope (period 1, going up), then the arming edge and the next event.
+    fn envelope_after_trigger(before: u32) -> u8 {
+        let mut apu = Apu::new();
+        for (reg, v) in [(0xFF26, 0x80), (0xFF17, 0x09)] {
+            apu.write_register(reg, v);
+        }
+        for _ in 0..6 { apu.div_event(false); }
+        apu.write_register(0xFF19, 0x80);
+        for _ in 1..before { apu.step(2); }
+        apu.div_event(false); // the 8th: counts the envelope down
+        apu.step(2);
+        apu.div_secondary_event();
+        apu.div_event(false);
+        apu.ch2.volume
+    }
+
+    /// A trigger's envelope reload lands after a DIV-APU event on the next M-cycle, which then
+    /// doesn't count it (Gambatte `ch2_init_reset_env_counter_timing_11/15`); the same for the
+    /// sweep, one M-cycle longer on a CGB (`ch1_init_reset_sweep_counter_timing_4/9/10`).
+    #[test]
+    fn trigger_reloads_env_sweep_length_on_time() {
+        assert_eq!(envelope_after_trigger(2), 1, "two M-cycles ahead: counted, stepped");
+        assert_eq!(envelope_after_trigger(1), 0, "the M-cycle before: not counted");
+
+        // NR10 period 1, shift 0: the sweep step's overflow check stops CH1 ($700 + $700).
+        let sweep_stops = |cgb: bool, before: u32| {
+            let mut apu = Apu::new();
+            apu.cgb_mode = cgb;
+            for (reg, v) in [(0xFF26, 0x80), (0xFF10, 0x10), (0xFF12, 0xF0), (0xFF13, 0x00)] {
+                apu.write_register(reg, v);
+            }
+            for _ in 0..2 { apu.div_event(false); }
+            apu.write_register(0xFF14, 0x87);
+            for _ in 1..before { apu.step(2); }
+            apu.div_event(false); // the 3rd: clocks the sweep
+            for _ in 0..4 { apu.step(2); }
+            apu.read_register(0xFF26) & 1 == 0
+        };
+        assert!(sweep_stops(false, 2) && sweep_stops(true, 3), "counted: the sweep steps");
+        assert!(!sweep_stops(false, 1), "DMG, the M-cycle before: not counted");
+        assert!(!sweep_stops(true, 2), "CGB, two M-cycles before: not counted");
     }
 
     /// Extra length clocking: CGB E needs length to be enabled by the write, CGB 0/B only that it

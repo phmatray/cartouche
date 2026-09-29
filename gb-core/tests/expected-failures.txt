@@ -55,8 +55,6 @@ gambatte/display_startstate/stat_scx3_1_cgb04c_out87.gbc@cgb  # boot
 gambatte/display_startstate/stat_scx3_2_cgb04c_out84.gbc@cgb  # boot
 gambatte/display_startstate/stat_scx5_1_cgb04c_out87.gbc@cgb  # boot
 gambatte/display_startstate/stat_scx5_2_cgb04c_out84.gbc@cgb  # boot
-gambatte/div/start_inc_1_cgb04c_out1E.gbc@cgb  # timer
-gambatte/div/start_inc_2_cgb04c_out1F.gbc@cgb  # timer
 gambatte/dma/dma_dst_wrap_2_cgb04c_out0.gbc@cgb  # hdma
 gambatte/dma/dma_hiram_read_cgb04c_out7.gbc@cgb  # hdma
 gambatte/dma/dma_hiram_read_result_cgb04c_out1.gbc@cgb  # hdma
@@ -1025,62 +1023,22 @@ gambatte/serial/start_wait_trigger_int8_read_if_2_dmg08_outE8_cgb04c_outE0.gbc@c
 gambatte/serial/start_wait_trigger_int8_read_if_3_dmg08_cgb04c_outE0.gbc@cgb  # serial
 gambatte/serial/start_wait_trigger_int8_read_if_3_dmg08_cgb04c_outE0.gbc@dmg  # serial
 gambatte/serial/start_wait_trigger_int8_read_if_ds_2_cgb04c_outE0.gbc@cgb  # serial
-gambatte/sound/ch1_duty0_pos6_to_pos7_timing_ds_6_cgb04c_outaudio1.gbc@cgb  # apu
-gambatte/sound/ch1_duty0_to_duty3_pos3_2_dmg08_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch1_duty0_to_duty3_pos3_2_dmg08_cgb04c_outaudio0.gbc@dmg  # apu
-gambatte/sound/ch1_duty0_to_duty3_pos3_dmg08_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch1_duty0_to_duty3_pos3_dmg08_cgb04c_outaudio0.gbc@dmg  # apu
-gambatte/sound/ch1_init_pos_1_dmg08_outaudio0_cgb04c_outaudio1.gbc@dmg  # apu
-gambatte/sound/ch1_init_pos_4_dmg08_outaudio1_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch1_init_pos_5_dmg08_outaudio1_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch1_init_pos_6_dmg08_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch1_init_pos_6_dmg08_cgb04c_outaudio0.gbc@dmg  # apu
-gambatte/sound/ch1_init_pos_7_dmg08_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch1_init_pos_7_dmg08_cgb04c_outaudio0.gbc@dmg  # apu
-gambatte/sound/ch1_init_pos_8_dmg08_outaudio0_cgb04c_outaudio1.gbc@dmg  # apu
-gambatte/sound/ch1_init_reset_sweep_counter_timing_10_dmg08_outaudio0_cgb04c_outaudio1.gbc@cgb  # apu
-gambatte/sound/ch1_init_reset_sweep_counter_timing_2_dmg08_xoutaudio1lowpitch_cgb04c_outaudio1.gbc@cgb  # apu
-gambatte/sound/ch1_init_reset_sweep_counter_timing_3_dmg08_outaudio0_cgb04c_outaudio1.gbc@cgb  # apu
-gambatte/sound/ch1_init_reset_sweep_counter_timing_4_dmg08_outaudio1_cgb04c_outaudio0.gbc@dmg  # apu
-gambatte/sound/ch1_init_reset_sweep_counter_timing_9_dmg08_outaudio1_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch1_init_reset_sweep_counter_timing_nr52_2_dmg08_out0_cgb04c_out1.gbc@cgb  # apu
-gambatte/sound/ch1_init_reset_sweep_counter_timing_nr52_3_dmg08_out0_cgb04c_out1.gbc@cgb  # apu
-gambatte/sound/ch2_init_env_counter_timing_2_dmg08_outaudio1_cgb04c_outaudio0.gbc@dmg  # apu
-gambatte/sound/ch2_init_env_counter_timing_3_dmg08_outaudio1_cgb04c_outaudio0.gbc@dmg  # apu
-gambatte/sound/ch2_init_env_counter_timing_4_dmg08_cgb04c_outaudio1.gbc@cgb  # apu
-gambatte/sound/ch2_init_env_counter_timing_4_dmg08_cgb04c_outaudio1.gbc@dmg  # apu
-gambatte/sound/ch2_init_reset_env_counter_timing_10_dmg08_outaudio1_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_env_counter_timing_11_dmg08_outaudio0_cgb04c_outaudio1.gbc@dmg  # apu
-gambatte/sound/ch2_init_reset_env_counter_timing_14_dmg08_outaudio0_cgb04c_outaudio1.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_env_counter_timing_15_dmg08_outaudio1_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_env_counter_timing_2_dmg08_outaudio1_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_env_counter_timing_4_dmg08_outaudio0_cgb04c_outaudio1.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_env_counter_timing_5_dmg08_outaudio0_cgb04c_outaudio1.gbc@dmg  # apu
-gambatte/sound/ch2_init_reset_env_counter_timing_7_dmg08_outaudio1_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_length_counter_timing_2_dmg08_outaudio0_cgb04c_outaudio1.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_length_counter_timing_3_dmg08_outaudio1_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_length_counter_timing_6_dmg08_outaudio1_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_length_counter_timing_7_dmg08_outaudio0_cgb04c_outaudio1.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_length_counter_timing_nr52_1_dmg08_out2_cgb04c_out0.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_length_counter_timing_nr52_4_dmg08_out2_cgb04c_out0.gbc@cgb  # apu
-gambatte/sound/ch2_late_reset_nr52_2b_dmg08_cgb04c_out0.gbc@cgb  # apu
-gambatte/sound/ch2_late_reset_nr52_2b_dmg08_cgb04c_out0.gbc@dmg  # apu
-gambatte/sound/ch2_late_reset_nr52_ds_2b_cgb04c_out0.gbc@cgb  # apu
-gambatte/speedchange/speedchange2_ch1_duty0_pos6_to_pos7_timing_ds_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange2_ch1_duty0_pos6_to_pos7_timing_nop_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange2_ch1_duty0_pos6_to_pos7_timing_nop_ds_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange2_ch2_nr52_1b_cgb04c_outF0.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange2_ch2_nr52_2b_cgb04c_outF0.gbc@cgb  # double-speed
+gambatte/sound/ch1_duty0_pos6_to_pos7_timing_ds_6_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange2_ch1_duty0_pos6_to_pos7_timing_ds_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange2_ch1_duty0_pos6_to_pos7_timing_nop_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange2_ch1_duty0_pos6_to_pos7_timing_nop_ds_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange2_ch2_nr52_1b_cgb04c_outF0.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange2_ch2_nr52_2b_cgb04c_outF0.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
 gambatte/speedchange/speedchange2_ly44_m3_stat_4_cgb04c_outC2.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange2_nop_ch1_duty0_pos6_to_pos7_timing_ds_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange3_ch1_duty0_pos6_to_pos7_timing_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange3_ch1_duty0_pos6_to_pos7_timing_nop_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange3_ch2_nr52_2b_cgb04c_outF0.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange3_nop_ch1_duty0_pos6_to_pos7_timing_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange_ch1_duty0_pos6_to_pos7_timing_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange_ch1_duty0_pos6_to_pos7_timing_ds_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange_ch1_duty0_pos6_to_pos7_timing_nop_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange_ch1_nr4init_duty0_pos6_to_pos7_timing_2_cgb04c_outaudio1.gbc@cgb  # double-speed
+gambatte/speedchange/speedchange2_nop_ch1_duty0_pos6_to_pos7_timing_ds_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange3_ch1_duty0_pos6_to_pos7_timing_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange3_ch1_duty0_pos6_to_pos7_timing_nop_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange3_ch2_nr52_2b_cgb04c_outF0.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange3_nop_ch1_duty0_pos6_to_pos7_timing_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange_ch1_duty0_pos6_to_pos7_timing_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange_ch1_duty0_pos6_to_pos7_timing_ds_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange_ch1_duty0_pos6_to_pos7_timing_nop_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange_ch1_nr4init_duty0_pos6_to_pos7_timing_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
 gambatte/sprites/10spritesPrLine_10xposA7_m0irq_2_dmg08_cgb04c_out2.gbc@cgb  # ppu-mode3
 gambatte/sprites/10spritesPrLine_10xposA7_m0irq_2_dmg08_cgb04c_out2.gbc@dmg  # ppu-mode3
 gambatte/sprites/enable/late_disable_ds_3_cgb04c_out3.gbc@cgb  # ppu-mode3
@@ -1128,7 +1086,6 @@ gambatte/tima/tc00_irq_late_retrigger_3_dmg08_cgb04c_outE0.gbc@dmg  # timer
 gambatte/tima/tc00_irq_late_retrigger_ds_2_cgb04c_outE0.gbc@cgb  # timer
 gambatte/tima/tc00_late_div_write_if_1a_dmg08_cgb04c_outE0.gbc@cgb  # timer
 gambatte/tima/tc00_late_div_write_if_1a_dmg08_cgb04c_outE0.gbc@dmg  # timer
-gambatte/tima/tc00_start_2_cgb04c_outF1.gbc@cgb  # timer
 gambatte/tima/tc01_1stopstart_irq_1_dmg08_cgb04c_outE0.gbc@cgb  # timer
 gambatte/tima/tc01_1stopstart_irq_1_dmg08_cgb04c_outE0.gbc@dmg  # timer
 gambatte/tima/tc01_1stopstart_offset1_irq_1_dmg08_cgb04c_outE0.gbc@cgb  # timer

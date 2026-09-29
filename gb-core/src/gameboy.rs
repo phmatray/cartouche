@@ -268,7 +268,16 @@ impl GameBoy {
         // The DMG boot ROM never writes P1, which powers on with both groups selected; the SGB one
         // leaves both deselected after its packets.
         self.bus.joypad.select = if sgb { 0x30 } else { 0x00 };
-        self.bus.timer.div_counter = if sgb { sgb_boot_div(&self.bus.cartridge) } else { 0xABC8 };
+        // A CGB-CPU C hands a CGB cartridge over with DIV at $1E9C: Gambatte `div/start_inc_1/2` pin
+        // its M-cycle, and the APU frame-sequencer ROMs (`ch1_init_reset_sweep_counter_timing_*`,
+        // `ch2_init_reset_env/length_counter_timing_*`), which count from it, agree.
+        self.bus.timer.div_counter = if sgb {
+            sgb_boot_div(&self.bus.cartridge)
+        } else if self.cgb_mode {
+            0x1E9C
+        } else {
+            0xABC8
+        };
         self.bus.interrupts.interrupt_flag = 0xE1;
         self.bus.ppu.lcdc = 0x91;
         self.bus.ppu.bgp = 0xFC;
@@ -294,7 +303,9 @@ impl GameBoy {
         self.bus.apu.write_register(0xFF12, 0xF3);
         self.bus.apu.write_register(0xFF24, 0x77);
         self.bus.apu.write_register(0xFF25, 0xF3);
-        self.bus.apu.ch1.enabled = !sgb;
+        if !sgb {
+            self.bus.apu.hand_over_boot_sound(self.cgb_mode);
+        }
 
         if self.cgb_mode {
             self.bus.wram_bank = 1;
