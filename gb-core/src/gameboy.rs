@@ -611,6 +611,9 @@ impl GameBoy {
         data.push(self.bus.ppu.opri);
         // Then the hardware revision (absent from older states: `Default`).
         data.push(self.bus.rev as u8);
+        // Then the lock of an invalid opcode (absent from older states: not locked): flag, PC LE.
+        let [lo, hi] = self.cpu.locked_pc.to_le_bytes();
+        data.extend_from_slice(&[self.cpu.locked as u8, lo, hi]);
 
         data
     }
@@ -843,6 +846,11 @@ impl GameBoy {
         self.bus.timer.div_hold = (spsw >> 3) & 3;
         self.bus.ppu.opri = byte(TIMING_TAIL_LEN + 6).unwrap_or(0) & 1;
         self.set_revision(byte(TIMING_TAIL_LEN + 7).and_then(|r| Revision::ALL.get(r as usize)).copied().unwrap_or_default());
+        let (locked, pc) = match timing.get(TIMING_TAIL_LEN + 8..TIMING_TAIL_LEN + 11) {
+            Some(&[1, lo, hi]) => (true, u16::from_le_bytes([lo, hi])),
+            _ => (false, 0),
+        };
+        (self.cpu.locked, self.cpu.locked_pc) = (locked, pc);
         true
     }
 }

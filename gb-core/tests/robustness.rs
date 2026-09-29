@@ -204,8 +204,8 @@ fn stop_mode_waits_for_a_button_from_the_web_side() {
     let mut old = gb_core::Emulator::new();
     assert!(old.load_rom(&rom(&STOP, &[])));
     // Cut the tail: stop mode and KEY0, the (empty) mapper block's u16 length, the timing bytes, RP,
-    // the mode-3 length, the speed-switch byte, OPRI, the revision.
-    assert!(old.load_state(&state[..state.len() - 16]));
+    // the mode-3 length, the speed-switch byte, OPRI, the revision, the CPU lock.
+    assert!(old.load_state(&state[..state.len() - 19]));
     old.run_frame();
     assert_ne!(old.get_pc(), 0x0106, "an older state is not in stop mode");
     assert!(emu.load_state(&state));
@@ -299,4 +299,48 @@ fn halt_with_a_pending_stat_interrupt_and_ime_off_does_not_sleep() {
         assert!(!gb.cpu.halted);
     }
     assert_eq!(gb.cpu.regs.a, 0x01);
+}
+
+/// JP $0150; at $0150 EI, then the invalid opcode $D3, with every interrupt enabled.
+fn locks_at_0151() -> GameBoy {
+    let mut r = rom(&[0xC3, 0x50, 0x01], &[]);
+    r[0x150..0x152].copy_from_slice(&[0xFB, 0xD3]);
+    let mut gb = GameBoy::new(r).unwrap();
+    gb.skip_boot_rom();
+    gb.bus.write_byte(0xFFFF, 0x1F);
+    gb
+}
+
+/// An invalid opcode locks the CPU like hardware (Pan Docs: it "will hard-lock the CPU"): no more
+/// fetches, no interrupt wakes it, and the rest of the machine keeps running.
+#[test]
+fn an_invalid_opcode_locks_the_cpu_and_the_machine_runs_on() {
+    let mut gb = locks_at_0151();
+    gb.run_frame().unwrap();
+    assert!(gb.cpu.locked);
+    assert_eq!(gb.cpu.locked_pc, 0x0151, "the address of the $D3");
+    gb.bus.write_byte(0xFF0F, 0x1F); // every interrupt pending, IME on
+    for _ in 0..60 { gb.run_frame().unwrap(); }
+    let (pc, sp) = (gb.cpu.regs.pc, gb.cpu.regs.sp);
+    let (ly, div) = (gb.bus.read_byte(0xFF44), gb.bus.read_byte(0xFF04));
+    for _ in 0..300 { gb.step_instruction().unwrap(); } // 1200 dots
+    assert!(gb.cpu.locked, "an interrupt doesn't wake it");
+    assert_eq!((gb.cpu.regs.pc, gb.cpu.regs.sp), (pc, sp), "no fetch, no dispatch");
+    assert_eq!(pc, 0x0152);
+    assert_ne!(gb.bus.read_byte(0xFF44), ly, "the PPU runs on");
+    assert_ne!(gb.bus.read_byte(0xFF04), div, "the timer runs on");
+}
+
+#[test]
+fn a_locked_cpu_stays_locked_through_a_state_and_an_older_state_loads_unlocked() {
+    let mut gb = locks_at_0151();
+    gb.run_frame().unwrap();
+    let state = gb.save_state();
+    let mut other = locks_at_0151();
+    assert!(other.load_state(&state));
+    assert!(other.cpu.locked);
+    assert_eq!(other.cpu.locked_pc, 0x0151);
+    assert!(other.load_state(&state[..state.len() - 3]), "a state from before the lock bytes");
+    assert!(!other.cpu.locked);
+    assert_eq!(other.cpu.locked_pc, 0);
 }
