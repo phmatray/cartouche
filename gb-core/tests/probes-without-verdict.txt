@@ -28,5 +28,6 @@ gbmicrotest/ppu_sprite_testbench.gb  # raster test bench, draws a frame; no resu
 gbmicrotest/ppu_spritex_vs_scx.gb  # raster test bench, draws a frame; no result
 gbmicrotest/ppu_win_vs_wx.gb  # raster test bench, draws a frame; no result
 gbmicrotest/ppu_wx_early.gb  # raster test bench, draws a frame; no result
+gbmicrotest/temp.gb  # an empty main (`nop`, l.4) runs off the end of the ROM into an invalid opcode and locks the CPU (#276); no $FF82 verdict
 gbmicrotest/toggle_lcdc.gb  # `RESULT $91` (l.5) is never used; toggles LCDC and loops (l.42)
 gbmicrotest/wave_write_to_0xC003.gb  # writes $55 to $C003 forever (l.6-7); no result

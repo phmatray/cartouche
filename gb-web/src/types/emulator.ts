@@ -5,6 +5,8 @@ export interface RegisterState {
   hl: number;
   sp: number;
   pc: number;
+  /** Address of the invalid opcode the CPU locked up on, null while it runs. */
+  locked: number | null;
   flags: {
     z: boolean;
     n: boolean;

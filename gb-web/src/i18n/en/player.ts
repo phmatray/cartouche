@@ -46,6 +46,7 @@ export default {
     ok: 'Overwrite',
   },
   toast: {
+    locked: 'The processor locked up on an invalid instruction at {pc}.',
     resumed: 'Resumed where you left off',
     loadedSlot: 'Loaded slot {n}',
     loadedResume: 'Loaded the resume point',
@@ -202,6 +203,7 @@ export default {
     debugSub: 'Registers, code, memory, serial output and tiles, for development',
   },
   debug: {
+    locked: 'CPU locked up at {pc} (invalid instruction)',
     view: 'Debug view',
     cpu: 'cpu',
     serial: 'serial',

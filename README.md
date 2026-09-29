@@ -186,15 +186,17 @@ crash. They are not counted in the score.
 | Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 30/51 ³ |
 | SameSuite | APU, HDMA and interrupt edge cases (CGB), SGB multiplayer | 78/78 ⁴ |
 | Age | PPU, STAT, OAM/VRAM access and double-speed timing | 36/51 |
-| gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 477/490 ² |
+| gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 477/489 ² |
 | rtc3test | The MBC3 real-time clock | 6/6 |
 
 ¹ Test 7 runs inside the combined `oam_bug.gb`. Run on its own, that ROM
 overruns its 8 KB text log and overwrites its own code, so it cannot finish on
 any emulator. The details are in [CHANGELOG.md](CHANGELOG.md).
 
-² Plus 23 probes with no verdict (not a test), which run without an emulator
-error and are not counted.
+² Plus 24 probes with no verdict (not a test), which run without an emulator
+error and are not counted. One of them, `temp.gb`, runs into an invalid opcode,
+which locks the CPU as on hardware: the screen and sound run on, and the player
+says so.
 
 ³ 18 of the 21 failures are rule-blocked: their reference screenshots show the
 ® that Nintendo's boot ROM leaves in video memory, which Cartouche does not ship,
