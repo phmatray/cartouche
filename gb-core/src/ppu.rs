@@ -531,6 +531,7 @@ impl Ppu {
             (true, false, false) => 0,
             (true, true, false) => 1,
             (true, true, true) => 5,
+            (true, false, true) => 4,
             _ => 2,
         };
         match at.checked_sub(self.mode_clock) {
@@ -836,7 +837,7 @@ impl Ppu {
         // A write catches mode 2's pulse for 2 dots, 3 in double speed and on line 0, whose mode
         // 2 has no early rise (Gambatte `m2enable/late_enable_ly0_lcdoffset2_1/_2` against
         // `late_enable_lcdoffset2_1/_2`).
-        let pulse = if self.ly == 0 { 3 } else { 4 - self.m_cycle_dots / 2 };
+        let pulse = 4 - self.m_cycle_dots / 2;
         let actual = self.compute_stat_line(pulse, early, lyc_write.then_some(lead));
         // In double speed the line's own edge then follows the write's view of LY = LYC for the
         // rest of the line's last 3 dots (line 153: to dot 7), where it would otherwise see the
@@ -902,7 +903,8 @@ impl Ppu {
         // dots, 3 in double speed: on the CPU's M-cycle grid that is the line's first M-cycle, off
         // it (a CGB after a speed switch) no more (Gambatte `m2enable/late_enable_*lcdoffset*`).
         let oam    = ((self.mode == PpuMode::OamScan && !self.lcd_on_line0 || self.mode == PpuMode::VBlank && self.ly == 144)
-            && self.mode_clock < pulse || self.mode2_early_by(early))
+            && self.mode_clock < pulse || self.mode2_early_by(early)
+            || self.mode == PpuMode::VBlank && self.ly == 0 && self.m_cycle_dots == 4 && early == 4 && self.mode_clock >= 454)
             && self.stat & 0x20 != 0;
         // No comparator blank at a line start: the interrupt is requested one M-cycle ahead of the
         // line (the CPU samples IF before its opcode fetch).
@@ -942,8 +944,6 @@ impl Ppu {
         if irq && edge && lead > 0 {
             if (1..=lead).contains(&self.dots_left()) {
                 return match (self.mode, self.ly) {
-                    // A CGB's LYC write already sees 153 there; the line's own edge doesn't.
-                    (PpuMode::VBlank, 152) => (lead > 2).then_some(153),
                     (PpuMode::VBlank, 0 | 153) => Some(0),
                     (_, ly) => Some(ly + 1),
                 };
