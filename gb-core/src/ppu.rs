@@ -452,17 +452,32 @@ impl Ppu {
 
     /// Advance PPU by the given T-cycles. Returns (vblank_irq, stat_irq, hblank_entry).
     pub fn step(&mut self, cycles: u32) -> (bool, bool, bool) {
+        if self.wy_check_in == 0 { self.step_dots(cycles) } else { self.step_wy(cycles) }
+    }
+
+    /// `step` with a WY compare due (`wy_write`): at its dot, inside these dots or at their end.
+    #[inline(never)]
+    fn step_wy(&mut self, cycles: u32) -> (bool, bool, bool) {
         if self.lcdc & 0x80 == 0 {
             return (false, false, false);
         }
-        if self.wy_check_in != 0 && (self.wy_check_in as u32) < cycles {
-            // A WY compare due inside these dots (`wy_write`): the dots before it, then the rest.
-            let before = self.wy_check_in as u32;
-            let a = self.step(before);
-            self.wy_check_in = 0;
-            self.wy_check();
-            let b = self.step(cycles - before);
-            return (a.0 | b.0, a.1 | b.1, a.2 | b.2);
+        let due = self.wy_check_in as u32;
+        if due > cycles {
+            self.wy_check_in -= cycles as u8;
+            return self.step_dots(cycles);
+        }
+        let a = self.step_dots(due);
+        self.wy_check_in = 0;
+        self.wy_check();
+        if due == cycles { return a; }
+        let b = self.step_dots(cycles - due);
+        (a.0 | b.0, a.1 | b.1, a.2 | b.2)
+    }
+
+    #[inline]
+    fn step_dots(&mut self, cycles: u32) -> (bool, bool, bool) {
+        if self.lcdc & 0x80 == 0 {
+            return (false, false, false);
         }
 
         let mut vblank_irq = false;
@@ -533,17 +548,6 @@ impl Ppu {
                         self.ly += 1;
                     }
                 }
-            }
-        }
-
-        if self.wy_check_in != 0 {
-            // Due at the end of these dots (the split above takes it earlier), or later.
-            match (self.wy_check_in as u32).checked_sub(cycles) {
-                Some(0) | None => {
-                    self.wy_check_in = 0;
-                    self.wy_check();
-                }
-                Some(left) => self.wy_check_in = left as u8,
             }
         }
 
