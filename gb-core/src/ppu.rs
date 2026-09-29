@@ -280,6 +280,7 @@ impl Ppu {
                 let was_enabled = self.lcdc & 0x80 != 0;
                 let tile_sel = (self.lcdc ^ value) & 0x10 != 0;
                 self.lcdc = value;
+                self.line.win_was_on |= value & 0x20 != 0;
                 if tile_sel { self.tile_sel_switch(); }
                 let is_enabled = self.lcdc & 0x80 != 0;
                 if was_enabled && !is_enabled {
@@ -1077,6 +1078,22 @@ mod tests {
         assert!(s[43..51].iter().all(|&v| v == 3) && s[51] == 0 && s[52..].iter().all(|&v| v == 3), "{s:?}");
         let s = at(61); // x = 54: inside it
         assert!(s[43..].iter().all(|&v| v == 3), "{s:?}");
+    }
+
+    /// DMG, WX 2-6: LCDC.5 turned off during the window's first tile leaves that tile with its
+    /// 7 - WX pixels dropped, WX + 1 window pixels, and no second tile (Mealybug
+    /// `m3_lcdc_win_en_change_multiple_wx`, lines 2-6). Returns the window widths seen for
+    /// writes swept across the line start.
+    #[test]
+    fn wx_0_6_window_off_in_first_tile() {
+        for wx in 2..=6u8 {
+            let widths: Vec<usize> = (0..40).map(|dot| {
+                let s = shades(&run_line10(|p| { window_setup(p); p.wx = wx; }, |p, d| if d == dot { p.write_register(0xFF40, 0xD1) }), 10);
+                s.iter().take_while(|&&v| v == 3).count()
+            }).collect();
+            assert!(widths.contains(&(wx as usize + 1)), "WX {wx}: {widths:?}");
+            assert!(!widths.contains(&8), "WX {wx}: never a whole first tile: {widths:?}");
+        }
     }
 
     /// Pan Docs' "Mode 3 length" of the current line with the registers as they are: 172, plus the

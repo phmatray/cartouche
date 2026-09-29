@@ -51,7 +51,6 @@ gbmicrotest/vblank_int_if_c.gb  # stat
 mealybug-tearoom-tests/ppu/m3_lcdc_bg_en_change.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_change2.gb@cgb  # ppu-mode3: CGB C reference only; no differing pixel is in the ® tile's footprint
 mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change2.gb@cgb  # ppu-mode3: CGB C reference only; no differing pixel is in the ® tile's footprint
-mealybug-tearoom-tests/ppu/m3_lcdc_win_en_change_multiple_wx.gb@dmg  # ppu-mode3
 age-test-roms/m3-bg-bgp/m3-bg-bgp.gb@dmgC  # ppu-mode3
 age-test-roms/m3-bg-bgp/m3-bg-bgp.gb@ncmBC  # ppu-mode3
 age-test-roms/m3-bg-scx/m3-bg-scx-ds.gb@cgbBCE  # double-speed
