@@ -1451,6 +1451,7 @@ impl Apu {
         self.ch4.clock_length();
     }
 
+    #[inline(never)]
     fn generate_sample(&mut self) {
         if self.sample_buffer.len() >= AUDIO_BUFFER_SIZE {
             return;
