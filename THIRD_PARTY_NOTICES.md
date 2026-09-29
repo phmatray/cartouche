@@ -354,6 +354,12 @@ Cartouche license as `LICENSE.txt`; the in-app Legal page links to all three.
   Rust in `gb-core/src/memory.rs`; and (`Core/sm83_cpu.c`) the M-cycles in which
   the interrupt dispatch pushes PC, in `gb-core/src/cpu.rs`; and (`GB_dma_run`)
   the OAM DMA waiting while the CPU is halted.
+- Also from SameBoy (`Core/memory.c` `GB_hdma_run`, `Core/sm83_cpu.c`): the
+  VRAM DMA (GDMA/HDMA) running after the CPU's opcode fetch, its lead-in and
+  bytes per M-cycle in both speeds, the destination wrapping to the end of the
+  transfer, a late HDMA5 cancel still running a due block, the sources that read
+  $FF, and its bus sharing with a running OAM DMA, ported to Rust in
+  `gb-core/src/memory.rs` and `gb-core/src/cpu.rs`.
 - Also from SameBoy (`Core/display.c`): the window's WY latch, compared as a
   line starts and after WY and LCDC writes (`wy_check`), the WX 0 match range,
   and WX 166 (the next line's window from its second tile on a Game Boy, the
