@@ -1,5 +1,5 @@
 //! Conformance suites: Mooneye (acceptance + emulator-only MBC), Mealybug Tearoom, SameSuite, Age,
-//! gbmicrotest and rtc3test, from the pinned c-sp/game-boy-test-roms archive that
+//! gbmicrotest, rtc3test and Gambatte's hwtests (DMG and CGB rows), from the pinned c-sp/game-boy-test-roms archive that
 //! `scripts/fetch-test-roms.sh` unpacks into test-roms/conformance/ (gitignored, never committed).
 //!
 //! Every ROM of a suite runs and ends as a pass, an expected fail (listed in
@@ -57,6 +57,21 @@ enum Protocol {
     /// rtc3test: presses `presses` in the menu, runs `secs` emulated seconds, then compares the
     /// next complete frame with `reference`.
     Scripted { presses: &'static [JoypadButton], secs: u64, reference: PathBuf },
+    /// A Gambatte hwtest (`gambatte`): 15 frames, then its check.
+    Gambatte(Check),
+}
+
+/// What a Gambatte hwtest's name promises (`gambatte`).
+#[derive(Clone, Debug, PartialEq)]
+enum Check {
+    /// `_out<hex>`: the shown frame's top-left cells display these digits (`hex_verdict`).
+    Hex(String),
+    /// `_outaudio1` / `_outaudio0`: the last frame makes sound, or stays silent (`audio_verdict`).
+    Audio(bool),
+    /// A sibling screenshot: the shown frame, pixel for pixel, in Gambatte's colours.
+    Screen(PathBuf),
+    /// No result in its name (the `*_dumper` ROMs...): listed in probes-without-verdict.txt.
+    Runs,
 }
 
 /// One run of one ROM: `label` is its line in expected-failures.txt.
@@ -160,7 +175,11 @@ fn probe_verdict(gb: &GameBoy, checks: &[(u16, u8)]) -> Verdict {
 /// CGB RGB555 expanded with (x<<3)|(x>>2), as acid2.rs compares.
 fn compare_screen(gb: &GameBoy, hw: Hw, reference: &Path) -> Verdict {
     let to_rgb = if hw == Hw::Dmg { dmg_to_grey } else { cgb_to_rgb };
-    let actual: Vec<[u8; 3]> = gb.bus.ppu.framebuffer.chunks(4).map(to_rgb).collect();
+    compare_frame(gb, &gb.bus.ppu.framebuffer, to_rgb, reference)
+}
+
+fn compare_frame(gb: &GameBoy, frame: &[u8], to_rgb: fn(&[u8]) -> [u8; 3], reference: &Path) -> Verdict {
+    let actual: Vec<[u8; 3]> = frame.chunks(4).map(to_rgb).collect();
     let expected = load_png_rgb(reference);
     if expected.len() != actual.len() {
         return Verdict::Fail(format!("reference is {} pixels, frame {}", expected.len(), actual.len()));
@@ -263,6 +282,9 @@ fn run_scripted(gb: &mut GameBoy, hw: Hw, presses: &[JoypadButton], secs: u64, r
 }
 
 fn run_rom(path: &Path, hw: Hw, protocol: &Protocol, timeout_secs: u64) -> Verdict {
+    if let Protocol::Gambatte(check) = protocol {
+        return run_gambatte(path, hw, check).unwrap_or_else(|e| Verdict::Fail(format!("emulator error: {e}")));
+    }
     // A screenshot names its revision in the reference (Age devices, Mealybug `_cgb_c`).
     let rev = revision(match protocol {
         Protocol::Screenshot(png) => png,
@@ -404,6 +426,11 @@ fn roms(dir: &Path) -> Vec<PathBuf> {
 /// Runs the ROMs under `root/dirs` (`pick` turns each into its jobs, given its path relative to
 /// the conformance directory), in parallel, then reconciles them with expected-failures.txt.
 fn run_suite(suite: &str, root: &str, dirs: &[&str], timeout_secs: u64, pick: fn(&Path, &str) -> Vec<Job>) {
+    run_suite_where(suite, root, dirs, timeout_secs, pick, |_| true);
+}
+
+/// `run_suite` for the runs, and the list entries, whose label `keep` accepts: one row per model.
+fn run_suite_where(suite: &str, root: &str, dirs: &[&str], timeout_secs: u64, pick: fn(&Path, &str) -> Vec<Job>, keep: fn(&str) -> bool) {
     let base = conformance_dir();
     if !base.join(root).is_dir() {
         assert!(std::env::var_os("CARTOUCHE_REQUIRE_ROMS").is_none(), "{suite}: {root} not found");
@@ -418,6 +445,7 @@ fn run_suite(suite: &str, root: &str, dirs: &[&str], timeout_secs: u64, pick: fn
             let rel = rom.strip_prefix(&base).unwrap().to_string_lossy().replace('\\', "/");
             pick(&rom, &rel)
         })
+        .filter(|job| keep(&job.label))
         .collect();
     assert!(!jobs.is_empty(), "{suite}: no ROMs under {root}");
 
@@ -439,7 +467,7 @@ fn run_suite(suite: &str, root: &str, dirs: &[&str], timeout_secs: u64, pick: fn
     results.sort_by(|a, b| a.0.cmp(&b.0));
 
     let in_suite = |set: BTreeSet<String>| -> BTreeSet<String> {
-        set.into_iter().filter(|e| prefixes.iter().any(|p| e.starts_with(&format!("{p}/")))).collect()
+        set.into_iter().filter(|e| keep(e) && prefixes.iter().any(|p| e.starts_with(&format!("{p}/")))).collect()
     };
     let failures = record("expected-failures.txt");
     let expected = in_suite(parse_expected(&failures));
@@ -668,6 +696,242 @@ fn mealybug_tearoom() {
 #[test]
 fn rtc3test_all() {
     run_suite("rtc3test", "rtc3test", &[""], 30, rtc3test);
+}
+
+/// Gambatte's hwtests (pokemon-speedrunning/gambatte-core test/hwtests, prebuilt in the archive):
+/// models and results are in the name, read as its test runner reads them (c-sp's howto, MIT).
+/// `dmg08_cgb04c_out<r>` runs on both, `dmg08_out<r>` on the DMG (and `cgb04c_out<r>` then on the
+/// CGB), any other `_out<r>` on the CGB alone; `<r>` is `audio0`/`audio1` or hex digits. A sibling
+/// `<stem>_dmg08_cgb04c.png` (both), `_dmg08.png` or `_cgb04c.png` is a screenshot. `dmg08` is a
+/// DMG-CPU B/C board (`Revision::Default`), `cgb04c` a CPU CGB C. `_xout`/`_x<model>` results were
+/// not checked on hardware and do not run; a ROM with no result at all only has to run (on the
+/// CGB when it is a .gbc) and must be in probes-without-verdict.txt.
+fn gambatte(rom: &Path, rel: &str) -> Vec<Job> {
+    let s = stem(rom);
+    let job = |hw, check| {
+        let label = format!("{rel}@{}", if hw == Hw::Dmg { "dmg" } else { "cgb" });
+        Job { label, rom: rom.to_path_buf(), hw, protocol: Protocol::Gambatte(check) }
+    };
+    let (dmg, cgb) = if s.contains("dmg08_cgb04c_out") {
+        (Some("dmg08_cgb04c_out"), Some("dmg08_cgb04c_out"))
+    } else if s.contains("dmg08_out") {
+        (Some("dmg08_out"), s.contains("cgb04c_out").then_some("cgb04c_out"))
+    } else {
+        (None, s.contains("_out").then_some("_out"))
+    };
+    let png = |models: &str| Some(rom.with_file_name(format!("{s}_{models}.png"))).filter(|p| p.is_file());
+    let shots = match png("dmg08_cgb04c") {
+        Some(p) => [Some(p.clone()), Some(p)],
+        None => [png("dmg08"), png("cgb04c")],
+    };
+    let mut jobs = Vec::new();
+    for ((hw, token), shot) in [(Hw::Dmg, dmg), (Hw::Cgb, cgb)].into_iter().zip(shots) {
+        if let Some(t) = token {
+            let result = &s[s.find(t).unwrap() + t.len()..];
+            jobs.push(job(
+                hw,
+                match result {
+                    r if r.starts_with("audio0") => Check::Audio(false),
+                    r if r.starts_with("audio1") => Check::Audio(true),
+                    r => Check::Hex(r.chars().take_while(char::is_ascii_hexdigit).collect()),
+                },
+            ));
+        }
+        if let Some(png) = shot {
+            jobs.push(job(hw, Check::Screen(png)));
+        }
+    }
+    if jobs.is_empty() {
+        let hw = if rom.extension().is_some_and(|e| e == "gbc") { Hw::Cgb } else { Hw::Dmg };
+        let probe = job(hw, Check::Runs);
+        assert!(NO_VERDICT.contains(&probe.label), "{}: no result in its name: list it in probes-without-verdict.txt", probe.label);
+        jobs.push(probe);
+    }
+    jobs
+}
+
+/// Gambatte's runner: 15 frames from the post-boot state, then the check, on the last complete
+/// frame (`front`) or on the last frame's sound.
+fn run_gambatte(path: &Path, hw: Hw, check: &Check) -> Result<Verdict, String> {
+    let rev = if hw == Hw::Cgb { Revision::CgbC } else { Revision::Default };
+    let mut gb = match boot(path, hw, rev) {
+        Ok(gb) => gb,
+        Err(e) => return Ok(Verdict::Fail(e)),
+    };
+    // The layer trace gives `tile25_footprint` each line's registers.
+    gb.bus.ppu.set_tracing(matches!(check, Check::Screen(_)));
+    frames(&mut gb, 14)?;
+    gb.bus.apu.clear_samples();
+    frames(&mut gb, 1)?;
+    let front = &gb.bus.ppu.front;
+    Ok(match check {
+        Check::Hex(digits) => hex_verdict(front, &std::fs::read(path).map_err(|e| e.to_string())?, digits),
+        Check::Audio(want_sound) => {
+            // SAFETY: the APU's own buffer, read while `gb` is borrowed and not stepped.
+            let samples = unsafe { std::slice::from_raw_parts(gb.bus.apu.buffer_ptr(), gb.bus.apu.buffer_len()) };
+            audio_verdict(samples, *want_sound)
+        }
+        Check::Screen(png) => compare_frame(&gb, front, if hw == Hw::Dmg { dmg_to_grey } else { gambatte_cgb_to_rgb }, png),
+        Check::Runs => Verdict::Pass,
+    })
+}
+
+/// Where every `_out<hex>` hwtest keeps its font: it copies the glyphs (16 bytes each, 0 to F)
+/// from ROM $7A00 to tile 0 and writes the result's digits as tile numbers from $9800 (hwtests
+/// sources, e.g. window/late_disable_0_dmg08_cgb04c_out0.asm; the same address in all 3 079 `_out`
+/// ROMs of the v7.0 archive).
+const GAMBATTE_FONT: usize = 0x7A00;
+
+/// Digit i passes when the shown frame's 8x8 cell at (8i, 0) draws that digit's glyph, read from
+/// the ROM under test (never Gambatte's runner's bitmaps): one colour for each glyph colour, and
+/// different colours for different ones, whatever the palette.
+fn hex_verdict(frame: &[u8], rom: &[u8], digits: &str) -> Verdict {
+    let glyph = |n: u32| rom.get(GAMBATTE_FONT + 16 * n as usize..).and_then(|g| g.get(..16));
+    for (i, d) in digits.chars().enumerate() {
+        let Some(want) = glyph(d.to_digit(16).unwrap()).filter(|_| i < 20) else {
+            return Verdict::Fail(format!("no cell or glyph for digit {i} ({d})"));
+        };
+        if !cell_shows(frame, i, want) {
+            let shown = (0..16).find(|&n| glyph(n).is_some_and(|g| cell_shows(frame, i, g)));
+            let shown = shown.map_or("no digit".into(), |n| format!("{n:X}"));
+            return Verdict::Fail(format!("cell {i} shows {shown}, expected {}", d.to_ascii_uppercase()));
+        }
+    }
+    Verdict::Pass
+}
+
+fn cell_shows(frame: &[u8], i: usize, glyph: &[u8]) -> bool {
+    let mut colours: [Option<&[u8]>; 4] = [None; 4];
+    for y in 0..8 {
+        for x in 0..8 {
+            let colour = (glyph[2 * y] >> (7 - x) & 1) | (glyph[2 * y + 1] >> (7 - x) & 1) << 1;
+            let px = (y * 160 + i * 8 + x) * 4;
+            let px = &frame[px..px + 3];
+            match colours[colour as usize] {
+                Some(c) if c != px => return false,
+                _ => colours[colour as usize] = Some(px),
+            }
+        }
+    }
+    let shown: Vec<&[u8]> = colours.into_iter().flatten().collect();
+    (1..shown.len()).all(|j| !shown[..j].contains(&shown[j]))
+}
+
+/// Sound is a change in the level before the output capacitor. Cartouche's samples (stereo
+/// pairs) come out of it (apu.rs: out = x - cap, then cap = x - out * 0.996), so a steady level
+/// still decays towards 0. Undone per side: x[n] - x[0] = out[n] - out[0] + 0.004 * sum(out[..n]).
+/// The smallest step a channel makes is above 0.004, float drift well under 0.001.
+fn audio_verdict(samples: &[f32], want_sound: bool) -> Verdict {
+    const KEPT: f64 = 0.996; // apu.rs HIGHPASS_CHARGE
+    let sound = (0..2).any(|side| {
+        let out: Vec<f64> = samples.iter().skip(side).step_by(2).map(|&s| s as f64).collect();
+        let mut sum = 0.0;
+        out.iter().any(|&o| {
+            let moved = (o - out[0] + (1.0 - KEPT) * sum).abs() > 1e-3;
+            sum += o;
+            moved
+        })
+    });
+    match (sound, want_sound) {
+        (true, true) | (false, false) => Verdict::Pass,
+        (false, true) => Verdict::Fail("silent, expected sound".into()),
+        (true, false) => Verdict::Fail("sound, expected silence".into()),
+    }
+}
+
+/// Gambatte's CGB colours from RGB555: R = (13r + 2g + b) / 2, G = (3g + b) * 2,
+/// B = (3r + 2g + 11b) / 2 (c-sp's howto). The core expands x*255/31; recover x first.
+fn gambatte_cgb_to_rgb(p: &[u8]) -> [u8; 3] {
+    let [r, g, b] = [p[0], p[1], p[2]].map(|v| (v as u16 * 31 + 127) / 255);
+    [(r * 13 + g * 2 + b) / 2, (g * 3 + b) * 2, (r * 3 + g * 2 + b * 11) / 2].map(|v| v as u8)
+}
+
+#[test]
+fn gambatte_names() {
+    let checks = |rel: &str| -> Vec<(String, Hw, Check)> {
+        gambatte(Path::new(rel), &format!("gambatte/{rel}"))
+            .into_iter()
+            .map(|j| match j.protocol {
+                Protocol::Gambatte(c) => (j.label, j.hw, c),
+                p => panic!("{p:?}"),
+            })
+            .collect()
+    };
+    let hex = |d: &str| Check::Hex(d.into());
+    assert_eq!(
+        checks("window/late_disable_0_dmg08_cgb04c_out0.gbc"),
+        [
+            ("gambatte/window/late_disable_0_dmg08_cgb04c_out0.gbc@dmg".into(), Hw::Dmg, hex("0")),
+            ("gambatte/window/late_disable_0_dmg08_cgb04c_out0.gbc@cgb".into(), Hw::Cgb, hex("0")),
+        ]
+    );
+    let late_1 = checks("window/late_disable_1_dmg08_out3_cgb04c_out0.gbc");
+    assert_eq!(late_1.iter().map(|(_, hw, c)| (*hw, c.clone())).collect::<Vec<_>>(), [(Hw::Dmg, hex("3")), (Hw::Cgb, hex("0"))]);
+    assert_eq!(checks("dma/hdma_vs_m0int_pc_scx1_1_cgb04c_out1033.gbc")[0].2, hex("1033"));
+    assert_eq!(checks("window/late_disable_ds_1_cgb04c_out0.gbc").len(), 1); // CGB alone
+    assert_eq!(checks("sound/ch1_duty0_pos6_to_pos7_timing_1_dmg08_cgb04c_outaudio1.gbc")[1].2, Check::Audio(true));
+    let dmg_only = checks("sound/x_dmg08_outaudio0_cgb_xoutaudio1lowpitch.gbc");
+    assert_eq!(dmg_only.into_iter().map(|c| (c.1, c.2)).collect::<Vec<_>>(), [(Hw::Dmg, Check::Audio(false))]);
+    assert_eq!(checks("oamdma/oamdma_srcFF00_busyreadC000_dmg08_out1_cgb_xoutblank.gbc").len(), 1); // DMG alone
+    assert_eq!(checks("vram_dumper.gbc"), [("gambatte/vram_dumper.gbc@cgb".into(), Hw::Cgb, Check::Runs)]);
+
+    let dir = std::env::temp_dir().join(format!("cartouche-282-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let png = dir.join("scy_during_m3_1_dmg08.png");
+    std::fs::write(&png, b"").unwrap();
+    let shot = gambatte(&dir.join("scy_during_m3_1.gb"), "gambatte/scy/scy_during_m3_1.gb");
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert_eq!(shot.len(), 1);
+    assert_eq!(shot[0].label, "gambatte/scy/scy_during_m3_1.gb@dmg");
+    assert!(matches!(&shot[0].protocol, Protocol::Gambatte(Check::Screen(p)) if *p == png));
+}
+
+#[test]
+fn gambatte_hex_verdict_reads_the_roms_own_glyph() {
+    let mut rom = vec![0; 0x8000];
+    let glyph = |d: usize| -> Vec<u8> { (0..16).map(|b| (d * 16 + b) as u8 & 0x7E).collect() };
+    for d in 0..16 {
+        rom[GAMBATTE_FONT + d * 16..][..16].copy_from_slice(&glyph(d));
+    }
+    // "3A" drawn in the four DMG greys in cells 0 and 1.
+    let mut frame = vec![0xFF; 160 * 144 * 4];
+    for (i, d) in [3, 10].into_iter().enumerate() {
+        let g = glyph(d);
+        for y in 0..8 {
+            for x in 0..8 {
+                let colour = (g[2 * y] >> (7 - x) & 1) | (g[2 * y + 1] >> (7 - x) & 1) << 1;
+                let px = (y * 160 + i * 8 + x) * 4;
+                frame[px..px + 3].fill([0xFF, 0xAA, 0x55, 0x00][colour as usize]);
+            }
+        }
+    }
+    assert_eq!(hex_verdict(&frame, &rom, "3A"), Verdict::Pass);
+    assert_eq!(hex_verdict(&frame, &rom, "3a"), Verdict::Pass);
+    assert!(matches!(hex_verdict(&frame, &rom, "3B"), Verdict::Fail(_)));
+    assert!(matches!(hex_verdict(&frame, &rom, "3A0"), Verdict::Fail(_))); // cell 2 is blank
+    frame[(160 + 9) * 4] ^= 0x10; // one pixel of cell 1
+    assert!(matches!(hex_verdict(&frame, &rom, "3A"), Verdict::Fail(_)));
+}
+
+#[test]
+fn gambatte_audio_verdict_undoes_the_capacitor() {
+    // A steady level through the capacitor: out[n] = out[0] * 0.996^n on both sides.
+    let steady: Vec<f32> = (0..1470).map(|n| 0.2 * 0.996f32.powi(n / 2)).collect();
+    assert_eq!(audio_verdict(&steady, false), Verdict::Pass);
+    assert!(matches!(audio_verdict(&steady, true), Verdict::Fail(_)));
+    assert_eq!(audio_verdict(&[0.0; 1470], false), Verdict::Pass);
+    // The smallest square wave a channel makes: one volume step of 15, NR50 at 0, 4 channels.
+    let square: Vec<f32> = (0..1470).map(|n| if n / 40 % 2 == 0 { 0.0 } else { 2.0 / 15.0 / 8.0 / 4.0 }).collect();
+    assert_eq!(audio_verdict(&square, true), Verdict::Pass);
+    assert!(matches!(audio_verdict(&square, false), Verdict::Fail(_)));
+}
+
+#[test]
+fn gambatte_cgb_colours() {
+    assert_eq!(gambatte_cgb_to_rgb(&[255, 255, 255, 255]), [248, 248, 248]);
+    assert_eq!(gambatte_cgb_to_rgb(&[0, 0, 0, 255]), [0, 0, 0]);
+    // r = 31 alone: 31 * 13 / 2, 0, 31 * 3 / 2
+    assert_eq!(gambatte_cgb_to_rgb(&[255, 0, 0, 255]), [201, 0, 46]);
 }
 
 #[test]

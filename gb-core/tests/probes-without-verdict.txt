@@ -31,3 +31,103 @@ gbmicrotest/ppu_wx_early.gb  # raster test bench, draws a frame; no result
 gbmicrotest/temp.gb  # an empty main (`nop`, l.4) runs off the end of the ROM into an invalid opcode and locks the CPU (#276); no $FF82 verdict
 gbmicrotest/toggle_lcdc.gb  # `RESULT $91` (l.5) is never used; toggles LCDC and loops (l.42)
 gbmicrotest/wave_write_to_0xC003.gb  # writes $55 to $C003 forever (l.6-7); no result
+
+# Gambatte hwtests whose name gives its runner no result (gambatte-core test/testrunner.cpp reads
+# `dmg08`/`cgb04c` `_out<hex>`, `_outaudio0/1` and `_dmg08`/`_cgb04c` PNGs), per #244 and #281. Each
+# runs its 15 frames, on the CGB for a .gbc and on the DMG for a .gb, and must not stop with an
+# emulator error.
+gambatte/bgtiledata/bgtiledata_spx08_ds_1.gbc@cgb  # no result in its name, which the runner skips
+gambatte/bgtiledata/bgtiledata_spx08_ds_2.gbc@cgb  # no result in its name, which the runner skips
+gambatte/cgb_bgp_dumper.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/cgb_objp_dumper.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/fexx_ffxx_dumper.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/fexx_read_reset_set_dumper.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/halt/ime_noie_nolcdirq_readstat_dmg08_cgb_blank.gb@dmg  # no result in its name, which the runner skips
+gambatte/halt/lycint_dmgpalette_during_m3_1.gb@dmg  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/halt/lycint_dmgpalette_during_m3_2.gb@dmg  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/halt/lycint_dmgpalette_during_m3_3.gb@dmg  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/halt/lycint_dmgpalette_during_m3_4.gb@dmg  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/halt/noime_noie_nolcdirq_readstat_dmg08_cgb_blank.gb@dmg  # no result in its name, which the runner skips
+gambatte/ioregs_reset_dumper.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/jpadirq_1.gbc@cgb  # no result in its name, which the runner skips
+gambatte/jpadirq_2.gbc@cgb  # no result in its name, which the runner skips
+gambatte/m0enable/lycdisable_ff45_ds_2_xout0.gbc@cgb  # `_xout`: a result not verified on hardware, which the runner skips
+gambatte/oamdma/oamdma_src80_oambusy_dumper_1.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdma_srcC0_oambusy_dumper_1.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdmasrc8000_gdmasrcC000_2xgdmalen09_oamdumper_1.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdmasrc8000_gdmasrcC000_2xgdmalen09_vramdumper_1.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdmasrcC000_gdmasrc0000_gdmalen04_oamdumper_1.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdmasrcC000_gdmasrc0000_gdmalen04_oamdumper_ds_1.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdmasrcC000_gdmasrc0000_gdmalen13_oamdumper_ds_1.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdmasrcC000_gdmasrc0000_gdmalen13_vramdumper_ds_1.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdmasrcC000_gdmasrcC000_2xgdmalen09_oamdumper_1.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdmasrcC000_gdmasrcC000_2xgdmalen09_vramdumper_1.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdmasrcC000_gdmasrcC000_gdmalen09_oamdumper_1.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdmasrcC000_gdmasrcC000_gdmalen09_vramdumper_1.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdmasrcC000_gdmasrcC000_gdmalen13_oamdumper_1.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdmasrcC000_gdmasrcC000_gdmalen13_oamdumper_2.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdmasrcC000_gdmasrcC000_gdmalen13_oamdumper_ds_1.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdmasrcC000_gdmasrcC000_gdmalen13_oamdumper_ds_2.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdmasrcC000_gdmasrcC000_gdmalen13_oamdumper_ds_3.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdmasrcC000_gdmasrcC000_gdmalen13_vramdumper_1.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdmasrcC000_gdmasrcC000_gdmalen13_vramdumper_ds_1.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdmasrcC000_gdmasrcC0F0_gdmalen13_oamdumper_1.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/oamdma/oamdmasrcC000_gdmasrcC0F0_gdmalen13_vramdumper_1.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/scx_during_m3/old/offset_3/scx_during_m3_1.gb@dmg  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/offset_3/scx_during_m3_2.gb@dmg  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/offset_3/scx_during_m3_3.gb@dmg  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/offset_3/scx_during_m3_4.gb@dmg  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/offset_3/scx_during_m3_5.gb@dmg  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/offset_3/scx_during_m3_ds_1.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/offset_3/scx_during_m3_ds_2.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/offset_3/scx_during_m3_ds_3.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/offset_3/scx_during_m3_ds_4.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/offset_3/scx_during_m3_ds_5.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/offset_3/scx_during_m3_ds_6.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/offset_3/scx_during_m3_ds_7.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/revoffset_3/scx_during_m3_1.gb@dmg  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/revoffset_3/scx_during_m3_2.gb@dmg  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/revoffset_3/scx_during_m3_3.gb@dmg  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/revoffset_3/scx_during_m3_4.gb@dmg  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/revoffset_3/scx_during_m3_5.gb@dmg  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/revoffset_3/scx_during_m3_ds_1.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/revoffset_3/scx_during_m3_ds_2.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/revoffset_3/scx_during_m3_ds_3.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/revoffset_3/scx_during_m3_ds_4.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/revoffset_3/scx_during_m3_ds_5.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/revoffset_3/scx_during_m3_ds_6.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/revoffset_3/scx_during_m3_ds_7.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/scx_during_m3_1.gb@dmg  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/scx_during_m3_2.gb@dmg  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/scx_during_m3_3.gb@dmg  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/scx_during_m3_4.gb@dmg  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/scx_during_m3_ds_1.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/scx_during_m3_ds_2.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/scx_during_m3_ds_3.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/scx_during_m3_ds_4.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/scx_during_m3_ds_5.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/scx_during_m3_ds_6.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/old/scx_during_m3_ds_7.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/scx_attrib_during_m3_spx0.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/scx_during_m3/scx_attrib_during_m3_spx1.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/sound/ch1_duty0_to_duty3_pos3_1_dmg08_cgb_xoutaudio1.gbc@cgb  # `_xout`: a result not verified on hardware, which the runner skips
+gambatte/sprites/11spritesPrLine_10xposA8.gbc@cgb  # no result in its name, which the runner skips
+gambatte/sprites/late_disable_group_image_1.gb@dmg  # no result in its name, which the runner skips
+gambatte/sprites/late_disable_group_image_2.gb@dmg  # no result in its name, which the runner skips
+gambatte/sprites/late_disable_group_image_3.gb@dmg  # no result in its name, which the runner skips
+gambatte/sprites/late_disable_group_image_4.gb@dmg  # no result in its name, which the runner skips
+gambatte/sprites/late_disable_group_image_5.gb@dmg  # no result in its name, which the runner skips
+gambatte/sprites/late_disable_group_image_6.gb@dmg  # no result in its name, which the runner skips
+gambatte/sprites/late_disable_group_image_7.gb@dmg  # no result in its name, which the runner skips
+gambatte/sprites/late_disable_group_image_8.gb@dmg  # no result in its name, which the runner skips
+gambatte/sprites/late_disable_group_image_9.gb@dmg  # no result in its name, which the runner skips
+gambatte/sprites/late_disable_scx5_1.gb@dmg  # no result in its name, which the runner skips
+gambatte/sprites/late_disable_scx5_2.gb@dmg  # no result in its name, which the runner skips
+gambatte/sprites/late_disable_sp00x18_1.gb@dmg  # no result in its name, which the runner skips
+gambatte/sprites/late_disable_sp00x18_2.gb@dmg  # no result in its name, which the runner skips
+gambatte/sprites/sprite_late_enable_spx19_2_dmg08_xout0.gb@dmg  # `_xout`: a result not verified on hardware, which the runner skips
+gambatte/sram.gbc@cgb  # no result in its name, which the runner skips
+gambatte/vram_dumper.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
+gambatte/window/on_screen/late_wx_ds_1.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/window/on_screen/late_wx_ds_2.gbc@cgb  # only a `<stem>.png` naming no model, which the runner never reads
+gambatte/wram_dumper.gbc@cgb  # dumper: upstream compares it with a hardware memory dump (a .bin not in the archive)
