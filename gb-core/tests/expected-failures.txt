@@ -46,11 +46,6 @@ age-test-roms/stat-mode/stat-mode-cgbE.gb  # stat
 age-test-roms/stat-mode/stat-mode-ncmE.gb  # stat
 age-test-roms/vram/vram-read-cgbBCE.gb  # ppu
 age-test-roms/vram/vram-read-ncmBCE.gb  # ppu
-gbmicrotest/000-oam_lock.gb  # no-verdict
-gbmicrotest/000-write_to_x8000.gb  # no-verdict
-gbmicrotest/001-vram_unlocked.gb  # no-verdict
-gbmicrotest/002-vram_locked.gb  # no-verdict
-gbmicrotest/004-tima_boot_phase.gb  # no-verdict
 gbmicrotest/004-tima_cycle_timer.gb  # no-verdict
 gbmicrotest/007-lcd_on_stat.gb  # no-verdict
 gbmicrotest/400-dma.gb  # no-verdict
@@ -115,7 +110,6 @@ gbmicrotest/lyc1_int_if_edge_c.gb  # stat
 gbmicrotest/lyc1_write_timing_b.gb  # stat
 gbmicrotest/lyc1_write_timing_c.gb  # stat
 gbmicrotest/minimal.gb  # no-verdict
-gbmicrotest/mode2_stat_int_to_oam_unlock.gb  # no-verdict
 gbmicrotest/oam_int_halt_a.gb  # ppu
 gbmicrotest/oam_int_halt_b.gb  # ppu
 gbmicrotest/oam_int_if_level_d.gb  # ppu
@@ -123,7 +117,6 @@ gbmicrotest/oam_int_inc_sled.gb  # ppu
 gbmicrotest/oam_int_nops_a.gb  # ppu
 gbmicrotest/oam_int_nops_b.gb  # ppu
 gbmicrotest/oam_sprite_trashing.gb  # no-verdict
-gbmicrotest/poweron.gb  # no-verdict
 gbmicrotest/ppu_scx_vs_bgp.gb  # no-verdict
 gbmicrotest/ppu_sprite_testbench.gb  # no-verdict
 gbmicrotest/ppu_spritex_vs_scx.gb  # no-verdict

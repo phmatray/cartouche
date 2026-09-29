@@ -42,6 +42,9 @@ enum Protocol {
     Fibonacci,
     /// gbmicrotest: $FF82 becomes $01 (pass) or $FF (fail).
     Hram,
+    /// A gbmicrotest probe (no $FF82 verdict) whose source records the hardware value: each
+    /// (address, byte) must hold when the run's budget ends.
+    Probe { checks: &'static [(u16, u8)] },
     /// Stops on `LD B,B`; the frame must match the reference PNG pixel for pixel.
     Screenshot(PathBuf),
     /// rtc3test: presses `presses` in the menu, runs `secs` emulated seconds, then compares the
@@ -94,6 +97,27 @@ fn hram_verdict(byte: u8) -> Option<Verdict> {
         0x00 => None,
         0x01 => Some(Verdict::Pass),
         b => Some(Verdict::Fail(format!("$FF82 = ${b:02X}"))),
+    }
+}
+
+/// VRAM is read directly, so a probe's result is seen whatever mode the PPU is in.
+fn probe_byte(gb: &GameBoy, addr: u16) -> u8 {
+    match addr {
+        0x8000..=0x9FFF => gb.bus.ppu.vram[(addr - 0x8000) as usize],
+        _ => gb.bus.read_byte(addr),
+    }
+}
+
+fn probe_verdict(gb: &GameBoy, checks: &[(u16, u8)]) -> Verdict {
+    let wrong: Vec<String> = checks
+        .iter()
+        .filter(|&&(addr, want)| probe_byte(gb, addr) != want)
+        .map(|&(addr, want)| format!("${addr:04X} = ${:02X}, source records ${want:02X}", probe_byte(gb, addr)))
+        .collect();
+    if wrong.is_empty() {
+        Verdict::Pass
+    } else {
+        Verdict::Fail(wrong.join(", "))
     }
 }
 
@@ -171,7 +195,10 @@ fn run_rom(path: &Path, hw: Hw, protocol: &Protocol, timeout_secs: u64) -> Verdi
             Err(e) => return Verdict::Fail(format!("emulator error: {e}")),
         }
     }
-    Verdict::Fail("timeout".into())
+    match protocol {
+        Protocol::Probe { checks } => probe_verdict(&gb, checks),
+        _ => Verdict::Fail("timeout".into()),
+    }
 }
 
 /// The entries of expected-failures.txt: `#` starts a comment, blank lines are ignored.
@@ -365,9 +392,34 @@ fn age_all() {
     run_suite("Age", "age-test-roms", &[""], 30, age);
 }
 
+/// gbmicrotest probes that write no $FF82 verdict but whose source (aappleby/gbmicrotest
+/// tests/<stem>.s, commit 463eb6b, built with -DDMG) records what the hardware leaves behind. Each
+/// probe loops storing its result to $8000; "dots" in a source table is that pattern, $55, and
+/// "black" is $FF (tile 0's low bitplane read through the boot BGP $FC).
+const PROBE_ORACLES: &[(&str, &[(u16, u8)])] = &[
+    // l.15 "69 - black" with l.32 DELAY 69: OAM reads $FF while locked
+    ("000-oam_lock", &[(0x8000, 0xFF)]),
+    // l.3 "We should be able to write our dotted line pattern to vram on startup."
+    ("000-write_to_x8000", &[(0x8000, 0x55)]),
+    // l.5 "3  - dots" with l.8 DELAY 3
+    ("001-vram_unlocked", &[(0x8000, 0x55)]),
+    // l.19 "71 - stat 10000100 - hblank line 0 starts here" with l.81 DELAY 71 (DMG)
+    ("002-vram_locked", &[(0x8000, 0x84)]),
+    // l.10 PASS 10 (DMG), l.31 `add $55 - PASS`: the four TIMA reads sum to 10, leaving $55
+    ("004-tima_boot_phase", &[(0x8000, 0x55)]),
+    // l.3-4 "correct - 54 - black" with l.11 DELAY 54: OAM still locked, reads $FF
+    ("mode2_stat_int_to_oam_unlock", &[(0x8000, 0xFF)]),
+    // l.4 "NR10 FF10 0b10000000" (read mask): $00 written to NR10 reads back $80
+    ("poweron", &[(0x8000, 0x80)]),
+];
+
 /// gbmicrotest runs on the DMG it was checked on (DMG-CPU B/C).
 fn gbmicrotest(rom: &Path, rel: &str) -> Vec<Job> {
-    vec![Job { label: rel.to_string(), rom: rom.to_path_buf(), hw: Hw::Dmg, protocol: Protocol::Hram }]
+    let protocol = match PROBE_ORACLES.iter().find(|(s, _)| *s == stem(rom)) {
+        Some(&(_, checks)) => Protocol::Probe { checks },
+        None => Protocol::Hram,
+    };
+    vec![Job { label: rel.to_string(), rom: rom.to_path_buf(), hw: Hw::Dmg, protocol }]
 }
 
 #[test]
@@ -380,6 +432,16 @@ fn hram_verdict_decoding() {
     assert_eq!(hram_verdict(0x00), None);
     assert_eq!(hram_verdict(0x01), Some(Verdict::Pass));
     assert!(matches!(hram_verdict(0xFF), Some(Verdict::Fail(_))));
+}
+
+#[test]
+fn probe_verdict_compares_bytes() {
+    let mut rom = vec![0; 0x8000];
+    rom[0x14D] = 0xE7; // header checksum of an all-zero header
+    let mut gb = GameBoy::new(rom).unwrap();
+    gb.bus.ppu.vram[0] = 0x55;
+    assert_eq!(probe_verdict(&gb, &[(0x8000, 0x55)]), Verdict::Pass);
+    assert!(matches!(probe_verdict(&gb, &[(0x8000, 0x55), (0x8001, 0x01)]), Verdict::Fail(_)));
 }
 
 /// Mealybug Tearoom ships one expected screenshot per model next to each ROM. The DMG one
