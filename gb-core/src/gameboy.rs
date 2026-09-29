@@ -321,6 +321,12 @@ impl GameBoy {
     /// for the partner's byte (`bus.serial.stalled()`), and on a breakpoint (`take_break`); the
     /// next call finishes that frame.
     pub fn run_frame(&mut self) -> Result<(), EmulatorError> {
+        let result = self.run_frame_cycles();
+        self.bus.apu_catch_up(); // callers read the samples, registers and state
+        result
+    }
+
+    fn run_frame_cycles(&mut self) -> Result<(), EmulatorError> {
         self.bus.ir_light_in = false; // alone: no partner's light (only `run_linked_frame` sets it)
         if self.frame_cycles == 0 {
             self.bus.ppu.frame_ready = false;
@@ -497,7 +503,9 @@ impl GameBoy {
     pub fn step_instruction(&mut self) -> Result<u32, EmulatorError> {
         self.bus.cycle_count = 0;
         self.cpu.handle_interrupts(&mut self.bus);
-        self.cpu.step(&mut self.bus)?;
+        let stepped = self.cpu.step(&mut self.bus);
+        self.bus.apu_catch_up();
+        stepped?;
         self.double_speed = self.bus.double_speed;
         if let Some(w) = &mut self.bus.watch {
             w.hit = None; // a step stops anyway: no break left over for the next run_frame
@@ -511,6 +519,7 @@ impl GameBoy {
     }
 
     pub fn save_state(&self) -> Vec<u8> {
+        debug_assert_eq!(self.bus.apu_pending, 0, "the APU catches up before control returns");
         let mut data = Vec::with_capacity(65536);
 
         data.extend_from_slice(SAVE_MAGIC);
