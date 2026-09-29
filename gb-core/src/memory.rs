@@ -967,6 +967,19 @@ mod tests {
         assert_eq!(run(0xE0, 0xFF80, 0).ppu.read_oam(3), 0xFF, "from $E000: $FF");
     }
 
+    /// A DMA from $FE00 copies work RAM's $DE00 page on a DMG, $FF on a CGB (the external bus).
+    #[test]
+    fn dma_from_fe00_copies_per_model() {
+        for (cgb, want) in [(false, 0x5A), (true, 0xFF)] {
+            let mut bus = bus();
+            (bus.cgb_mode, bus.ppu.cgb_mode) = (cgb, cgb);
+            bus.write_byte(0xDE07, 0x5A);
+            bus.write_byte(0xFF46, 0xFE);
+            for _ in 0..162 { bus.cycle_tick(); }
+            assert_eq!(bus.read_byte(0xFE07), want, "CGB {cgb}");
+        }
+    }
+
     /// A CGB read during a DMA: the DMA's byte on its own bus, $FF on the external bus from
     /// $E000+, work RAM's remapped bank from the external bus, the addressed byte elsewhere; a
     /// VRAM read during a VRAM DMA clears the OAM byte copied that M-cycle.
