@@ -960,12 +960,14 @@ mod tests {
     }
 
     /// A dispatch takes the timer interrupt already requested; TIMA overflowing again in its M4
-    /// is taken with it (IF.2 clear afterwards), in its M5 it retriggers (IF.2 set): the bit is
-    /// let go at M5's sampling point, which the TIMA reload misses (Gambatte `tc00_irq_late_retrigger_1..3`).
+    /// is taken with it (IF.2 clear afterwards), in its M5 it retriggers (IF.2 set) on a DMG: the
+    /// bit is let go at M5's sampling point, which the TIMA reload misses there but not on a CGB
+    /// (Gambatte `tc00_irq_late_retrigger_1..3`).
     #[test]
     fn source_rising_after_dispatch_clear_retriggers() {
-        for (m, retriggers) in [(3, false), (4, false), (5, true)] {
+        for (m, cgb, retriggers) in [(3, false, false), (4, false, false), (5, false, true), (4, true, false), (5, true, false)] {
             let mut bus = bus();
+            bus.cgb_mode = cgb;
             // TAC 4: DIV bit 9 falls when the counter reaches $400, `m` M-cycles into the dispatch.
             (bus.timer.div_counter, bus.timer.tima, bus.timer.tac) = (0x400 - 4 * m, 0xFF, 0x04);
             (bus.interrupts.interrupt_enable, bus.interrupts.interrupt_flag) = (TIMER_BIT, TIMER_BIT);
@@ -974,7 +976,7 @@ mod tests {
             cpu.handle_interrupts(&mut bus);
             assert_eq!(cpu.regs.pc, 0x50, "M{m}: dispatched");
             assert_eq!(bus.timer.tima, 0x00, "M{m}: overflowed during the dispatch");
-            assert_eq!(bus.interrupts.interrupt_flag & TIMER_BIT != 0, retriggers, "overflow in M{m}");
+            assert_eq!(bus.interrupts.interrupt_flag & TIMER_BIT != 0, retriggers, "overflow in M{m}, CGB {cgb}");
         }
     }
 

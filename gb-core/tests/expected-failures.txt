@@ -981,8 +981,6 @@ gambatte/serial/start_wait_sc80_read_if_1_dmg08_cgb04c_outE0.gbc@cgb  # serial
 gambatte/serial/start_wait_sc80_read_if_1_dmg08_cgb04c_outE0.gbc@dmg  # serial
 gambatte/serial/start_wait_stop_read_if_1_dmg08_cgb04c_outE0.gbc@cgb  # serial
 gambatte/serial/start_wait_stop_read_if_1_dmg08_cgb04c_outE0.gbc@dmg  # serial
-gambatte/serial/start_wait_trigger_int8_read_if_2_dmg08_outE8_cgb04c_outE0.gbc@cgb  # serial
-gambatte/serial/start_wait_trigger_int8_read_if_ds_2_cgb04c_outE0.gbc@cgb  # serial
 gambatte/sound/ch1_duty0_pos6_to_pos7_timing_ds_6_cgb04c_outaudio1.gbc@cgb  # apu
 gambatte/sound/ch1_duty0_to_duty3_pos3_2_dmg08_cgb04c_outaudio0.gbc@cgb  # apu
 gambatte/sound/ch1_duty0_to_duty3_pos3_2_dmg08_cgb04c_outaudio0.gbc@dmg  # apu
@@ -1075,8 +1073,6 @@ gambatte/sprites/sprite_late_disable_spx1A_1_dmg08_out0.gb@dmg  # ppu-mode3
 gambatte/sprites/sprite_late_late_disable_spx1A_1_dmg08_out0.gb@dmg  # ppu-mode3
 gambatte/tima/tc00_irq_ds_1_cgb04c_outE0.gbc@cgb  # timer
 gambatte/tima/tc00_irq_ds_2_cgb04c_outE4.gbc@cgb  # timer
-gambatte/tima/tc00_irq_late_retrigger_2_dmg08_outE4_cgb04c_outE0.gbc@cgb  # timer
-gambatte/tima/tc00_irq_late_retrigger_ds_2_cgb04c_outE0.gbc@cgb  # timer
 gambatte/tima/tc00_start_2_cgb04c_outF1.gbc@cgb  # timer
 gambatte/vram_m3/preread_lcdoffset2_1_cgb04c_out0.gbc@cgb  # ppu-mode3
 gambatte/vram_m3/prewrite_lcdoffset2_1_cgb04c_out1.gbc@cgb  # ppu-mode3

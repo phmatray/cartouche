@@ -183,6 +183,19 @@ mod tests {
         }
     }
 
+    /// Stopping the timer (TAC bit 2) while its input bit is high is a falling edge, starting it
+    /// is not: a stop/start pair ticks TIMA once, whichever DIV phase it lands on (Gambatte
+    /// `tc01_1stopstart[_offset1..3]_irq`, `_ff_tma`).
+    #[test]
+    fn tac_stop_start_glitch_increments() {
+        for div in (0..16u16).step_by(4) {
+            let mut t = Timer { div_counter: div, tac: 0x05, ..Timer::new() };
+            t.write(0xFF07, 0x01);
+            t.write(0xFF07, 0x05);
+            assert_eq!(t.tima, u8::from(div & 8 != 0), "DIV {div:#x}: bit 3 high ticks once");
+        }
+    }
+
     #[test]
     fn overflow_reloads_one_m_cycle_later_and_a_tima_write_cancels_it() {
         // TAC 5 (16 cycles), DIV one M-cycle before the falling edge of bit 3.

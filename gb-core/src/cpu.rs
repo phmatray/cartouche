@@ -1,4 +1,5 @@
 use crate::error::CpuError;
+use crate::interrupts::{SERIAL_BIT, TIMER_BIT};
 use crate::memory::MemoryBus;
 use crate::registers::Registers;
 
@@ -76,13 +77,16 @@ impl Cpu {
         bus.write_access(self.regs.sp, pc as u8);
         bus.interrupts.interrupt_flag &= !bit;
         bus.cycle_tick(); // M5: jump to vector
-        // The bit is let go at the halted CPU's sampling point of M5, in single speed: that source
-        // rising again before it is absorbed, after it (`late_interrupts`) it retriggers. Every
-        // source pins it from both sides (Gambatte `*_late_retrigger_1/2`: mode 0 at SCX 0 and 1,
-        // mode 2, LY = LYC, VBlank, TIMA, serial). In double speed the M4 clear is the last.
-        if !bus.double_speed {
-            bus.interrupts.interrupt_flag &= !(bit & bus.if_late & !bus.late_interrupts());
-        }
+        // The bit is let go at the halted CPU's sampling point of M5: that source rising again
+        // before it is absorbed, after it (`late_interrupts`) it retriggers. Every source pins it
+        // from both sides (Gambatte `*_late_retrigger_1/2`: mode 0 at SCX 0 and 1, mode 2,
+        // LY = LYC, VBlank, TIMA, serial). On a CGB the sources clocked from DIV, TIMA and serial,
+        // rise before that point, in both speeds (`tc00_irq_late_retrigger_2/_ds_2` and
+        // `start_wait_trigger_int8_read_if_2/_ds_2`: $E0 on the CGB, $E4/$E8 on the DMG); in double
+        // speed the PPU's rise after it (`*_late_retrigger_ds_1`).
+        let div = if bus.cgb_mode || bus.ppu.compat { TIMER_BIT | SERIAL_BIT } else { 0 };
+        let late = if bus.double_speed { !div } else { bus.late_interrupts() & !div };
+        bus.interrupts.interrupt_flag &= !(bit & bus.if_late & !late);
         self.regs.pc = vector;
     }
 
