@@ -13,11 +13,13 @@
 //! - `info`: 4 bytes per pixel: `[layer, slot, ids, attr]`
 //!   - layer: where the shown pixel came from, `LAYER_BG` / `LAYER_WIN` / `LAYER_OBJ`
 //!   - slot: OAM index (0..40) of the claiming OBJ, `NO_OBJ` when none
-//!   - ids: bits 0-1 BG/window colour id, bit 2 CGB BG-to-OBJ tile priority, bits 4-5 OBJ colour id
+//!   - ids: bits 0-1 BG/window colour id, bit 2 CGB BG-to-OBJ tile priority, bit 3 the BG/window
+//!     tile's data read (at least partly) from $8000-$8FFF, bits 4-5 OBJ colour id
 //!   - attr: OAM attribute byte of the claiming OBJ
 //! - `tile`: 1 byte per pixel, the BG/window tile number the pixel was fetched with (after any
 //!   mid-line SCX/SCY/LCDC write, as the fetcher read the map). 0 where no tile was fetched (the
-//!   colour-0 pixel of a WX re-match). The VRAM bank (CGB attribute bit 3) is not recorded.
+//!   colour-0 pixel of a WX re-match), or the OBJ's tile when a CGB TILE_SEL write fed the
+//!   fetch an OBJ row. The VRAM bank (CGB attribute bit 3) is not recorded.
 //! - `meta`: `META_LEN` bytes. Header (`HEADER_LEN`): "CTRC", version, cgb, rendered line count,
 //!   compat (a DMG cartridge coloured by a CGB: BGP picks from BG CRAM palette 0), frame number
 //!   (u32 LE). Then one `LINE_LEN` record per scanline (see [`line`]), then the

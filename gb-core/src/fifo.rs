@@ -69,6 +69,12 @@ pub(crate) struct Fetcher {
     /// A DMG and a CGB C read SCY again for each data byte.
     pub row: u8,
     pub window: bool,
+    /// The tile the layer trace records for the pushed pixels: `tile`, or the OBJ's tile when a
+    /// CGB TILE_SEL write gave one of the reads that OBJ's data (`tile_sel_switch`).
+    pub trace_tile: u8,
+    /// A data byte came from $8000-$8FFF (LCDC.4 set at its read, or an OBJ row): with
+    /// `trace_tile`, which tile the layer trace records (bit 3 of its `ids`).
+    pub from_8000: bool,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -171,6 +177,8 @@ pub(crate) struct LineState {
     /// WX before the last write, and the last dot the window still compares it (`wx_seen`).
     pub wx_old: u8,
     pub wx_dot: u32,
+    /// The high byte of the last OBJ row fetched (kept from line to line), and its tile.
+    pub sel_obj: Option<(u8, u8)>,
 }
 
 impl Ppu {
@@ -197,6 +205,7 @@ impl Ppu {
             // Line 0 draws one M-cycle earlier after the mode 2 interrupt than the other lines
             // (Mealybug's DMG ROMs make up for it by waiting one M-cycle less on line 0).
             lead: if self.ly == 0 && !self.lcd_on_line0 { 4 } else { 0 },
+            sel_obj: self.line.sel_obj,
             ..LineState::default()
         };
         if self.trace.is_some() {
@@ -338,14 +347,17 @@ impl Ppu {
                     if self.cgb_mode { self.line.fetcher.attr = self.vram[0x2000 + at]; }
                     self.line.fetcher.row = self.bg_row();
                 }
+                self.line.fetcher.trace_tile = self.line.fetcher.tile;
                 self.line.fetcher.step = FetchStep::DataLo;
             }
             FetchStep::DataLo => {
                 self.line.fetcher.lo = self.vram[self.fetch_addr()];
+                self.line.fetcher.from_8000 = self.lcdc & 0x10 != 0;
                 self.line.fetcher.step = FetchStep::DataHi;
             }
             FetchStep::DataHi => {
                 self.line.fetcher.hi = self.vram[self.fetch_addr() + 1];
+                self.line.fetcher.from_8000 |= self.lcdc & 0x10 != 0;
                 self.line.fetcher.half = true; // at Push: the high byte was read on the last dot
                 if self.line.first_fetch {
                     // The fine scroll is latched as the first fetch ends (Mealybug `m3_window_timing_wx_0`
@@ -362,9 +374,10 @@ impl Ppu {
                 } else {
                     // The tile rides in `oam_index` for the layer trace. Read here from `self`, not
                     // `f`: as `f.tile`, the compiler loads it on every fetcher dot, not once a push.
-                    let tile = self.line.fetcher.tile;
+                    let tile = self.line.fetcher.trace_tile;
                     let bg = &mut self.line.bg;
-                    let (palette, bg_priority) = (f.attr & 7, f.attr & 0x80 != 0);
+                    // Bit 3 of a BG pixel's palette: `from_8000`, for the layer trace.
+                    let (palette, bg_priority) = (f.attr & 7 | (f.from_8000 as u8) << 3, f.attr & 0x80 != 0);
                     for i in 0..8 {
                         let bit = if f.attr & 0x20 != 0 { i } else { 7 - i };
                         let color = (f.hi >> bit & 1) << 1 | (f.lo >> bit & 1);
@@ -396,21 +409,37 @@ impl Ppu {
     /// address. Fitted to Mealybug `m3_lcdc_tile_sel_change` (CGB D) and Age `m3-bg-lcdc`
     /// (CGB B-E), both directions; a write one dot later or earlier reads plainly, and so does
     /// every write in double speed (Age `m3-bg-lcdc-ds`), which lands elsewhere in the dot.
+    /// A write that sets LCDC.4 once an OBJ has been fetched gives instead the high byte of the
+    /// last OBJ row fetched, on any line before (Matt Currie's PPU notes, TILE_SEL: "bitplane 1
+    /// data from the most recently drawn sprite"). Mealybug `m3_lcdc_tile_sel_change` and
+    /// `m3_lcdc_tile_sel_win_change` (CGB D: the tile row beside the first line of an OBJ, which
+    /// takes the previous line's OBJ row), `m3_lcdc_tile_sel_change2` and
+    /// `m3_lcdc_tile_sel_win_change2` (CGB C: 126 and 109 pixels fewer differ).
     pub(crate) fn tile_sel_switch(&mut self) {
         if !(self.cgb_mode || self.compat) || self.m_cycle_dots != 4 || !self.line.active || self.mode != crate::ppu::PpuMode::Drawing {
             return;
         }
         let f = self.line.fetcher;
-        match (f.step, f.half) {
-            (FetchStep::DataHi, false) => self.line.fetcher.lo = f.tile & self.vram[self.fetch_addr()],
-            (FetchStep::Push, true) => self.line.fetcher.hi = f.tile & self.vram[self.fetch_addr() + 1],
-            _ => {}
-        }
+        let hi = match (f.step, f.half) {
+            (FetchStep::DataHi, false) => false,
+            (FetchStep::Push, true) => true,
+            _ => return,
+        };
+        let byte = match self.line.sel_obj {
+            // Set: the high byte of the last OBJ row fetched.
+            Some((obj_hi, obj_tile)) if self.lcdc & 0x10 != 0 => {
+                (self.line.fetcher.trace_tile, self.line.fetcher.from_8000) = (obj_tile, true);
+                obj_hi
+            }
+            _ => f.tile & self.vram[self.fetch_addr() + hi as usize],
+        };
+        if hi { self.line.fetcher.hi = byte } else { self.line.fetcher.lo = byte }
     }
 
     /// The OBJ fetch: reads the OBJ's row and merges it into the OBJ FIFO, `shift` pixels already past.
     fn fetch_obj(&mut self, i: usize, shift: u8) {
         let a = self.obj_row(i);
+        self.line.sel_obj = Some((self.vram[a + 1], (a >> 4) as u8));
         self.merge_obj(i, shift, self.vram[a], self.vram[a + 1]);
     }
 
@@ -442,6 +471,7 @@ impl Ppu {
     fn obj_hi(&mut self, i: u8, lo: u8) {
         self.line.obj_fetch = None;
         let a = self.obj_row(i as usize);
+        self.line.sel_obj = Some((self.vram[a + 1], (a >> 4) as u8));
         self.merge_obj(i as usize, 0, lo, self.vram[a + 1]);
     }
 
@@ -632,7 +662,7 @@ impl Ppu {
             bg_id = bg.color;
             shown = obj_on && (self.lcdc & 0x01 == 0 || bg_id == 0 || !(obj.bg_priority || bg.bg_priority));
             obj_color = obj_on.then(|| self.get_obj_cram_color(obj.palette, obj.color));
-            bg_color = self.get_bg_cram_color(bg.palette, bg_id);
+            bg_color = self.get_bg_cram_color(bg.palette & 7, bg_id);
         } else {
             // A DMG shows the dot of a BGP write with both values mixed, a CGB (compatibility mode)
             // the new one (Mealybug `m3_bgp_change`).
@@ -650,7 +680,7 @@ impl Ppu {
         let line = self.ly as usize;
         self.set_pixel(x, line, if shown { obj_color.unwrap() } else { bg_color });
         if self.trace.is_some() {
-            self.trace_pixel(x, window, bg_id | (bg.bg_priority as u8) << 2, bg.oam_index, bg_color, obj, obj_color, shown);
+            self.trace_pixel(x, window, bg_id | (bg.bg_priority as u8) << 2 | bg.palette & 8, bg.oam_index, bg_color, obj, obj_color, shown);
         }
     }
 

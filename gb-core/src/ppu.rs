@@ -1397,6 +1397,36 @@ mod tests {
         assert!(!colours(Revision::Default).contains(&2));
     }
 
+    /// CGB: LCDC.4 set on the dot a tile data read lands on gives that read the high byte of the
+    /// last OBJ row fetched ($A5 here: colours 1,0,1,0,0,1,0,1 as a low byte). The BG tile is blank
+    /// at $8800 and at $8000; the OBJ (X 8, tile 1) is fetched before the first pixel.
+    #[test]
+    fn cgb_tile_sel_set_takes_last_obj_row() {
+        let patterns = |cgb: bool, obj: bool| -> Vec<Vec<u8>> {
+            (16..80).map(|dot| {
+                let p = run_line10(|p| {
+                    (p.cgb_mode, p.lcdc) = (cgb, 0x83);
+                    if obj { p.oam[0..4].copy_from_slice(&[10 + 16, 8, 1, 0]); }
+                    p.vram[0x11] = 0xA5; // tile 1, row 0: high byte
+                    for (c, rgb) in [0x7FFFu16, 0x001F, 0x03E0, 0x7C00].iter().enumerate() {
+                        p.bg_cram[c * 2..c * 2 + 2].copy_from_slice(&rgb.to_le_bytes());
+                    }
+                }, |p, d| if d == dot { p.write_register(0xFF40, 0x93) });
+                let ids: Vec<u8> = if cgb {
+                    let row = &p.framebuffer[10 * SCREEN_WIDTH * 4..11 * SCREEN_WIDTH * 4];
+                    row.chunks(4).map(|c| [[255, 255, 255], [255, 0, 0], [0, 255, 0], [0, 0, 255]].iter().position(|k| k[..] == c[..3]).unwrap_or(9) as u8).collect()
+                } else {
+                    shades(&p, 10)
+                };
+                ids[8..].chunks(8).find(|t| t.iter().any(|&c| c != 0)).map_or(vec![], |t| t.to_vec())
+            }).collect()
+        };
+        let obj_row = vec![1, 0, 1, 0, 0, 1, 0, 1];
+        assert!(patterns(true, true).contains(&obj_row), "{:?}", patterns(true, true));
+        assert!(!patterns(true, false).contains(&obj_row), "no OBJ fetched: the tile number rule");
+        assert!(!patterns(false, true).contains(&obj_row), "a DMG reads plainly");
+    }
+
     /// CGB tile attributes: map entry 0 uses bank 1 and flips X and Y; its tile has one dark
     /// pixel at row 0, column 0 in bank 1 (and nothing in bank 0), so it shows at row 7, column 7.
     #[test]
