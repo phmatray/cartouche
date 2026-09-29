@@ -45,6 +45,11 @@ const OUT_DELAY: [u32; 2] = [1, 3];
 /// `m3_lcdc_obj_size_change_scx`, DMG and CGB: an 8x16 → 8x8 write between the two reads gives
 /// the 8x8 low byte with the 8x16 high byte).
 const OBJ_LO_AT: [u8; 2] = [1, 2];
+/// The dot the fine-scroll drop compares its first pixel with SCX (`drop_dot`): DMG, CGB, CGB in
+/// double speed. Gambatte `scx_during_m3/scx_0360c0`, `scx_0761c0` and `scx_m3_extend` pin each from
+/// both sides (a write 4 dots earlier or later, 2 in double speed), `ly0_late_scx7_m3stat_*` line 0
+/// after LCD on.
+const DROP_FROM: [u8; 3] = [5, 6, 5];
 
 #[derive(Clone, Copy, Default, PartialEq, Debug)]
 pub(crate) enum FetchStep {
@@ -131,10 +136,12 @@ pub(crate) struct LineState {
     pub x: u8,
     /// SCX % 8, latched as the first fetch ends.
     pub fine: u8,
-    /// BG pixels still to drop at the line start (SCX % 8).
+    /// BG pixels still to drop at the line start: 255 while the drop is not settled (`drop_dot`).
     pub discard: u8,
-    /// With a fine scroll, the dot SCX is sampled again for it and the first tile (`fifo_dot`).
-    pub resample: u8,
+    /// The dot the fine-scroll drop compares its first pixel with SCX (`drop_dot`); 0 once settled.
+    pub drop_from: u8,
+    /// The last dot of the line's start (`fifo_dot`): 19, later while the drop is pending.
+    pub start_end: u32,
     /// The OAM X that the next popped pixel reaches (x + 8 once the discard is over).
     pub hit_x: u8,
     pub fetcher: Fetcher,
@@ -186,6 +193,9 @@ pub(crate) struct LineState {
     pub relength: bool,
     /// The x the window last started at.
     pub win_x: u8,
+    /// CGB: the BG FIFO, fetcher, `window_triggered` and `win_rows` as the window started, while its
+    /// first tile is fetched: LCDC.5 off then gives them back (`cancel_window`).
+    pub win_undo: Option<(PixelFifo, Fetcher, bool, u8)>,
     /// WX before the last write, and the last dot the window still compares it (`wx_seen`).
     pub wx_old: u8,
     pub wx_dot: u32,
@@ -206,7 +216,10 @@ impl Ppu {
             lcdc_prev: self.lcdc as u16 * 0x101,
             win_was_on: self.lcdc & 0x20 != 0,
             fine,
-            discard: fine,
+            discard: 255,
+            // After LCD on, line 0's mode 3 runs 2 dots late (`measure_len`).
+            drop_from: DROP_FROM[if self.m_cycle_dots == 2 { 2 } else { (self.cgb_mode || self.compat) as usize }] + 2 * self.lcd_on_line0 as u8,
+            start_end: 19,
             hit_x: 8 - fine,
             first_fetch: true,
             sprites,
@@ -363,7 +376,7 @@ impl Ppu {
     /// `during_object_fetch`; Age m3-bg-scx on DMG, CGB, non-CGB mode and double speed).
     #[inline]
     fn bg_col(&self, tile_x: u8) -> u8 {
-        if tile_x == 0 { return self.scx >> 3; }
+        if tile_x == 0 || self.line.drop_from != 0 { return self.scx >> 3; }
         let late = if (self.cgb_mode || self.compat) && self.line.obj_pending.is_none() { 7 } else { 8 };
         // Pixels still to drop count as x below 0 (SameBoy's negative `position_in_line`; Gambatte
         // `scx_during_m3/scx_0360c0/scx_during_m3_4`: SCX's coarse bits written while they drop).
@@ -438,10 +451,12 @@ impl Ppu {
                 self.line.fetcher.from_8000 |= self.lcdc & 0x10 != 0;
                 self.line.fetcher.half = true; // at Push: the high byte was read on the last dot
                 if self.line.first_fetch {
-                    // The fine scroll is latched as the first fetch ends (Mealybug `m3_window_timing_wx_0`
-                    // takes a SCX write 2 dots before it, `m3_scx_low_3_bits` leaves one 2 dots after it).
-                    let fine = self.scx & 7;
-                    (self.line.fine, self.line.discard, self.line.hit_x, self.line.resample) = (fine, fine, 8 - fine, if fine != 0 { fine + 6 - (self.m_cycle_dots == 2) as u8 } else { 0 });
+                    // The fine scroll is latched as the first fetch ends, for the OBJs left of the first
+                    // tile and a WX 0 window, unless the drop is already settled (`drop_dot`; Mealybug
+                    // `m3_window_timing_wx_0` takes a SCX write 2 dots before it).
+                    if self.line.drop_from != 0 {
+                        (self.line.fine, self.line.hit_x) = (self.scx & 7, 8 - (self.scx & 7));
+                    }
                     // So are the first tile's number and row, with that SCX and SCY (Gambatte
                     // `scx_during_m3/scx_*` and `scy/scy_during_m3*` `_1`/`_2`/`_3`, both models: a
                     // write 4 dots before this read moves the first tile, one on this dot does not).
@@ -524,16 +539,24 @@ impl Ppu {
         if hi { self.line.fetcher.hi = byte } else { self.line.fetcher.lo = byte }
     }
 
-    /// With a fine scroll, SCX is sampled again as many dots later: its fine bits set the pixels
-    /// still to drop (past them, 8 more), its coarse bits the first tile (Gambatte
-    /// `scx_during_m3/scx_0360c0`, `scx_0367c0`, `scx_0761c0`: a write after the first fetch
-    /// still moves the line when the old SCX had a fine scroll).
+    /// The fine-scroll drop: from `drop_from`, the k-th dot compares k % 8 with SCX's live fine
+    /// bits, and the first match drops k pixels (SameBoy's `position_in_line` from -16, MIT). SCX
+    /// lowered below the pixels already counted misses until k wraps: 8 dots more, one tile's
+    /// pixels more (Gambatte `scx_m3_extend`, `scx_0360c0`, `scx_0761c0`). A drop ended short
+    /// of the latched fine scroll takes its first tile where SCX now points (`scx_0363c0`, `scx_0367c0`).
     #[inline(never)]
-    fn resample_scx(&mut self) {
-        let (fine, old, dropped) = (self.scx & 7, self.line.fine, self.line.fine - self.line.discard);
-        let discard = if fine >= dropped { fine - dropped } else { fine + 8 - dropped };
-        (self.line.fine, self.line.discard, self.line.hit_x) = (fine, discard, 8u8.wrapping_sub(discard));
-        if fine < old && self.line.fetcher.tile_x == 0 && !self.line.fetcher.window {
+    fn drop_dot(&mut self) {
+        let k = (self.line.dot - self.line.drop_from as u32) as u8;
+        // ponytail: a SCX chasing k for 200 dots is settled there, so the line always ends (and the
+        // pending count, 255 minus the pixels popped, never runs out); hardware would chase on.
+        if k & 7 != self.scx & 7 && k < 200 {
+            self.line.start_end = self.line.start_end.max(self.line.dot + 1);
+            return;
+        }
+        let old = self.line.fine;
+        let discard = self.line.discard - (255 - k); // pixels popped while it was pending are gone
+        (self.line.fine, self.line.discard, self.line.hit_x, self.line.drop_from) = (self.scx & 7, discard, 8u8.wrapping_sub(discard), 0);
+        if k < old && self.line.fetcher.tile_x == 0 && !self.line.fetcher.window {
             // A shorter drop: the first tile is the one SCX now points at.
             let base = if self.lcdc & 0x08 != 0 { 0x1C00 } else { 0x1800 };
             let at = base + (self.scy.wrapping_add(self.ly) >> 3) as usize * 32 + (self.scx >> 3) as usize;
@@ -542,6 +565,22 @@ impl Ppu {
             if self.line.fetcher.step == FetchStep::Push && !self.line.first_fetch {
                 let a = self.fetch_addr();
                 (self.line.fetcher.lo, self.line.fetcher.hi) = (self.vram[a], self.vram[a + 1]);
+            }
+        }
+    }
+
+    /// CGB (both modes): LCDC.5 turned off while the window's first tile is being fetched cancels
+    /// the window: the BG FIFO and fetcher go on from where the window stopped them, so the line
+    /// only loses the dots it already waited, not the window's 6. A CGB in single speed sees the
+    /// write a dot sooner than the FIFO does, as it does a WX write (`wx_seen`): that dot is not
+    /// counted. A DMG keeps the window and its penalty. Gambatte `window/late_disable_*`, `_scx2/3/5`,
+    /// `_wx0f`, `late_scx03_wx0f..12`, `late_scx00_wx0f/10_ds`, `late_scx_late_disable`: the line is
+    /// W - T dots longer (W - T + 1 in double speed) up to the window's first push, T its start.
+    pub(crate) fn cancel_window(&mut self) {
+        if self.line.fetcher.window && self.line.fetcher.tile_x == 0 {
+            if let Some((bg, fetcher, triggered, rows)) = self.line.win_undo.take() {
+                (self.line.bg, self.line.fetcher, self.line.window_triggered, self.line.win_rows) = (bg, fetcher, triggered, rows);
+                self.line.dot -= (self.m_cycle_dots == 4) as u32;
             }
         }
     }
@@ -670,9 +709,9 @@ impl Ppu {
     fn fifo_dot(&mut self) {
         // WX 0-6 is matched before x = 0 (x = WX - 7), while the first tile is being fetched; the
         // first match holds (a later WX 0-6 match on the same line is no new start).
-        if self.line.dot <= 19 {
-            if self.line.dot == self.line.resample as u32 {
-                self.resample_scx();
+        if self.line.dot <= self.line.start_end {
+            if self.line.drop_from != 0 && self.line.dot >= self.line.drop_from as u32 {
+                self.drop_dot();
             }
             if self.line.dot == 4 && std::mem::take(&mut self.win_carry) && self.win_on() {
                 // DMG, WX = 166 on the line before (`end_line`): the window runs from the line's
@@ -733,6 +772,7 @@ impl Ppu {
         if !self.line.fetcher.window && self.line.left_done && self.line.discard == 0 && self.win_on()
             && if self.line.win_skip > 0 { x == 0 } else { self.wy_ok() && self.wx_match(x, dmg) }
         {
+            if !dmg { self.line.win_undo = Some((self.line.bg, self.line.fetcher, self.line.window_triggered, self.line.win_rows)); }
             // Turned off and on again, the window starts over on its next row.
             if self.line.window_triggered { self.line.win_rows += 1; }
             self.line.window_triggered = true;
