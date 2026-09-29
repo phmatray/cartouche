@@ -58,6 +58,19 @@ pub struct MemoryBus {
     pub(crate) hdma_source: u16,
     pub(crate) hdma_dest: u16,
     pub(crate) hdma_remaining: u8,
+    /// A GDMA, or an HBlank DMA block, due: it runs after the CPU's next opcode fetch (`hdma_run`).
+    pub(crate) hdma_on: bool,
+    /// The CPU halted before this line's HBlank DMA request: waking in HBlank runs the block it
+    /// slept through (`hdma_halt`).
+    pub(crate) hdma_wake: bool,
+    /// An HBlank DMA request came while the CPU was halted (`hdma_halted`).
+    pub(crate) hdma_missed: bool,
+    /// HBlank started while halted: that line's request is skipped (`hdma_halted`).
+    pub(crate) hdma_skip: bool,
+    /// HBlank (the PPU's internal mode 0) started in the M-cycle just run.
+    pub(crate) hdma_entry: bool,
+    /// A VRAM DMA is copying: a running OAM DMA skips its bytes (`dma_tick`).
+    pub(crate) hdma_busy: bool,
     /// RP ($FF56, CGB): bit 0 = LED on, bits 6-7 = read enable (both set: bit 1 shows the sensor).
     pub(crate) rp: u8,
     /// The IF bits the M-cycle just run raised from clear, after the CPU's access in it: the PPU's
@@ -136,6 +149,12 @@ impl MemoryBus {
             hdma_source: 0,
             hdma_dest: 0,
             hdma_remaining: 0,
+            hdma_on: false,
+            hdma_wake: false,
+            hdma_missed: false,
+            hdma_skip: false,
+            hdma_entry: false,
+            hdma_busy: false,
             rp: 0,
             if_late: 0,
             ir_light_in: false,
@@ -438,7 +457,10 @@ impl MemoryBus {
                     self.dma_source = value;
                     self.dma_delay = 2;
                 } else {
+                    // The LCD turned off outside mode 0 enters it: an HBlank DMA runs a block (SameBoy's `GB_lcd_off`).
+                    let lcd_off = addr == 0xFF40 && self.ppu.lcdc & !value & 0x80 != 0 && self.ppu.read_register(0xFF41) & 3 != 0;
                     self.ppu.write_register(addr, value);
+                    self.hdma_on |= lcd_off && self.hdma_active;
                     if std::mem::take(&mut self.ppu.stat_write_irq) { self.interrupts.request(STAT_BIT); }
                     if std::mem::take(&mut self.ppu.stat_write_drop) && self.if_hidden() & STAT_BIT != 0 {
                         self.interrupts.interrupt_flag &= !STAT_BIT;
@@ -475,8 +497,10 @@ impl MemoryBus {
             // previous (cancelled) transfer stopped.
             0xFF51 => self.hdma_source = (self.hdma_source & 0x00F0) | (value as u16) << 8,
             0xFF52 => self.hdma_source = (self.hdma_source & 0xFF00) | (value as u16 & 0xF0),
-            0xFF53 => self.hdma_dest = (self.hdma_dest & 0x00F0) | ((value as u16 & 0x1F) << 8),
-            0xFF54 => self.hdma_dest = (self.hdma_dest & 0x1F00) | (value as u16 & 0xF0),
+            // The destination keeps its top bits: VRAM takes the low 13, and a transfer stops when it
+            // wraps past $FFFF (Gambatte `dma_dst_wrap_1/2`; SameBoy).
+            0xFF53 => self.hdma_dest = (self.hdma_dest & 0x00F0) | (value as u16) << 8,
+            0xFF54 => self.hdma_dest = (self.hdma_dest & 0xFF00) | (value as u16 & 0xF0),
             0xFF55 => self.write_hdma5(value),
             0xFF56 => {
                 if self.cgb_mode { self.rp = value & 0xC1; }
@@ -514,11 +538,27 @@ impl MemoryBus {
             return false;
         }
         // STOP's second M-cycle reads the byte after it; DIV resets at the end of the next one.
+        // An HBlank DMA request in the first stays due; one in the second, as DIV resets, ends the
+        // HBlank DMA: HDMA5 reads bit 7 = 1 and its length, nothing copied (Gambatte
+        // `hdma_transition_speedchange_hdmalen00/01`, `hdma_late_m3speedchange_hdma5_scx1/2_1`).
+        // A block left behind outside mode 0 runs on waking in mode 0 (SameBoy's `leave_stop_mode`).
+        let (hdma_on, stat) = (self.hdma_on, self.ppu.read_register(0xFF41) & 3);
         self.tick_components();
+        let first = std::mem::take(&mut self.hdma_on);
         let earlier = self.timer.div_counter;
         // From here the pause holds the OAM DMA's copying as HALT does (`dma_hold`).
         let hold = std::mem::replace(&mut self.dma_hold, true);
         self.tick_components();
+        let second = self.hdma_on;
+        if if self.double_speed { second } else { first } {
+            let (len, rem) = (self.hdma5, self.hdma_remaining);
+            if !self.double_speed { self.hdma_run(); }
+            (self.hdma_active, self.hdma_on, self.hdma5, self.hdma_remaining) = (false, false, 0x80 | len, rem);
+        } else if self.double_speed {
+            self.hdma_on = hdma_on || first || self.hdma_active && stat != 0 && self.ppu.read_register(0xFF41) & 3 == 0;
+        } else {
+            self.hdma_on = hdma_on;
+        }
         let div = self.timer.div_counter;
         let cgb_e = self.rev == crate::gameboy::Revision::CgbE;
         self.timer.speed_switch_div_reset(earlier, cgb_e);
@@ -543,8 +583,13 @@ impl MemoryBus {
             return true;
         }
         let mut behind = !self.double_speed;
+        // The pause is a HALT to the HBlank DMA (`hdma_halt`, `hdma_unhalt`; Gambatte
+        // `hdma_m3speedchange_late_m0wakeup_1/2`).
+        let hdma_on = self.hdma_on;
+        self.hdma_halt();
         for _ in 0..0x8000 {
             self.tick_components();
+            self.hdma_missed |= std::mem::take(&mut self.hdma_on);
             // Taken back once the PPU is a dot into a mode, so no mode change is undone.
             if behind && self.ppu.mode_clock > 0 {
                 self.ppu.mode_clock -= 1;
@@ -552,6 +597,8 @@ impl MemoryBus {
             }
             if self.interrupts.pending() & !self.late_interrupts() != 0 { break; }
         }
+        self.hdma_on = hdma_on;
+        self.hdma_unhalt();
         self.dma_hold = hold;
         true
     }
@@ -615,9 +662,8 @@ impl MemoryBus {
         if vblank_irq | stat_irq || self.if_late != 0 {
             self.ppu_irqs(vblank_irq, stat_irq);
         }
-        if hblank_entry && self.hdma_active {
-            self.hdma_step();
-            self.dma_stall();
+        if self.hdma_active {
+            self.hdma_tick(hblank_entry);
         }
         let div = self.timer.div_counter;
         if self.timer.step(4) {
@@ -717,6 +763,12 @@ impl MemoryBus {
             return;
         }
         let cgb = self.cgb_mode || self.ppu.compat;
+        // A VRAM DMA takes the bus from it: its bytes are skipped but for the transfer's last
+        // (SameBoy's `GB_dma_run`; Gambatte `oamdmasrcC000_hdmasrc0000`, `hdma_transition_oamdma_*`).
+        if self.hdma_busy && (self.hdma_remaining > 1 || self.hdma_dest & 0xF != 0xF) {
+            self.dma_index += 1;
+            return;
+        }
         let byte = if cgb && self.dma_source >= 0xE0 { 0xFF } else { self.peek(self.dma_src(self.dma_index)) };
         self.ppu.write_oam(self.dma_index as u16, byte);
         self.dma_index += 1;
@@ -733,8 +785,15 @@ impl MemoryBus {
     /// `late_interrupts` for a halted CPU: on Color hardware a mode-0 edge always wakes it an
     /// M-cycle later, whatever its dot in the M-cycle (Gambatte `halt/m0int_m0stat_scx3/4_2`,
     /// `m0irq_m0stat_scx3/4_2`, `late_m0int/irq_halt_m0stat_scx3_*b`, which a DMG splits by SCX).
+    /// So is the LY = LYC edge at a line's start, when it lands after the M-cycle's first dot
+    /// (Gambatte `dma/gdma_cycles_*`, `hdma_cycles_*`, `hdma_start_*` from LYC 1 and 144 against
+    /// the same reads from LYC 153, `halt/lycirq_m2stat_2` on the CGB; not on a DMG, gbmicrotest
+    /// `lyc*_int_halt_a`).
     pub fn halt_late_interrupts(&self) -> u8 {
-        let cgb_m0 = (self.cgb_mode || self.ppu.compat) && self.if_late & STAT_BIT != 0 && self.ppu.mode0_edge_now();
+        let p = &self.ppu;
+        let lyc = p.stat & 0x40 != 0 && p.ly == p.lyc && matches!(p.mode, PpuMode::OamScan | PpuMode::VBlank)
+            && p.mode_clock < p.m_cycle_dots;
+        let cgb_m0 = (self.cgb_mode || self.ppu.compat) && self.if_late & STAT_BIT != 0 && (self.ppu.mode0_edge_now() || lyc);
         self.late_interrupts() | if cgb_m0 { STAT_BIT } else { 0 }
     }
 
@@ -820,7 +879,8 @@ impl MemoryBus {
         if (0xFE00..=0xFEFF).contains(&addr) { self.ppu.oam_bug_write(); }
     }
 
-    /// Handle writes to HDMA5 (0xFF55) — triggers GDMA or starts HDMA.
+    /// Handle writes to HDMA5 (0xFF55): a GDMA, or an HBlank DMA, runs after the CPU's next
+    /// opcode fetch (`hdma_run`).
     fn write_hdma5(&mut self, value: u8) {
         if !self.cgb_mode {
             return;
@@ -829,53 +889,113 @@ impl MemoryBus {
             // Writing bit 7 = 0 during an HBlank DMA cancels it; HDMA5 then reads bit 7 = 1 with
             // the length bits just written, not the remaining length Pan Docs describes (SameSuite
             // hdma_lcd_off/hdma_mode0, checked on hardware). Writing bit 7 = 1 restarts it.
+            // A block already due still runs, as a GDMA of the length just written (SameBoy;
+            // Gambatte `hdma_late_disable*`).
             self.hdma_active = false;
+            self.hdma_remaining = (value & 0x7F) + 1;
             self.hdma5 = 0x80 | (value & 0x7F);
             return;
         }
         self.hdma_remaining = (value & 0x7F) + 1;
         // While a transfer is pending HDMA5 reads bit 7 = 0 plus the remaining length.
         self.hdma5 = value & 0x7F;
-
-        if value & 0x80 == 0 {
-            // GDMA: transfer all blocks immediately; the CPU is stalled meanwhile.
-            while self.hdma_remaining > 0 {
-                self.hdma_step();
-                self.dma_stall();
-            }
-        } else {
-            // HDMA: one 16-byte block per HBlank, the first one right away if the PPU is
-            // already in HBlank (which includes the LCD being off).
-            self.hdma_active = true;
-            if self.ppu.mode == crate::ppu::PpuMode::HBlank {
-                self.hdma_step();
-                self.dma_stall();
-            }
-        }
+        self.hdma_active = value & 0x80 != 0;
+        // A GDMA always; an HBlank DMA at once when the PPU is in HBlank already (the LCD off too).
+        self.hdma_on = !self.hdma_active || self.ppu.mode == PpuMode::HBlank;
     }
 
-    /// The CPU is stalled while a 16-byte block is copied: 8 M-cycles at normal speed,
-    /// 16 at double speed (the same wall-clock time).
-    fn dma_stall(&mut self) {
-        for _ in 0..if self.double_speed { 16 } else { 8 } {
+    /// The HDMA/GDMA transfer, after the CPU's opcode fetch that found it due (the dispatch's
+    /// discarded one too); the CPU waits meanwhile. Single speed: a lead-in half M-cycle, 2 bytes
+    /// per M-cycle, a half M-cycle out (8n + 1 M-cycles for n blocks); double speed: a lead-in
+    /// M-cycle, then 1 byte per M-cycle (16n + 1). A GDMA runs all its blocks back to back, an
+    /// HBlank DMA one (Gambatte `gdma_cycles_*`, `hdma_cycles_*`). After SameBoy's `GB_hdma_run`
+    /// (MIT, see THIRD_PARTY_NOTICES.md).
+    #[inline(never)]
+    pub(crate) fn hdma_run(&mut self) {
+        let per = if self.double_speed { 1 } else { 2 };
+        self.hdma_busy = true;
+        if self.double_speed { self.tick_components(); }
+        'run: loop {
             self.tick_components();
+            for k in 0..per {
+                // Only the cartridge and work RAM feed it: VRAM and $E000 on read $FF (Gambatte
+                // `dma_vram_read`, `dma_hiram_read*`, `dma_oam_read`; SameBoy).
+                let byte = if matches!(self.hdma_source, 0x8000..=0x9FFF | 0xE000..) { 0xFF } else { self.read_byte(self.hdma_source) };
+                self.ppu.write_vram(self.hdma_dest & 0x1FFF, byte);
+                // A running OAM DMA writes what it sees, the VRAM DMA's byte, at the source's low
+                // byte: every byte in double speed, one in two in single speed (SameBoy).
+                if self.dma_active && k == 0 && (self.hdma_source as u8) < 0xA0 {
+                    self.ppu.write_oam(self.hdma_source & 0xFF, byte);
+                }
+                self.hdma_source = self.hdma_source.wrapping_add(1);
+                self.hdma_dest = self.hdma_dest.wrapping_add(1);
+                if self.hdma_dest & 0xF == 0 {
+                    self.hdma_remaining -= 1;
+                    if self.hdma_remaining == 0 || self.hdma_dest == 0 {
+                        self.hdma_active = false;
+                        self.hdma5 = 0xFF; // done
+                        break 'run;
+                    }
+                    self.hdma5 = (self.hdma_remaining - 1) & 0x7F; // bit 7 = 0: more to come
+                    if self.hdma_active { break 'run; }
+                }
+            }
+        }
+        self.hdma_busy = false;
+        if !self.double_speed { self.tick_components(); }
+        self.hdma_on = false;
+    }
+
+    /// An M-cycle of an HBlank DMA: its block request rises 2 dots after STAT shows mode 0
+    /// in single speed (SameBoy), as it does in double speed, per SCX (Gambatte `hdma_start_*`,
+    /// `hdma_late_disable_*`, `irq_precedence/hdma_vs_m0_*`, `late_hdma_vs_*`).
+    /// Kept out of the per-M-cycle path: only while an HBlank DMA is on.
+    #[inline(never)]
+    fn hdma_tick(&mut self, hblank_entry: bool) {
+        self.hdma_entry = hblank_entry;
+        let at = if self.ppu.m_cycle_dots == 4 { 5 } else { 4 };
+        if self.ppu.mode == PpuMode::HBlank && self.ppu.lcdc & 0x80 != 0
+            && (at..at + self.ppu.m_cycle_dots).contains(&self.ppu.mode_clock)
+        {
+            self.hdma_on = true;
         }
     }
 
-    /// Transfer one 16-byte HDMA block from source to VRAM.
-    fn hdma_step(&mut self) {
-        for i in 0..16u16 {
-            let byte = self.read_byte(self.hdma_source.wrapping_add(i));
-            self.ppu.write_vram((self.hdma_dest + i) & 0x1FFF, byte);
+    /// The CPU halts (`HALT` after its first halted M-cycle, the STOP a held button turns into a
+    /// HALT, the pause after a speed switch). A request it sleeps through runs when it wakes in
+    /// HBlank, if it halted before that line's request (still in the line before, one dot in, or
+    /// earlier in the line): Gambatte `hdma_late_m0halt_*`, `hdma_late_m0unhalt_*`,
+    /// `hdma_late_m3halt_m0unhalt_*`, their `lcdoffset` twins.
+    pub(crate) fn hdma_halt(&mut self) {
+        let p = &self.ppu;
+        let past = p.lcdc & 0x80 != 0 && p.mode == PpuMode::HBlank && p.mode_clock >= if p.m_cycle_dots == 4 { 5 } else { 4 };
+        (self.hdma_missed, self.hdma_skip) = (false, false);
+        self.hdma_wake = !past && !(p.mode == PpuMode::OamScan && p.mode_clock == 0);
+    }
+
+    /// The CPU wakes (see `hdma_halt`).
+    #[inline(never)]
+    pub(crate) fn hdma_unhalt(&mut self) {
+        let hblank = self.ppu.lcdc & 0x80 == 0 || self.ppu.mode == PpuMode::HBlank;
+        if self.hdma_active && self.hdma_wake && self.hdma_missed && hblank {
+            self.hdma_on = true;
         }
-        self.hdma_source = self.hdma_source.wrapping_add(16);
-        self.hdma_dest = (self.hdma_dest + 16) & 0x1FF0;
-        self.hdma_remaining -= 1;
-        if self.hdma_remaining == 0 {
-            self.hdma_active = false;
-            self.hdma5 = 0xFF; // inactive, no blocks remaining
-        } else {
-            self.hdma5 = (self.hdma_remaining - 1) & 0x7F; // active (bit 7 = 0)
+    }
+
+    /// An M-cycle of a halted CPU with an HBlank DMA on (after `hdma_halt` in its first). A
+    /// request whose HBlank began before the CPU halted still runs, now; one whose HBlank began
+    /// while halted waits for the wake (`hdma_unhalt`): Gambatte `hdma_late_m3halt_m2unhalt_*`,
+    /// `hdma_transition_halt_*`.
+    #[inline(never)]
+    pub(crate) fn hdma_halted(&mut self) {
+        if self.hdma_entry {
+            self.hdma_skip = true;
+        }
+        if self.hdma_on && !self.hdma_skip {
+            self.hdma_run();
+        }
+        if std::mem::take(&mut self.hdma_on) {
+            (self.hdma_skip, self.hdma_missed) = (false, true);
         }
     }
 }
@@ -1462,5 +1582,83 @@ mod tests {
                 assert_eq!(bus.read_byte(0xFF0F) & bit, bit, "{bit:#x}: seen the next M-cycle (write in between: {clear})");
             }
         }
+    }
+
+    /// A Color bus with the VRAM DMA pointed from $C000 to $8000.
+    fn cgb_bus(lcd: u8) -> MemoryBus {
+        let mut bus = bus();
+        (bus.cgb_mode, bus.ppu.cgb_mode) = (true, true);
+        bus.write_byte(0xFF40, lcd);
+        for (addr, value) in [(0xFF51, 0xC0), (0xFF52, 0x00), (0xFF53, 0x00), (0xFF54, 0x00)] {
+            bus.write_byte(addr, value);
+        }
+        bus
+    }
+
+    /// A GDMA waits for the CPU's next opcode fetch, then moves 2 bytes per M-cycle in single
+    /// speed (1 in double speed) after a lead-in: 8n + 1 M-cycles (16n + 1) for n blocks.
+    #[test]
+    fn gdma_moves_two_bytes_per_m_cycle() {
+        for (ds, blocks, m_cycles) in [(false, 1u32, 9u32), (false, 2, 17), (true, 1, 17), (true, 2, 33)] {
+            let mut bus = cgb_bus(0x00);
+            (bus.double_speed, bus.ppu.m_cycle_dots) = (ds, if ds { 2 } else { 4 });
+            bus.write_byte(0xFF55, blocks as u8 - 1);
+            assert!(bus.hdma_on && bus.ppu.vram[0] == 0, "nothing moves before the fetch");
+            bus.cycle_count = 0;
+            bus.hdma_run();
+            assert_eq!(bus.cycle_count, m_cycles * if ds { 2 } else { 4 }, "ds {ds}, {blocks} blocks");
+            assert_eq!(bus.read_byte(0xFF55), 0xFF);
+            assert!((0..16 * blocks as usize).all(|i| bus.ppu.vram[i] == i as u8 + 1), "ds {ds}, {blocks} blocks");
+        }
+    }
+
+    /// Runs the PPU to line 10 at `mode` with `mode_clock` at least `dot`.
+    fn to_line_10(bus: &mut MemoryBus, mode: PpuMode, dot: u32) {
+        while !(bus.ppu.ly == 10 && bus.ppu.mode == mode && bus.ppu.mode_clock >= dot) {
+            bus.cycle_tick();
+        }
+    }
+
+    /// A CPU halted before a line's HBlank DMA request skips it, and runs it on waking in that
+    /// HBlank; halted after the request (the block done), it has nothing to run.
+    #[test]
+    fn hdma_block_runs_during_halt() {
+        let mut bus = cgb_bus(0x91);
+        to_line_10(&mut bus, PpuMode::OamScan, 8);
+        bus.write_byte(0xFF55, 0x81); // 2 blocks, mode 2: nothing due yet
+        assert!(!bus.hdma_on);
+        bus.hdma_halt();
+        while !(bus.ppu.mode == PpuMode::HBlank && bus.ppu.mode_clock >= 20) {
+            bus.cycle_tick();
+            bus.hdma_halted();
+        }
+        assert_eq!((bus.hdma_on, bus.hdma_missed, bus.hdma5), (false, true, 0x01), "slept through");
+        bus.hdma_unhalt();
+        assert!(bus.hdma_on, "woken in HBlank");
+        bus.hdma_run();
+        assert_eq!(bus.hdma5, 0x00);
+
+        let mut bus = cgb_bus(0x91);
+        to_line_10(&mut bus, PpuMode::OamScan, 8);
+        bus.write_byte(0xFF55, 0x81);
+        to_line_10(&mut bus, PpuMode::HBlank, 20);
+        bus.hdma_run(); // the request came to a running CPU
+        bus.hdma_halt();
+        bus.hdma_halted();
+        bus.hdma_unhalt();
+        assert!(!bus.hdma_on, "halted after the request: nothing left for this line");
+    }
+
+    /// The pause after a speed switch is a HALT to the HBlank DMA: no block moves in it.
+    #[test]
+    fn hdma_waits_for_speed_switch_pause() {
+        let mut bus = cgb_bus(0x91);
+        to_line_10(&mut bus, PpuMode::OamScan, 8);
+        bus.write_byte(0xFF55, 0x81);
+        bus.write_byte(0xFF4D, 0x01);
+        assert!(bus.try_speed_switch());
+        assert!(bus.double_speed);
+        assert_eq!(bus.hdma5, 0x01, "both blocks still to go");
+        assert!(bus.ppu.vram[..32].iter().all(|&b| b == 0));
     }
 }
