@@ -402,9 +402,10 @@ fn mooneye_emulator_only_mbc() {
     run_suite("Mooneye emulator-only MBC", "mooneye-test-suite", &["emulator-only/mbc1", "emulator-only/mbc2", "emulator-only/mbc5"], 30, mooneye);
 }
 
-/// SameSuite targets the CGB (its sgb/ tests need a Super Game Boy, which fail here and are listed).
+/// SameSuite targets the CGB, except its sgb/ directory, written for the Super Game Boy.
 fn samesuite(rom: &Path, rel: &str) -> Vec<Job> {
-    vec![Job { label: rel.to_string(), rom: rom.to_path_buf(), hw: Hw::Cgb, protocol: Protocol::Fibonacci }]
+    let hw = if rel.starts_with("same-suite/sgb/") { Hw::Sgb } else { Hw::Cgb };
+    vec![Job { label: rel.to_string(), rom: rom.to_path_buf(), hw, protocol: Protocol::Fibonacci }]
 }
 
 /// Age names its devices in `-`-separated tokens: `dmgC`, `cgbBCE`, `ncmBCE` (a CGB running the
