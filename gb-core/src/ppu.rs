@@ -489,6 +489,12 @@ impl Ppu {
         self.mode == PpuMode::OamScan && self.mode_clock < self.m_cycle_dots && self.stat & 0x20 != 0
     }
 
+    /// The mode-0 interrupt rose in the first dot of the M-cycle just run, before the CPU's write
+    /// in it (which comes after its read): an IF write there clears it, an IF read misses it.
+    pub(crate) fn mode0_edge_first_dot(&self) -> bool {
+        self.mode0_edge_age().is_some_and(|age| age + 1 == self.m_cycle_dots)
+    }
+
     /// The mode-0 interrupt rose in the second half of the M-cycle just run, after a halted CPU
     /// sampled IF: HALT wakes one M-cycle later than a running CPU dispatches. With the edge at
     /// Pan Docs' mode-3 length (+2 dots on the line after LCD on), this gives the SCX groups the

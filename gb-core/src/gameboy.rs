@@ -814,7 +814,7 @@ impl GameBoy {
         // Not saved: at a boundary it only decides a halted CPU's wake on a mode-0 edge of the
         // M-cycle just run, where a set IF.1 is that edge's (a halted CPU with it already pending
         // would have woken); a read or write ticks first, which recomputes it.
-        self.bus.ppu_fresh = crate::interrupts::VBLANK_BIT | crate::interrupts::STAT_BIT;
+        self.bus.if_late = crate::interrupts::VBLANK_BIT | crate::interrupts::STAT_BIT;
         self.cpu.ime_pending = read_u8!() != 0;
         // Before the tail below, STOP never stopped anything: an older state is not in stop mode.
         pos += 1;
