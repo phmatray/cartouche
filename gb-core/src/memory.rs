@@ -63,6 +63,8 @@ pub struct MemoryBus {
     pub cheats: crate::cheats::Cheats,
     /// Debugger watchpoints; `None` unless one is set, so the CPU accessors pay one check.
     pub watch: Option<Box<crate::debug::WatchSet>>,
+    /// The hardware revision (`GameBoy::set_revision`), for subsystems to read as a plain field.
+    pub rev: crate::gameboy::Revision,
 }
 
 impl MemoryBus {
@@ -103,6 +105,7 @@ impl MemoryBus {
             ir_light_in: false,
             cheats: Default::default(),
             watch: None,
+            rev: crate::gameboy::Revision::Default,
         }
     }
 

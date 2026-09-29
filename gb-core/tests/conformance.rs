@@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{LazyLock, Mutex};
 
 use common::{cgb_to_rgb, dmg_to_grey, load_png_rgb};
-use gb_core::gameboy::{GameBoy, Model, CYCLES_PER_FRAME};
+use gb_core::gameboy::{GameBoy, Model, Revision, CYCLES_PER_FRAME};
 use gb_core::interrupts::JOYPAD_BIT;
 use gb_core::joypad::JoypadButton;
 use gb_core::trace::line;
@@ -73,7 +73,7 @@ fn conformance_dir() -> PathBuf {
 
 /// DMG family: post-boot state, like blargg.rs. CGB: Cartouche's CGB boot ROM runs to its end, so a
 /// DMG-only cartridge starts in compatibility mode as on real hardware.
-fn boot(path: &Path, hw: Hw) -> Result<GameBoy, String> {
+fn boot(path: &Path, hw: Hw, rev: Revision) -> Result<GameBoy, String> {
     let rom = std::fs::read(path).map_err(|e| format!("cannot read ROM: {e}"))?;
     let model = match hw {
         Hw::Mgb => Model::Mgb,
@@ -84,14 +84,44 @@ fn boot(path: &Path, hw: Hw) -> Result<GameBoy, String> {
     match hw {
         Hw::Dmg | Hw::Mgb | Hw::Sgb | Hw::Sgb2 => {
             let mut gb = GameBoy::with_model(rom, model).map_err(|e| e.to_string())?;
+            gb.set_revision(rev);
             gb.skip_boot_rom();
             Ok(gb)
         }
         Hw::Cgb => {
+            // ponytail: set after the CGB boot ROM ran; no CGB revision changes the hand-over yet.
             let mut gb = GameBoy::with_boot(rom, true, 0, 0).map_err(|e| e.to_string())?;
+            gb.set_revision(rev);
             gb.finish_boot().map_err(|e| e.to_string())?;
             Ok(gb)
         }
+    }
+}
+
+/// The revision a suite's file name asks for (never its contents): Mooneye/SameSuite `-dmg0`,
+/// `-cgbB`, `-A`..., Age `-cgbE`/`-ncmBC`... (its CGB token wins, as `age_hw` runs it on the CGB),
+/// Mealybug `_cgb_c`/`_cgb_d` references. A suffix naming several revisions keeps `Default`, the
+/// one the core already matches; `cgb0B`-style SameSuite ones take the first they name.
+fn revision(path: &Path) -> Revision {
+    let s = stem(path);
+    if s.ends_with("_cgb_c") {
+        return Revision::CgbC;
+    }
+    if s.ends_with("_cgb_d") {
+        return Revision::CgbD;
+    }
+    let tokens: Vec<&str> = s.split('-').skip(1).collect();
+    let token = tokens.iter().find(|t| t.starts_with("cgb") || t.starts_with("ncm")).or(tokens.last());
+    match token.copied().unwrap_or("") {
+        "dmg0" => Revision::Dmg0,
+        "G" | "GS" | "dmgC" => Revision::DmgAbc,
+        t if t.starts_with("dmgABC") => Revision::DmgAbc,
+        "A" | "agb" | "ags" => Revision::Agb,
+        "cgb0" | "cgb0B" | "cgb0BC" => Revision::Cgb0,
+        "cgbB" => Revision::CgbB,
+        "cgbC" | "cgbBC" | "ncmBC" => Revision::CgbC,
+        "cgbE" | "ncmE" => Revision::CgbE,
+        _ => Revision::Default,
     }
 }
 
@@ -224,7 +254,12 @@ fn run_scripted(gb: &mut GameBoy, hw: Hw, presses: &[JoypadButton], secs: u64, r
 }
 
 fn run_rom(path: &Path, hw: Hw, protocol: &Protocol, timeout_secs: u64) -> Verdict {
-    match boot(path, hw) {
+    // A screenshot names its revision in the reference (Age devices, Mealybug `_cgb_c`).
+    let rev = revision(match protocol {
+        Protocol::Screenshot(png) => png,
+        _ => path,
+    });
+    match boot(path, hw, rev) {
         Ok(gb) => run(gb, hw, protocol, timeout_secs),
         Err(e) => Verdict::Fail(e),
     }
@@ -624,6 +659,30 @@ fn mealybug_tearoom() {
 #[test]
 fn rtc3test_all() {
     run_suite("rtc3test", "rtc3test", &[""], 30, rtc3test);
+}
+
+#[test]
+fn revision_from_suffix() {
+    let rev = |name: &str| revision(Path::new(name));
+    assert_eq!(rev("mooneye-test-suite/acceptance/boot_regs-dmg0.gb"), Revision::Dmg0);
+    assert_eq!(rev("mooneye-test-suite/acceptance/boot_hwio-dmgABCmgb.gb"), Revision::DmgAbc);
+    assert_eq!(rev("mooneye-test-suite/acceptance/di_timing-GS.gb"), Revision::DmgAbc);
+    assert_eq!(rev("mooneye-test-suite/acceptance/boot_div-cgb0.gb"), Revision::Cgb0);
+    assert_eq!(rev("mooneye-test-suite/acceptance/boot_div-cgbABCDE.gb"), Revision::Default);
+    assert_eq!(rev("mooneye-test-suite/acceptance/boot_regs-sgb.gb"), Revision::Default);
+    assert_eq!(rev("age-test-roms/stat-mode/stat-mode-cgbE.gb"), Revision::CgbE);
+    assert_eq!(rev("age-test-roms/ly/ly-dmgC-cgbBC.gb"), Revision::CgbC); // run on the CGB
+    assert_eq!(rev("age-test-roms/ly/ly-ncmE.gb"), Revision::CgbE);
+    assert_eq!(rev("age-test-roms/oam/oam-write-dmgC.gb"), Revision::DmgAbc);
+    assert_eq!(rev("age-test-roms/halt/ei-halt-dmgC-cgbBCE.gb"), Revision::Default);
+    assert_eq!(rev("same-suite/apu/channel_1/channel_1_freq_change_timing-A.gb"), Revision::Agb);
+    assert_eq!(rev("same-suite/apu/channel_1/channel_1_freq_change_timing-cgb0BC.gb"), Revision::Cgb0);
+    assert_eq!(rev("same-suite/apu/channel_3/channel_3_extra_length_clocking-cgbB.gb"), Revision::CgbB);
+    assert_eq!(rev("same-suite/apu/channel_1/channel_1_freq_change_timing-cgbDE.gb"), Revision::Default);
+    assert_eq!(rev("mealybug-tearoom-tests/ppu/m3_scy_change2_cgb_c.png"), Revision::CgbC);
+    assert_eq!(rev("mealybug-tearoom-tests/ppu/m3_scy_change_cgb_d.png"), Revision::CgbD);
+    assert_eq!(rev("mealybug-tearoom-tests/ppu/m3_scy_change_dmg_blob.png"), Revision::Default);
+    assert_eq!(rev("mooneye-test-suite/acceptance/div_timing.gb"), Revision::Default);
 }
 
 #[test]
