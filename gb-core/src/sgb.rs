@@ -35,7 +35,8 @@ pub struct Sgb {
     bit: usize,
     packet: [u8; 16],
     command: Vec<u8>,
-    // Multiplayer (MLT_REQ): 1, 2 or 4 players, the one P1 reads now, and players 2-4's buttons.
+    // Multiplayer (MLT_REQ): its mode + 1 (1, 2 or 4 players; 3 is mode 2, stuck on player 1 or
+    // 3), the one P1 reads now, and players 2-4's buttons.
     players: u8,
     pub player: u8,
     /// `[d-pad, buttons]` of players 2-4, 0 = pressed (as `Joypad`).
@@ -119,14 +120,13 @@ impl Sgb {
         let sel = value & 0x30;
         let prev = self.last_p1;
         self.last_p1 = sel;
+        // The next player is read after P15 goes from low to high (MLT_REQ), whatever P14 does.
+        if prev & 0x20 == 0 && sel & 0x20 != 0 {
+            self.player = (self.player + 1) & (self.players - 1);
+        }
         match sel {
             0x00 => { self.receiving = true; self.bit = 0; }
-            0x30 => {
-                // The next player is read after P15 goes back high (MLT_REQ).
-                if self.players > 1 && prev & 0x20 == 0 {
-                    self.player = (self.player + 1) & (self.players - 1);
-                }
-            }
+            0x30 => {}
             _ if prev == 0x30 && self.receiving => {
                 let one = sel == 0x10;
                 if self.bit == 128 {
@@ -225,9 +225,13 @@ impl Sgb {
                 if c[9] & 0x40 != 0 { self.mask = 0; }
             }
             0x0B => self.start_trn(Trn::Pal),
+            // MLT_REQ: the P15 pulses of its own packet have already moved the player; the new
+            // mode then ANDs it with its mask. Mode 2 (undocumented) keeps player 1 or 3, the
+            // latter from players 2 and 3 (SameSuite sgb/command_mlt_req).
             0x11 => {
-                self.players = [1, 2, 1, 4][(c[1] & 3) as usize];
-                self.player = 0;
+                let mode = c[1] & 3;
+                self.player = if mode == 2 { (self.player + 1) & 2 } else { self.player & mode };
+                self.players = mode + 1;
             }
             0x13 => self.start_trn(Trn::Chr(c[1] & 1 != 0)),
             0x14 => self.start_trn(Trn::Pct),
@@ -416,7 +420,7 @@ impl Sgb {
             let Some(d) = data.get(*pos..*pos + len) else { return false };
             *pos += len;
             // Values are clamped: a damaged state must not index out of the tables.
-            s.players = if matches!(d[0], 2 | 4) { d[0] } else { 1 };
+            s.players = if (1..=4).contains(&d[0]) { d[0] } else { 1 };
             s.player = d[1] & (s.players - 1);
             s.mask = d[2] & 3;
             s.trn = [Trn::None, Trn::Pal, Trn::Attr, Trn::Chr(false), Trn::Chr(true), Trn::Pct, Trn::Sou][(d[3] as usize).min(6)];
@@ -639,4 +643,46 @@ impl SnesAudio {
 
 fn rgba(c: u16) -> [u8; 4] {
     Ppu::rgb555_to_rgba8888(c as u8, (c >> 8) as u8)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::gameboy::{GameBoy, Model};
+
+    fn p1(gb: &mut GameBoy, writes: &[u8]) -> u8 {
+        for &w in writes { gb.bus.write_byte(0xFF00, w); }
+        gb.bus.read_byte(0xFF00)
+    }
+
+    /// MLT_REQ `mode`, sent the way SameSuite's sgb/ tests send it.
+    fn mlt_req(gb: &mut GameBoy, mode: u8) -> u8 {
+        let mut w = vec![0x00, 0x30];
+        for i in 0..128 {
+            let byte = [0x89, mode][..].get(i / 8).copied().unwrap_or(0);
+            w.extend([if byte >> (i % 8) & 1 != 0 { 0x10 } else { 0x20 }, 0x30]);
+        }
+        w.extend([0x20, 0x30]);
+        p1(gb, &w)
+    }
+
+    #[test]
+    fn mlt_req_four_players_id_sequence() {
+        let mut rom = vec![0u8; 0x8000];
+        rom[0x14D] = 0xE7; // header checksum of an all-zero header
+        let mut gb = GameBoy::with_model(rom, Model::Sgb).unwrap();
+        let next = |gb: &mut GameBoy| p1(gb, &[0x10, 0x30]);
+        // From one player, the packet's own P15 pulses do not count: player 1 first.
+        assert_eq!(mlt_req(&mut gb, 3), 0xFF);
+        let ids: Vec<u8> = (0..5).map(|_| next(&mut gb)).collect();
+        assert_eq!(ids, [0xFE, 0xFD, 0xFC, 0xFF, 0xFE]);
+        // P15 rising counts even when P14 goes low in between; P14 alone does not.
+        assert_eq!(p1(&mut gb, &[0x20, 0x30]), 0xFE);
+        assert_eq!(p1(&mut gb, &[0x10, 0x20, 0x30]), 0xFD);
+        // Another MLT_REQ 3 pulses P15 six times: player 3 + 6 = player 1 (mod 4), then player 2.
+        assert_eq!(mlt_req(&mut gb, 3), 0xFF);
+        assert_eq!(next(&mut gb), 0xFE);
+        // One player again: $F.
+        assert_eq!(mlt_req(&mut gb, 0), 0xFF);
+        assert_eq!(next(&mut gb), 0xFF);
+    }
 }
