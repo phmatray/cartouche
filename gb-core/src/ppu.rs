@@ -83,6 +83,8 @@ pub struct Ppu {
 
     // STAT interrupt line — used for rising-edge detection to avoid re-firing
     pub(crate) stat_irq_line: bool,
+    /// The last STAT write raised that line (DMG glitch): the bus requests IF.1 at once and clears it.
+    pub(crate) stat_write_irq: bool,
 
     // CGB color support
     pub cgb_mode: bool,
@@ -130,6 +132,7 @@ impl Ppu {
             front: vec![0; FRAMEBUFFER_SIZE],
             frame_ready: false,
             stat_irq_line: false,
+            stat_write_irq: false,
             cgb_mode: false,
             compat: false,
             bg_cram: [0; 64],
@@ -299,7 +302,22 @@ impl Ppu {
                     self.lcd_on_line0 = true;
                 }
             }
-            0xFF41 => self.stat = (value & 0x78) | (self.stat & 0x07),
+            0xFF41 => {
+                // DMG: the write acts as if every enable were set for its M-cycle (Pan Docs
+                // "Spurious STAT interrupts"), so the line rises if a source is active as it lands:
+                // HBlank once STAT reads mode 0 (gbmicrotest `stat_write_glitch_l1_a/b`, `_l143_a/b`),
+                // VBlank, LY = LYC (`_l0_a`, `_l154_a`), and mode 2 only while its pulse lasts
+                // (`MODE2_PULSE`: `_l0_b/c`, `_l1_c/d`, `_l154_b/c`). The line after LCD on has no
+                // mode-0 source (`lyc1_int_nops_a`). A CGB, in either mode, doesn't glitch.
+                let read = self.read_register(0xFF41);
+                let active = self.mode == PpuMode::HBlank && read & 3 == 0
+                    || self.mode == PpuMode::VBlank
+                    || read & 4 != 0
+                    || (self.mode == PpuMode::OamScan && !self.lcd_on_line0) && self.mode_clock < MODE2_PULSE;
+                self.stat_write_irq = self.lcdc & 0x80 != 0 && !self.cgb_mode && !self.compat && !self.stat_irq_line && active;
+                self.stat_irq_line |= self.stat_write_irq;
+                self.stat = (value & 0x78) | (self.stat & 0x07);
+            }
             0xFF42 => self.scy = value,
             0xFF43 => self.scx = value,
             0xFF44 => {}
@@ -745,11 +763,33 @@ mod tests {
     /// The mode-2 source is a pulse: STAT bit 5 written in a line's first M-cycle raises the
     /// interrupt, written one M-cycle later it raises nothing until the next line (gbmicrotest
     /// `oam_int_if_level_c/d`).
+    /// A DMG STAT write raises the STAT line when a source is active, whatever the value written
+    /// (gbmicrotest `stat_write_glitch_*`): in HBlank once STAT reads 0, not in mode 3 or after the
+    /// mode-2 pulse. A CGB never does.
+    #[test]
+    fn dmg_stat_write_glitch_raises_if() {
+        let write_at = |cgb: bool, mode: PpuMode, clk: u32| {
+            let mut p = Ppu::new();
+            (p.lcdc, p.ly, p.lyc, p.cgb_mode) = (0x81, 10, 0, cgb); // LYC 0: no coincidence
+            while p.mode != mode { p.step(1); }
+            while p.mode_clock < clk { p.step(1); }
+            p.write_register(0xFF41, 0x00);
+            p.stat_write_irq
+        };
+        assert!(write_at(false, PpuMode::HBlank, 4), "HBlank, STAT reads 0");
+        assert!(!write_at(false, PpuMode::HBlank, 2), "HBlank, STAT still reads 3");
+        assert!(!write_at(false, PpuMode::Drawing, 40), "mode 3");
+        assert!(write_at(false, PpuMode::OamScan, 0), "mode 2's pulse");
+        assert!(!write_at(false, PpuMode::OamScan, 4), "mode 2 after its pulse");
+        assert!(!write_at(true, PpuMode::HBlank, 4), "no glitch on a CGB");
+    }
+
     #[test]
     fn mode2_stat_source_is_a_pulse() {
         for (m_cycle, fires) in [(0, true), (1, false), (20, false)] {
             let mut p = Ppu::new();
-            (p.lcdc, p.ly, p.mode, p.mode_clock) = (0x81, 9, PpuMode::HBlank, 0);
+            // A CGB: the same pulse, without the DMG STAT-write glitch.
+            (p.lcdc, p.ly, p.mode, p.mode_clock, p.cgb_mode) = (0x81, 9, PpuMode::HBlank, 0, true);
             while p.ly == 9 { p.step(4); }
             for _ in 0..m_cycle { p.step(4); }
             p.write_register(0xFF41, 0x20);

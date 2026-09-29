@@ -33,16 +33,8 @@ gbmicrotest/lyc1_write_timing_b.gb  # stat
 gbmicrotest/lyc1_write_timing_c.gb  # stat
 gbmicrotest/oam_int_inc_sled.gb  # ppu
 gbmicrotest/oam_int_nops_a.gb  # ppu
-gbmicrotest/stat_write_glitch_l0_a.gb  # stat
-gbmicrotest/stat_write_glitch_l0_b.gb  # stat
-gbmicrotest/stat_write_glitch_l143_b.gb  # stat
 gbmicrotest/stat_write_glitch_l143_c.gb  # stat
-gbmicrotest/stat_write_glitch_l143_d.gb  # stat
-gbmicrotest/stat_write_glitch_l154_a.gb  # stat
-gbmicrotest/stat_write_glitch_l154_b.gb  # stat
 gbmicrotest/stat_write_glitch_l154_d.gb  # stat
-gbmicrotest/stat_write_glitch_l1_b.gb  # stat
-gbmicrotest/stat_write_glitch_l1_c.gb  # stat
 gbmicrotest/temp.gb  # rom-defect: an empty main (`nop`, temp.s l.4) runs off the end of the ROM into an invalid opcode, which locks a real CPU; Cartouche stops with an emulator error
 gbmicrotest/vblank2_int_if_a.gb  # stat
 gbmicrotest/vblank2_int_if_c.gb  # stat

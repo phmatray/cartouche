@@ -298,6 +298,7 @@ impl MemoryBus {
                     self.dma_delay = 2;
                 } else {
                     self.ppu.write_register(addr, value);
+                    if std::mem::take(&mut self.ppu.stat_write_irq) { self.interrupts.request(STAT_BIT); }
                 }
             }
             0xFF4D => {
