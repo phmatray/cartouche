@@ -2,8 +2,9 @@
 # plus `@<model or reference>` for screenshot runs (Mealybug, Age screenshots, rtc3test), then `# <area>`.
 # Every ROM here still runs; CI fails when one passes. Remove a line with the fix that makes it pass.
 # Areas: boot, cpu-timing, interrupt, timer, oam-dma, hdma, stat, ppu, ppu-mode3, double-speed,
-# apu, mbc, rtc, sgb, serial, other; no-verdict = a gbmicrotest ROM whose source never writes a verdict
-# to $FF82 (a hardware probe, not a self-checking test), so it times out on every emulator.
+# apu, mbc, rtc, sgb, serial, other; rom-defect = the ROM itself is broken (the line gives the
+# evidence, and the upstream report when there is one). gbmicrotest probes whose source records no
+# value are in probes-without-verdict.txt instead: they run, but have no verdict to fail.
 
 mooneye-test-suite/acceptance/boot_div-dmg0.gb  # boot: DMG-CPU 0 (the first DMG revision) is not emulated
 mooneye-test-suite/acceptance/boot_hwio-dmg0.gb  # boot: DMG-CPU 0 (the first DMG revision) is not emulated
@@ -43,24 +44,7 @@ age-test-roms/stat-mode/stat-mode-cgbE.gb  # stat
 age-test-roms/stat-mode/stat-mode-ncmE.gb  # stat
 age-test-roms/vram/vram-read-cgbBCE.gb  # ppu
 age-test-roms/vram/vram-read-ncmBCE.gb  # ppu
-gbmicrotest/000-oam_lock.gb  # no-verdict
-gbmicrotest/000-write_to_x8000.gb  # no-verdict
-gbmicrotest/001-vram_unlocked.gb  # no-verdict
-gbmicrotest/002-vram_locked.gb  # no-verdict
-gbmicrotest/004-tima_boot_phase.gb  # no-verdict
-gbmicrotest/004-tima_cycle_timer.gb  # no-verdict
-gbmicrotest/007-lcd_on_stat.gb  # no-verdict
-gbmicrotest/400-dma.gb  # no-verdict
-gbmicrotest/500-scx-timing.gb  # no-verdict
-gbmicrotest/800-ppu-latch-scx.gb  # no-verdict
-gbmicrotest/801-ppu-latch-scy.gb  # no-verdict
-gbmicrotest/802-ppu-latch-tileselect.gb  # no-verdict
-gbmicrotest/803-ppu-latch-bgdisplay.gb  # no-verdict
-gbmicrotest/audio_testbench.gb  # no-verdict
-gbmicrotest/cpu_bus_1.gb  # no-verdict
-gbmicrotest/dma_basic.gb  # no-verdict
-gbmicrotest/flood_vram.gb  # no-verdict
-gbmicrotest/halt_op_dupe_delay.gb  # other: ROM defect, expects DIV $55 ~60 M-cycles after a DIV reset; the HALT bug gives $01, as SameBoy (#215)
+gbmicrotest/halt_op_dupe_delay.gb  # rom-defect: https://github.com/aappleby/gbmicrotest/issues/3 expects DIV $55 ~60 M-cycles after a DIV reset; the HALT bug gives $01, as SameBoy (#215)
 gbmicrotest/hblank_int_if_a.gb  # stat
 gbmicrotest/hblank_int_l0.gb  # stat
 gbmicrotest/hblank_int_scx0_if_b.gb  # ppu-mode3
@@ -101,31 +85,20 @@ gbmicrotest/int_oam_nops.gb  # ppu
 gbmicrotest/lcdon_to_oam_int_l0.gb  # ppu
 gbmicrotest/lcdon_to_oam_int_l1.gb  # ppu
 gbmicrotest/lcdon_to_oam_int_l2.gb  # ppu
-gbmicrotest/lcdon_write_timing.gb  # no-verdict
 gbmicrotest/line_144_oam_int_b.gb  # ppu
 gbmicrotest/line_144_oam_int_c.gb  # ppu
 gbmicrotest/line_144_oam_int_d.gb  # ppu
 gbmicrotest/line_153_lyc0_int_inc_sled.gb  # stat
-gbmicrotest/ly_while_lcd_off.gb  # no-verdict
 gbmicrotest/lyc1_int_if_edge_a.gb  # stat
 gbmicrotest/lyc1_int_if_edge_c.gb  # stat
 gbmicrotest/lyc1_write_timing_b.gb  # stat
 gbmicrotest/lyc1_write_timing_c.gb  # stat
-gbmicrotest/minimal.gb  # no-verdict
-gbmicrotest/mode2_stat_int_to_oam_unlock.gb  # no-verdict
 gbmicrotest/oam_int_halt_a.gb  # ppu
 gbmicrotest/oam_int_halt_b.gb  # ppu
 gbmicrotest/oam_int_if_level_d.gb  # ppu
 gbmicrotest/oam_int_inc_sled.gb  # ppu
 gbmicrotest/oam_int_nops_a.gb  # ppu
 gbmicrotest/oam_int_nops_b.gb  # ppu
-gbmicrotest/oam_sprite_trashing.gb  # no-verdict
-gbmicrotest/poweron.gb  # no-verdict
-gbmicrotest/ppu_scx_vs_bgp.gb  # no-verdict
-gbmicrotest/ppu_sprite_testbench.gb  # no-verdict
-gbmicrotest/ppu_spritex_vs_scx.gb  # no-verdict
-gbmicrotest/ppu_win_vs_wx.gb  # no-verdict
-gbmicrotest/ppu_wx_early.gb  # no-verdict
 gbmicrotest/stat_write_glitch_l0_a.gb  # stat
 gbmicrotest/stat_write_glitch_l0_b.gb  # stat
 gbmicrotest/stat_write_glitch_l143_b.gb  # stat
@@ -136,13 +109,11 @@ gbmicrotest/stat_write_glitch_l154_b.gb  # stat
 gbmicrotest/stat_write_glitch_l154_d.gb  # stat
 gbmicrotest/stat_write_glitch_l1_b.gb  # stat
 gbmicrotest/stat_write_glitch_l1_c.gb  # stat
-gbmicrotest/temp.gb  # no-verdict (an empty main: it runs off the end of the ROM)
-gbmicrotest/toggle_lcdc.gb  # no-verdict
+gbmicrotest/temp.gb  # rom-defect: an empty main (`nop`, temp.s l.4) runs off the end of the ROM into an invalid opcode, which locks a real CPU; Cartouche stops with an emulator error
 gbmicrotest/vblank2_int_if_a.gb  # stat
 gbmicrotest/vblank2_int_if_c.gb  # stat
 gbmicrotest/vblank_int_if_a.gb  # stat
 gbmicrotest/vblank_int_if_c.gb  # stat
-gbmicrotest/wave_write_to_0xC003.gb  # no-verdict
 mealybug-tearoom-tests/ppu/m3_bgp_change_sprites.gb@cgb  # ppu-mode3: the pixels @dmg fails on (left-edge OBJs use the boot ROM's ® tile, which Cartouche's boot ROM does not have)
 mealybug-tearoom-tests/ppu/m3_bgp_change_sprites.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_lcdc_bg_en_change.gb@dmg  # ppu-mode3

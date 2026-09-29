@@ -164,7 +164,11 @@ browser's own install button.
 
 The core is checked against the public hardware test ROMs that emulator
 authors rely on. Every suite below runs in CI on each commit; known failures are
-listed, not hidden, in `gb-core/tests/expected-failures.txt`.
+listed, not hidden, in `gb-core/tests/expected-failures.txt`. Some gbmicrotest
+ROMs are hardware probes, not tests: their source records no expected value, so
+nothing can pass or fail. They are listed in `gb-core/tests/probes-without-verdict.txt`
+and still run on every commit, but only to check that the emulator does not
+crash. They are not counted in the score.
 
 | Suite | What it checks | Result |
 |---|---|---|
@@ -182,12 +186,15 @@ listed, not hidden, in `gb-core/tests/expected-failures.txt`.
 | Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 26/51 |
 | SameSuite | APU, HDMA and interrupt edge cases (CGB), SGB multiplayer | 71/78 |
 | Age | PPU, STAT, OAM/VRAM access and double-speed timing | 19/51 |
-| gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 413/513 |
+| gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 420/490 ² |
 | rtc3test | The MBC3 real-time clock | 6/6 |
 
 ¹ Test 7 runs inside the combined `oam_bug.gb`. Run on its own, that ROM
 overruns its 8 KB text log and overwrites its own code, so it cannot finish on
 any emulator. The details are in [CHANGELOG.md](CHANGELOG.md).
+
+² Plus 23 probes with no verdict (not a test), which run without an emulator
+error and are not counted.
 
 ```bash
 ./scripts/fetch-test-roms.sh                  # downloads the test ROMs (not stored in this repo)
