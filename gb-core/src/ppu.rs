@@ -66,7 +66,18 @@ pub struct Ppu {
     pub mode: PpuMode,
     pub mode_clock: u32,
     pub window_line_counter: u8,
-    pub(crate) window_was_active: bool,
+    /// WY has matched LY on a line of this frame (`wy_ok`).
+    pub(crate) wy_latch: bool,
+    /// DMG, WX = 166: the window, due on the line's last pixel, starts the next line instead
+    /// (`end_line`).
+    pub(crate) win_carry: bool,
+    /// The window starts on the line's last pixel (a CGB's WX 166, `predict_len`): the mode-0
+    /// interrupt comes when mode 3 would have ended without it, 6 dots before STAT shows mode 0
+    /// (SameBoy's `wx_166_interrupt_glitch`, MIT; Gambatte `window/m2int_wxA6_m0irq*_1/_2` on the
+    /// CGB, beside `m2int_wxA6_m3stat_*`, whose mode 3 is 6 dots longer).
+    pub(crate) m0_early: bool,
+    /// Dots until a WY or LCDC write is compared (`wy_write`), 0: none due.
+    pub(crate) wy_check_in: u8,
     /// First line after the LCD is switched on, until its HBlank: no OAM scan (STAT reads mode 0),
     /// the line is 4 dots short, and its mode 3 shows late and ends late.
     pub(crate) lcd_on_line0: bool,
@@ -138,7 +149,10 @@ impl Ppu {
             mode: PpuMode::OamScan,
             mode_clock: 0,
             window_line_counter: 0,
-            window_was_active: false,
+            wy_latch: false,
+            win_carry: false,
+            wy_check_in: 0,
+            m0_early: false,
             lcd_on_line0: false,
             mode3_len: MODE3_MAX,
             m_cycle_dots: 4,
@@ -329,7 +343,14 @@ impl Ppu {
                 }
                 let was_enabled = self.lcdc & 0x80 != 0;
                 let tile_sel = (self.lcdc ^ value) & 0x10 != 0;
+                // A window carried to the next line (DMG, WX = 166) turned off and on again before it
+                // starts moves to its next row, as it does within a line (`fifo_dot`; Gambatte
+                // `wxA6_weoff_at_xposA6`: on again in HBlank, `wxA6_wy01_weoff_ly02_weon_ly60`: in mode 2).
+                if self.win_carry && self.lcdc & 0x20 == 0 && value & 0x20 != 0 {
+                    self.window_line_counter = self.window_line_counter.wrapping_add(1);
+                }
                 self.lcdc = value;
+                self.wy_write();
                 self.line.win_was_on |= value & 0x20 != 0;
                 if tile_sel { self.tile_sel_switch(); }
                 let is_enabled = self.lcdc & 0x80 != 0;
@@ -344,7 +365,7 @@ impl Ppu {
                     self.stat_irq_line = lyc_flag != 0 && self.stat & 0x40 != 0;
                     self.lcd_on_line0 = false;
                     self.line.active = false;
-                    (self.window_was_active, self.window_line_counter) = (false, 0);
+                    (self.wy_latch, self.win_carry, self.window_line_counter) = (false, false, 0);
                 } else if !was_enabled && is_enabled {
                     // Line 0 restarts 4 dots in, without an OAM scan.
                     self.mode = PpuMode::OamScan;
@@ -400,9 +421,16 @@ impl Ppu {
             }
             0xFF48 => self.obp0 = value,
             0xFF49 => self.obp1 = value,
-            0xFF4A => self.wy = value,
+            0xFF4A => {
+                self.wy = value;
+                self.wy_write();
+            }
             0xFF4B => {
-                (self.line.wx_old, self.line.wx_dot) = (self.wx, self.line.dot + 1); // see `wx_seen`
+                // See `wx_seen`: the old WX is compared one dot more, except by a CGB in single speed
+                // (Gambatte `window/late_wx_1/_2`, `_wx03`, `_wx0f`, `_ff_07`, `_ff_0f`: a CGB's
+                // write in the M-cycle before the match moves it, a DMG's does not; `late_wx_ds_1/_2`).
+                let late = (!(self.cgb_mode || self.compat) || self.m_cycle_dots == 2) as u32;
+                (self.line.wx_old, self.line.wx_dot) = (self.wx, self.line.dot + late);
                 self.wx = value;
             }
             0xFF4F => self.vram_bank = value & 0x01,
@@ -418,6 +446,43 @@ impl Ppu {
             }
             0xFF6C => self.opri = value & 1,
             _ => {}
+        }
+    }
+
+    /// WY compared with LY, with the LCD and the window on: a match holds for the rest of the frame
+    /// (`wy_latch`). Compared as each line starts and when WY or LCDC is written (SameBoy's
+    /// `wy_check`, MIT; Gambatte `window/late_enable_afterVblank_*`: LCDC.5 on at the end of WY's
+    /// line still opens the window on the next, `enable_display_ly0_wemaster_*`: WY = LY while LCDC
+    /// turns the LCD on, then WY moved off).
+    pub(crate) fn wy_check(&mut self) {
+        if self.lcdc & 0xA0 == 0xA0 && self.wy == self.ly { self.wy_latch = true; }
+    }
+
+    /// A line starts: WY is compared with its LY a few dots in, at once on a CGB in single speed
+    /// except on line 0 (Gambatte `window/arg/late_wy_1toFF_*`, `late_wy_2toFF_*`, `late_wy_1/_2`,
+    /// `late_wy_ds_*`: WY moved off LY in the line's first M-cycle closes the window on a DMG, not
+    /// on a CGB, on line 0 on both; one M-cycle later it no longer does).
+    fn wy_line_start(&mut self, line0: bool) {
+        let at: u32 = match (self.cgb_mode || self.compat, self.m_cycle_dots == 2, line0) {
+            (true, false, false) => 0,
+            (true, true, false) => 1,
+            (true, true, true) => 5,
+            _ => 2,
+        };
+        match at.checked_sub(self.mode_clock) {
+            Some(0) | None => self.wy_check(),
+            Some(d) if self.wy_check_in == 0 || d < self.wy_check_in as u32 => self.wy_check_in = d as u8,
+            _ => {}
+        }
+    }
+
+    /// A WY or LCDC write is compared a few dots later: 3 on a DMG, an M-cycle on a CGB (in both
+    /// modes). A write in a line's last M-cycle is compared with that line on a DMG, with the next
+    /// on a CGB (Gambatte `window/late_enable_afterVblank_2/_4/_ds_2`); a DMG's WY written 2 dots
+    /// before a WX match misses it, 4 dots before does not (`late_scx_late_wy_FFto4_ly4_wx20_2/_3`).
+    fn wy_write(&mut self) {
+        if !self.wy_latch {
+            self.wy_check_in = if self.cgb_mode || self.compat { self.m_cycle_dots as u8 } else { 3 };
         }
     }
 
@@ -437,13 +502,39 @@ impl Ppu {
     }
 
     /// Advance PPU by the given T-cycles. Returns (vblank_irq, stat_irq, hblank_entry).
+    #[inline(always)]
     pub fn step(&mut self, cycles: u32) -> (bool, bool, bool) {
+        if self.wy_check_in == 0 { self.step_dots(cycles) } else { self.step_wy(cycles) }
+    }
+
+    /// `step` with a WY compare due (`wy_write`): at its dot, inside these dots or at their end.
+    #[inline(never)]
+    fn step_wy(&mut self, cycles: u32) -> (bool, bool, bool) {
+        if self.lcdc & 0x80 == 0 {
+            return (false, false, false);
+        }
+        let due = self.wy_check_in as u32;
+        if due > cycles {
+            self.wy_check_in -= cycles as u8;
+            return self.step_dots(cycles);
+        }
+        self.wy_check_in = 0;
+        let a = self.step_dots(due); // a line starting there may set the next compare due
+        self.wy_check();
+        if due == cycles { return a; }
+        let b = self.step(cycles - due);
+        (a.0 | b.0, a.1 | b.1, a.2 | b.2)
+    }
+
+    #[inline(always)]
+    fn step_dots(&mut self, cycles: u32) -> (bool, bool, bool) {
         if self.lcdc & 0x80 == 0 {
             return (false, false, false);
         }
 
         let mut vblank_irq = false;
         let mut hblank_entry = false;
+        let mut line_start = None; // Some(line 0)
         let mut prev_stat_line = self.stat_irq_line;
         self.stat_line_before = prev_stat_line;
 
@@ -454,7 +545,7 @@ impl Ppu {
                 if self.mode_clock >= 80 {
                     self.mode_clock -= 80;
                     self.mode = PpuMode::Drawing;
-                    self.mode3_len = MODE3_MAX;
+                    (self.mode3_len, self.m0_early) = (MODE3_MAX, false);
                     self.start_line();
                 }
             }
@@ -489,10 +580,10 @@ impl Ppu {
                             t.finish_frame(&self.framebuffer, &self.oam, &self.bg_cram, &self.obj_cram, &self.vram, self.cgb_mode, self.compat);
                         }
                         self.window_line_counter = 0;
-                        self.window_was_active = false;
                         vblank_irq = true;
                     } else {
                         self.mode = PpuMode::OamScan;
+                        line_start = Some(false);
                         (self.scan_n, self.scan_next) = (0, 0);
                     }
                 }
@@ -508,12 +599,18 @@ impl Ppu {
                     self.mode_clock -= 456;
                     if self.ly == 0 {
                         self.mode = PpuMode::OamScan;
+                        self.wy_latch = false; // a new frame
+                        line_start = Some(true);
                         (self.scan_n, self.scan_next) = (0, 0);
                     } else {
                         self.ly += 1;
                     }
                 }
             }
+        }
+
+        if let Some(line0) = line_start {
+            self.wy_line_start(line0);
         }
 
         // Compute combined STAT interrupt signal and fire only on rising edge.
@@ -626,7 +723,9 @@ impl Ppu {
     #[inline]
     fn compute_stat_line(&self, pulse: u32, early: u32, lyc_lead: Option<u32>) -> bool {
         if self.stat & 0x78 == 0 { return false; } // no source enabled: every term below is false
-        let hblank = self.mode == PpuMode::HBlank && self.mode_clock >= self.mode0_irq_delay() && self.stat & 0x08 != 0;
+        let hblank = (self.mode == PpuMode::HBlank && self.mode_clock >= self.mode0_irq_delay()
+            || self.m0_early && self.mode == PpuMode::Drawing && self.mode_clock + 6 + MODE0_EARLY >= self.mode3_len)
+            && self.stat & 0x08 != 0;
         let vblank = self.mode == PpuMode::VBlank  && self.stat & 0x10 != 0;
         // Mode 2 is a pulse at the line start, not a level (`MODE2_PULSE`). Line 144 has it too;
         // line 0 after LCD on doesn't. It rises
@@ -1327,6 +1426,7 @@ mod tests {
         p.lcdc = 0x83; // LCD, BG, OBJ on
         p.ly = 10;
         setup(&mut p);
+        p.wy_check(); // as the line starts
         let (mut dot, mut hblank_at) = (0, 0);
         while p.read_register(0xFF44) == 10 {
             dot += 1;
@@ -1405,6 +1505,7 @@ mod tests {
         let mut p = Ppu::new();
         (p.lcdc, p.bgp, p.obp0, p.ly) = (0x91, 0xE4, 0xE4, 10); // LCD, BG on; tiles at $8000
         setup(&mut p);
+        p.wy_check(); // as the line starts
         while p.ly == 10 {
             if p.mode == PpuMode::Drawing {
                 let dot = p.mode_clock;
@@ -1495,7 +1596,7 @@ mod tests {
     fn window_waits_for_wy_to_match_ly() {
         let s = shades(&run_line10(|p| { window_setup(p); p.wy = 0; }, |_, _| {}), 10);
         assert!(s.iter().all(|&v| v == 0), "WY never matched this frame: {s:?}");
-        let s = shades(&run_line10(|p| { window_setup(p); p.wy = 0; p.window_was_active = true; }, |_, _| {}), 10);
+        let s = shades(&run_line10(|p| { window_setup(p); p.wy = 0; p.wy_latch = true; }, |_, _| {}), 10);
         assert_eq!(s.iter().position(|&v| v == 3), Some(43));
     }
 
@@ -1517,6 +1618,69 @@ mod tests {
         assert!(s[80..93].iter().all(|&v| v == 0), "BG while it is off: {s:?}");
         assert!(s[93..].iter().all(|&v| v == 1), "restarted at x = 93 on row 1: {s:?}");
         assert_eq!(p.window_line_counter, 2, "two rows used");
+    }
+
+    /// WY written in mode 3 is compared 3 dots later on a DMG, 4 (an M-cycle) on a CGB: the window
+    /// opens on this line if that compare comes before its WX match (x = 43 here), else not before
+    /// WY matches again.
+    #[test]
+    fn late_wy_write_triggers_per_compare_dot() {
+        // The last mode-3 dot a WY = LY write still opens the window at x = 43, written through the
+        // bus or compared at once.
+        let last_write = |cgb: bool, at_once: bool| {
+            let shows = |d: u32| {
+                let p = run_line10(|p| { window_setup(p); (p.wy, p.cgb_mode) = (0xFF, cgb); }, |p, dot| if dot == d {
+                    if at_once { p.wy = 10; p.wy_check() } else { p.write_register(0xFF4A, 10) }
+                });
+                p.line.win_x == 43 && p.window_line_counter == 1
+            };
+            let last = (0..100).rev().find(|&d| shows(d)).expect("an early write opens it");
+            assert!(shows(0) && !shows(last + 1));
+            last
+        };
+        assert_eq!(last_write(false, false), last_write(false, true) - 3, "DMG: 3 dots");
+        assert_eq!(last_write(true, false), last_write(true, true) - 4, "CGB: an M-cycle");
+    }
+
+    /// A WX write reaches the window's match one dot later on a DMG than on a CGB in single speed.
+    #[test]
+    fn cgb_wx_write_reaches_the_match_at_once() {
+        // The last mode-3 dot a WX 50 → 255 write still keeps the window from x = 43.
+        let last_write = |cgb: bool| {
+            let shows = |d: u32| {
+                let p = run_line10(|p| { window_setup(p); p.cgb_mode = cgb; }, |p, dot| if dot == d { p.write_register(0xFF4B, 0xFF) });
+                p.line.window_triggered
+            };
+            assert!(!shows(0));
+            (0..100).find(|&d| shows(d)).expect("a late write leaves it") - 1
+        };
+        // A CGB's FIFO matches 2 dots ahead of a DMG's (`FIFO_LAG`), less the dot a DMG's write waits.
+        assert_eq!(last_write(false) - last_write(true), 1);
+    }
+
+    /// DMG, WX = 166: no window on WY's line, but its last pixel uses a window row, and the next
+    /// line is the window from x = 0, on its second column (Gambatte `window/on_screen/wxA6_*`).
+    #[test]
+    fn wx_a6_triggers_on_the_last_pixel() {
+        let mut p = Ppu::new();
+        window_setup(&mut p);
+        (p.bgp, p.ly, p.wx) = (0xE4, 10, 166);
+        p.vram[0x1C01] = 0; // window column 1: light, the rest dark
+        p.wy_check();
+        while p.ly < 12 { p.step(1); }
+        assert!(shades(&p, 10).iter().all(|&v| v == 0), "WY's line is BG");
+        let s = shades(&p, 11);
+        assert!(s[..8].iter().all(|&v| v == 0) && s[8..].iter().all(|&v| v == 3), "the window's column 1 first: {s:?}");
+        assert_eq!(p.window_line_counter, 2, "a row on each line");
+        // A CGB starts it on each line's last pixel: nothing is carried to the next line.
+        let mut p = Ppu::new();
+        window_setup(&mut p);
+        (p.cgb_mode, p.ly, p.wx) = (true, 10, 166);
+        p.wy_check();
+        while p.ly < 11 { p.step(1); }
+        assert!(!p.win_carry);
+        while p.ly < 12 { p.step(1); }
+        assert_eq!(p.window_line_counter, 2);
     }
 
     /// The first tile is fetched twice, but its tile number is read by the first fetch only.
@@ -1574,7 +1738,7 @@ mod tests {
         let setup = |drew: u8| move |p: &mut Ppu| {
             p.lcdc = 0xD1; // window off
             p.vram[0..16].fill(0x80); // tile 0: its first column dark
-            (p.wx, p.window_was_active, p.window_line_counter) = (95, true, drew);
+            (p.wx, p.wy_latch, p.window_line_counter) = (95, true, drew);
         };
         let dark = |drew: u8| -> Vec<usize> {
             shades(&run_line10(setup(drew), |_, _| {}), 10).iter().enumerate().filter(|(_, &v)| v == 3).map(|(x, _)| x).collect()
@@ -1609,7 +1773,7 @@ mod tests {
     fn pan_docs_len(p: &Ppu) -> u32 {
         let fine = (p.scx % 8) as i32;
         // A DMG never matches WX 166 in mode 3 (Age stat-mode-window).
-        let window = p.lcdc & 0x20 != 0 && (p.window_was_active || p.ly == p.wy)
+        let window = p.lcdc & 0x20 != 0 && (p.wy_latch || p.ly == p.wy)
             && p.wx <= if p.cgb_mode || p.compat { 166 } else { 165 };
         let mut len = 172 + fine as u32 + if window { 6 } else { 0 };
         if window && p.wx == 0 && fine > 0 { len += 1; }
