@@ -181,12 +181,12 @@ crash. They are not counted in the score.
 | Homebrew smoke tests | Freely licensed GB and GBC games run without freezing | ✅ |
 | Link cable | Serial transfers between two consoles | ✅ |
 | Infrared (CGB, HuC1, HuC3) | Light between the two consoles of the link page | ✅ |
-| Mooneye acceptance | Timers, DMA, interrupts, PPU and instruction timing | 74/75 |
+| Mooneye acceptance | Timers, DMA, interrupts, PPU and instruction timing | 75/75 |
 | Mooneye emulator-only MBC | MBC1, MBC2 and MBC5 banking | 28/28 |
-| Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 29/51 ³ |
+| Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 30/51 ³ |
 | SameSuite | APU, HDMA and interrupt edge cases (CGB), SGB multiplayer | 78/78 ⁴ |
 | Age | PPU, STAT, OAM/VRAM access and double-speed timing | 36/51 |
-| gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 459/489 ² |
+| gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 477/489 ² |
 | rtc3test | The MBC3 real-time clock | 6/6 |
 
 ¹ Test 7 runs inside the combined `oam_bug.gb`. Run on its own, that ROM
@@ -198,7 +198,7 @@ error and are not counted. One of them, `temp.gb`, runs into an invalid opcode,
 which locks the CPU as on hardware: the screen and sound run on, and the player
 says so.
 
-³ 18 of the 22 failures are rule-blocked: their reference screenshots show the
+³ 18 of the 21 failures are rule-blocked: their reference screenshots show the
 ® that Nintendo's boot ROM leaves in video memory, which Cartouche does not ship,
 and every pixel that differs is where that tile is drawn. They stay counted as
 failures, in their own section of `expected-failures.txt`.
