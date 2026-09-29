@@ -45,8 +45,9 @@ echo "fe5d1e8ba8144431200bee34b71f3889a84c5a256442a4b1cf2a57f7e6c057f5  $HB/shoc
   | shasum -a 256 -c --quiet -
 
 echo "Fetching conformance suites..."
-# c-sp/game-boy-test-roms v7.0: prebuilt Mooneye, Mealybug Tearoom, SameSuite, Age, gbmicrotest and
-# rtc3test with their reference screenshots, for tests/conformance.rs. One pinned archive, SHA-256
+# c-sp/game-boy-test-roms v7.0: prebuilt Mooneye, Mealybug Tearoom, SameSuite, Age, gbmicrotest,
+# rtc3test and Gambatte's hwtests (gambatte/, from pokemon-speedrunning/gambatte-core) with their
+# reference screenshots, for tests/conformance.rs. One pinned archive, SHA-256
 # checked; the suites keep the archive's own directory names.
 CONF="$DEST/conformance"
 ZIP="$DEST/game-boy-test-roms-v7.0.zip"

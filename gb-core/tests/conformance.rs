@@ -847,6 +847,16 @@ fn gambatte_cgb_to_rgb(p: &[u8]) -> [u8; 3] {
 }
 
 #[test]
+fn gambatte_dmg() {
+    run_suite_where("Gambatte DMG", "gambatte", &[""], 1, gambatte, |label| label.ends_with("@dmg"));
+}
+
+#[test]
+fn gambatte_cgb() {
+    run_suite_where("Gambatte CGB", "gambatte", &[""], 1, gambatte, |label| label.ends_with("@cgb"));
+}
+
+#[test]
 fn gambatte_names() {
     let checks = |rel: &str| -> Vec<(String, Hw, Check)> {
         gambatte(Path::new(rel), &format!("gambatte/{rel}"))

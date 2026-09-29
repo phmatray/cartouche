@@ -188,6 +188,7 @@ crash. They are not counted in the score.
 | Age | PPU, STAT, OAM/VRAM access and double-speed timing | 49/51 |
 | gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 487/489 ² |
 | rtc3test | The MBC3 real-time clock | 6/6 |
+| Gambatte hwtests | STAT and LYC interrupts, mode 3 length, window, OAM DMA, HDMA, HALT, speed switch and sound, checked on a DMG and a CGB | DMG 1501/1873, CGB 2493/3352 ⁵ |
 
 ¹ Test 7 runs inside the combined `oam_bug.gb`. Run on its own, that ROM
 overruns its 8 KB text log and overwrites its own code, so it cannot finish on
@@ -205,6 +206,12 @@ failures, in their own section of `expected-failures.txt`.
 
 ⁴ Each ROM runs on the chip revision its file name names (`-cgb0B`, `-cgbB`,
 `-A` for the Game Boy Advance…). The app itself plays as a CGB E.
+
+⁵ Each ROM runs on the model its name names (a DMG, or a CGB C), 15 frames,
+like Gambatte's own runner. A hex result is read from the screen in the test's
+own font, from its own ROM. Plus 95 ROMs with no result in their name (34 DMG,
+61 CGB: memory dumpers and unverified results), which run without an emulator
+error and are not counted. No failure is rule-blocked.
 
 ```bash
 ./scripts/fetch-test-roms.sh                  # downloads the test ROMs (not stored in this repo)
