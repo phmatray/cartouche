@@ -451,6 +451,7 @@ impl Ppu {
     }
 
     /// Advance PPU by the given T-cycles. Returns (vblank_irq, stat_irq, hblank_entry).
+    #[inline(always)]
     pub fn step(&mut self, cycles: u32) -> (bool, bool, bool) {
         if self.wy_check_in == 0 { self.step_dots(cycles) } else { self.step_wy(cycles) }
     }
@@ -474,7 +475,7 @@ impl Ppu {
         (a.0 | b.0, a.1 | b.1, a.2 | b.2)
     }
 
-    #[inline]
+    #[inline(always)]
     fn step_dots(&mut self, cycles: u32) -> (bool, bool, bool) {
         if self.lcdc & 0x80 == 0 {
             return (false, false, false);
