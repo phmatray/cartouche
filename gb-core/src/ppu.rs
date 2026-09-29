@@ -110,6 +110,9 @@ pub struct Ppu {
     /// The STAT line rose in the M-cycle just run (`step`), and whether LY = LYC alone raised it.
     pub(crate) stat_edge_now: bool,
     pub(crate) stat_edge_lyc: bool,
+    /// Double speed: an LYC write near a line's end compared LY = LYC as writes do; the line's own
+    /// edge follows that view until the two agree again (`stat_line_written`).
+    pub(crate) lyc_write_view: bool,
 
     // CGB color support
     pub cgb_mode: bool,
@@ -169,6 +172,7 @@ impl Ppu {
             stat_line_before: false,
             stat_edge_now: false,
             stat_edge_lyc: false,
+            lyc_write_view: false,
             cgb_mode: false,
             compat: false,
             bg_cram: [0; 64],
@@ -665,7 +669,10 @@ impl Ppu {
 
         // Compute combined STAT interrupt signal and fire only on rising edge.
         // This prevents re-firing when the condition was already active (STAT blocking).
-        let lead = Some(if self.m_cycle_dots == 4 { 2 } else { 0 });
+        if self.lyc_write_view && self.dots_left() > 3 && !(self.mode == PpuMode::VBlank && matches!(self.ly, 0 | 153) && self.mode_clock <= 7) {
+            self.lyc_write_view = false;
+        }
+        let lead = Some(if self.m_cycle_dots == 4 { 2 } else if self.lyc_write_view { 3 } else { 0 });
         let new_stat_line = self.compute_stat_line(MODE2_PULSE, self.m_cycle_dots, lead);
         let stat_irq = new_stat_line && !prev_stat_line;
         self.stat_irq_line = new_stat_line;
@@ -808,7 +815,18 @@ impl Ppu {
         // `m1/lyc143_late_m2enable_lycdisable_*`, `m2enable/late_enable_m0disable_*`,
         // `m2_late_m0disable_*`, `lyc1_m2irq_late_lycdisable_*`, `lyc1_late_m2enable_lycdisable_*`).
         let early = if lyc_write { lead } else if self.m_cycle_dots == 2 { 1 } else { 2 };
-        let actual = self.compute_stat_line(4 - self.m_cycle_dots / 2, early, lyc_write.then_some(lead));
+        // A write catches mode 2's pulse for 2 dots, 3 in double speed and on line 0, whose mode
+        // 2 has no early rise (Gambatte `m2enable/late_enable_ly0_lcdoffset2_1/_2` against
+        // `late_enable_lcdoffset2_1/_2`).
+        let pulse = if self.ly == 0 { 3 } else { 4 - self.m_cycle_dots / 2 };
+        let actual = self.compute_stat_line(pulse, early, lyc_write.then_some(lead));
+        // In double speed the line's own edge then follows the write's view of LY = LYC for the
+        // rest of the line's last 3 dots (line 153: to dot 7), where it would otherwise see the
+        // old line (Gambatte `lycEnable/late_ff45_enable_ds_lcdoffset1_1/_2`,
+        // `ff45_enable_weirdpoint_ds_lcdoffset1_*`, `lyc153_late_ff45_enable_ds_lcdoffset1_*`).
+        if lyc_write && self.m_cycle_dots == 2 {
+            self.lyc_write_view = true;
+        }
         let line = forced || actual;
         // A DMG's LYC write in a line's first M-cycle (and a CGB's in double speed, on its first
         // dot) lands before the line starts: the line level it compares with is the one before
@@ -826,7 +844,13 @@ impl Ppu {
         // enabling mode 1 itself is too late, `m1/m1irq_late_enable_2`).
         let bridge = !lyc_write && (self.cgb_mode || self.compat) && self.m_cycle_dots == 4
             && self.mode == PpuMode::OamScan && self.ly == 0 && self.mode_clock == 0;
-        let prev = if before || bridge { self.stat_line_before } else { self.stat_irq_line };
+        // A CGB's LYC write in single speed lands between its M-cycle's third and fourth dots:
+        // after the LY = LYC fall `step` takes 2 dots before a line on the CPU's grid, before it
+        // off the grid, 1 dot before the line (Gambatte `lycEnable/ff45_enable_weirdpoint_lcdoffset1_1/_2`:
+        // LYC 5 to 6 there keeps the line up; `ff45_enable_weirdpoint_3` on the grid).
+        let cgb_fall = lyc_write && (self.cgb_mode || self.compat) && self.m_cycle_dots == 4
+            && self.stat_line_before && !self.stat_irq_line && self.dots_left() == 1;
+        let prev = if before || bridge || cgb_fall { self.stat_line_before } else { self.stat_irq_line };
         // A CGB's write never catches line 144's mode-2 pulse (Gambatte
         // `m1/ly143_late_m2enable_2/_ds_2`, `lyc143_late_m2enable_lycdisable_2`: on a DMG it does).
         let pulse144 = (self.cgb_mode || self.compat) && self.mode == PpuMode::VBlank && self.ly == 144 && self.stat & 0x20 != 0;
@@ -882,16 +906,21 @@ impl Ppu {
         self.ly_compare_lead(irq, edge, if edge && self.m_cycle_dots == 4 { 2 } else { 0 })
     }
 
+    /// Dots until the line ends, in HBlank and VBlank (0 in modes 2 and 3).
+    #[inline]
+    fn dots_left(&self) -> u32 {
+        match self.mode {
+            PpuMode::HBlank => (376 + MODE0_EARLY - self.mode3_len).wrapping_sub(self.mode_clock),
+            PpuMode::VBlank => 456u32.wrapping_sub(self.mode_clock),
+            _ => 0,
+        }
+    }
+
     #[inline]
     fn ly_compare_lead(&self, irq: bool, edge: bool, lead: u32) -> Option<u8> {
         let c = self.mode_clock;
         if irq && edge && lead > 0 {
-            let left = match self.mode {
-                PpuMode::HBlank => (376 + MODE0_EARLY - self.mode3_len).wrapping_sub(c),
-                PpuMode::VBlank => 456u32.wrapping_sub(c),
-                _ => 0,
-            };
-            if (1..=lead).contains(&left) {
+            if (1..=lead).contains(&self.dots_left()) {
                 return match (self.mode, self.ly) {
                     // A CGB's LYC write already sees 153 there; the line's own edge doesn't.
                     (PpuMode::VBlank, 152) => (lead > 2).then_some(153),
