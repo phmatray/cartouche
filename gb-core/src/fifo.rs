@@ -165,6 +165,8 @@ pub(crate) struct LineState {
     pub win_second: bool,
     /// LCDC.5 was on at some dot of this line so far.
     pub win_was_on: bool,
+    /// DMG, WX = 166: the last pixel's match used a window row (`fifo_dot`).
+    pub wx166_row: bool,
     /// Traced lines: the line record's registers, taken at the first dot.
     pub record: [u8; 12],
     /// Popped pixels on their way to the LCD, by the dot they were popped (mod 4): (BG, OBJ,
@@ -190,7 +192,7 @@ pub(crate) struct LineState {
 impl Ppu {
     /// Mode 2 → 3: selects the line's OBJs and resets the fetcher.
     pub(crate) fn start_line(&mut self) {
-        if self.ly == self.wy { self.window_was_active = true; }
+        if self.ly == self.wy { self.wy_latch = true; }
         let (sprites, nsprites) = if self.lcd_on_line0 { ([(0, 0, 0, 0, 0); 10], 0) } else { self.select_sprites(self.ly as usize) };
         let fine = self.scx & 7;
         let mut obj_xs = [0u64; 4];
@@ -265,9 +267,13 @@ impl Ppu {
     pub(crate) fn end_line(&mut self) {
         self.line.active = false;
         let window_line = self.window_line_counter;
-        if self.line.window_triggered {
-            self.window_line_counter = self.win_line().wrapping_add(1);
-        }
+        // DMG, WX = 166: the window matches the last pixel but does not start; it moves the window
+        // line (`win_rows`) and starts the next line if LCDC.5 is on as its mode 3 begins, after
+        // VBlank too (SameBoy's WX 166 handling, MIT; Gambatte `window/on_screen/wxA6_*`: the
+        // window on every line after WY's, also with LCDC.5 back on in VBlank or in the line's
+        // mode 2, but not on line 0 with WX 166 back only in VBlank).
+        self.window_line_counter = self.win_line().wrapping_add(self.line.window_triggered as u8);
+        self.win_carry = !(self.cgb_mode || self.compat) && self.wx == 166 && self.wy_ok();
         let (line, rec, win_x) = (self.ly as usize, self.line.record, self.wx.saturating_sub(7));
         let (sprites, n) = (self.line.sprites, rec[11] as usize);
         let drawn = self.line.window_triggered;
@@ -286,7 +292,7 @@ impl Ppu {
 
     #[inline]
     fn wy_ok(&self) -> bool {
-        self.window_was_active || self.ly == self.wy
+        self.wy_latch || self.ly == self.wy
     }
 
     /// LCDC turns the window on. On a DMG, LCDC bit 0 off blanks it but it still runs: it still
@@ -609,6 +615,14 @@ impl Ppu {
         // WX 0-6 is matched before x = 0 (x = WX - 7), while the first tile is being fetched; the
         // first match holds (a later WX 0-6 match on the same line is no new start).
         if self.line.dot <= 19 {
+            if self.line.dot == 4 && std::mem::take(&mut self.win_carry) && self.win_on() {
+                // DMG, WX = 166 on the line before (`end_line`): the window runs from the line's
+                // first tile, its second column (SameBoy's `window_tile_x = 1`, MIT; Gambatte
+                // `window/on_screen/wxA6_*`), if LCDC.5 is on by the thrown-away first fetch's data
+                // read (`wxA6_late_we_reenable_1..4`: on 4 dots into mode 3 it shows, 8 dots in not).
+                self.line.window_triggered = true;
+                (self.line.fetcher.window, self.line.fetcher.tile_x) = (true, 1);
+            }
             if self.line.win_skip == 0 {
                 let wx = self.wx_seen();
                 if wx < 7 && self.line.dot == 6 + wx as u32 && self.win_on() && self.wy_ok() {
@@ -683,6 +697,10 @@ impl Ppu {
             let bg = &mut self.line.bg;
             bg.px[0] = Pixel::default();
             (bg.head, bg.len) = (0, 1);
+        } else if x == 159 && dmg && !self.line.fetcher.window && !self.line.wx166_row && self.wx_seen() == 166 && self.win_on() && self.wy_ok() {
+            // DMG, WX = 166, the window not running: no window on the last pixel, but it uses a
+            // row (`end_line`; Gambatte `wxA6_weoff_at_xposA6`: two rows a line).
+            (self.line.wx166_row, self.line.win_rows) = (true, self.line.win_rows + 1);
         }
         self.fetcher_dot();
         if self.line.bg.len == 0 { return; }

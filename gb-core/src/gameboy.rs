@@ -591,7 +591,7 @@ impl GameBoy {
         data.extend_from_slice(&b.hdma_dest.to_le_bytes());
         data.extend_from_slice(&[b.hdma_remaining, b.hdma_active as u8, b.hdma5, b.key1]);
         data.extend_from_slice(&[b.dma_active as u8, 0xA0u8.saturating_sub(b.dma_index)]);
-        data.extend_from_slice(&[b.ppu.window_was_active as u8, b.ppu.lcd_on_line0 as u8, b.ppu.stat_irq_line as u8]);
+        data.extend_from_slice(&[b.ppu.wy_latch as u8 | (b.ppu.win_carry as u8) << 1, b.ppu.lcd_on_line0 as u8, b.ppu.stat_irq_line as u8]);
         data.extend_from_slice(&[self.cpu.ime_pending as u8, self.cpu.stopped as u8]);
         let sr = &self.bus.serial;
         data.extend_from_slice(&[sr.data, sr.control, sr.incoming]);
@@ -800,7 +800,9 @@ impl GameBoy {
         self.bus.key1 = read_u8!();
         self.bus.dma_active = read_u8!() != 0;
         pos += 1; // the bytes the transfer had left: older states copied them all on the $FF46 write
-        self.bus.ppu.window_was_active = read_u8!() != 0;
+        // Bit 1 (absent from older states: clear): the window carried into the next line.
+        let win = read_u8!();
+        (self.bus.ppu.wy_latch, self.bus.ppu.win_carry) = (win & 1 != 0, win & 2 != 0);
         self.bus.ppu.lcd_on_line0 = read_u8!() != 0;
         self.bus.ppu.stat_irq_line = read_u8!() != 0;
         // Not saved: at a boundary it only decides a halted CPU's wake on a mode-0 edge of the

@@ -59,7 +59,11 @@ pub struct Ppu {
     pub mode: PpuMode,
     pub mode_clock: u32,
     pub window_line_counter: u8,
-    pub(crate) window_was_active: bool,
+    /// WY has matched LY on a line of this frame (`wy_ok`).
+    pub(crate) wy_latch: bool,
+    /// DMG, WX = 166: the window, due on the line's last pixel, starts the next line instead
+    /// (`end_line`).
+    pub(crate) win_carry: bool,
     /// First line after the LCD is switched on, until its HBlank: no OAM scan (STAT reads mode 0),
     /// the line is 4 dots short, and its mode 3 shows late and ends late.
     pub(crate) lcd_on_line0: bool,
@@ -124,7 +128,8 @@ impl Ppu {
             mode: PpuMode::OamScan,
             mode_clock: 0,
             window_line_counter: 0,
-            window_was_active: false,
+            wy_latch: false,
+            win_carry: false,
             lcd_on_line0: false,
             mode3_len: MODE3_MAX,
             m_cycle_dots: 4,
@@ -284,6 +289,12 @@ impl Ppu {
             0xFF40 => {
                 let was_enabled = self.lcdc & 0x80 != 0;
                 let tile_sel = (self.lcdc ^ value) & 0x10 != 0;
+                // A window carried to the next line (DMG, WX = 166) turned off and on again before it
+                // starts moves to its next row, as it does within a line (`fifo_dot`; Gambatte
+                // `wxA6_weoff_at_xposA6`: on again in HBlank, `wxA6_wy01_weoff_ly02_weon_ly60`: in mode 2).
+                if self.win_carry && self.lcdc & 0x20 == 0 && value & 0x20 != 0 {
+                    self.window_line_counter = self.window_line_counter.wrapping_add(1);
+                }
                 self.lcdc = value;
                 self.line.win_was_on |= value & 0x20 != 0;
                 if tile_sel { self.tile_sel_switch(); }
@@ -299,7 +310,7 @@ impl Ppu {
                     self.stat_irq_line = lyc_flag != 0 && self.stat & 0x40 != 0;
                     self.lcd_on_line0 = false;
                     self.line.active = false;
-                    (self.window_was_active, self.window_line_counter) = (false, 0);
+                    (self.wy_latch, self.win_carry, self.window_line_counter) = (false, false, 0);
                 } else if !was_enabled && is_enabled {
                     // Line 0 restarts 4 dots in, without an OAM scan.
                     self.mode = PpuMode::OamScan;
@@ -421,7 +432,7 @@ impl Ppu {
                             t.finish_frame(&self.framebuffer, &self.oam, &self.bg_cram, &self.obj_cram, &self.vram, self.cgb_mode, self.compat);
                         }
                         self.window_line_counter = 0;
-                        self.window_was_active = false;
+                        self.wy_latch = false;
                         vblank_irq = true;
                     } else {
                         self.mode = PpuMode::OamScan;
@@ -1190,7 +1201,7 @@ mod tests {
     fn window_waits_for_wy_to_match_ly() {
         let s = shades(&run_line10(|p| { window_setup(p); p.wy = 0; }, |_, _| {}), 10);
         assert!(s.iter().all(|&v| v == 0), "WY never matched this frame: {s:?}");
-        let s = shades(&run_line10(|p| { window_setup(p); p.wy = 0; p.window_was_active = true; }, |_, _| {}), 10);
+        let s = shades(&run_line10(|p| { window_setup(p); p.wy = 0; p.wy_latch = true; }, |_, _| {}), 10);
         assert_eq!(s.iter().position(|&v| v == 3), Some(43));
     }
 
@@ -1212,6 +1223,29 @@ mod tests {
         assert!(s[80..93].iter().all(|&v| v == 0), "BG while it is off: {s:?}");
         assert!(s[93..].iter().all(|&v| v == 1), "restarted at x = 93 on row 1: {s:?}");
         assert_eq!(p.window_line_counter, 2, "two rows used");
+    }
+
+    /// DMG, WX = 166: no window on WY's line, but its last pixel uses a window row, and the next
+    /// line is the window from x = 0, on its second column (Gambatte `window/on_screen/wxA6_*`).
+    #[test]
+    fn wx_a6_triggers_on_the_last_pixel() {
+        let mut p = Ppu::new();
+        window_setup(&mut p);
+        (p.bgp, p.ly, p.wx) = (0xE4, 10, 166);
+        p.vram[0x1C01] = 0; // window column 1: light, the rest dark
+        while p.ly < 12 { p.step(1); }
+        assert!(shades(&p, 10).iter().all(|&v| v == 0), "WY's line is BG");
+        let s = shades(&p, 11);
+        assert!(s[..8].iter().all(|&v| v == 0) && s[8..].iter().all(|&v| v == 3), "the window's column 1 first: {s:?}");
+        assert_eq!(p.window_line_counter, 2, "a row on each line");
+        // A CGB starts it on each line's last pixel: nothing is carried to the next line.
+        let mut p = Ppu::new();
+        window_setup(&mut p);
+        (p.cgb_mode, p.ly, p.wx) = (true, 10, 166);
+        while p.ly < 11 { p.step(1); }
+        assert!(!p.win_carry);
+        while p.ly < 12 { p.step(1); }
+        assert_eq!(p.window_line_counter, 2);
     }
 
     /// The first tile is fetched twice, but its tile number is read by the first fetch only.
@@ -1269,7 +1303,7 @@ mod tests {
         let setup = |drew: u8| move |p: &mut Ppu| {
             p.lcdc = 0xD1; // window off
             p.vram[0..16].fill(0x80); // tile 0: its first column dark
-            (p.wx, p.window_was_active, p.window_line_counter) = (95, true, drew);
+            (p.wx, p.wy_latch, p.window_line_counter) = (95, true, drew);
         };
         let dark = |drew: u8| -> Vec<usize> {
             shades(&run_line10(setup(drew), |_, _| {}), 10).iter().enumerate().filter(|(_, &v)| v == 3).map(|(x, _)| x).collect()
@@ -1304,7 +1338,7 @@ mod tests {
     fn pan_docs_len(p: &Ppu) -> u32 {
         let fine = (p.scx % 8) as i32;
         // A DMG never matches WX 166 in mode 3 (Age stat-mode-window).
-        let window = p.lcdc & 0x20 != 0 && (p.window_was_active || p.ly == p.wy)
+        let window = p.lcdc & 0x20 != 0 && (p.wy_latch || p.ly == p.wy)
             && p.wx <= if p.cgb_mode || p.compat { 166 } else { 165 };
         let mut len = 172 + fine as u32 + if window { 6 } else { 0 };
         if window && p.wx == 0 && fine > 0 { len += 1; }
