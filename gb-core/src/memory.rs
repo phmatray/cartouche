@@ -679,13 +679,13 @@ impl MemoryBus {
     /// mid-cycle, so these wake it one M-cycle later; so does the dispatch that clears the bit it
     /// takes (`Cpu::dispatch`). The timer raises IF.2 with the TIMA reload, at the next M-cycle
     /// boundary; the bus requests it one M-cycle ahead (see `Timer::step`), which a running CPU's
-    /// fetch-time sample needs but a halted one must not see yet. The serial port's IF.3 and
-    /// line 0's mode-2 edge (which, unlike the other lines', is not early: `Ppu::mode2_early`)
-    /// also rise after that sample (Gambatte `start_wait_trigger_int8_read_if_2` on the DMG,
-    /// `lyc153int_m2irq_late_retrigger_1/2`).
+    /// fetch-time sample needs but a halted one must not see yet. The serial port's IF.3 also
+    /// rises after that sample (Gambatte `start_wait_trigger_int8_read_if_2` on the DMG). Line
+    /// 0's mode-2 edge is on time for the dispatch once LY = LYC 153 is (`lyc153int_m2irq_late_retrigger_1/2`),
+    /// but an IF access in its M-cycle misses it (`if_hidden`).
     pub fn late_interrupts(&self) -> u8 {
         let stat = self.if_late & STAT_BIT != 0
-            && (self.ppu.mode0_edge_late() || self.ppu.mode2_early() || self.ppu.ly == 0 && self.ppu.mode2_edge_now());
+            && (self.ppu.mode0_edge_late() || self.ppu.mode2_early());
         (if stat { STAT_BIT } else { 0 }) | self.if_late & SERIAL_BIT | if self.timer.reload_pending { TIMER_BIT } else { 0 }
     }
 
@@ -709,7 +709,7 @@ impl MemoryBus {
         } else {
             0
         };
-        self.if_late & !ppu & if self.ppu.mode2_edge_now() { !STAT_BIT } else { 0xFF }
+        self.if_late & !ppu & if self.ppu.mode2_edge_now() && self.ppu.ly != 0 { !STAT_BIT } else { 0xFF }
     }
 
     pub fn cycle_tick(&mut self) {
