@@ -793,7 +793,9 @@ impl MemoryBus {
         let p = &self.ppu;
         let lyc = p.stat & 0x40 != 0 && p.ly == p.lyc && matches!(p.mode, PpuMode::OamScan | PpuMode::VBlank)
             && p.mode_clock < p.m_cycle_dots;
-        let cgb_m0 = (self.cgb_mode || self.ppu.compat) && self.if_late & STAT_BIT != 0 && (self.ppu.mode0_edge_now() || lyc);
+        // And mode 1's (Gambatte `halt/m1int_ly_1/_2/_3`: the CGB reads LY 91 where the DMG reads 90).
+        let m1 = p.stat & 0x10 != 0 && p.mode == PpuMode::VBlank && p.ly == 144 && p.mode_clock < p.m_cycle_dots;
+        let cgb_m0 = (self.cgb_mode || self.ppu.compat) && self.if_late & STAT_BIT != 0 && (self.ppu.mode0_edge_now() || lyc || m1);
         self.late_interrupts() | if cgb_m0 { STAT_BIT } else { 0 }
     }
 
