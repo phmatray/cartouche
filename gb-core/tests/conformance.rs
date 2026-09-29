@@ -19,6 +19,7 @@ use common::{cgb_to_rgb, dmg_to_grey, load_png_rgb};
 use gb_core::gameboy::{GameBoy, Model, CYCLES_PER_FRAME};
 use gb_core::interrupts::JOYPAD_BIT;
 use gb_core::joypad::JoypadButton;
+use gb_core::trace::line;
 
 #[derive(Clone, Debug, PartialEq)]
 enum Verdict {
@@ -106,10 +107,62 @@ fn compare_screen(gb: &GameBoy, hw: Hw, reference: &Path) -> Verdict {
     if expected.len() != actual.len() {
         return Verdict::Fail(format!("reference is {} pixels, frame {}", expected.len(), actual.len()));
     }
-    match actual.iter().zip(&expected).filter(|(a, e)| a != e).count() {
+    let differ: Vec<bool> = actual.iter().zip(&expected).map(|(a, e)| a != e).collect();
+    match differ.iter().filter(|&&d| d).count() {
         0 => Verdict::Pass,
-        diff => Verdict::Fail(format!("{diff} pixels differ")),
+        diff => {
+            let outside = differ.iter().zip(tile25_footprint(gb)).filter(|&(&d, inside)| d && !inside).count();
+            Verdict::Fail(format!("{diff} pixels differ; {outside} px outside tile-25 footprints"))
+        }
     }
+}
+
+/// The screen pixels (160x144, row-major) drawn from tile 25 ($8190): where the Nintendo boot ROM
+/// leaves its ® and Cartouche's boot ROMs leave nothing. OBJs whose tile at that row is 25 (the
+/// 8x16 half included) and BG/window cells whose map entry is 25 with LCDC.4 set: a structural
+/// footprint from OAM, the tile maps and each line's LCDC, SCX, SCY and window position (the layer
+/// trace's per-line record of the shown frame, else the registers), never the glyph's bytes. A
+/// diagnostic only: it never changes a verdict.
+fn tile25_footprint(gb: &GameBoy) -> Vec<bool> {
+    let p = &gb.bus.ppu;
+    let traced = p.trace.as_deref().map(|t| &t.done);
+    let mut fp = vec![false; 160 * 144];
+    for y in 0..144 {
+        let [lcdc, scx, scy, win_line, win_x] = match traced {
+            Some(t) if t.rendered(y) => [line::LCDC, line::SCX, line::SCY, line::WIN_LINE, line::WIN_X].map(|i| t.line(y)[i]),
+            _ => {
+                let win = p.lcdc & 0x20 != 0 && y >= p.wy as usize && p.wx < 167;
+                [p.lcdc, p.scx, p.scy, if win { (y - p.wy as usize) as u8 } else { 0xFF }, p.wx.saturating_sub(7)]
+            }
+        };
+        let height = if lcdc & 0x04 != 0 { 16 } else { 8 };
+        for o in p.oam.chunks(4) {
+            let row = y as i32 + 16 - o[0] as i32;
+            if !(0..height).contains(&row) {
+                continue;
+            }
+            let row = if o[3] & 0x40 != 0 { height - 1 - row } else { row };
+            let tile = if height == 16 { (o[2] & 0xFE) | (row >= 8) as u8 } else { o[2] };
+            if tile == 25 {
+                for x in (o[1] as usize).saturating_sub(8)..(o[1] as usize).min(160) {
+                    fp[y * 160 + x] = true;
+                }
+            }
+        }
+        if lcdc & 0x10 == 0 {
+            continue;
+        }
+        let map = |bit: u8, cx: usize, cy: usize| p.vram[if lcdc & bit != 0 { 0x1C00 } else { 0x1800 } + cy / 8 % 32 * 32 + cx / 8 % 32];
+        for x in 0..160 {
+            let tile = if win_line != 0xFF && x >= win_x as usize {
+                map(0x40, x - win_x as usize, win_line as usize)
+            } else {
+                map(0x08, x + scx as usize, y + scy as usize)
+            };
+            fp[y * 160 + x] |= tile == 25;
+        }
+    }
+    fp
 }
 
 fn frames(gb: &mut GameBoy, n: u64) -> Result<(), String> {
@@ -142,6 +195,8 @@ fn run_rom(path: &Path, hw: Hw, protocol: &Protocol, timeout_secs: u64) -> Verdi
         Ok(gb) => gb,
         Err(e) => return Verdict::Fail(e),
     };
+    // The layer trace gives `tile25_footprint` each line's registers.
+    gb.bus.ppu.set_tracing(matches!(protocol, Protocol::Screenshot(_)));
     if let Protocol::Scripted { presses, secs, reference } = protocol {
         return run_scripted(&mut gb, hw, presses, *secs, reference).unwrap_or_else(|e| Verdict::Fail(format!("emulator error: {e}")));
     }
@@ -420,6 +475,19 @@ fn mealybug_tearoom() {
 #[test]
 fn rtc3test_all() {
     run_suite("rtc3test", "rtc3test", &[""], 30, rtc3test);
+}
+
+#[test]
+fn tile25_footprint_covers_obj_at_x3() {
+    let mut rom = vec![0; 0x8000];
+    rom[0x14D] = 0xE7; // header checksum of an all-zero header
+    let mut gb = GameBoy::new(rom).unwrap();
+    gb.bus.ppu.lcdc = 0x93; // LCD, BG and OBJs on, tile data at $8000 (map all zeros), 8x8 OBJs
+    gb.bus.ppu.oam = [0; 0xA0];
+    gb.bus.ppu.oam[..4].copy_from_slice(&[16, 3, 25, 0]);
+    let covered: Vec<(usize, usize)> = tile25_footprint(&gb).iter().enumerate().filter(|(_, &c)| c).map(|(i, _)| (i % 160, i / 160)).collect();
+    let want: Vec<(usize, usize)> = (0..8).flat_map(|y| (0..3).map(move |x| (x, y))).collect();
+    assert_eq!(covered, want);
 }
 
 #[test]
