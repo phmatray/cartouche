@@ -637,12 +637,14 @@ impl MemoryBus {
             }
             self.dma_active = true;
             self.dma_index = 0;
+            self.ppu.set_oam_dma(true);
         }
         if !self.dma_active {
             return;
         }
         if self.dma_index >= 0xA0 {
             self.dma_active = false;
+            self.ppu.set_oam_dma(false);
             return;
         }
         let cgb = self.cgb_mode || self.ppu.compat;
