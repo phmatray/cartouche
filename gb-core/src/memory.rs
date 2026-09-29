@@ -967,6 +967,23 @@ mod tests {
         assert_eq!(run(0xE0, 0xFF80, 0).ppu.read_oam(3), 0xFF, "from $E000: $FF");
     }
 
+    /// The interrupt dispatch pushes PC in its M-cycles 4 and 5: onto a running DMA's bus, the
+    /// bytes land in OAM there (Gambatte hwtest `oamdma_src0000_busyint0002`).
+    #[test]
+    fn dispatch_pushes_in_m_cycles_4_and_5() {
+        let mut bus = bus();
+        bus.write_byte(0xFF46, 0x00); // from ROM (zeros)
+        for _ in 0..4 { bus.cycle_tick(); } // the next M-cycle copies byte 3
+        let mut cpu = crate::cpu::Cpu::new();
+        (cpu.ime, cpu.regs.sp, cpu.regs.pc) = (true, 0x0002, 0xFF94);
+        (bus.interrupts.interrupt_enable, bus.interrupts.interrupt_flag) = (TIMER_BIT, TIMER_BIT);
+        cpu.handle_interrupts(&mut bus);
+        assert_eq!(cpu.regs.pc, 0x0050);
+        for _ in 0..160 { bus.cycle_tick(); }
+        let oam: Vec<u8> = (5..9).map(|i| bus.ppu.read_oam(i)).collect();
+        assert_eq!(oam, [0x00, 0xFF, 0x94, 0x00], "PC high in M-cycle 4 (byte 6), low in 5 (byte 7)");
+    }
+
     /// A DMA from $FE00 copies work RAM's $DE00 page on a DMG, $FF on a CGB (the external bus).
     #[test]
     fn dma_from_fe00_copies_per_model() {
