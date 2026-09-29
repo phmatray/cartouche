@@ -184,7 +184,7 @@ crash. They are not counted in the score.
 | Mooneye acceptance | Timers, DMA, interrupts, PPU and instruction timing | 73/75 |
 | Mooneye emulator-only MBC | MBC1, MBC2 and MBC5 banking | 28/28 |
 | Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 29/51 ³ |
-| SameSuite | APU, HDMA and interrupt edge cases (CGB), SGB multiplayer | 71/78 |
+| SameSuite | APU, HDMA and interrupt edge cases (CGB), SGB multiplayer | 78/78 ⁴ |
 | Age | PPU, STAT, OAM/VRAM access and double-speed timing | 25/51 |
 | gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 420/490 ² |
 | rtc3test | The MBC3 real-time clock | 6/6 |
@@ -200,6 +200,9 @@ error and are not counted.
 ® that Nintendo's boot ROM leaves in video memory, which Cartouche does not ship,
 and every pixel that differs is where that tile is drawn. They stay counted as
 failures, in their own section of `expected-failures.txt`.
+
+⁴ Each ROM runs on the chip revision its file name names (`-cgb0B`, `-cgbB`,
+`-A` for the Game Boy Advance…). The app itself plays as a CGB E.
 
 ```bash
 ./scripts/fetch-test-roms.sh                  # downloads the test ROMs (not stored in this repo)
