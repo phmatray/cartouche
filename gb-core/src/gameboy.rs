@@ -21,6 +21,33 @@ pub enum Model {
     Sgb2,
 }
 
+/// The hardware revision within a model's family (DMG-CPU 0, CGB E, ...). `Default` is the hybrid
+/// the core has always modelled, and the only one the web app uses. Chosen before the hand-over
+/// (`set_revision`, then `skip_boot_rom`) and read from `bus.rev`, a plain field.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Revision {
+    #[default]
+    Default,
+    /// DMG-CPU 0: its boot ROM checks the header before showing anything, so it hands over earlier.
+    Dmg0,
+    DmgAbc,
+    CgbA,
+    Cgb0,
+    CgbB,
+    CgbC,
+    CgbD,
+    CgbE,
+    Agb,
+}
+
+impl Revision {
+    /// In declaration order: a save state stores the index (`as u8`).
+    const ALL: [Revision; 10] = [
+        Revision::Default, Revision::Dmg0, Revision::DmgAbc, Revision::CgbA, Revision::Cgb0,
+        Revision::CgbB, Revision::CgbC, Revision::CgbD, Revision::CgbE, Revision::Agb,
+    ];
+}
+
 /// The machine a save state belongs to: a state from one never loads into another.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Console {
@@ -181,6 +208,11 @@ impl GameBoy {
         Ok(gb)
     }
 
+    /// The hardware revision to emulate; call it before the hand-over (`skip_boot_rom`).
+    pub fn set_revision(&mut self, rev: Revision) {
+        self.bus.rev = rev;
+    }
+
     pub fn skip_boot_rom(&mut self) {
         if self.cgb_mode {
             self.cpu.regs.a = 0x11;
@@ -200,6 +232,16 @@ impl GameBoy {
             self.cpu.regs.e = 0x00;
             self.cpu.regs.h = 0xC0;
             self.cpu.regs.l = 0x60;
+        } else if self.bus.rev == Revision::Dmg0 {
+            // DMG-CPU 0 (Pan Docs "Power Up Sequence", Mooneye boot_regs-dmg0).
+            self.cpu.regs.a = 0x01;
+            self.cpu.regs.f = 0x00;
+            self.cpu.regs.b = 0xFF;
+            self.cpu.regs.c = 0x13;
+            self.cpu.regs.d = 0x00;
+            self.cpu.regs.e = 0xC1;
+            self.cpu.regs.h = 0x84;
+            self.cpu.regs.l = 0x03;
         } else {
             self.cpu.regs.a = if self.model == Model::Mgb { 0xFF } else { 0x01 };
             self.cpu.regs.f = 0xB0;
@@ -227,6 +269,15 @@ impl GameBoy {
         self.bus.ppu.ly = 153;
         self.bus.ppu.mode = crate::ppu::PpuMode::VBlank;
         self.bus.ppu.mode_clock = 396;
+        if self.bus.rev == Revision::Dmg0 && self.console == Console::Dmg {
+            // DMG-CPU 0 checks the header before it shows the logo, and hands over earlier: DIV
+            // $18 (boot_div-dmg0 pins its phase: $1900 comes 53 M-cycles in), LY $91 in VBlank
+            // (Pan Docs "Hardware registers"). boot_hwio-dmg0 passes for any dot 88-252 of that
+            // line; ponytail: its middle, until a hardware trace pins it.
+            self.bus.timer.div_counter = 0x182C;
+            self.bus.ppu.ly = 145;
+            self.bus.ppu.mode_clock = 168;
+        }
 
         // The boot sound's channel 1 registers; on a DMG it is still on (silent, its envelope
         // has run down), the SGB boot ROM plays no sound.
@@ -550,6 +601,8 @@ impl GameBoy {
         data.push(self.bus.apu_event_late as u8 | due | self.bus.timer.div_hold.min(3) << 3);
         // Then OPRI (absent from older states: 0, OBJs by OAM index).
         data.push(self.bus.ppu.opri);
+        // Then the hardware revision (absent from older states: `Default`).
+        data.push(self.bus.rev as u8);
 
         data
     }
@@ -778,6 +831,7 @@ impl GameBoy {
         self.bus.apu_event_due = (spsw & 2 != 0).then_some(spsw & 4 != 0);
         self.bus.timer.div_hold = (spsw >> 3) & 3;
         self.bus.ppu.opri = byte(TIMING_TAIL_LEN + 6).unwrap_or(0) & 1;
+        self.bus.rev = byte(TIMING_TAIL_LEN + 7).and_then(|r| Revision::ALL.get(r as usize)).copied().unwrap_or_default();
         true
     }
 }
@@ -882,9 +936,32 @@ mod tests {
         assert_eq!(g.save_state(), state);
 
         let mut g = GameBoy::new(rom).unwrap();
-        assert!(g.load_state(&state[..state.len() - TIMING_TAIL_LEN - 7])); // - 7: RP, mode-3 length, speed switch, OPRI
+        assert!(g.load_state(&state[..state.len() - TIMING_TAIL_LEN - 8])); // - 8: RP, mode-3 length, speed switch, OPRI, revision
         assert!(!g.bus.timer.reload_pending);
         assert_eq!(g.bus.dma_index, 0xA0, "an older state's transfer is already in OAM");
+    }
+
+    /// The revision goes with a state; one saved before it existed loads as `Default`.
+    #[test]
+    fn save_state_keeps_the_revision() {
+        let mut rom = vec![0u8; 0x8000];
+        rom[0x100..0x102].copy_from_slice(&[0x18, 0xFE]);
+        rom[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(rom[i]).wrapping_sub(1));
+        let mut gb = GameBoy::with_model(rom.clone(), Model::Dmg).unwrap();
+        gb.set_revision(Revision::Dmg0);
+        gb.skip_boot_rom();
+        assert_eq!((gb.cpu.regs.b, gb.bus.timer.div_counter, gb.bus.ppu.ly), (0xFF, 0x182C, 145));
+        let state = gb.save_state();
+
+        let mut g = GameBoy::new(rom.clone()).unwrap();
+        assert!(g.load_state(&state));
+        assert_eq!(g.bus.rev, Revision::Dmg0);
+        assert_eq!(g.save_state(), state);
+
+        let mut g = GameBoy::new(rom).unwrap();
+        g.bus.rev = Revision::CgbE;
+        assert!(g.load_state(&state[..state.len() - 1]));
+        assert_eq!(g.bus.rev, Revision::Default);
     }
 
     /// KEY0 set by the CGB boot ROM (DMG compatibility) goes with a state saved before it unmaps.
@@ -925,7 +1002,7 @@ mod tests {
 
         let mut g = GameBoy::new(rom).unwrap();
         g.bus.ppu.mode3_len = 200;
-        assert!(g.load_state(&state[..state.len() - 6])); // without the mode-3 length, speed switch and OPRI
+        assert!(g.load_state(&state[..state.len() - 7])); // without the mode-3 length, speed switch, OPRI and revision
         assert_eq!(g.bus.ppu.mode3_len, 172);
     }
 
@@ -951,8 +1028,8 @@ mod tests {
         assert_eq!(c.read_ram(0), 0x97);
 
         // The pre-change layout ends right after KEY0 (then the mapper block, the timing tail, RP
-        // the mode-3 length, the speed-switch byte and OPRI).
-        let end = state.len() - TIMING_TAIL_LEN - 7;
+        // the mode-3 length, the speed-switch byte, OPRI and the revision).
+        let end = state.len() - TIMING_TAIL_LEN - 8;
         let extra = u16::from_le_bytes([state[end - 151], state[end - 150]]);
         assert_eq!(extra, 149, "mode, address, result, opcode, 128 bytes of nibbles, IR LED, clock tail");
         let old = &state[..end - 151];
@@ -1019,7 +1096,7 @@ mod tests {
     /// state cut right after KEY0 (before the mapper block existed) still loads.
     fn reload(gb: &GameBoy, rom: &[u8]) -> GameBoy {
         let state = gb.save_state();
-        let cut = state.len() - 7 - TIMING_TAIL_LEN - 2 - gb.bus.cartridge.export_extra().len(); // 7: RP, mode-3 length, speed switch, OPRI
+        let cut = state.len() - 8 - TIMING_TAIL_LEN - 2 - gb.bus.cartridge.export_extra().len(); // 8: RP, mode-3 length, speed switch, OPRI, revision
         assert_eq!(state[cut..cut + 2], (gb.bus.cartridge.export_extra().len() as u16).to_le_bytes());
         let mut old = GameBoy::new(rom.to_vec()).unwrap();
         assert!(old.load_state(&state[..cut]), "a state without the mapper block");

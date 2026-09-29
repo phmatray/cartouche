@@ -181,7 +181,7 @@ crash. They are not counted in the score.
 | Homebrew smoke tests | Freely licensed GB and GBC games run without freezing | ✅ |
 | Link cable | Serial transfers between two consoles | ✅ |
 | Infrared (CGB, HuC1, HuC3) | Light between the two consoles of the link page | ✅ |
-| Mooneye acceptance | Timers, DMA, interrupts, PPU and instruction timing | 70/75 |
+| Mooneye acceptance | Timers, DMA, interrupts, PPU and instruction timing | 73/75 |
 | Mooneye emulator-only MBC | MBC1, MBC2 and MBC5 banking | 28/28 |
 | Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 26/51 ³ |
 | SameSuite | APU, HDMA and interrupt edge cases (CGB), SGB multiplayer | 71/78 |

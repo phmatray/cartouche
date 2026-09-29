@@ -7,9 +7,6 @@
 # value are in probes-without-verdict.txt instead: they run, but have no verdict to fail.
 # rule-blocked = the reference needs data Cartouche may not ship (#240), in its own section at the end.
 
-mooneye-test-suite/acceptance/boot_div-dmg0.gb  # boot: DMG-CPU 0 (the first DMG revision) is not emulated
-mooneye-test-suite/acceptance/boot_hwio-dmg0.gb  # boot: DMG-CPU 0 (the first DMG revision) is not emulated
-mooneye-test-suite/acceptance/boot_regs-dmg0.gb  # boot: DMG-CPU 0 (the first DMG revision) is not emulated
 mooneye-test-suite/acceptance/ppu/hblank_ly_scx_timing-GS.gb  # stat
 mooneye-test-suite/acceptance/ppu/stat_lyc_onoff.gb  # stat
 same-suite/apu/channel_1/channel_1_extra_length_clocking-cgb0B.gb  # apu
