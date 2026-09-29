@@ -1268,6 +1268,48 @@ mod tests {
         assert!(!patterns(false).contains(&glitch));
     }
 
+    /// LCDC.1 turned off for 8 dots, swept across the fetch of an OBJ at X 16, with a BGP write at
+    /// a fixed dot showing how far the pixels are. Returns, per write dot: whether the OBJ shows and
+    /// the x the new BGP starts at.
+    fn obj_en_pulse(cgb: bool) -> Vec<(u32, bool, usize)> {
+        (8..48).map(|dot| {
+            let p = run_line10(|p| {
+                (p.cgb_mode, p.lcdc) = (cgb, 0x93);
+                p.oam[0..4].copy_from_slice(&[26, 16, 1, 0]); // row 0 on line 10, x 8-15
+                p.vram[16..18].fill(0xFF); // tile 1, row 0: colour 3
+                for (c, rgb) in [0x7FFFu16, 0x001F, 0x03E0, 0x7C00].iter().enumerate() {
+                    p.bg_cram[c * 2..c * 2 + 2].copy_from_slice(&rgb.to_le_bytes());
+                    p.obj_cram[c * 2..c * 2 + 2].copy_from_slice(&rgb.to_le_bytes());
+                }
+            }, |p, d| match d {
+                _ if d == dot => p.write_register(0xFF40, 0x91),
+                _ if d == dot + 8 => p.write_register(0xFF40, 0x93),
+                120 => { p.write_register(0xFF47, 0xFF); p.bg_cram[0..2].copy_from_slice(&0x001Fu16.to_le_bytes()); }
+                _ => {}
+            });
+            let row: Vec<[u8; 3]> = p.framebuffer[10 * SCREEN_WIDTH * 4..11 * SCREEN_WIDTH * 4].chunks(4).map(|c| [c[0], c[1], c[2]]).collect();
+            let white = [row[0][0], row[0][1], row[0][2]];
+            let obj = row[8] != white;
+            (dot, obj, (16..160).find(|&x| row[x] != white).unwrap())
+        }).collect()
+    }
+
+    /// DMG: OBJs turned off while an OBJ is being fetched stop the fetch (the OBJ is not drawn) and
+    /// the pixels resume at once, one dot further ahead than the write for the fetch dot already
+    /// begun. A CGB fetches the OBJ anyway (Mealybug `m3_lcdc_obj_en_change_variant`, SameBoy).
+    #[test]
+    fn dmg_obj_disable_aborts_obj_fetch() {
+        // Fetched: the new BGP from x 90 (11 dots of OBJ penalty); OBJs off at the match: from 101.
+        let dmg = obj_en_pulse(false);
+        let aborted: Vec<usize> = dmg.iter().filter(|r| (27..=36).contains(&r.0)).map(|r| r.2).collect();
+        // Off while the OBJ waits for the tile (5 dots), then during its fetch (6): each dot later
+        // saves one dot less, and the fetch gives back the dot it had begun.
+        assert_eq!(aborted, [100, 99, 98, 97, 96, 96, 95, 94, 93, 92], "{dmg:?}");
+        assert!(dmg.iter().all(|r| (27..=36).contains(&r.0) != (r.2 == 90 || r.2 == 101)), "{dmg:?}");
+        let cgb = obj_en_pulse(true);
+        assert!(cgb.iter().all(|r| r.2 == 90 || r.2 == 101), "a CGB never stops an OBJ fetch: {cgb:?}");
+    }
+
     /// An 8x16 → 8x8 LCDC.2 write swept across an OBJ fetch: each row byte is read with the OBJ
     /// size of its dot, the high byte 2 dots after the low one. Line 10 is row 10 of an 8x16 OBJ
     /// (tile 3, row 2: colour 2) or row 2 of an 8x8 one (tile 2: colour 1); a write between the
