@@ -183,7 +183,17 @@ impl Ppu {
         if self.lcdc & 0x80 == 0 || !matches!(addr, 0x8000..=0x9FFF | 0xFE00..=0xFE9F | 0xFF69 | 0xFF6B) {
             return false;
         }
-        let shown = match self.read_register(0xFF41) & 3 {
+        // How many dots into mode 2/3 the lock shows. Single speed: VRAM from mode 3's 3rd dot,
+        // OAM and the palettes from its 4th; double speed: OAM from mode 2's 2nd dot, the rest from
+        // the 3rd. Only a PPU off the CPU's M-cycle grid (a CGB after a speed switch) tells these
+        // from one M-cycle (Gambatte `vram_m3`, `oam_access`, `cgbpal_m3` `*_lcdoffset*`).
+        let lag = match (self.m_cycle_dots, addr) {
+            (4, 0x8000..=0x9FFF) => 3,
+            (4, _) => 4,
+            (_, 0xFE00..=0xFE9F) => 1,
+            _ => 2,
+        };
+        let shown = match self.stat_mode(lag) {
             2 if self.lcd_on_line0 && self.mode == PpuMode::Drawing => 0,
             m => m,
         };
@@ -218,31 +228,40 @@ impl Ppu {
         }
     }
 
+    /// The mode STAT shows: mode 1, 2 or 3 `lag` dots after it starts, mode 0 after `MODE0_EARLY`.
+    #[inline]
+    fn stat_mode(&self, lag: u32) -> u8 {
+        let m = self.m_cycle_dots;
+        let hb = 5 - m / 2;
+        match self.mode {
+            _ if self.lcdc & 0x80 == 0 => 0,
+            PpuMode::HBlank if self.mode_clock < hb => 3, // see MODE0_EARLY
+            // The first line after LCD on has no mode 2, and its mode 3 shows 4 dots late.
+            PpuMode::OamScan if self.lcd_on_line0 => 0,
+            PpuMode::Drawing if self.lcd_on_line0 && self.mode_clock < 4 => 0,
+            PpuMode::Drawing if self.mode_clock < lag => 2,
+            // Line 0 after VBlank: 0 like the other lines in single speed on a CGB B/C, still
+            // 1 in double speed and on a CGB E, which has no mode-0 M-cycle there (Age stat-mode).
+            PpuMode::OamScan if self.mode_clock < lag => if self.ly == 0 && (m == 2 || self.rev == Revision::CgbE) { 1 } else { 0 },
+            PpuMode::VBlank if self.mode_clock < lag && self.ly == 144 => 0,
+            mode => mode as u8,
+        }
+    }
+
     pub fn read_register(&self, addr: u16) -> u8 {
         match addr {
             0xFF40 => self.lcdc,
             0xFF41 => {
-                // A new mode reads one M-cycle late: its STAT interrupt is requested one M-cycle
-                // ahead of the hardware line, since the CPU samples IF before its opcode fetch.
-                // An M-cycle is 4 dots, 2 in double speed.
-                let m = self.m_cycle_dots;
-                let mode_bits = match self.mode {
-                    _ if self.lcdc & 0x80 == 0 => 0,
-                    PpuMode::HBlank if self.mode_clock < 5 - m / 2 => 3, // see MODE0_EARLY
-                    // The first line after LCD on has no mode 2, and its mode 3 shows 4 dots late.
-                    PpuMode::OamScan if self.lcd_on_line0 => 0,
-                    PpuMode::Drawing if self.lcd_on_line0 && self.mode_clock < 4 => 0,
-                    PpuMode::Drawing if self.mode_clock < m => 2,
-                    // Line 0 after VBlank: 0 like the other lines in single speed on a CGB B/C, still
-                    // 1 in double speed and on a CGB E, which has no mode-0 M-cycle there (Age stat-mode).
-                    PpuMode::OamScan if self.mode_clock < m => if self.ly == 0 && (m == 2 || self.rev == Revision::CgbE) { 1 } else { 0 },
-                    PpuMode::VBlank if self.mode_clock < m && self.ly == 144 => 0,
-                    mode => mode as u8,
-                };
+                // A new mode 1, 2 or 3 reads 2 dots late: on the CPU's M-cycle grid, one M-cycle
+                // late (its STAT interrupt is requested one M-cycle ahead of the hardware line,
+                // since the CPU samples IF before its opcode fetch). Off the grid (a CGB after a
+                // speed switch), 2 dots in single speed too (Gambatte `lcd_offset/*_m1stat_*`,
+                // `speedchange2_ly44_m3_stat`).
+                let mode_bits = self.stat_mode(2);
                 // With the LCD off the coincidence bit is frozen at its LCD-off value
                 // (kept in stored bit 2). Bit 7 is unused and always reads 1.
                 let lyc_flag = if self.lcdc & 0x80 == 0 { self.stat & 0x04 }
-                    else if self.ly_compare(false) == Some(self.lyc) { 0x04 } else { 0 };
+                    else if self.ly_compare(false, false) == Some(self.lyc) { 0x04 } else { 0 };
                 0x80 | (self.stat & 0x78) | lyc_flag | mode_bits
             }
             0xFF42 => self.scy,
@@ -289,7 +308,7 @@ impl Ppu {
                 if tile_sel { self.tile_sel_switch(); }
                 let is_enabled = self.lcdc & 0x80 != 0;
                 if was_enabled && !is_enabled {
-                    let lyc_flag = if self.ly_compare(false) == Some(self.lyc) { 0x04 } else { 0 };
+                    let lyc_flag = if self.ly_compare(false, false) == Some(self.lyc) { 0x04 } else { 0 };
                     self.stat = (self.stat & !0x04) | lyc_flag;
                     self.ly = 0;
                     self.mode = PpuMode::HBlank;
@@ -306,7 +325,7 @@ impl Ppu {
                     self.mode_clock = 4;
                     self.lcd_on_line0 = true;
                     // LY 0 = LYC raises the line in the write's M-cycle (Mooneye `stat_lyc_onoff`).
-                    self.stat_line_written(false);
+                    self.stat_line_written(false, false);
                 }
             }
             0xFF41 => {
@@ -323,14 +342,14 @@ impl Ppu {
                         || read & 4 != 0
                         || (self.mode == PpuMode::OamScan && !self.lcd_on_line0) && self.mode_clock < MODE2_PULSE);
                 self.stat = (value & 0x78) | (self.stat & 0x07);
-                self.stat_line_written(glitch);
+                self.stat_line_written(glitch, false);
             }
             0xFF42 => self.scy = value,
             0xFF43 => self.scx = value,
             0xFF44 => {}
             0xFF45 => {
                 self.lyc = value;
-                self.stat_line_written(false);
+                self.stat_line_written(false, true);
             }
             0xFF47 => {
                 self.line.bgp_old = Some((self.bgp, self.line.dot));
@@ -448,7 +467,7 @@ impl Ppu {
 
         // Compute combined STAT interrupt signal and fire only on rising edge.
         // This prevents re-firing when the condition was already active (STAT blocking).
-        let new_stat_line = self.compute_stat_line();
+        let new_stat_line = self.compute_stat_line(MODE2_PULSE, true);
         let stat_irq = new_stat_line && !prev_stat_line;
         self.stat_irq_line = new_stat_line;
 
@@ -468,6 +487,12 @@ impl Ppu {
     /// M-cycle, if any, is mode 2's (an LY = LYC match at the same line start is not told apart).
     pub(crate) fn mode2_edge_now(&self) -> bool {
         self.mode == PpuMode::OamScan && self.mode_clock < self.m_cycle_dots && self.stat & 0x20 != 0
+    }
+
+    /// The mode-0 interrupt rose in the first dot of the M-cycle just run, before the CPU's write
+    /// in it (which comes after its read): an IF write there clears it, an IF read misses it.
+    pub(crate) fn mode0_edge_first_dot(&self) -> bool {
+        self.mode0_edge_age().is_some_and(|age| age + 1 == self.m_cycle_dots)
     }
 
     /// The mode-0 interrupt rose in the second half of the M-cycle just run, after a halted CPU
@@ -508,38 +533,63 @@ impl Ppu {
     /// it makes, rises in that M-cycle (gbmicrotest `lyc1_write_timing_a..d`, `oam_int_if_level_c/d`).
     /// `forced`: the DMG STAT-write glitch holds the line high for it. The bus requests IF.1 on a
     /// rise (`stat_write_irq`), and on a fall withdraws the edge `step` raised late in that same
-    /// M-cycle, which the write came before (`line_153_lyc_int_b`).
-    fn stat_line_written(&mut self, forced: bool) {
+    /// M-cycle, which the write came before (`line_153_lyc_int_b`). `lyc_write`: an LYC write
+    /// compares like the line's own edge (`ly_compare`'s `edge`), a STAT write with the flag.
+    fn stat_line_written(&mut self, forced: bool, lyc_write: bool) {
         if self.lcdc & 0x80 == 0 { return; }
-        let line = forced || self.compute_stat_line();
+        let line = forced || self.compute_stat_line(4 - self.m_cycle_dots / 2, lyc_write);
         self.stat_write_irq = line && !self.stat_irq_line;
         self.stat_write_drop = !line && self.stat_irq_line;
         self.stat_irq_line = line;
     }
 
-    /// OR of all enabled STAT interrupt sources. Used for rising-edge detection.
+    /// OR of all enabled STAT interrupt sources. Used for rising-edge detection. `pulse`: the dots
+    /// mode 2's source counts from the line start (a write catches fewer); `lyc_lead`: see `ly_compare`'s `edge`.
     #[inline]
-    fn compute_stat_line(&self) -> bool {
+    fn compute_stat_line(&self, pulse: u32, lyc_lead: bool) -> bool {
         if self.stat & 0x78 == 0 { return false; } // no source enabled: every term below is false
         let hblank = self.mode == PpuMode::HBlank && self.mode_clock >= self.mode0_irq_delay() && self.stat & 0x08 != 0;
         let vblank = self.mode == PpuMode::VBlank  && self.stat & 0x10 != 0;
         // Mode 2 is a pulse at the line start, not a level (`MODE2_PULSE`). Line 144 has it too;
         // line 0 after LCD on doesn't. It rises
-        // in the M-cycle before the line (`mode2_early`).
+        // in the M-cycle before the line (`mode2_early`). A write enabling it catches it for 2
+        // dots, 3 in double speed: on the CPU's M-cycle grid that is the line's first M-cycle, off
+        // it (a CGB after a speed switch) no more (Gambatte `m2enable/late_enable_*lcdoffset*`).
         let oam    = ((self.mode == PpuMode::OamScan && !self.lcd_on_line0 || self.mode == PpuMode::VBlank && self.ly == 144)
-            && self.mode_clock < MODE2_PULSE || self.mode2_early()) && self.stat & 0x20 != 0;
+            && self.mode_clock < pulse || self.mode2_early())
+            && self.stat & 0x20 != 0;
         // No comparator blank at a line start: the interrupt is requested one M-cycle ahead of the
         // line (the CPU samples IF before its opcode fetch).
-        let lyc    = self.ly_compare(true) == Some(self.lyc) && self.stat & 0x40 != 0;
+        let lyc    = self.stat & 0x40 != 0 && self.ly_compare(true, lyc_lead) == Some(self.lyc);
         hblank || vblank || oam || lyc
     }
 
     /// The line LY=LYC compares against: none for the first M-cycle of a line (the comparator
     /// is updating), and on line 153 (whose LY reads 0 after its first M-cycle) 153 for one
-    /// M-cycle, none for one, then 0 through line 0.
+    /// M-cycle, none for one, then 0 through line 0. `edge` (the line's own STAT edge and LYC
+    /// writes, not STAT writes or reads): in single speed the comparator takes the next line 2
+    /// dots before the line ends. On the CPU's M-cycle grid that is the M-cycle the line starts
+    /// in; off it (a CGB after a speed switch) the interrupt comes one M-cycle earlier (Gambatte
+    /// `lcd_offset/offset*_lyc98int_ly_count_*`, `vram_m3`/`oam_access`/`cgbpal_m3` `*_lcdoffset*`,
+    /// `lycEnable/late_ff4[15]_enable_lcdoffset1_*`). Not in double speed (the `_ds` variants).
     #[inline]
-    fn ly_compare(&self, irq: bool) -> Option<u8> {
-        let c = self.mode_clock;
+    fn ly_compare(&self, irq: bool, edge: bool) -> Option<u8> {
+        let mut c = self.mode_clock;
+        if irq && edge && self.m_cycle_dots == 4 {
+            let left = match self.mode {
+                PpuMode::HBlank => (376 + MODE0_EARLY - self.mode3_len).wrapping_sub(c),
+                PpuMode::VBlank => 456u32.wrapping_sub(c),
+                _ => 0,
+            };
+            if (1..=2).contains(&left) {
+                return match (self.mode, self.ly) {
+                    (PpuMode::VBlank, 152) => None,
+                    (PpuMode::VBlank, 0 | 153) => Some(0),
+                    (_, ly) => Some(ly + 1),
+                };
+            }
+            c += 2; // line 153's steps too (`lycEnable/lyc153_late_ff4[15]_enable_lcdoffset1_*`)
+        }
         match (self.mode, self.ly) {
             (PpuMode::VBlank, 0 | 153) => match c { 0..=3 => None, 4..=7 => Some(153), 8..=11 if !irq => None, _ => Some(0) },
             (PpuMode::OamScan, 0) => Some(0),
@@ -890,10 +940,12 @@ mod tests {
     }
 
     /// Line 0 after LCD on: mode 3 ends 2 dots later than on other lines, SCX extension included,
-    /// and shows 4 dots in (2 dots later than other lines in double speed). Age stat-mode.
+    /// and shows 4 dots in, 2 dots later than other lines (Age stat-mode; on the CPU's M-cycle grid
+    /// the same M-cycle in single speed).
     #[test]
     fn lcd_on_line_0_mode3_timing() {
-        for (m_cycle_dots, shows_late) in [(4, 0), (2, 2)] {
+        for m_cycle_dots in [4, 2] {
+            let shows_late = 2;
             for scx in [0, 5] {
                 let mut p = Ppu::new();
                 (p.scx, p.m_cycle_dots) = (scx, m_cycle_dots);
@@ -994,6 +1046,23 @@ mod tests {
                 dots += 1;
             }
             assert_eq!(dots, lag, "{m_cycle_dots} dots per M-cycle");
+        }
+    }
+
+    /// The LY = LYC edge of a line comes 2 dots before it in single speed, at it in double speed:
+    /// with the PPU off the CPU's M-cycle grid, one M-cycle earlier (Gambatte
+    /// `lcd_offset/offset*_lyc98int_ly_count_*`, the `_ds` variants).
+    #[test]
+    fn lyc_edge_leads_the_line_by_2_dots_in_single_speed() {
+        for (m_cycle_dots, lead) in [(4, 2), (2, 0)] {
+            for left in 0..m_cycle_dots + 2 {
+                let mut p = Ppu::new();
+                (p.lcdc, p.ly, p.lyc, p.stat, p.m_cycle_dots) = (0x81, 10, 11, 0x40, m_cycle_dots);
+                (p.mode, p.mode3_len) = (PpuMode::HBlank, 172);
+                p.mode_clock = 376 + MODE0_EARLY - 172 - left - m_cycle_dots;
+                let (_, irq, _) = p.step(m_cycle_dots);
+                assert_eq!(irq, left <= lead, "{m_cycle_dots} dots per M-cycle, {left} dots before the line");
+            }
         }
     }
 

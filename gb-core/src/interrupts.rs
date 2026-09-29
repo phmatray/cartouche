@@ -25,27 +25,11 @@ impl InterruptController {
         self.interrupt_flag |= bit;
     }
 
-    /// Returns the vector address of the highest-priority pending interrupt
-    /// and clears its IF bit. Returns None if no interrupt is pending.
-    pub fn acknowledge(&mut self) -> Option<u16> {
-        let pending = self.pending();
-        if pending == 0 {
-            return None;
-        }
-
-        // Lowest set bit = highest priority
+    /// The highest-priority interrupt pending in `ie` & IF: its IF bit (lowest set bit), and
+    /// its vector, $40 + 8 x the bit's position. None when nothing is pending.
+    pub fn highest(&self, ie: u8) -> Option<(u8, u16)> {
+        let pending = ie & self.interrupt_flag & 0x1F;
         let bit = pending & pending.wrapping_neg();
-        self.interrupt_flag &= !bit;
-
-        let vector = match bit {
-            VBLANK_BIT => 0x0040,
-            STAT_BIT => 0x0048,
-            TIMER_BIT => 0x0050,
-            SERIAL_BIT => 0x0058,
-            JOYPAD_BIT => 0x0060,
-            _ => return None,
-        };
-
-        Some(vector)
+        (bit != 0).then(|| (bit, 0x40 + 8 * bit.trailing_zeros() as u16))
     }
 }
