@@ -386,6 +386,25 @@ impl Ppu {
                     let (was, now) = (edge(old), !before(old) && (dmg || before(self.stat)) || edge(self.stat));
                     (self.stat_write_irq, self.stat_write_drop) = (now && !was, was && !now);
                 }
+                if self.lcdc & 0x80 != 0 && self.mode == PpuMode::OamScan && self.mode_clock == 0
+                    && !self.lcd_on_line0 && (dmg || self.m_cycle_dots == 2)
+                {
+                    // A STAT write in a line's first M-cycle lands before the line starts on a
+                    // DMG and in CGB double speed (after it in CGB single speed), as at line 144:
+                    // before the start, mode 2 has risen 2 dots early (line 0: mode 1 still
+                    // holds) and mode 0 has already fallen; LY = LYC compares the new line. A DMG
+                    // glitches there. (Gambatte `m2enable/late_enable_after_lycint_2`,
+                    // `late_enable_m0disable_2`, `lyc0/lyc1_late_m2enable_lycdisable_*`,
+                    // `late_m1disable_ly0_2`, `m2_late_m1disable_ly0_ds_1`,
+                    // `miscmstatirq/lycstatwirq_trigger_*`.)
+                    let lyc = self.lyc == self.ly;
+                    let early = if self.ly == 0 { 0x10 } else { 0x20 };
+                    let before = |s: u8| s & early != 0 || s & 0x40 != 0 && lyc;
+                    let after = |s: u8| s & 0x20 != 0 || s & 0x40 != 0 && lyc;
+                    let was = after(old) && !self.stat_line_before;
+                    let now = !self.stat_line_before && (dmg || before(self.stat)) || !before(self.stat) && after(self.stat);
+                    (self.stat_write_irq, self.stat_write_drop) = (now && !was, was && !now);
+                }
                 self.write_vs_mode0_edge(old, self.lyc, dmg, false, was_high);
             }
             0xFF42 => self.scy = value,
@@ -1282,6 +1301,23 @@ mod tests {
             assert!(irq && p.mode == PpuMode::HBlank && p.mode_clock == age, "CGB {cgb}, age {age}");
             p.write_register(0xFF41, 0);
             assert_eq!(!p.stat_write_drop, kept, "CGB {cgb}, the edge {age} dots old");
+        }
+    }
+
+    /// A DMG STAT write in a line's first M-cycle lands before the line: enabling mode 2 there
+    /// (with mode 0 falling) keeps the line up, where a CGB takes a new edge (Gambatte
+    /// `m2enable/late_enable_m0disable_2`).
+    #[test]
+    fn stat_write_at_line_start() {
+        for (cgb, edge) in [(false, false), (true, true)] {
+            let mut p = Ppu::new();
+            (p.lcdc, p.ly, p.mode, p.mode3_len, p.stat, p.cgb_mode) = (0x81, 1, PpuMode::HBlank, 172, 0x08, cgb);
+            p.mode_clock = 376 + MODE0_EARLY - 172 - 8;
+            p.step(4);
+            p.step(4);
+            assert_eq!((p.ly, p.mode, p.mode_clock), (2, PpuMode::OamScan, 0));
+            p.write_register(0xFF41, 0x20);
+            assert_eq!(p.stat_write_irq, edge, "CGB {cgb}");
         }
     }
 

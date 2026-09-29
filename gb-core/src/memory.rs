@@ -726,6 +726,14 @@ impl MemoryBus {
     /// rises after that sample (Gambatte `start_wait_trigger_int8_read_if_2` on the DMG). Line
     /// 0's mode-2 edge is on time for the dispatch once LY = LYC 153 is (`lyc153int_m2irq_late_retrigger_1/2`),
     /// but an IF access in its M-cycle misses it (`if_hidden`).
+    /// `late_interrupts` for a halted CPU: on Color hardware a mode-0 edge always wakes it an
+    /// M-cycle later, whatever its dot in the M-cycle (Gambatte `halt/m0int_m0stat_scx3/4_2`,
+    /// `m0irq_m0stat_scx3/4_2`, `late_m0int/irq_halt_m0stat_scx3_*b`, which a DMG splits by SCX).
+    pub fn halt_late_interrupts(&self) -> u8 {
+        let cgb_m0 = (self.cgb_mode || self.ppu.compat) && self.if_late & STAT_BIT != 0 && self.ppu.mode0_edge_now();
+        self.late_interrupts() | if cgb_m0 { STAT_BIT } else { 0 }
+    }
+
     pub fn late_interrupts(&self) -> u8 {
         let stat = self.if_late & STAT_BIT != 0
             && (self.ppu.mode0_edge_late() || self.ppu.mode2_early());
@@ -944,6 +952,26 @@ mod tests {
             let shown = phase >= 2;
             assert_eq!(bus.read_byte(0xFF41) & 3, if shown { 1 } else { 0 }, "phase {phase}");
             assert_eq!(bus.read_byte(0xFF0F) & 1 != 0, shown, "phase {phase}");
+        }
+    }
+
+    /// A mode-0 edge 3 dots into its M-cycle wakes a halted DMG at once, a halted CGB an M-cycle
+    /// later (Gambatte `halt/m0int_m0stat_scx3_2`: $00 on the DMG, $02 on the CGB).
+    #[test]
+    fn halt_mode0_wake_then_stat_read_per_scx() {
+        for cgb in [false, true] {
+            let mut rom = vec![0u8; 0x8000];
+            rom[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(rom[i]).wrapping_sub(1));
+            let mut bus = MemoryBus::new(Cartridge::from_rom(rom).unwrap(), cgb);
+            bus.boot_rom_active = false;
+            let p = &mut bus.ppu;
+            (p.lcdc, p.ly, p.mode, p.mode3_len, p.stat, p.scx) = (0x81, 10, PpuMode::Drawing, 175, 0x08, 3);
+            p.mode_clock = 175 - 2 - 1;
+            p.start_line();
+            p.mode3_len = 175;
+            bus.cycle_tick();
+            assert!(bus.ppu.mode == PpuMode::HBlank && bus.if_late & STAT_BIT != 0);
+            assert_eq!(bus.halt_late_interrupts() & STAT_BIT != 0, cgb, "CGB {cgb}");
         }
     }
 
