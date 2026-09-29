@@ -24,9 +24,11 @@
 //! CGB mode: the fetcher also reads the tile's attributes from VRAM bank 1 (palette, bank, flips,
 //! BG-to-OBJ priority), LCDC bit 0 is the BG/window master priority instead of the BG enable,
 //! and OBJs overlap by OAM index unless OPRI bit 0 asks for the DMG's X order. A CGB (in both
-//! modes) also latches the tile row with the tile number, as a CGB D does, shows a BGP write
+//! modes) also latches the tile row with the tile number, as a CGB D does (a CGB C reads it at
+//! each data fetch, like a DMG: Mealybug `m3_scy_change2`), shows a BGP write
 //! without the DMG's mixed pixel, and LCDC bit 0 one dot later.
 
+use crate::gameboy::Revision;
 use crate::ppu::{Ppu, Sprite, SCREEN_WIDTH};
 use crate::trace::{LAYER_BG, LAYER_OBJ, LAYER_WIN, NO_OBJ};
 
@@ -64,7 +66,7 @@ pub(crate) struct Fetcher {
     /// CGB: the tile's attributes (bank 1 of the map).
     pub attr: u8,
     /// CGB: the tile row, latched with the tile number (a CGB D; Mealybug `m3_scy_change`).
-    /// A DMG reads SCY again for each data byte.
+    /// A DMG and a CGB C read SCY again for each data byte.
     pub row: u8,
     pub window: bool,
 }
@@ -301,7 +303,7 @@ impl Ppu {
     #[inline]
     fn fetch_addr(&self) -> usize {
         let f = &self.line.fetcher;
-        let row = if self.cgb_mode || self.compat { f.row } else { self.bg_row() };
+        let row = if (self.cgb_mode || self.compat) && self.rev != Revision::CgbC { f.row } else { self.bg_row() };
         let row = if f.attr & 0x40 != 0 { 7 - row } else { row };
         self.fetch_tile_row(f.tile) + row as usize * 2 + if f.attr & 0x08 != 0 { 0x2000 } else { 0 }
     }
