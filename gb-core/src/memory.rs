@@ -299,6 +299,10 @@ impl MemoryBus {
                 } else {
                     self.ppu.write_register(addr, value);
                     if std::mem::take(&mut self.ppu.stat_write_irq) { self.interrupts.request(STAT_BIT); }
+                    if std::mem::take(&mut self.ppu.stat_write_drop) && self.if_hidden() & STAT_BIT != 0 {
+                        self.interrupts.interrupt_flag &= !STAT_BIT;
+                        self.ppu_fresh &= !STAT_BIT;
+                    }
                 }
             }
             0xFF4D => {
@@ -530,8 +534,8 @@ impl MemoryBus {
     /// in it: that access doesn't see them (nor clear them), though the next opcode fetch
     /// dispatches them. Mode 0 for every SCX (gbmicrotest `hblank_int_scx0..7_if_a/b/c`,
     /// `hblank_int_if_a/b`), VBlank's IF.0 and mode-1 STAT edge (`vblank2_int_if_a..d`,
-    /// `vblank_int_if_a..d`, `stat_write_glitch_l143_c/d`). Not a mode-2 edge, which such a read
-    /// sees (`oam_int_if_edge_a..d`).
+    /// `vblank_int_if_a..d`, `stat_write_glitch_l143_c/d`), the LY = LYC edge (`lyc1_int_if_edge_a..d`).
+    /// Not a mode-2 edge, which such a read sees (`oam_int_if_edge_a..d`).
     pub(crate) fn if_hidden(&self) -> u8 {
         if self.ppu_fresh == 0 { return 0; }
         self.ppu_fresh & if self.ppu.mode2_edge_now() { !STAT_BIT } else { 0xFF }

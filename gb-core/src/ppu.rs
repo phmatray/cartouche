@@ -18,8 +18,6 @@ const MODE0_EARLY: u32 = 2;
 /// again early in mode 2, so a STAT write enabling it later in mode 2 raises nothing and the next
 /// interrupt comes with the next line (gbmicrotest `oam_int_if_level_c/d`: a write landing in the
 /// line's first M-cycle fires, one M-cycle later doesn't; `oam_int_nops_b`, `oam_int_halt_a/b`).
-/// Its 4 dots, plus one M-cycle: the STAT line is sampled once per M-cycle, before a CPU write of
-/// that M-cycle is seen (`Ppu::step`).
 const MODE2_PULSE: u32 = 4;
 /// The longest mode 3 a line can have (172 + 7 fine scroll + 6 window + 10 OBJs of 11 dots): what
 /// `mode3_len` holds until the FIFO measures the line (`measure_len`).
@@ -83,8 +81,11 @@ pub struct Ppu {
 
     // STAT interrupt line — used for rising-edge detection to avoid re-firing
     pub(crate) stat_irq_line: bool,
-    /// The last STAT write raised that line (DMG glitch): the bus requests IF.1 at once and clears it.
+    /// The last STAT or LYC write raised that line (`stat_line_written`): the bus requests IF.1 at
+    /// once and clears it.
     pub(crate) stat_write_irq: bool,
+    /// The last STAT or LYC write lowered that line (`stat_line_written`).
+    pub(crate) stat_write_drop: bool,
 
     // CGB color support
     pub cgb_mode: bool,
@@ -133,6 +134,7 @@ impl Ppu {
             frame_ready: false,
             stat_irq_line: false,
             stat_write_irq: false,
+            stat_write_drop: false,
             cgb_mode: false,
             compat: false,
             bg_cram: [0; 64],
@@ -291,7 +293,9 @@ impl Ppu {
                     self.ly = 0;
                     self.mode = PpuMode::HBlank;
                     self.mode_clock = 0;
-                    self.stat_irq_line = false;
+                    // The LY = LYC part of the STAT line holds with the frozen flag: turned back on with
+                    // LY 0 = LYC, the flag and the line stay set, and no edge (Mooneye `stat_lyc_onoff`).
+                    self.stat_irq_line = lyc_flag != 0 && self.stat & 0x40 != 0;
                     self.lcd_on_line0 = false;
                     self.line.active = false;
                     self.window_was_active = false;
@@ -300,6 +304,8 @@ impl Ppu {
                     self.mode = PpuMode::OamScan;
                     self.mode_clock = 4;
                     self.lcd_on_line0 = true;
+                    // LY 0 = LYC raises the line in the write's M-cycle (Mooneye `stat_lyc_onoff`).
+                    self.stat_line_written(false);
                 }
             }
             0xFF41 => {
@@ -310,18 +316,21 @@ impl Ppu {
                 // (`MODE2_PULSE`: `_l0_b/c`, `_l1_c/d`, `_l154_b/c`). The line after LCD on has no
                 // mode-0 source (`lyc1_int_nops_a`). A CGB, in either mode, doesn't glitch.
                 let read = self.read_register(0xFF41);
-                let active = self.mode == PpuMode::HBlank && read & 3 == 0
-                    || self.mode == PpuMode::VBlank
-                    || read & 4 != 0
-                    || (self.mode == PpuMode::OamScan && !self.lcd_on_line0) && self.mode_clock < MODE2_PULSE;
-                self.stat_write_irq = self.lcdc & 0x80 != 0 && !self.cgb_mode && !self.compat && !self.stat_irq_line && active;
-                self.stat_irq_line |= self.stat_write_irq;
+                let glitch = self.lcdc & 0x80 != 0 && !self.cgb_mode && !self.compat
+                    && (self.mode == PpuMode::HBlank && read & 3 == 0
+                        || self.mode == PpuMode::VBlank
+                        || read & 4 != 0
+                        || (self.mode == PpuMode::OamScan && !self.lcd_on_line0) && self.mode_clock < MODE2_PULSE);
                 self.stat = (value & 0x78) | (self.stat & 0x07);
+                self.stat_line_written(glitch);
             }
             0xFF42 => self.scy = value,
             0xFF43 => self.scx = value,
             0xFF44 => {}
-            0xFF45 => self.lyc = value,
+            0xFF45 => {
+                self.lyc = value;
+                self.stat_line_written(false);
+            }
             0xFF47 => {
                 self.line.bgp_old = Some((self.bgp, self.line.dot));
                 self.bgp = value;
@@ -453,9 +462,10 @@ impl Ppu {
         (rose && self.mode_clock < self.m_cycle_dots).then_some(self.mode_clock)
     }
 
-    /// Mode 2 started in the M-cycle just run (its STAT edge, when there is one).
+    /// Mode 2 started in the M-cycle just run with its STAT source enabled: the STAT edge of that
+    /// M-cycle, if any, is mode 2's (an LY = LYC match at the same line start is not told apart).
     pub(crate) fn mode2_edge_now(&self) -> bool {
-        self.mode == PpuMode::OamScan && self.mode_clock < self.m_cycle_dots
+        self.mode == PpuMode::OamScan && self.mode_clock < self.m_cycle_dots && self.stat & 0x20 != 0
     }
 
     /// The mode-0 interrupt rose in the second half of the M-cycle just run, after a halted CPU
@@ -468,6 +478,20 @@ impl Ppu {
         self.mode0_edge_age().is_some_and(|age| age < self.m_cycle_dots / 2)
     }
 
+    /// A STAT, LYC or LCD-on write lands early in its M-cycle, before the STAT line is evaluated for it
+    /// (`step` ran it already): evaluate it again now, so a source the write enables, or a match
+    /// it makes, rises in that M-cycle (gbmicrotest `lyc1_write_timing_a..d`, `oam_int_if_level_c/d`).
+    /// `forced`: the DMG STAT-write glitch holds the line high for it. The bus requests IF.1 on a
+    /// rise (`stat_write_irq`), and on a fall withdraws the edge `step` raised late in that same
+    /// M-cycle, which the write came before (`line_153_lyc_int_b`).
+    fn stat_line_written(&mut self, forced: bool) {
+        if self.lcdc & 0x80 == 0 { return; }
+        let line = forced || self.compute_stat_line();
+        self.stat_write_irq = line && !self.stat_irq_line;
+        self.stat_write_drop = !line && self.stat_irq_line;
+        self.stat_irq_line = line;
+    }
+
     /// OR of all enabled STAT interrupt sources. Used for rising-edge detection.
     fn compute_stat_line(&self) -> bool {
         let hblank = self.mode == PpuMode::HBlank && self.stat & 0x08 != 0;
@@ -475,7 +499,7 @@ impl Ppu {
         // Mode 2 is a pulse at the line start, not a level (`MODE2_PULSE`). Line 144 has it too;
         // line 0 after LCD on doesn't.
         let oam    = (self.mode == PpuMode::OamScan && !self.lcd_on_line0 || self.mode == PpuMode::VBlank && self.ly == 144)
-            && self.mode_clock < MODE2_PULSE + self.m_cycle_dots && self.stat & 0x20 != 0;
+            && self.mode_clock < MODE2_PULSE && self.stat & 0x20 != 0;
         // No comparator blank at a line start: the interrupt is requested one M-cycle ahead of the
         // line (the CPU samples IF before its opcode fetch).
         let lyc    = self.ly_compare(true) == Some(self.lyc) && self.stat & 0x40 != 0;
@@ -489,7 +513,7 @@ impl Ppu {
     fn ly_compare(&self, irq: bool) -> Option<u8> {
         let c = self.mode_clock;
         match (self.mode, self.ly) {
-            (PpuMode::VBlank, 0 | 153) => match c { 0..=3 => None, 4..=7 => Some(153), 8..=11 => None, _ => Some(0) },
+            (PpuMode::VBlank, 0 | 153) => match c { 0..=3 => None, 4..=7 => Some(153), 8..=11 if !irq => None, _ => Some(0) },
             (PpuMode::OamScan, 0) => Some(0),
             (PpuMode::OamScan | PpuMode::VBlank, _) if c < 4 && !irq => None,
             _ => Some(self.ly),
@@ -782,6 +806,31 @@ mod tests {
         assert!(!write_at(true, PpuMode::HBlank, 4), "no glitch on a CGB");
     }
 
+    /// A LYC write that makes LY = LYC raises the line in the write's own M-cycle, not the next
+    /// one (gbmicrotest `lyc1_write_timing_a..d`). Across LCD off and on the LY = LYC part of the line
+    /// holds with the frozen flag: back on with LY 0 = LYC, no new edge; with the flag clear, an
+    /// edge at once (Mooneye `stat_lyc_onoff`).
+    #[test]
+    fn lyc_write_takes_effect_after_delay() {
+        let mut p = Ppu::new();
+        (p.lcdc, p.ly, p.mode, p.mode_clock, p.stat, p.lyc) = (0x81, 10, PpuMode::Drawing, 40, 0x40, 0xFF);
+        p.write_register(0xFF45, 10);
+        assert!(p.stat_write_irq, "LYC = LY: the line rises with the write");
+        p.write_register(0xFF45, 11);
+        assert!(!p.stat_write_irq && p.stat_write_drop, "and falls with the next one");
+
+        for (held, edge) in [(true, false), (false, true)] {
+            let mut p = Ppu::new();
+            (p.lcdc, p.ly, p.mode, p.mode_clock, p.stat) = (0x81, 0x90, PpuMode::VBlank, 100, 0x40);
+            p.lyc = if held { 0x90 } else { 0 };
+            p.stat_irq_line = held;
+            p.write_register(0xFF40, 0x00);
+            p.write_register(0xFF45, 0);
+            p.write_register(0xFF40, 0x80);
+            assert_eq!(p.stat_write_irq, edge, "flag held through LCD off: {held}");
+        }
+    }
+
     #[test]
     fn mode2_stat_source_is_a_pulse() {
         for (m_cycle, fires) in [(0, true), (1, false), (20, false)] {
@@ -791,7 +840,7 @@ mod tests {
             while p.ly == 9 { p.step(4); }
             for _ in 0..m_cycle { p.step(4); }
             p.write_register(0xFF41, 0x20);
-            assert_eq!(p.step(4).1, fires, "STAT written in M-cycle {m_cycle} of mode 2");
+            assert_eq!(p.stat_write_irq, fires, "STAT written in M-cycle {m_cycle} of mode 2");
             let mut next_line = false;
             while !next_line { next_line = p.step(4).1; }
             assert_eq!((p.ly, p.mode), (11, PpuMode::OamScan), "then with the next line");
