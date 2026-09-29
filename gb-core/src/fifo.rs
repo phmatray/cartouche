@@ -643,16 +643,16 @@ impl Ppu {
             bg.px[0] = Pixel::default();
             (bg.head, bg.len) = (0, 1);
         } else if dmg && self.lcdc & 0x20 == 0 && !self.line.fetcher.window && self.line.bg.len == 0 && self.line.fetcher.step == FetchStep::Push
-            && self.line.left_done && self.line.discard == 0 && self.wy_ok() && x + 7 == self.wx_seen() && !(self.line.window_triggered && self.line.win_x == x) && self.line.win_was_on
+            && self.line.left_done && self.line.discard == 0 && self.wy_ok() && x + 7 == self.wx_seen() && !(self.line.window_triggered && self.line.win_x == x) && (self.line.win_was_on || self.window_line_counter > 0)
         {
             // DMG, window off: a WX match where the next tile is about to be pushed gives the LCD
             // one colour-0 pixel, and the BG goes on a pixel later (SameBoy's model and issue #278:
             // Star Trek 25th Anniversary's BG one pixel right on hardware; Mealybug
-            // `m3_lcdc_win_en_change_multiple_wx` lines 15 and 39).
-            // ponytail: only on a line where LCDC.5 was on at some dot. SameBoy applies it on every
-            // line once WY matched, which moves the OBJ penalties off Pan Docs' mode-3 formula
-            // (dmg-acid2 lines 40 and 66, `fifo_mode3_matches_formula`); widen it once a timing ROM
-            // measures mode 3 on such a line.
+            // `m3_lcdc_win_en_change_multiple_wx` lines 15 and 39). Only once the window was
+            // activated: LCDC.5 on at some dot of this line, or the window drawn on an earlier line
+            // of the frame, then on every line (logic captures in SameBoy issue #278; SameBoy's
+            // `wy_triggered` needs LCDC.5 too). A WY match with the window off arms nothing
+            // (dmg-acid2's WY 40, whose lines keep Pan Docs' mode-3 length).
             let bg = &mut self.line.bg;
             bg.px[0] = Pixel::default();
             (bg.head, bg.len) = (0, 1);

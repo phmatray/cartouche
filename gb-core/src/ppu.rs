@@ -299,7 +299,7 @@ impl Ppu {
                     self.stat_irq_line = lyc_flag != 0 && self.stat & 0x40 != 0;
                     self.lcd_on_line0 = false;
                     self.line.active = false;
-                    self.window_was_active = false;
+                    (self.window_was_active, self.window_line_counter) = (false, 0);
                 } else if !was_enabled && is_enabled {
                     // Line 0 restarts 4 dots in, without an OAM scan.
                     self.mode = PpuMode::OamScan;
@@ -1165,6 +1165,26 @@ mod tests {
         assert!(s[43..51].iter().all(|&v| v == 3) && s[51] == 0 && s[52..].iter().all(|&v| v == 3), "{s:?}");
         let s = at(61); // x = 54: inside it
         assert!(s[43..].iter().all(|&v| v == 3), "{s:?}");
+    }
+
+    /// DMG, LCDC.5 off the whole line: once the window drew earlier in the frame, a WX match on a
+    /// tile boundary ((WX & 7) == 7 - (SCX & 7)) gives one colour-0 pixel and the BG goes on a pixel
+    /// later, 160 pixels in the same mode-3 length; never while the window has not drawn (logic
+    /// captures in SameBoy issue #278).
+    #[test]
+    fn window_off_pixel_after_the_window_drew() {
+        let setup = |drew: u8| move |p: &mut Ppu| {
+            p.lcdc = 0xD1; // window off
+            p.vram[0..16].fill(0x80); // tile 0: its first column dark
+            (p.wx, p.window_was_active, p.window_line_counter) = (95, true, drew);
+        };
+        let dark = |drew: u8| -> Vec<usize> {
+            shades(&run_line10(setup(drew), |_, _| {}), 10).iter().enumerate().filter(|(_, &v)| v == 3).map(|(x, _)| x).collect()
+        };
+        let shifted: Vec<usize> = (0..11).map(|k| 8 * k).chain((11..20).map(|k| 8 * k + 1)).collect();
+        assert_eq!(dark(3), shifted, "x = 88 colour 0, the BG one pixel right from there");
+        assert_eq!(dark(0), (0..20).map(|k| 8 * k).collect::<Vec<_>>(), "the window never drew");
+        assert_eq!(line_timing(setup(3)).0, 80 + 172, "mode 3 as long as without the pixel");
     }
 
     /// DMG, WX 2-6: LCDC.5 turned off during the window's first tile leaves that tile with its
