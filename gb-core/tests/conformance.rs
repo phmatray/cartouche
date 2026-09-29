@@ -152,8 +152,8 @@ fn compare_screen(gb: &GameBoy, hw: Hw, reference: &Path) -> Verdict {
 /// 8x16 half included) and BG/window pixels fetched from tile 25 with LCDC.4 set: a structural
 /// footprint from OAM, the layer trace's per-pixel tile record and per-line registers of the shown
 /// frame (in CGB mode, or untraced, the tile maps with each line's SCX, SCY and window position),
-/// never the glyph's bytes. It
-/// never turns a fail into a pass: it only tells a ®-only fail from one with a real gap.
+/// never the glyph's bytes. It never turns a fail into a pass: it only tells a ®-only fail from one
+/// with a real gap.
 fn tile25_footprint(gb: &GameBoy) -> Vec<bool> {
     let p = &gb.bus.ppu;
     let traced = p.trace.as_deref().map(|t| &t.done);
