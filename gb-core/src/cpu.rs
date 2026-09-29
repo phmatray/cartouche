@@ -6,6 +6,8 @@ use crate::registers::Registers;
 pub struct Cpu {
     pub regs: Registers,
     pub halted: bool,
+    /// HALT's first M-cycle is still to run: the OAM DMA copies on through it (`MemoryBus::dma_hold`).
+    pub(crate) halt_grace: bool,
     pub ime: bool,
     pub ime_pending: bool,
     pub stopped: bool,
@@ -21,6 +23,7 @@ impl Cpu {
         Self {
             regs: Registers::default(),
             halted: false,
+            halt_grace: false,
             ime: false,
             ime_pending: false,
             stopped: false,
@@ -38,10 +41,10 @@ impl Cpu {
         }
         if self.halted {
             // Off the hot path: only a halted CPU with an interrupt pending gets here.
-            if self.locked || pending & !bus.late_interrupts() == 0 {
+            if self.locked || pending & !bus.halt_late_interrupts() == 0 {
                 return;
             }
-            self.halted = false;
+            (self.halted, self.halt_grace, bus.dma_hold) = (false, false, false);
             bus.hdma_unhalt();
         }
         if self.ime {
@@ -116,9 +119,10 @@ impl Cpu {
         }
 
         if self.halted {
-            if bus.hdma_on && bus.hdma_grace && bus.ppu.mode_clock as i32 - bus.hdma_at_pub() >= crate::memory::knob(13) - 1 { bus.hdma_run(); }
-            if bus.hdma_on && bus.hdma_grace { bus.hdma_run(); }
-            bus.hdma_grace = false;
+            bus.cycle_tick();
+            let grace = std::mem::take(&mut self.halt_grace);
+            if grace { bus.dma_hold = true; }
+            if bus.hdma_on && grace && bus.ppu.mode_clock as i32 - bus.hdma_at_pub() >= crate::memory::knob(13) - 1 && crate::memory::knob(13) != 0 { bus.hdma_run(); }
             if bus.hdma_on { bus.hdma_missed = true; }
             bus.hdma_on = false; // an HBlank block while halted waits for the wake (`MemoryBus::hdma_halt`)
             return Ok(4);
@@ -356,7 +360,7 @@ impl Cpu {
                 // An interrupt raised in this opcode fetch is pending already: the bug (Age
                 // halt-m0-interrupt, SCX 0-2).
                 if ime || bus.interrupts.pending() == 0 {
-                    self.halted = true;
+                    (self.halted, self.halt_grace) = (true, true);
                     bus.hdma_halt();
                 } else {
                     // HALT bug: IME=0 but interrupt pending — don't halt,
