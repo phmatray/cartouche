@@ -259,7 +259,9 @@ impl Ppu {
                 PpuMode::Drawing => self.lcd_on_line0 && self.m_cycle_dots == 2 && self.mode_clock >= 2,
                 _ => false,
             };
-            (shown >= from || lead) && !(shown == 2 && self.mode == PpuMode::Drawing)
+            // The M-cycle mode 3 begins in, STAT still showing mode 2, lets a write through, except
+            // a CGB's OAM write (Gambatte `oam_access/midwrite_1..3`: the DMG writes, the CGB not).
+            (shown >= from || lead) && !(shown == 2 && self.mode == PpuMode::Drawing && !(from == 2 && (self.cgb_mode || self.compat)))
         } else {
             // A CGB E unlocks OAM one dot after STAT shows mode 0 in single speed (Age oam-read's `EFF`).
             let e_lag = from == 2 && self.rev == Revision::CgbE && self.m_cycle_dots == 4
