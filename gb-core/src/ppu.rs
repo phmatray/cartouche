@@ -1155,6 +1155,30 @@ mod tests {
         assert!(!patterns(false).contains(&glitch));
     }
 
+    /// CGB: an SCY write between a tile's two data reads. A CGB D latched the row with the tile
+    /// number, so both bytes come from one row; a CGB C reads the row at each data fetch, so it
+    /// can mix row 2's low byte ($00) with row 3's high byte ($FF): colour 2 (Mealybug
+    /// `m3_scy_change2`, CGB C reference).
+    #[test]
+    fn cgb_c_latches_tile_row_at_row_fetch() {
+        let colours = |rev: Revision| -> Vec<u8> {
+            (16..80).flat_map(|dot| {
+                let p = run_line10(|p| {
+                    (p.cgb_mode, p.rev) = (true, rev);
+                    p.vram[6..8].fill(0xFF); // tile 0, row 3: colour 3; row 2: colour 0
+                    for (c, rgb) in [0x7FFFu16, 0x001F, 0x03E0, 0x7C00].iter().enumerate() {
+                        p.bg_cram[c * 2..c * 2 + 2].copy_from_slice(&rgb.to_le_bytes());
+                    }
+                }, |p, d| if d == dot { p.write_register(0xFF42, 1) });
+                let row = p.framebuffer[10 * SCREEN_WIDTH * 4..11 * SCREEN_WIDTH * 4].to_vec();
+                row.chunks(4).map(|c| [[255, 255, 255], [255, 0, 0], [0, 255, 0], [0, 0, 255]].iter().position(|k| k[..] == c[..3]).unwrap() as u8).collect::<Vec<_>>()
+            }).collect()
+        };
+        assert!(colours(Revision::CgbC).contains(&2), "CGB C mixes two rows");
+        assert!(!colours(Revision::CgbD).contains(&2), "CGB D latches one row");
+        assert!(!colours(Revision::Default).contains(&2));
+    }
+
     /// CGB tile attributes: map entry 0 uses bank 1 and flips X and Y; its tile has one dark
     /// pixel at row 0, column 0 in bank 1 (and nothing in bank 0), so it shows at row 7, column 7.
     #[test]

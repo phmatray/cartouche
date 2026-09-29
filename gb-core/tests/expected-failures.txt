@@ -117,7 +117,6 @@ mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change2.gb@cgb  # ppu-mode3: CGB
 mealybug-tearoom-tests/ppu/m3_lcdc_win_en_change_multiple_wx.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_scx_low_3_bits.gb@cgb  # ppu-mode3: 54 px outside the ® tile's footprint (x 150-151 from line 73: the ® BG cells as a mid-line SCX write shifts them, which the per-line footprint cannot place); every other differing pixel is the ® (rule-blocked)
 mealybug-tearoom-tests/ppu/m3_scx_low_3_bits.gb@dmg  # ppu-mode3: 54 px outside the ® tile's footprint (x 150-151 from line 73: the ® BG cells as a mid-line SCX write shifts them, which the per-line footprint cannot place); every other differing pixel is the ® (rule-blocked)
-mealybug-tearoom-tests/ppu/m3_scy_change2.gb@cgb  # ppu-mode3: CGB C reference only; the fetcher latches the tile row with the tile number, as a CGB D does (m3_scy_change passes)
 age-test-roms/m3-bg-bgp/m3-bg-bgp.gb@dmgC  # ppu-mode3
 age-test-roms/m3-bg-bgp/m3-bg-bgp.gb@ncmBC  # ppu-mode3
 age-test-roms/m3-bg-scx/m3-bg-scx-ds.gb@cgbBCE  # double-speed
