@@ -19,11 +19,15 @@ use common::{cgb_to_rgb, dmg_to_grey, load_png_rgb};
 use gb_core::gameboy::{GameBoy, Model, CYCLES_PER_FRAME};
 use gb_core::interrupts::JOYPAD_BIT;
 use gb_core::joypad::JoypadButton;
+use gb_core::trace::line;
 
 #[derive(Clone, Debug, PartialEq)]
 enum Verdict {
     Pass,
     Fail(String),
+    /// A screenshot fail whose every differing pixel lies in tile 25's footprint (see
+    /// `tile25_footprint`): the only verdict a rule-blocked entry may have.
+    FailTile25(String),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -133,10 +137,65 @@ fn compare_screen(gb: &GameBoy, hw: Hw, reference: &Path) -> Verdict {
     if expected.len() != actual.len() {
         return Verdict::Fail(format!("reference is {} pixels, frame {}", expected.len(), actual.len()));
     }
-    match actual.iter().zip(&expected).filter(|(a, e)| a != e).count() {
+    let differ: Vec<bool> = actual.iter().zip(&expected).map(|(a, e)| a != e).collect();
+    match differ.iter().filter(|&&d| d).count() {
         0 => Verdict::Pass,
-        diff => Verdict::Fail(format!("{diff} pixels differ")),
+        diff => match differ.iter().zip(tile25_footprint(gb)).filter(|&(&d, inside)| d && !inside).count() {
+            0 => Verdict::FailTile25(format!("{diff} pixels differ, all inside tile-25 footprints")),
+            outside => Verdict::Fail(format!("{diff} pixels differ; {outside} px outside tile-25 footprints")),
+        },
     }
+}
+
+/// The screen pixels (160x144, row-major) drawn from tile 25 ($8190): where the Nintendo boot ROM
+/// leaves its ® and Cartouche's boot ROMs leave nothing. OBJs whose tile at that row is 25 (the
+/// 8x16 half included) and BG/window cells whose map entry is 25 with LCDC.4 set: a structural
+/// footprint from OAM, the tile maps and each line's LCDC, SCX, SCY and window position (the layer
+/// trace's per-line record of the shown frame, else the registers), never the glyph's bytes. It
+/// never turns a fail into a pass: it only tells a ®-only fail from one with a real gap.
+fn tile25_footprint(gb: &GameBoy) -> Vec<bool> {
+    let p = &gb.bus.ppu;
+    let traced = p.trace.as_deref().map(|t| &t.done);
+    let mut fp = vec![false; 160 * 144];
+    for y in 0..144 {
+        let [lcdc, scx, scy, win_line, win_x] = match traced {
+            Some(t) if t.rendered(y) => [line::LCDC, line::SCX, line::SCY, line::WIN_LINE, line::WIN_X].map(|i| t.line(y)[i]),
+            _ => {
+                let win = p.lcdc & 0x20 != 0 && y >= p.wy as usize && p.wx < 167;
+                [p.lcdc, p.scx, p.scy, if win { (y - p.wy as usize) as u8 } else { 0xFF }, p.wx.saturating_sub(7)]
+            }
+        };
+        let height = if lcdc & 0x04 != 0 { 16 } else { 8 };
+        for o in p.oam.chunks(4) {
+            let row = y as i32 + 16 - o[0] as i32;
+            if !(0..height).contains(&row) {
+                continue;
+            }
+            let row = if o[3] & 0x40 != 0 { height - 1 - row } else { row };
+            let tile = if height == 16 { (o[2] & 0xFE) | (row >= 8) as u8 } else { o[2] };
+            // In CGB mode, attribute bit 3 takes the tile from VRAM bank 1, where no boot ROM writes.
+            if tile == 25 && !(p.cgb_mode && o[3] & 0x08 != 0) {
+                for x in (o[1] as usize).saturating_sub(8)..(o[1] as usize).min(160) {
+                    fp[y * 160 + x] = true;
+                }
+            }
+        }
+        if lcdc & 0x10 == 0 {
+            continue;
+        }
+        let map = |bit: u8, cx: usize, cy: usize| {
+            let at = if lcdc & bit != 0 { 0x1C00 } else { 0x1800 } + cy / 8 % 32 * 32 + cx / 8 % 32;
+            p.vram[at] == 25 && !(p.cgb_mode && p.vram[0x2000 + at] & 0x08 != 0)
+        };
+        for x in 0..160 {
+            fp[y * 160 + x] |= if win_line != 0xFF && x >= win_x as usize {
+                map(0x40, x - win_x as usize, win_line as usize)
+            } else {
+                map(0x08, x + scx as usize, y + scy as usize)
+            };
+        }
+    }
+    fp
 }
 
 fn frames(gb: &mut GameBoy, n: u64) -> Result<(), String> {
@@ -172,6 +231,8 @@ fn run_rom(path: &Path, hw: Hw, protocol: &Protocol, timeout_secs: u64) -> Verdi
 }
 
 fn run(mut gb: GameBoy, hw: Hw, protocol: &Protocol, timeout_secs: u64) -> Verdict {
+    // The layer trace gives `tile25_footprint` each line's registers.
+    gb.bus.ppu.set_tracing(matches!(protocol, Protocol::Screenshot(_)));
     if let Protocol::Scripted { presses, secs, reference } = protocol {
         return run_scripted(&mut gb, hw, presses, *secs, reference).unwrap_or_else(|e| Verdict::Fail(format!("emulator error: {e}")));
     }
@@ -218,32 +279,48 @@ fn parse_expected(text: &str) -> BTreeSet<String> {
         .collect()
 }
 
+/// The entries of expected-failures.txt whose area is `rule-blocked`.
+fn parse_rule_blocked(text: &str) -> BTreeSet<String> {
+    text.lines()
+        .filter_map(|l| l.split_once('#'))
+        .filter(|(entry, area)| !entry.trim().is_empty() && area.trim_start().starts_with("rule-blocked"))
+        .map(|(entry, _)| entry.trim().to_string())
+        .collect()
+}
+
 /// Pass or listed fail is green; an unlisted fail, a listed pass or a listed entry with no ROM
 /// behind it is red. A ROM in `no_verdict` only has to run (Protocol::Runs) and never counts as a
-/// pass: it may not also be in `expected`. Ok((passed, total, ran without a verdict)).
+/// pass: it may not also be in `expected`. A `rule_blocked` entry (a subset of `expected`) must
+/// fail inside tile 25's footprint alone, and a listed fail that does must be rule-blocked.
+/// Ok((passed, total, ran without a verdict, rule-blocked)).
 fn reconcile(
     suite: &str,
     results: &[(String, Verdict)],
     expected: &BTreeSet<String>,
     no_verdict: &BTreeSet<String>,
-) -> Result<(usize, usize, usize), String> {
+    rule_blocked: &BTreeSet<String>,
+) -> Result<(usize, usize, usize, usize), String> {
     let mut errors = Vec::new();
     let mut passed = 0;
     let mut runs = 0;
+    let mut blocked = 0;
     for (label, verdict) in results {
         if no_verdict.contains(label) {
             match verdict {
                 _ if expected.contains(label) => errors.push(format!("in both expected-failures.txt and probes-without-verdict.txt: {label}")),
                 Verdict::Pass => runs += 1,
-                Verdict::Fail(why) => errors.push(format!("probe without a verdict failed to run: {label} ({why})")),
+                Verdict::Fail(why) | Verdict::FailTile25(why) => errors.push(format!("probe without a verdict failed to run: {label} ({why})")),
             }
             continue;
         }
-        match (verdict, expected.contains(label)) {
-            (Verdict::Pass, false) => passed += 1,
-            (Verdict::Pass, true) => errors.push(format!("now passes: remove from expected-failures.txt: {label}")),
-            (Verdict::Fail(_), true) => {}
-            (Verdict::Fail(why), false) => errors.push(format!("regression: {label} ({why})")),
+        match (verdict, expected.contains(label), rule_blocked.contains(label)) {
+            (Verdict::Pass, false, _) => passed += 1,
+            (Verdict::Pass, true, _) => errors.push(format!("now passes: remove from expected-failures.txt: {label}")),
+            (Verdict::FailTile25(_), true, true) => blocked += 1,
+            (Verdict::Fail(_), true, false) => {}
+            (Verdict::Fail(why), true, true) => errors.push(format!("rule-blocked but not ®-only: {label} ({why})")),
+            (Verdict::FailTile25(why), true, false) => errors.push(format!("®-only now: move to the rule-blocked section: {label} ({why})")),
+            (Verdict::Fail(why) | Verdict::FailTile25(why), false, _) => errors.push(format!("regression: {label} ({why})")),
         }
     }
     let ran: BTreeSet<&str> = results.iter().map(|(l, _)| l.as_str()).collect();
@@ -251,17 +328,15 @@ fn reconcile(
         errors.push(format!("stale entry: {entry}"));
     }
     if errors.is_empty() {
-        Ok((passed, results.len() - runs, runs))
+        Ok((passed, results.len() - runs, runs, blocked))
     } else {
         Err(format!("{suite}: {} problem(s)\n{}", errors.len(), errors.join("\n")))
     }
 }
 
-/// The entries of a record file in tests/.
-fn record(name: &str) -> BTreeSet<String> {
-    let text = std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join(name))
-        .unwrap_or_else(|e| panic!("read tests/{name}: {e}"));
-    parse_expected(&text)
+/// A record file in tests/.
+fn record(name: &str) -> String {
+    std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join(name)).unwrap_or_else(|e| panic!("read tests/{name}: {e}"))
 }
 
 /// Every .gb/.gbc under `dir`, sorted.
@@ -322,11 +397,21 @@ fn run_suite(suite: &str, root: &str, dirs: &[&str], timeout_secs: u64, pick: fn
     let in_suite = |set: BTreeSet<String>| -> BTreeSet<String> {
         set.into_iter().filter(|e| prefixes.iter().any(|p| e.starts_with(&format!("{p}/")))).collect()
     };
-    let expected = in_suite(record("expected-failures.txt"));
-    let no_verdict = in_suite(record("probes-without-verdict.txt"));
-    match reconcile(suite, &results, &expected, &no_verdict) {
-        Ok((passed, total, 0)) => println!("| {suite} | {passed}/{total} |"),
-        Ok((passed, total, runs)) => println!("| {suite} | {passed}/{total} | + {runs} probes without a verdict ran |"),
+    let failures = record("expected-failures.txt");
+    let expected = in_suite(parse_expected(&failures));
+    let rule_blocked = in_suite(parse_rule_blocked(&failures));
+    let no_verdict = in_suite(parse_expected(&record("probes-without-verdict.txt")));
+    match reconcile(suite, &results, &expected, &no_verdict, &rule_blocked) {
+        Ok((passed, total, runs, blocked)) => {
+            let mut row = format!("| {suite} | {passed}/{total} |");
+            if runs > 0 {
+                row += &format!(" + {runs} probes without a verdict ran |");
+            }
+            if blocked > 0 {
+                row += &format!(" {blocked} rule-blocked |");
+            }
+            println!("{row}");
+        }
         Err(e) => panic!("{e}"),
     }
 }
@@ -444,7 +529,7 @@ const PROBE_ORACLES: &[(&str, &[(u16, u8)])] = &[
     ("poweron", &[(0x8000, 0x80)]),
 ];
 
-static NO_VERDICT: LazyLock<BTreeSet<String>> = LazyLock::new(|| record("probes-without-verdict.txt"));
+static NO_VERDICT: LazyLock<BTreeSet<String>> = LazyLock::new(|| parse_expected(&record("probes-without-verdict.txt")));
 
 /// gbmicrotest runs on the DMG it was checked on (DMG-CPU B/C).
 fn gbmicrotest(rom: &Path, rel: &str) -> Vec<Job> {
@@ -542,6 +627,26 @@ fn rtc3test_all() {
 }
 
 #[test]
+fn tile25_footprint_covers_obj_at_x3() {
+    let mut rom = vec![0; 0x8000];
+    rom[0x14D] = 0xE7; // header checksum of an all-zero header
+    let mut gb = GameBoy::new(rom).unwrap();
+    gb.bus.ppu.lcdc = 0x93; // LCD, BG and OBJs on, tile data at $8000 (map all zeros), 8x8 OBJs
+    gb.bus.ppu.oam = [0; 0xA0];
+    gb.bus.ppu.oam[..4].copy_from_slice(&[16, 3, 25, 0]);
+    let covered: Vec<(usize, usize)> = tile25_footprint(&gb).iter().enumerate().filter(|(_, &c)| c).map(|(i, _)| (i % 160, i / 160)).collect();
+    let want: Vec<(usize, usize)> = (0..8).flat_map(|y| (0..3).map(move |x| (x, y))).collect();
+    assert_eq!(covered, want);
+}
+
+#[test]
+fn parse_expected_counts_rule_blocked() {
+    let text = "s/a.gb@dmg  # rule-blocked: ® in tile 25\ns/b.gb  # ppu-mode3\n";
+    assert_eq!(parse_expected(text).len(), 2);
+    assert_eq!(parse_rule_blocked(text).into_iter().collect::<Vec<_>>(), ["s/a.gb@dmg"]);
+}
+
+#[test]
 fn parse_expected_ignores_comments() {
     let text = "# header\n\nsuite/a.gb  # timer\n  suite/b.gb\n#suite/c.gb\n";
     let set = parse_expected(text);
@@ -555,26 +660,37 @@ fn reconcile_states() {
     let results = vec![("s/pass.gb".to_string(), Verdict::Pass), ("s/fail.gb".to_string(), fail())];
 
     let none = listed(&[]);
-    assert_eq!(reconcile("s", &results, &listed(&["s/fail.gb"]), &none), Ok((1, 2, 0)));
+    assert_eq!(reconcile("s", &results, &listed(&["s/fail.gb"]), &none, &none), Ok((1, 2, 0, 0)));
 
-    let err = reconcile("s", &results, &none, &none).unwrap_err();
+    let err = reconcile("s", &results, &none, &none, &none).unwrap_err();
     assert!(err.contains("regression: s/fail.gb"), "{err}");
 
-    let err = reconcile("s", &results, &listed(&["s/fail.gb", "s/pass.gb"]), &none).unwrap_err();
+    let err = reconcile("s", &results, &listed(&["s/fail.gb", "s/pass.gb"]), &none, &none).unwrap_err();
     assert!(err.contains("now passes: remove from expected-failures.txt: s/pass.gb"), "{err}");
 
-    let err = reconcile("s", &results, &listed(&["s/fail.gb", "s/gone.gb"]), &none).unwrap_err();
+    let err = reconcile("s", &results, &listed(&["s/fail.gb", "s/gone.gb"]), &none, &none).unwrap_err();
     assert!(err.contains("stale entry: s/gone.gb"), "{err}");
 
     // A probe without a verdict that runs clean is counted apart, never as a pass.
-    assert_eq!(reconcile("s", &results, &listed(&["s/fail.gb"]), &listed(&["s/pass.gb"])), Ok((0, 1, 1)));
+    assert_eq!(reconcile("s", &results, &listed(&["s/fail.gb"]), &listed(&["s/pass.gb"]), &none), Ok((0, 1, 1, 0)));
 
-    let err = reconcile("s", &results, &none, &listed(&["s/fail.gb"])).unwrap_err();
+    let err = reconcile("s", &results, &none, &listed(&["s/fail.gb"]), &none).unwrap_err();
     assert!(err.contains("probe without a verdict failed to run: s/fail.gb"), "{err}");
 
-    let err = reconcile("s", &results, &listed(&["s/fail.gb"]), &listed(&["s/fail.gb"])).unwrap_err();
+    let err = reconcile("s", &results, &listed(&["s/fail.gb"]), &listed(&["s/fail.gb"]), &none).unwrap_err();
     assert!(err.contains("in both expected-failures.txt and probes-without-verdict.txt: s/fail.gb"), "{err}");
 
-    let err = reconcile("s", &results, &listed(&["s/fail.gb"]), &listed(&["s/gone.gb"])).unwrap_err();
+    let err = reconcile("s", &results, &listed(&["s/fail.gb"]), &listed(&["s/gone.gb"]), &none).unwrap_err();
     assert!(err.contains("stale entry: s/gone.gb"), "{err}");
+
+    // rule-blocked: must fail inside tile 25's footprint alone, and a ®-only fail must be rule-blocked
+    let r = listed(&["s/r.gb"]);
+    let tile25 = vec![("s/r.gb".to_string(), Verdict::FailTile25("8 pixels differ".into()))];
+    assert_eq!(reconcile("s", &tile25, &r, &none, &r), Ok((0, 1, 0, 1)));
+    let err = reconcile("s", &[("s/r.gb".to_string(), fail())], &r, &none, &r).unwrap_err();
+    assert!(err.contains("rule-blocked but not ®-only: s/r.gb"), "{err}");
+    let err = reconcile("s", &[("s/r.gb".to_string(), Verdict::Pass)], &r, &none, &r).unwrap_err();
+    assert!(err.contains("now passes: remove from expected-failures.txt: s/r.gb"), "{err}");
+    let err = reconcile("s", &tile25, &r, &none, &none).unwrap_err();
+    assert!(err.contains("®-only now: move to the rule-blocked section: s/r.gb"), "{err}");
 }
