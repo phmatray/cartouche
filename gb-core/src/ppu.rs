@@ -110,8 +110,9 @@ pub struct Ppu {
     /// The STAT line rose in the M-cycle just run (`step`), and whether LY = LYC alone raised it.
     pub(crate) stat_edge_now: bool,
     pub(crate) stat_edge_lyc: bool,
-    /// Double speed: an LYC write near a line's end compared LY = LYC as writes do; the line's own
-    /// edge follows that view until the two agree again (`stat_line_written`).
+    /// Double speed: an LYC write in a line's last 3 dots (line 153: its first 8) compared LY = LYC
+    /// as writes do; the line's own edge follows that view until the two agree again
+    /// (`stat_line_written`).
     pub(crate) lyc_write_view: bool,
 
     // CGB color support
@@ -841,7 +842,9 @@ impl Ppu {
         // rest of the line's last 3 dots (line 153: to dot 7), where it would otherwise see the
         // old line (Gambatte `lycEnable/late_ff45_enable_ds_lcdoffset1_1/_2`,
         // `ff45_enable_weirdpoint_ds_lcdoffset1_*`, `lyc153_late_ff45_enable_ds_lcdoffset1_*`).
-        if lyc_write && self.m_cycle_dots == 2 {
+        if lyc_write && self.m_cycle_dots == 2 && ((1..=3).contains(&self.dots_left())
+            || self.mode == PpuMode::VBlank && matches!(self.ly, 0 | 153) && self.mode_clock <= 7)
+        {
             self.lyc_write_view = true;
         }
         let line = forced || actual;
