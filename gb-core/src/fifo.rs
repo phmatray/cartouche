@@ -167,6 +167,8 @@ pub(crate) struct LineState {
     pub win_was_on: bool,
     /// DMG, WX = 166: the last pixel's match used a window row (`fifo_dot`).
     pub wx166_row: bool,
+    /// The window started on the last pixel (a CGB's WX 166): `Ppu::m0_early`.
+    pub win_last_px: bool,
     /// Traced lines: the line record's registers, taken at the first dot.
     pub record: [u8; 12],
     /// Popped pixels on their way to the LCD, by the dot they were popped (mod 4): (BG, OBJ,
@@ -258,6 +260,7 @@ impl Ppu {
             self.fifo_dot();
         }
         let len = self.line.len;
+        self.m0_early = self.line.win_last_px;
         self.line = saved;
         len
     }
@@ -632,10 +635,10 @@ impl Ppu {
             }
             if self.line.win_skip == 0 {
                 let wx = self.wx_seen();
-                // WX 0 also matches a few dots later, once WY matches then (Gambatte
-                // `late_scx_late_wy_FFto4_ly4_wx00_1/_2/_3`: WY compared by dot 9 opens it on both
-                // models, SameBoy's WX 0 range).
-                let late0 = wx == 0 && (7..=10).contains(&self.line.dot);
+                // WX 0 also matches a few dots later once WY matches then, later still with a fine
+                // scroll (SameBoy's WX 0 range, MIT; Gambatte `late_wy_FFto2_ly2_wx00_1..3`: WY
+                // compared by dot 8 opens it, `late_scx_late_wy_FFto4_ly4_wx00_1..3`, SCX 4: by dot 10).
+                let late0 = wx == 0 && (7..=if self.scx & 7 != 0 { 10 } else { 8 }).contains(&self.line.dot);
                 if wx < 7 && (self.line.dot == 6 + wx as u32 || late0) && self.win_on() && self.wy_ok() {
                     self.line.win_skip = 7 - wx;
                 }
@@ -684,6 +687,7 @@ impl Ppu {
             // Turned off and on again, the window starts over on its next row.
             if self.line.window_triggered { self.line.win_rows += 1; }
             self.line.window_triggered = true;
+            self.line.win_last_px |= x == 159;
             self.line.win_x = x;
             self.line.bg.clear();
             self.line.fetcher = Fetcher { window: true, ..Fetcher::default() };
