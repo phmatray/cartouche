@@ -416,20 +416,11 @@ gambatte/miscmstatirq/m1statwirq_3_dmg08_out2.gb@dmg  # stat
 gambatte/miscmstatirq/m1statwirq_trigger_ly94_lyc94_40_50_2_dmg08_outE0_cgb04c_outE2.gbc@dmg  # stat
 gambatte/miscmstatirq/m1statwirq_trigger_ly94_lyc94_40_50_ds_1_cgb04c_outE0.gbc@cgb  # stat
 gambatte/oam_access/midwrite_2_dmg08_out1_cgb04c_out0.gbc@cgb  # ppu
-gambatte/oamdma/late_sp00x_ds_2_cgb04c_out3.gbc@cgb  # oam-dma: handed to #307: double-speed mode-3 timing with OBJs after LCD on (the scan sees the OBJ as hardware does; STAT still reads mode 0)
-gambatte/oamdma/late_sp00y_ds_1_cgb04c_out3.gbc@cgb  # oam-dma: handed to #307: double-speed mode-3 timing with OBJs after LCD on (the scan sees the OBJ as hardware does; STAT still reads mode 0)
-gambatte/oamdma/late_sp01x_ds_2_cgb04c_out3.gbc@cgb  # oam-dma: handed to #307: double-speed mode-3 timing with OBJs after LCD on (the scan sees the OBJ as hardware does; STAT still reads mode 0)
-gambatte/oamdma/late_sp01y_ds_1_cgb04c_out3.gbc@cgb  # oam-dma: handed to #307: double-speed mode-3 timing with OBJs after LCD on (the scan sees the OBJ as hardware does; STAT still reads mode 0)
-gambatte/oamdma/late_sp39x_4_cgb04c_out3.gbc@cgb  # oam-dma: CGB only, 8 OBJs on the line: entry 39 read an M-cycle late here while late_sp39x_1/_2 pass; cause not pinned (follow-up)
-gambatte/oamdma/late_sp39x_ds_2_cgb04c_out3.gbc@cgb  # oam-dma: handed to #307: double-speed mode-3 timing with OBJs after LCD on (the scan sees the OBJ as hardware does; STAT still reads mode 0)
-gambatte/oamdma/late_sp39y_ds_1_cgb04c_out3.gbc@cgb  # oam-dma: handed to #307: double-speed mode-3 timing with OBJs after LCD on (the scan sees the OBJ as hardware does; STAT still reads mode 0)
-gambatte/oamdma/oamdma_late_speedchange_stat_2_cgb04c_out3.gbc@cgb  # oam-dma
 gambatte/oamdma/oamdma_srcFE00_busyread0000_dmg08_cgb04c_out0.gbc@dmg  # oam-dma: expects $FF from the power-on work RAM at $DExx that the DMA copies and the ROM never writes (per-unit contents; srcFF00 expects $00 at $DFxx)
 gambatte/oamdma/oamdma_srcFE00_busyreadA000_dmg08_cgb04c_out0.gbc@dmg  # oam-dma: expects $FF from the power-on work RAM at $DExx that the DMA copies and the ROM never writes (per-unit contents; srcFF00 expects $00 at $DFxx)
 gambatte/oamdma/oamdma_srcFE00_busyreadC000_dmg08_out0_cgb_xoutblank.gbc@dmg  # oam-dma: expects $FF from the power-on work RAM at $DExx that the DMA copies and the ROM never writes (per-unit contents; srcFF00 expects $00 at $DFxx)
 gambatte/oamdma/oamdma_srcFE00_readFE00_dmg08_cgb04c_out0.gbc@dmg  # oam-dma: expects $FF from the power-on work RAM at $DExx that the DMA copies and the ROM never writes (per-unit contents; srcFF00 expects $00 at $DFxx)
 gambatte/oamdma/oamdmasrcC000_hdmasrc0000_cgb04c_out0A940C0D.gbc@cgb  # oam-dma
-gambatte/oamdma/oamdmasrcC0_speedchange_readC000_cgb04c_out11.gbc@cgb  # oam-dma
 gambatte/scx_during_m3/scx_0060c0/scx_during_m3_1.gbc@cgb  # ppu-mode3
 gambatte/scx_during_m3/scx_0060c0/scx_during_m3_1.gbc@dmg  # ppu-mode3
 gambatte/scx_during_m3/scx_0060c0/scx_during_m3_2.gbc@cgb  # ppu-mode3
@@ -518,8 +509,6 @@ gambatte/speedchange/speedchange_ch1_duty0_pos6_to_pos7_timing_nop_2_cgb04c_outa
 gambatte/speedchange/speedchange_ch1_nr4init_duty0_pos6_to_pos7_timing_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
 gambatte/sprites/10spritesPrLine_10xposA7_m0irq_2_dmg08_cgb04c_out2.gbc@cgb  # ppu-mode3: handed to #291: mode-3 length with 10 OBJs at X $A7
 gambatte/sprites/10spritesPrLine_10xposA7_m0irq_2_dmg08_cgb04c_out2.gbc@dmg  # ppu-mode3: handed to #291: mode-3 length with 10 OBJs at X $A7
-gambatte/sprites/enable/late_disable_ds_3_cgb04c_out3.gbc@cgb  # ppu-mode3: handed to #307: double-speed mode-3 timing with OBJs after LCD on (the scan sees the OBJ as hardware does; STAT still reads mode 0)
-gambatte/sprites/late_disable_ds_1_cgb04c_out3.gbc@cgb  # ppu-mode3: handed to #307: double-speed mode-3 timing with OBJs after LCD on (the scan sees the OBJ as hardware does; STAT still reads mode 0)
 gambatte/sprites/sprite_late_disable_spx1A_1_dmg08_out0.gb@dmg  # ppu-mode3: handed to #291: LCDC.1 off mid mode 3 aborts the OBJ fetch at X $1A one M-cycle later on hardware (spx18/19/1B pass)
 gambatte/sprites/sprite_late_late_disable_spx1A_1_dmg08_out0.gb@dmg  # ppu-mode3: handed to #291: LCDC.1 off mid mode 3 aborts the OBJ fetch at X $1A one M-cycle later on hardware (spx18/19/1B pass)
 gambatte/window/arg/late_enable_afterVblank_4_dmg08_out3_cgb04c_out0.gbc@cgb  # ppu-mode3
