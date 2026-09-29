@@ -3,8 +3,9 @@
 /// A transfer shifts 8 bits: SC bit 7 starts it, bit 0 picks the clock (1 = internal, this
 /// console is the master; 0 = external, it waits for the partner's clock). An internal-clock
 /// transfer takes 8 periods of 512 CPU cycles (16 with the CGB fast clock, SC bit 1), whose edges
-/// come from the DIV counter: it ends on the 8th edge after the write, not 8 periods after it
-/// (Mooneye boot_sclk_align). When it ends SB
+/// come from the DIV counter: it ends on the 16th falling edge of DIV bit 7 (bit 2 with the fast
+/// clock) after the write, not 8 periods after it (Mooneye boot_sclk_align; Gambatte serial
+/// `start_wait_read_if`, `nopx1/2_start*_wait_read_if`, `div_write_start_*`). When it ends SB
 /// holds the byte shifted in (0xFF with no partner), SC bit 7 clears and the serial interrupt
 /// fires. Two consoles are connected by `gameboy::run_linked_frame`.
 ///
@@ -103,7 +104,9 @@ impl Serial {
                     // Blargg's test ROMs print through the serial port.
                     self.output.push(self.data);
                     let period = if value & 0x02 != 0 { 16 } else { 512 };
-                    self.remaining = 8 * period - (div as u32 + 4) % period;
+                    // 16 falling edges of the clock's DIV bit (`div_reset`), from the next one.
+                    let half = period / 2;
+                    self.remaining = 16 * half - 4 - div as u32 % half;
                     // A remote partner replaces the printer: its byte arrives through remote_reply.
                     self.incoming = if self.remote { 0xFF } else { self.printer.as_mut().map_or(0xFF, |p| p.exchange(self.data)) };
                     self.started = true;
@@ -138,7 +141,8 @@ impl Serial {
             return;
         }
         let half = if self.control & 0x02 != 0 { 8 } else { 256 };
-        let edges = self.remaining.div_ceil(half) - u32::from(div as u32 & half / 2 != 0);
+        let div = div as u32;
+        let edges = (div + self.remaining + 4) / half - div / half - u32::from(div & half / 2 != 0);
         self.remaining = (edges * half).saturating_sub(4).max(1);
     }
 
@@ -277,10 +281,10 @@ mod tests {
     fn sb_shifts_in_ones_mid_transfer() {
         let mut s = Serial::new();
         s.write(0xFF01, 0x00, 0);
-        s.write(0xFF02, 0x81, 0x1FC); // the next DIV edge is the next M-cycle's: a whole first period
+        s.write(0xFF02, 0x81, 0x100); // on a DIV bit 7 edge: 16 more, 4096 cycles less the write's M-cycle
         for bits in 0..8u8 {
             assert_eq!(s.read(0xFF01), (1u16 << bits) as u8 - 1, "after {bits} periods");
-            for _ in 0..128 - u32::from(bits == 7) { assert!(!s.tick(4)); }
+            for _ in 0..128 - 2 * u32::from(bits == 7) { assert!(!s.tick(4)); }
         }
         assert!(s.tick(4), "the 8th edge");
         assert_eq!((s.read(0xFF01), s.read(0xFF02)), (0x7F, 0x81), "its own M-cycle still sees the transfer");

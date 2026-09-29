@@ -551,10 +551,6 @@ gambatte/scy/scy_during_m3_spx08_ds_1.gbc@cgb  # ppu-mode3
 gambatte/scy/scy_during_m3_spx08_ds_2.gbc@cgb  # ppu-mode3
 gambatte/scy/scy_during_m3_spx08_ds_3.gbc@cgb  # ppu-mode3
 gambatte/scy/scy_during_m3_spx08_ds_4.gbc@cgb  # ppu-mode3
-gambatte/serial/nopx1_start83_wait_read_if_2_dmg08_outE0_cgb04c_outE8.gbc@cgb  # serial
-gambatte/serial/nopx2_start_wait_read_if_1_dmg08_cgb04c_outE0.gbc@cgb  # serial
-gambatte/serial/nopx2_start_wait_read_if_1_dmg08_cgb04c_outE0.gbc@dmg  # serial
-gambatte/serial/start83_late_div_write_wait_read_if_1b_cgb04c_outE8.gbc@cgb  # serial
 gambatte/serial/start_wait_read_if_ds_1_cgb04c_outE0.gbc@cgb  # serial
 gambatte/serial/start_wait_read_if_ds_2_cgb04c_outE8.gbc@cgb  # serial
 gambatte/sound/ch1_duty0_pos6_to_pos7_timing_ds_6_cgb04c_outaudio1.gbc@cgb  # apu
