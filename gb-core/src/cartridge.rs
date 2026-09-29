@@ -309,6 +309,8 @@ pub struct Cartridge {
     emulated_clock: bool,
     /// HuC1/HuC3 infrared LED: bit 0 of the last value written while A000-BFFF was the IR port.
     ir_led: bool,
+    /// MBC1M (multicart) wiring: BANK1 on 4 bits, BANK2 above it. Derived from the ROM at load.
+    mbc1m: bool,
 }
 
 impl Cartridge {
@@ -409,6 +411,14 @@ impl Cartridge {
             },
         };
 
+        // MBC1M (Pan Docs "MBC1 multicart"): a 1 MiB MBC1 board with BANK1 on 4 bits and BANK2
+        // picking a 256 KiB game. Recognised by its layout alone: at least two of game slots 1-3
+        // open on a header whose checksum holds. Only that checksum is computed; the logo is never
+        // read and no title or game is looked up (docs/LEGAL.md, CONTRIBUTING.md).
+        let mbc1m = matches!(cart_type, 0x01..=0x03)
+            && data.len() == 0x10_0000
+            && (1..4).filter(|s| checksum_at(s * 0x4_0000) == data[s * 0x4_0000 + 0x14D]).count() >= 2;
+
         let rtc = match cart_type {
             0x0F | 0x10 => Some(Rtc::new()),
             _ => None,
@@ -433,7 +443,18 @@ impl Cartridge {
             clock_dots: 0,
             emulated_clock: false,
             ir_led: false,
+            mbc1m,
         })
+    }
+
+    /// MBC1's BANK2 as the high bits of the ROM bank and BANK1 as the low ones: 2+5 bits, or 2+4
+    /// on an MBC1M board.
+    fn mbc1_bank(&self, bank2: u8, bank1: u8) -> usize {
+        if self.mbc1m {
+            (bank2 as usize) << 4 | (bank1 & 0x0F) as usize
+        } else {
+            (bank2 as usize) << 5 | bank1 as usize
+        }
     }
 
     /// The ROM bank mapped at $4000-$7FFF now, as `read_rom` resolves it (for debugger symbols).
@@ -441,7 +462,7 @@ impl Cartridge {
         let count = self.rom_bank_count.max(1);
         let bank = match &self.mbc {
             MbcType::NoMbc => 1,
-            MbcType::Mbc1 { rom_bank, ram_bank, .. } => (*ram_bank as usize) << 5 | *rom_bank as usize,
+            MbcType::Mbc1 { rom_bank, ram_bank, .. } => self.mbc1_bank(*ram_bank, *rom_bank),
             MbcType::Mbc2 { rom_bank, .. }
             | MbcType::Mbc3 { rom_bank, .. }
             | MbcType::Camera { rom_bank, .. }
@@ -466,7 +487,7 @@ impl Cartridge {
             } => match addr {
                 0x0000..=0x3FFF => {
                     if *mode {
-                        let bank = (*ram_bank as usize) << 5;
+                        let bank = self.mbc1_bank(*ram_bank, 0);
                         let offset = (bank % self.rom_bank_count) * 0x4000 + addr as usize;
                         self.rom.get(offset).copied().unwrap_or(0xFF)
                     } else {
@@ -474,7 +495,7 @@ impl Cartridge {
                     }
                 }
                 0x4000..=0x7FFF => {
-                    let bank = ((*ram_bank as usize) << 5) | (*rom_bank as usize);
+                    let bank = self.mbc1_bank(*ram_bank, *rom_bank);
                     let effective_bank = bank % self.rom_bank_count.max(1);
                     let offset = effective_bank * 0x4000 + (addr as usize - 0x4000);
                     self.rom.get(offset).copied().unwrap_or(0xFF)
@@ -1824,6 +1845,45 @@ mod tests {
         assert_eq!(c.read_ram(0), 0x11);
         c.write_rom(0x4000, 0x05);
         assert_eq!(c.read_ram(0), 0x55);
+    }
+
+    /// A 1 MiB MBC1 image, each 16 KiB bank starting with its number; `slots` of the 256 KiB game
+    /// slots 1-3 carry a checksummed header (slot 0's is the cartridge header).
+    fn mbc1_1mib(slots: usize) -> Cartridge {
+        let mut rom = vec![0u8; 0x10_0000];
+        for n in 0..64 { rom[n * 0x4000] = n as u8; }
+        header(&mut rom, 0, 0x01, 0x00);
+        for s in 1..=slots { header(&mut rom, s * 0x4_0000, 0x01, 0x00); }
+        Cartridge::from_rom(rom).expect("loads")
+    }
+
+    #[test]
+    fn mbc1_multicart_maps_4bit_bank1() {
+        let mut c = mbc1_1mib(3);
+        c.write_rom(0x4000, 1); // BANK2: game slot 1
+        c.write_rom(0x2000, 3);
+        assert_eq!(c.read_rom(0x4000), 0x13);
+        assert_eq!(c.current_rom_bank(), 0x13);
+        c.write_rom(0x2000, 0x12); // BANK1 bit 4 is not wired
+        assert_eq!(c.read_rom(0x4000), 0x12);
+        c.write_rom(0x2000, 0x10); // non-zero on 5 bits, so not bumped to 1: the slot's bank 0
+        assert_eq!(c.read_rom(0x4000), 0x10);
+        assert_eq!(c.read_rom(0x0000), 0x00, "mode 0: bank 0");
+        c.write_rom(0x6000, 1);
+        c.write_rom(0x4000, 2);
+        assert_eq!(c.read_rom(0x0000), 0x20, "mode 1: BANK2 << 4");
+    }
+
+    #[test]
+    fn a_1mib_mbc1_without_game_slots_stays_plain_mbc1() {
+        for slots in [0, 1] {
+            let mut c = mbc1_1mib(slots);
+            c.write_rom(0x4000, 1);
+            c.write_rom(0x2000, 3);
+            assert_eq!(c.read_rom(0x4000), 0x23, "{slots} slot header(s)");
+            c.write_rom(0x6000, 1);
+            assert_eq!(c.read_rom(0x0000), 0x20);
+        }
     }
 
     /// Writes a header (type, RAM size, checksum) at `at` (0 for bank 0's, `len - 0x8000` for the

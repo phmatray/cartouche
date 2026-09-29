@@ -10,7 +10,6 @@ mooneye-test-suite/acceptance/boot_hwio-dmg0.gb  # boot: DMG-CPU 0 (the first DM
 mooneye-test-suite/acceptance/boot_regs-dmg0.gb  # boot: DMG-CPU 0 (the first DMG revision) is not emulated
 mooneye-test-suite/acceptance/ppu/hblank_ly_scx_timing-GS.gb  # stat
 mooneye-test-suite/acceptance/ppu/stat_lyc_onoff.gb  # stat
-mooneye-test-suite/emulator-only/mbc1/multicart_rom_8Mb.gb  # mbc
 same-suite/apu/channel_1/channel_1_extra_length_clocking-cgb0B.gb  # apu
 same-suite/apu/channel_1/channel_1_freq_change_timing-A.gb  # apu
 same-suite/apu/channel_1/channel_1_freq_change_timing-cgb0BC.gb  # apu
