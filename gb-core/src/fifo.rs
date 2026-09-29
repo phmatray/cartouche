@@ -425,6 +425,15 @@ impl Ppu {
         bank + tile as usize * 16 + (row & 7) as usize * 2
     }
 
+    /// DMG: OBJs turned off (LCDC.1) while an OBJ waits for its fetch or is being fetched stop that
+    /// fetch at once; the OBJ is not drawn and the pixels resume on that dot (a CGB fetches it
+    /// anyway). Mealybug `m3_lcdc_obj_en_change` and `m3_lcdc_obj_en_change_variant` on the DMG, as
+    /// SameBoy models it. The OBJs left of the first tile, already merged, are not undone.
+    #[inline]
+    fn obj_abort(&self) -> bool {
+        self.lcdc & 0x02 == 0 && !(self.cgb_mode || self.compat) && self.line.obj_fetch.is_some() | self.line.obj_pending.is_some()
+    }
+
     /// The running OBJ fetch reads its row's high byte and merges the row into the OBJ FIFO.
     #[inline]
     fn obj_hi(&mut self, i: u8, lo: u8) {
@@ -513,6 +522,9 @@ impl Ppu {
                 self.line.win_skip = 7 - wx;
             }
         }
+        if self.line.obj_dots > 0 && self.obj_abort() {
+            (self.line.obj_dots, self.line.obj_fetch) = (0, None);
+        }
         if self.line.obj_dots > 0 {
             self.line.obj_dots -= 1;
             self.line.fetcher.half = false; // the fetcher waits at Push: its last read is past
@@ -562,6 +574,9 @@ impl Ppu {
         }
         self.fetcher_dot();
         if self.line.bg.len == 0 { return; }
+        if self.line.obj_pending.is_some() && self.obj_abort() {
+            self.line.obj_pending = None;
+        }
         if let Some(i) = self.line.obj_pending {
             // Waiting for the fetcher to finish its tile, then 6 dots of OBJ fetch.
             if self.line.fetcher.step == FetchStep::Push {
