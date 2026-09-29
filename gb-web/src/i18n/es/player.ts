@@ -47,6 +47,7 @@ export default {
     ok: 'Sobrescribir',
   },
   toast: {
+    locked: 'El procesador se bloqueó en una instrucción no válida en {pc}.',
     resumed: 'Reanudado donde lo dejaste',
     loadedSlot: 'Ranura {n} cargada',
     loadedResume: 'Punto de reanudación cargado',
@@ -203,6 +204,7 @@ export default {
     debugSub: 'Registros, código, memoria, salida serie y tiles, para desarrollo',
   },
   debug: {
+    locked: 'Procesador bloqueado en {pc} (instrucción no válida)',
     view: 'Vista de depuración',
     cpu: 'cpu',
     serial: 'serie',
