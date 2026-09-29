@@ -1503,6 +1503,20 @@ mod tests {
         assert_eq!(wake(63), 65, "the edge in HALT's first M-cycle");
     }
 
+    /// Line 153's own LY = LYC edge rises 2 dots before the line, as every line's does in single
+    /// speed: a PPU a dot off the grid raises it in the M-cycle over line 152's dots 452-455, not
+    /// the next (Gambatte `lcd_offset/offset1/2_lyc99int_*_1`).
+    #[test]
+    fn line153_lyc_edge_rises_two_dots_early() {
+        let mut bus = bus();
+        let p = &mut bus.ppu;
+        (p.lcdc, p.ly, p.mode, p.mode_clock, p.stat, p.lyc) = (0x81, 152, crate::ppu::PpuMode::VBlank, 451, 0x40, 153);
+        bus.interrupts.interrupt_enable = STAT_BIT;
+        bus.cycle_tick();
+        assert_eq!((bus.ppu.ly, bus.ppu.mode_clock), (152, 455));
+        assert_ne!(bus.interrupts.interrupt_flag & STAT_BIT, 0, "LY = LYC 153 at dot 454");
+    }
+
     /// An interrupt raised in HALT's own fetch means no HALT, whatever IME: with IME on the
     /// dispatch returns to the HALT itself, as after EI; HALT (Gambatte
     /// `halt/late_m0int_halt_m0stat_scx2_3a`, `scx3_3a/3b`, which then halt a line).
