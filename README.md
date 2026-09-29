@@ -164,7 +164,11 @@ browser's own install button.
 
 The core is checked against the public hardware test ROMs that emulator
 authors rely on. Every suite below runs in CI on each commit; known failures are
-listed, not hidden, in `gb-core/tests/expected-failures.txt`.
+listed, not hidden, in `gb-core/tests/expected-failures.txt`. Some gbmicrotest
+ROMs are hardware probes, not tests: their source records no expected value, so
+nothing can pass or fail. They are listed in `gb-core/tests/probes-without-verdict.txt`
+and still run on every commit, but only to check that the emulator does not
+crash. They are not counted in the score.
 
 | Suite | What it checks | Result |
 |---|---|---|
@@ -178,18 +182,21 @@ listed, not hidden, in `gb-core/tests/expected-failures.txt`.
 | Link cable | Serial transfers between two consoles | ✅ |
 | Infrared (CGB, HuC1, HuC3) | Light between the two consoles of the link page | ✅ |
 | Mooneye acceptance | Timers, DMA, interrupts, PPU and instruction timing | 70/75 |
-| Mooneye emulator-only MBC | MBC1, MBC2 and MBC5 banking | 27/28 |
-| Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 26/51 ² |
+| Mooneye emulator-only MBC | MBC1, MBC2 and MBC5 banking | 28/28 |
+| Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 26/51 ³ |
 | SameSuite | APU, HDMA and interrupt edge cases (CGB) | 69/78 |
 | Age | PPU, STAT, OAM/VRAM access and double-speed timing | 19/51 |
-| gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 413/513 |
+| gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 420/490 ² |
 | rtc3test | The MBC3 real-time clock | 6/6 |
 
 ¹ Test 7 runs inside the combined `oam_bug.gb`. Run on its own, that ROM
 overruns its 8 KB text log and overwrites its own code, so it cannot finish on
 any emulator. The details are in [CHANGELOG.md](CHANGELOG.md).
 
-² 13 of the 25 failures are rule-blocked: their reference screenshots show the
+² Plus 23 probes with no verdict (not a test), which run without an emulator
+error and are not counted.
+
+³ 13 of the 25 failures are rule-blocked: their reference screenshots show the
 ® that Nintendo's boot ROM leaves in video memory, which Cartouche does not ship,
 and every pixel that differs is where that tile is drawn. They stay counted as
 failures, in their own section of `expected-failures.txt`.

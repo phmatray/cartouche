@@ -57,6 +57,14 @@ tile 25 is drawn (worked out from OAM, the tile maps and the PPU registers,
 never from the glyph); CI fails when one passes or differs anywhere else.
 These entries are not counted as passes.
 
+`gb-core/tests/probes-without-verdict.txt` lists the gbmicrotest probes whose
+upstream source records no expected value, each with that evidence. They run
+on every CI run and must finish without an emulator error, but they never count
+as passes. A ROM cannot be on both lists, and every line must name a ROM that
+exists. A probe leaves this list when its source turns out to record a value.
+That value then goes in `PROBE_ORACLES` in `gb-core/tests/conformance.rs`, with
+the source line it comes from. Never guess a hardware value.
+
 ## Commits and pull requests
 
 - Use [Conventional Commits](https://www.conventionalcommits.org/)
