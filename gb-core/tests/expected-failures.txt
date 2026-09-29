@@ -8,13 +8,6 @@
 # rule-blocked = the reference needs data Cartouche may not ship (#240), in its own section at the end.
 
 mooneye-test-suite/acceptance/ppu/stat_lyc_onoff.gb  # stat
-same-suite/apu/channel_1/channel_1_extra_length_clocking-cgb0B.gb  # apu
-same-suite/apu/channel_1/channel_1_freq_change_timing-A.gb  # apu
-same-suite/apu/channel_1/channel_1_freq_change_timing-cgb0BC.gb  # apu
-same-suite/apu/channel_2/channel_2_extra_length_clocking-cgb0B.gb  # apu
-same-suite/apu/channel_3/channel_3_extra_length_clocking-cgb0.gb  # apu
-same-suite/apu/channel_3/channel_3_extra_length_clocking-cgbB.gb  # apu
-same-suite/apu/channel_4/channel_4_extra_length_clocking-cgb0B.gb  # apu
 age-test-roms/lcd-align-ly/lcd-align-ly-cgbBC.gb  # ppu
 age-test-roms/lcd-align-ly/lcd-align-ly-cgbE.gb  # ppu
 age-test-roms/ly/ly-cgbE.gb  # ppu
