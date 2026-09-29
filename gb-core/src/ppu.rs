@@ -620,7 +620,9 @@ impl Ppu {
     }
 
     /// OR of all enabled STAT interrupt sources. Used for rising-edge detection. `pulse`: the dots
-    /// mode 2's source counts from the line start (a write catches fewer); `lyc_lead`: see `ly_compare`'s `edge`.
+    /// mode 2's source counts from the line start (a write catches fewer); `early`: the dots before
+    /// a line its mode-2 source has risen (`mode2_early`); `lyc_lead`: `ly_compare_lead`'s lead
+    /// (`None`: the flag, as a STAT write sees it).
     #[inline]
     fn compute_stat_line(&self, pulse: u32, early: u32, lyc_lead: Option<u32>) -> bool {
         if self.stat & 0x78 == 0 { return false; } // no source enabled: every term below is false
