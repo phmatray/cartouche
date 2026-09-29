@@ -21,6 +21,25 @@ pub enum Model {
     Sgb2,
 }
 
+/// The hardware revision within a model's family (DMG-CPU 0, CGB E, ...). `Default` is the hybrid
+/// the core has always modelled, and the only one the web app uses. Chosen before the hand-over
+/// (`set_revision`, then `skip_boot_rom`) and read from `bus.rev`, a plain field.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Revision {
+    #[default]
+    Default,
+    /// DMG-CPU 0: its boot ROM checks the header before showing anything, so it hands over earlier.
+    Dmg0,
+    DmgAbc,
+    CgbA,
+    Cgb0,
+    CgbB,
+    CgbC,
+    CgbD,
+    CgbE,
+    Agb,
+}
+
 /// The machine a save state belongs to: a state from one never loads into another.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Console {
@@ -179,6 +198,11 @@ impl GameBoy {
             gb.skip_boot_rom();
         }
         Ok(gb)
+    }
+
+    /// The hardware revision to emulate; call it before the hand-over (`skip_boot_rom`).
+    pub fn set_revision(&mut self, rev: Revision) {
+        self.bus.rev = rev;
     }
 
     pub fn skip_boot_rom(&mut self) {
