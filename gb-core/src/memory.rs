@@ -3,7 +3,7 @@ use crate::boot_rom::DMG_BOOT_ROM;
 use crate::cartridge::Cartridge;
 use crate::interrupts::{InterruptController, JOYPAD_BIT, SERIAL_BIT, STAT_BIT, TIMER_BIT, VBLANK_BIT};
 use crate::joypad::Joypad;
-use crate::ppu::Ppu;
+use crate::ppu::{Ppu, PpuMode};
 use crate::serial::Serial;
 use crate::timer::Timer;
 
@@ -709,9 +709,18 @@ impl MemoryBus {
     /// a read or write of IF there misses it (`oam_int_if_edge_a..d`), a halted CPU wakes one
     /// M-cycle later (`late_interrupts`). Not a mode-2 edge a STAT write raises at mode 2's start,
     /// which such a read sees (`mode2_edge_now`).
+    /// An IF access samples 2 dots before its M-cycle ends: VBlank's IF.0 and the STAT edge with
+    /// it, raised at line 144's start, show once 2 dots have run, which only a PPU off the CPU's
+    /// M-cycle grid (a CGB after a speed switch) reaches before the M-cycle ends (Gambatte
+    /// `lcd_offset/offset*_lyc8fint_m1irq_*`).
     pub(crate) fn if_hidden(&self) -> u8 {
         if self.if_late == 0 { return 0; }
-        self.if_late & if self.ppu.mode2_edge_now() { !STAT_BIT } else { 0xFF }
+        let ppu = if self.ppu.mode == PpuMode::VBlank && (2..self.ppu.m_cycle_dots).contains(&self.ppu.mode_clock) {
+            VBLANK_BIT | STAT_BIT
+        } else {
+            0
+        };
+        self.if_late & !ppu & if self.ppu.mode2_edge_now() { !STAT_BIT } else { 0xFF }
     }
 
     pub fn cycle_tick(&mut self) {
@@ -880,6 +889,27 @@ mod tests {
         ] {
             let [s2, r, w, s3, v] = lock_edges(cgb, ds, rev);
             assert_eq!([s2 - r, s2 - w, s3 - v], [oam_r, oam_w, vram_r], "CGB {cgb}, double speed {ds}, {rev:?}");
+        }
+    }
+
+    /// A CGB after a speed switch runs its PPU 1-3 dots off the CPU's M-cycle grid. Stepping in
+    /// M-cycles that end `phase` dots after line 144 starts: STAT reads mode 1 from 2 dots in, and
+    /// VBlank's IF.0 shows to an IF read from then (Gambatte `lcd_offset/offset*_lyc8fint_m1*`).
+    #[test]
+    fn off_grid_ppu_shows_mode_1_two_dots_in() {
+        for phase in 0..4 {
+            let mut rom = vec![0u8; 0x8000];
+            rom[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(rom[i]).wrapping_sub(1));
+            let mut bus = MemoryBus::new(Cartridge::from_rom(rom).unwrap(), true);
+            bus.boot_rom_active = false;
+            let p = &mut bus.ppu;
+            (p.lcdc, p.ly, p.mode, p.mode3_len) = (0x81, 143, PpuMode::HBlank, 172);
+            p.mode_clock = 206 - 4 + phase; // HBlank lasts 376 + 2 (MODE0_EARLY) - 172 dots
+            bus.cycle_tick();
+            assert_eq!((bus.ppu.ly, bus.ppu.mode_clock), (144, phase));
+            let shown = phase >= 2;
+            assert_eq!(bus.read_byte(0xFF41) & 3, if shown { 1 } else { 0 }, "phase {phase}");
+            assert_eq!(bus.read_byte(0xFF0F) & 1 != 0, shown, "phase {phase}");
         }
     }
 
