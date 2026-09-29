@@ -22,14 +22,10 @@ age-test-roms/lcd-align-ly/lcd-align-ly-cgbE.gb  # ppu
 age-test-roms/ly/ly-cgbE.gb  # ppu
 age-test-roms/ly/ly-dmgC-cgbBC.gb  # ppu
 age-test-roms/ly/ly-ncmE.gb  # ppu
-age-test-roms/oam/oam-read-cgbE.gb  # ppu
 age-test-roms/oam/oam-read-dmgC-cgbBC.gb  # ppu
-age-test-roms/oam/oam-read-ncmE.gb  # ppu
 age-test-roms/oam/oam-write-cgbBCE.gb  # ppu
 age-test-roms/oam/oam-write-dmgC.gb  # ppu
 age-test-roms/oam/oam-write-ncmBCE.gb  # ppu
-age-test-roms/speed-switch/caution/spsw-interrupts-cgbE.gb  # double-speed
-age-test-roms/speed-switch/spsw-tima-cgbE.gb  # double-speed
 age-test-roms/stat-interrupt/stat-int-dmgC-cgbBCE.gb  # stat
 age-test-roms/stat-interrupt/stat-int-ncmBCE.gb  # stat
 age-test-roms/stat-mode-sprites/stat-mode-sprites-dmgC-cgbBCE.gb  # stat
@@ -38,8 +34,6 @@ age-test-roms/stat-mode-window/stat-mode-window-cgbBCE.gb  # stat
 age-test-roms/stat-mode-window/stat-mode-window-dmgC.gb  # stat
 age-test-roms/stat-mode-window/stat-mode-window-ds-cgbBCE.gb  # double-speed
 age-test-roms/stat-mode-window/stat-mode-window-ncmBCE.gb  # stat
-age-test-roms/stat-mode/stat-mode-cgbE.gb  # stat
-age-test-roms/stat-mode/stat-mode-ncmE.gb  # stat
 age-test-roms/vram/vram-read-cgbBCE.gb  # ppu
 age-test-roms/vram/vram-read-ncmBCE.gb  # ppu
 gbmicrotest/halt_op_dupe_delay.gb  # rom-defect: https://github.com/aappleby/gbmicrotest/issues/3 expects DIV $55 ~60 M-cycles after a DIV reset; the HALT bug gives $01, as SameBoy (#215)
@@ -121,7 +115,6 @@ mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_change2.gb@cgb  # ppu-mode3: CGB C r
 mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change.gb@cgb  # ppu-mode3: 8 px outside the ® tile's footprint (x 8-15 of line 64, beside a ® OBJ fetch); every other differing pixel is the ® (rule-blocked)
 mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change2.gb@cgb  # ppu-mode3: CGB C reference only; no differing pixel is in the ® tile's footprint
 mealybug-tearoom-tests/ppu/m3_lcdc_win_en_change_multiple_wx.gb@dmg  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_scy_change2.gb@cgb  # ppu-mode3: CGB C reference only; the fetcher latches the tile row with the tile number, as a CGB D does (m3_scy_change passes)
 age-test-roms/m3-bg-bgp/m3-bg-bgp.gb@dmgC  # ppu-mode3
 age-test-roms/m3-bg-bgp/m3-bg-bgp.gb@ncmBC  # ppu-mode3
 age-test-roms/m3-bg-scx/m3-bg-scx-ds.gb@cgbBCE  # double-speed

@@ -103,11 +103,12 @@ impl Timer {
 
     /// DIV reset by a CGB speed switch: like a DIV write, except that the 4 KHz input (DIV bit 9)
     /// only counts the reset as a falling edge when it was already high one M-cycle `earlier`
-    /// (CGB B/C, Age spsw-tima).
-    // ponytail: CGB B/C only; CGB E also delays the 65 KHz and 16 KHz inputs (spsw-tima-cgbE).
-    pub fn speed_switch_div_reset(&mut self, earlier: u16) {
+    /// (CGB B/C, Age spsw-tima). A CGB E (`cgb_e`) delays the 65 KHz and 16 KHz inputs (bits 5
+    /// and 7) the same way (spsw-tima-cgbE's `OFS`); the 262 KHz one never is.
+    pub fn speed_switch_div_reset(&mut self, earlier: u16, cgb_e: bool) {
         let mask = self.tac_bit_mask();
-        let seen = if mask == 1 << 9 { earlier & self.div_counter } else { self.div_counter };
+        let delayed = mask == 1 << 9 || (cgb_e && mask != 1 << 3);
+        let seen = if delayed { earlier & self.div_counter } else { self.div_counter };
         let edge = self.tac & 0x04 != 0 && seen & mask != 0;
         self.div_counter = 0;
         if edge { self.increment(); }
@@ -159,6 +160,25 @@ mod tests {
                 }
                 assert_eq!(t.step(4), edges > 0, "tac {tac} div {div:#06x}");
                 assert_eq!((t.tima, t.div_counter), (0xFFu8.wrapping_add(edges), div.wrapping_add(4)));
+            }
+        }
+    }
+
+    /// At a speed switch's DIV reset, an input bit that only rose in the last M-cycle is no
+    /// falling edge for the 4 KHz input, and on a CGB E for the 65 KHz and 16 KHz ones too.
+    #[test]
+    fn speed_switch_div_reset_cgb_e_delays_fast_inputs() {
+        for (tac, bit, e_delayed) in [(4u8, 9u16, true), (5, 3, false), (6, 5, true), (7, 7, true)] {
+            for cgb_e in [false, true] {
+                // The bit rose between `earlier` and now.
+                let mut t = Timer { div_counter: 1 << bit, tac, ..Timer::new() };
+                t.speed_switch_div_reset((1 << bit) - 4, cgb_e);
+                let delayed = bit == 9 || (cgb_e && e_delayed);
+                assert_eq!(t.tima, u8::from(!delayed), "TAC {tac}, CGB E {cgb_e}");
+                // Already high a M-cycle earlier: an edge on every revision.
+                let mut t = Timer { div_counter: (1 << bit) + 4, tac, ..Timer::new() };
+                t.speed_switch_div_reset(1 << bit, cgb_e);
+                assert_eq!((t.tima, t.div_counter), (1, 0), "TAC {tac}, CGB E {cgb_e}");
             }
         }
     }

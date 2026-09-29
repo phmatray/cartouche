@@ -367,7 +367,8 @@ impl MemoryBus {
         let earlier = self.timer.div_counter;
         self.tick_components();
         let div = self.timer.div_counter;
-        self.timer.speed_switch_div_reset(earlier);
+        let cgb_e = self.rev == crate::gameboy::Revision::CgbE;
+        self.timer.speed_switch_div_reset(earlier, cgb_e);
         // The reset can drop DIV's APU bit (old speed), seen one M-cycle late like the 4 KHz timer
         // input: a bit that only just rose does not count (Age spsw-ch2-lc-delay).
         self.div_apu_edge(div & earlier, true);
@@ -380,9 +381,10 @@ impl MemoryBus {
         // ends it early (Age spsw-interrupts). Back in single speed the PPU comes out one dot
         // behind (Age spsw-mode0: the LCD-to-CPU alignment shifts).
         // An interrupt already pending skips that pause, but the divider still stops for two
-        // M-cycles while the oscillator restarts (Age spsw-interrupts, CGB B/C).
+        // M-cycles while the oscillator restarts on a CGB B/C, one on a CGB E (Age spsw-interrupts'
+        // `OFS_B`).
         if self.interrupts.pending() & !self.late_interrupts() != 0 {
-            self.timer.div_hold = 2;
+            self.timer.div_hold = if cgb_e { 1 } else { 2 };
             return true;
         }
         let mut behind = !self.double_speed;
@@ -725,20 +727,25 @@ mod tests {
         assert_ne!(bus.read_byte(0xFF04), 0, "DIV has not wrapped");
     }
 
+    /// The divider stops for two M-cycles on a CGB B/C, one on a CGB E (Age spsw-interrupts).
     #[test]
     fn a_pending_interrupt_skips_the_pause_but_stops_the_divider() {
-        let mut bus = bus();
-        bus.cgb_mode = true;
-        bus.interrupts.interrupt_enable = VBLANK_BIT;
-        bus.interrupts.interrupt_flag = VBLANK_BIT;
-        bus.write_byte(0xFF4D, 0x01);
-        bus.cycle_count = 0;
-        assert!(bus.try_speed_switch());
-        assert_eq!(bus.cycle_count, 2 * 4, "STOP's two M-cycles, no pause");
-        for _ in 0..2 { bus.cycle_tick(); }
-        assert_eq!(bus.timer.div_counter, 0, "held for two M-cycles");
-        bus.cycle_tick();
-        assert_eq!(bus.timer.div_counter, 4);
+        use crate::gameboy::Revision;
+        for (rev, held) in [(Revision::Default, 2), (Revision::CgbC, 2), (Revision::CgbE, 1)] {
+            let mut bus = bus();
+            bus.cgb_mode = true;
+            bus.rev = rev;
+            bus.interrupts.interrupt_enable = VBLANK_BIT;
+            bus.interrupts.interrupt_flag = VBLANK_BIT;
+            bus.write_byte(0xFF4D, 0x01);
+            bus.cycle_count = 0;
+            assert!(bus.try_speed_switch());
+            assert_eq!(bus.cycle_count, 2 * 4, "STOP's two M-cycles, no pause");
+            for _ in 0..held { bus.cycle_tick(); }
+            assert_eq!(bus.timer.div_counter, 0, "{rev:?}: held for {held} M-cycles");
+            bus.cycle_tick();
+            assert_eq!(bus.timer.div_counter, 4, "{rev:?}");
+        }
     }
 
     #[test]
