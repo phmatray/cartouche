@@ -133,6 +133,8 @@ pub(crate) struct LineState {
     pub fine: u8,
     /// BG pixels still to drop at the line start (SCX % 8).
     pub discard: u8,
+    /// With a fine scroll, the dot SCX is sampled again for it and the first tile (`fifo_dot`).
+    pub resample: u8,
     /// The OAM X that the next popped pixel reaches (x + 8 once the discard is over).
     pub hit_x: u8,
     pub fetcher: Fetcher,
@@ -363,7 +365,9 @@ impl Ppu {
     fn bg_col(&self, tile_x: u8) -> u8 {
         if tile_x == 0 { return self.scx >> 3; }
         let late = if (self.cgb_mode || self.compat) && self.line.obj_pending.is_none() { 7 } else { 8 };
-        ((self.scx as u16 + self.line.x as u16 + late) >> 3) as u8 & 31
+        // Pixels still to drop count as x below 0 (SameBoy's negative `position_in_line`; Gambatte
+        // `scx_during_m3/scx_0360c0/scx_during_m3_4`: SCX's coarse bits written while they drop).
+        ((self.scx as u16 + self.line.x as u16 + late - self.line.discard as u16) >> 3) as u8 & 31
     }
 
     /// VRAM address of the fetched tile's row (CGB: in the attribute's bank, flipped by it).
@@ -437,7 +441,17 @@ impl Ppu {
                     // The fine scroll is latched as the first fetch ends (Mealybug `m3_window_timing_wx_0`
                     // takes a SCX write 2 dots before it, `m3_scx_low_3_bits` leaves one 2 dots after it).
                     let fine = self.scx & 7;
-                    (self.line.fine, self.line.discard, self.line.hit_x) = (fine, fine, 8 - fine);
+                    (self.line.fine, self.line.discard, self.line.hit_x, self.line.resample) = (fine, fine, 8 - fine, if fine != 0 { fine + 6 - (self.m_cycle_dots == 2) as u8 } else { 0 });
+                    // So are the first tile's number and row, with that SCX and SCY (Gambatte
+                    // `scx_during_m3/scx_*` and `scy/scy_during_m3*` `_1`/`_2`/`_3`, both models: a
+                    // write 4 dots before this read moves the first tile, one on this dot does not).
+                    if !self.line.fetcher.window {
+                        let base = if self.lcdc & 0x08 != 0 { 0x1C00 } else { 0x1800 };
+                        let at = base + (self.scy.wrapping_add(self.ly) >> 3) as usize * 32 + (self.scx >> 3) as usize;
+                        self.line.fetcher.tile = self.vram[at];
+                        if self.cgb_mode { self.line.fetcher.attr = self.vram[0x2000 + at]; }
+                        self.line.fetcher.row = self.bg_row();
+                    }
                 }
                 self.line.fetcher.step = FetchStep::Push;
             }
@@ -508,6 +522,28 @@ impl Ppu {
             _ => f.tile & self.vram[self.fetch_addr() + hi as usize],
         };
         if hi { self.line.fetcher.hi = byte } else { self.line.fetcher.lo = byte }
+    }
+
+    /// With a fine scroll, SCX is sampled again as many dots later: its fine bits set the pixels
+    /// still to drop (past them, 8 more), its coarse bits the first tile (Gambatte
+    /// `scx_during_m3/scx_0360c0`, `scx_0367c0`, `scx_0761c0`: a write after the first fetch
+    /// still moves the line when the old SCX had a fine scroll).
+    #[inline(never)]
+    fn resample_scx(&mut self) {
+        let (fine, old, dropped) = (self.scx & 7, self.line.fine, self.line.fine - self.line.discard);
+        let discard = if fine >= dropped { fine - dropped } else { fine + 8 - dropped };
+        (self.line.fine, self.line.discard, self.line.hit_x) = (fine, discard, 8u8.wrapping_sub(discard));
+        if fine < old && self.line.fetcher.tile_x == 0 && !self.line.fetcher.window {
+            // A shorter drop: the first tile is the one SCX now points at.
+            let base = if self.lcdc & 0x08 != 0 { 0x1C00 } else { 0x1800 };
+            let at = base + (self.scy.wrapping_add(self.ly) >> 3) as usize * 32 + (self.scx >> 3) as usize;
+            self.line.fetcher.tile = self.vram[at];
+            if self.cgb_mode { self.line.fetcher.attr = self.vram[0x2000 + at]; }
+            if self.line.fetcher.step == FetchStep::Push && !self.line.first_fetch {
+                let a = self.fetch_addr();
+                (self.line.fetcher.lo, self.line.fetcher.hi) = (self.vram[a], self.vram[a + 1]);
+            }
+        }
     }
 
     /// The OBJ fetch: reads the OBJ's row and merges it into the OBJ FIFO, `shift` pixels already past.
@@ -635,6 +671,9 @@ impl Ppu {
         // WX 0-6 is matched before x = 0 (x = WX - 7), while the first tile is being fetched; the
         // first match holds (a later WX 0-6 match on the same line is no new start).
         if self.line.dot <= 19 {
+            if self.line.dot == self.line.resample as u32 {
+                self.resample_scx();
+            }
             if self.line.dot == 4 && std::mem::take(&mut self.win_carry) && self.win_on() {
                 // DMG, WX = 166 on the line before (`end_line`): the window runs from the line's
                 // first tile, its second column (SameBoy's `window_tile_x = 1`, MIT; Gambatte

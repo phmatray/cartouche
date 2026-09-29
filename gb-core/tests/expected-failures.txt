@@ -18,32 +18,17 @@ age-test-roms/m3-bg-bgp/m3-bg-bgp.gb@dmgC  # ppu-mode3: 2 px, x 0 of lines 9 and
 
 # Gambatte hwtests (#282): `@dmg` runs on the DMG, `@cgb` on the CGB C, as the ROM's name says. The
 # area comes from the test's directory, so the fix children of #281 can take one group at a time.
-gambatte/bgen/bgoff_bgon_sprite_below_window.gbc@cgb  # ppu-mode3
-gambatte/bgtiledata/bgtiledata_spx08_1.gbc@cgb  # ppu-mode3
-gambatte/bgtiledata/bgtiledata_spx08_3.gbc@cgb  # ppu-mode3
-gambatte/bgtiledata/bgtiledata_spx09_1.gbc@cgb  # ppu-mode3
-gambatte/bgtiledata/bgtiledata_spx09_3.gbc@cgb  # ppu-mode3
-gambatte/bgtiledata/bgtiledata_spx0A_1.gbc@cgb  # ppu-mode3
-gambatte/bgtiledata/bgtiledata_spx0A_3.gbc@cgb  # ppu-mode3
-gambatte/bgtilemap/bgtilemap_spx08_ds_1.gbc@cgb  # ppu-mode3
-gambatte/bgtilemap/bgtilemap_spx08_ds_2.gbc@cgb  # ppu-mode3
-gambatte/bgtilemap/bgtilemap_spx08_ds_3.gbc@cgb  # ppu-mode3
-gambatte/bgtilemap/bgtilemap_spx08_ds_4.gbc@cgb  # ppu-mode3
-gambatte/cgbpal_m3/cgbpal_m3end_1_cgb04c_out7.gbc@cgb  # ppu-mode3
-gambatte/cgbpal_m3/cgbpal_m3end_3_cgb04c_out0.gbc@cgb  # ppu-mode3
-gambatte/cgbpal_m3/cgbpal_m3end_ds_1_cgb04c_out7.gbc@cgb  # ppu-mode3
-gambatte/cgbpal_m3/cgbpal_m3end_ds_3_cgb04c_out0.gbc@cgb  # ppu-mode3
-gambatte/cgbpal_m3/cgbpal_m3end_scx2_1_cgb04c_out7.gbc@cgb  # ppu-mode3
-gambatte/cgbpal_m3/cgbpal_m3end_scx2_3_cgb04c_out0.gbc@cgb  # ppu-mode3
-gambatte/cgbpal_m3/cgbpal_m3end_scx3_1_cgb04c_out7.gbc@cgb  # ppu-mode3
-gambatte/cgbpal_m3/cgbpal_m3end_scx3_3_cgb04c_out0.gbc@cgb  # ppu-mode3
-gambatte/cgbpal_m3/cgbpal_m3end_scx5_1_cgb04c_out7.gbc@cgb  # ppu-mode3
-gambatte/cgbpal_m3/cgbpal_m3end_scx5_3_cgb04c_out0.gbc@cgb  # ppu-mode3
-gambatte/cgbpal_m3/cgbpal_m3end_scx5_ds_1_cgb04c_out7.gbc@cgb  # ppu-mode3
-gambatte/cgbpal_m3/cgbpal_m3end_scx5_ds_3_cgb04c_out0.gbc@cgb  # ppu-mode3
-gambatte/cgbpal_m3/cgbpal_m3start_ds_1_cgb04c_out1.gbc@cgb  # ppu-mode3
-gambatte/cgbpal_m3/cgbpal_read_m3start_ds_1_cgb04c_out00.gbc@cgb  # ppu-mode3
-gambatte/cgbpal_m3/cgbpal_write_m3start_ds_1_cgb04c_out01.gbc@cgb  # ppu-mode3
+gambatte/bgen/bgoff_bgon_sprite_below_window.gbc@cgb  # ppu-mode3: CGB: a write beside an OBJ fetch at a low X reaches the BG fetcher at another dot (#317)
+gambatte/bgtiledata/bgtiledata_spx08_1.gbc@cgb  # ppu-mode3: CGB: a write beside an OBJ fetch at a low X reaches the BG fetcher at another dot (#317)
+gambatte/bgtiledata/bgtiledata_spx08_3.gbc@cgb  # ppu-mode3: CGB: a write beside an OBJ fetch at a low X reaches the BG fetcher at another dot (#317)
+gambatte/bgtiledata/bgtiledata_spx09_1.gbc@cgb  # ppu-mode3: CGB: a write beside an OBJ fetch at a low X reaches the BG fetcher at another dot (#317)
+gambatte/bgtiledata/bgtiledata_spx09_3.gbc@cgb  # ppu-mode3: CGB: a write beside an OBJ fetch at a low X reaches the BG fetcher at another dot (#317)
+gambatte/bgtiledata/bgtiledata_spx0A_1.gbc@cgb  # ppu-mode3: CGB: a write beside an OBJ fetch at a low X reaches the BG fetcher at another dot (#317)
+gambatte/bgtiledata/bgtiledata_spx0A_3.gbc@cgb  # ppu-mode3: CGB: a write beside an OBJ fetch at a low X reaches the BG fetcher at another dot (#317)
+gambatte/bgtilemap/bgtilemap_spx08_ds_1.gbc@cgb  # ppu-mode3: CGB: a write beside an OBJ fetch at a low X reaches the BG fetcher at another dot (#317)
+gambatte/bgtilemap/bgtilemap_spx08_ds_2.gbc@cgb  # ppu-mode3: CGB: a write beside an OBJ fetch at a low X reaches the BG fetcher at another dot (#317)
+gambatte/bgtilemap/bgtilemap_spx08_ds_3.gbc@cgb  # ppu-mode3: CGB: a write beside an OBJ fetch at a low X reaches the BG fetcher at another dot (#317)
+gambatte/bgtilemap/bgtilemap_spx08_ds_4.gbc@cgb  # ppu-mode3: CGB: a write beside an OBJ fetch at a low X reaches the BG fetcher at another dot (#317)
 gambatte/dma/dma_dst_wrap_2_cgb04c_out0.gbc@cgb  # hdma
 gambatte/dma/dma_hiram_read_cgb04c_out7.gbc@cgb  # hdma
 gambatte/dma/dma_hiram_read_result_cgb04c_out1.gbc@cgb  # hdma
@@ -155,23 +140,16 @@ gambatte/dma/hdma_transition_speedchange_ldaaimm_scx1_cgb04c_outFF.gbc@cgb  # hd
 gambatte/dma/hdma_transition_speedchange_ldaaimm_scx1_ds_cgb04c_out03.gbc@cgb  # hdma
 gambatte/dma/hdma_transition_speedchange_oamdma_cgb04c_out71.gbc@cgb  # hdma
 gambatte/dma/late_gdma_pc_7ffe_1_cgb04c_out02.gbc@cgb  # hdma
-gambatte/dmgpalette_during_m3/dmgpalette_during_m3_3.gb@dmg  # ppu-mode3
-gambatte/dmgpalette_during_m3/dmgpalette_during_m3_4.gb@dmg  # ppu-mode3
-gambatte/dmgpalette_during_m3/dmgpalette_during_m3_5.gb@dmg  # ppu-mode3
-gambatte/dmgpalette_during_m3/dmgpalette_during_m3_scx1_4.gb@dmg  # ppu-mode3
-gambatte/dmgpalette_during_m3/lycint_dmgpalette_during_m3_3.gb@dmg  # ppu-mode3
-gambatte/dmgpalette_during_m3/lycint_dmgpalette_during_m3_4.gb@dmg  # ppu-mode3
-gambatte/dmgpalette_during_m3/scx3/dmgpalette_during_m3_4.gb@dmg  # ppu-mode3
-gambatte/dmgpalette_during_m3/scx3/dmgpalette_during_m3_5.gb@dmg  # ppu-mode3
-gambatte/enable_display/ly0_late_cgbpr_ds_1_cgb04c_out55.gbc@cgb  # ppu
-gambatte/enable_display/ly0_late_cgbpw_1_cgb04c_outAA.gbc@cgb  # ppu
-gambatte/enable_display/ly0_late_cgbpw_ds_1_cgb04c_outAA.gbc@cgb  # ppu
-gambatte/enable_display/ly0_late_scx7_m3stat_scx0_2_dmg08_out87_cgb04c_out84.gbc@dmg  # ppu
-gambatte/enable_display/ly0_late_scx7_m3stat_scx1_1_dmg08_cgb04c_out87.gbc@cgb  # ppu
-gambatte/enable_display/ly0_late_scx7_m3stat_scx1_1_dmg08_cgb04c_out87.gbc@dmg  # ppu
-gambatte/enable_display/ly0_late_scx7_m3stat_scx3_1_dmg08_cgb04c_out87.gbc@cgb  # ppu
-gambatte/enable_display/ly0_late_scx7_m3stat_scx3_1_dmg08_cgb04c_out87.gbc@dmg  # ppu
-gambatte/enable_display/ly0_late_vramw_2_dmg08_out55_cgb04c_outAA.gbc@cgb  # ppu
+gambatte/dmgpalette_during_m3/dmgpalette_during_m3_3.gb@dmg  # ppu-mode3: DMG: a BGP write over the line's first pixels shows its mixed pixel one pixel left of Cartouche's (#317)
+gambatte/dmgpalette_during_m3/dmgpalette_during_m3_4.gb@dmg  # ppu-mode3: DMG: a BGP write over the line's first pixels shows its mixed pixel one pixel left of Cartouche's (#317)
+gambatte/dmgpalette_during_m3/dmgpalette_during_m3_5.gb@dmg  # ppu-mode3: DMG: a BGP write over the line's first pixels shows its mixed pixel one pixel left of Cartouche's (#317)
+gambatte/dmgpalette_during_m3/dmgpalette_during_m3_scx1_4.gb@dmg  # ppu-mode3: DMG: a BGP write over the line's first pixels shows its mixed pixel one pixel left of Cartouche's (#317)
+gambatte/dmgpalette_during_m3/lycint_dmgpalette_during_m3_3.gb@dmg  # ppu-mode3: DMG: a BGP write over the line's first pixels shows its mixed pixel one pixel left of Cartouche's (#317)
+gambatte/dmgpalette_during_m3/lycint_dmgpalette_during_m3_4.gb@dmg  # ppu-mode3: DMG: a BGP write over the line's first pixels shows its mixed pixel one pixel left of Cartouche's (#317)
+gambatte/dmgpalette_during_m3/scx3/dmgpalette_during_m3_4.gb@dmg  # ppu-mode3: DMG: a BGP write over the line's first pixels shows its mixed pixel one pixel left of Cartouche's (#317)
+gambatte/dmgpalette_during_m3/scx3/dmgpalette_during_m3_5.gb@dmg  # ppu-mode3: DMG: a BGP write over the line's first pixels shows its mixed pixel one pixel left of Cartouche's (#317)
+gambatte/enable_display/ly0_late_scx7_m3stat_scx0_2_dmg08_out87_cgb04c_out84.gbc@dmg  # ppu: the line after LCD on samples SCX's fine bits at another dot (#317)
+gambatte/enable_display/ly0_late_scx7_m3stat_scx1_1_dmg08_cgb04c_out87.gbc@cgb  # ppu: the line after LCD on samples SCX's fine bits at another dot (#317)
 gambatte/halt/late_m0int_halt_m0stat_scx2_3a_dmg08_cgb04c_out0.gbc@cgb  # interrupt
 gambatte/halt/late_m0int_halt_m0stat_scx2_3a_dmg08_cgb04c_out0.gbc@dmg  # interrupt
 gambatte/halt/late_m0int_halt_m0stat_scx3_2b_dmg08_cgb04c_out2.gbc@dmg  # interrupt
@@ -204,83 +182,37 @@ gambatte/m0enable/enable_wxA6_2x_spxA7_ds_1_cgb04c_out2.gbc@cgb  # stat
 gambatte/m0enable/enable_wxA6_2x_spxA7_ds_2_cgb04c_out2.gbc@cgb  # stat
 gambatte/m0enable/enable_wxA6_2x_spxA7_ds_3_cgb04c_out2.gbc@cgb  # stat
 gambatte/m1/m1irq_late_enable_lcdoffset1_1_cgb04c_out2.gbc@cgb  # stat
-gambatte/oam_access/midwrite_2_dmg08_out1_cgb04c_out0.gbc@cgb  # ppu
 gambatte/oamdma/oamdma_srcFE00_busyread0000_dmg08_cgb04c_out0.gbc@dmg  # oam-dma: expects $FF from the power-on work RAM at $DExx that the DMA copies and the ROM never writes (per-unit contents; srcFF00 expects $00 at $DFxx)
 gambatte/oamdma/oamdma_srcFE00_busyreadA000_dmg08_cgb04c_out0.gbc@dmg  # oam-dma: expects $FF from the power-on work RAM at $DExx that the DMA copies and the ROM never writes (per-unit contents; srcFF00 expects $00 at $DFxx)
 gambatte/oamdma/oamdma_srcFE00_busyreadC000_dmg08_out0_cgb_xoutblank.gbc@dmg  # oam-dma: expects $FF from the power-on work RAM at $DExx that the DMA copies and the ROM never writes (per-unit contents; srcFF00 expects $00 at $DFxx)
 gambatte/oamdma/oamdma_srcFE00_readFE00_dmg08_cgb04c_out0.gbc@dmg  # oam-dma: expects $FF from the power-on work RAM at $DExx that the DMA copies and the ROM never writes (per-unit contents; srcFF00 expects $00 at $DFxx)
 gambatte/oamdma/oamdmasrcC000_hdmasrc0000_cgb04c_out0A940C0D.gbc@cgb  # oam-dma
-gambatte/scx_during_m3/scx_0060c0/scx_during_m3_1.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0060c0/scx_during_m3_1.gbc@dmg  # ppu-mode3
-gambatte/scx_during_m3/scx_0060c0/scx_during_m3_2.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0060c0/scx_during_m3_2.gbc@dmg  # ppu-mode3
-gambatte/scx_during_m3/scx_0060c0/scx_during_m3_ds_1.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0060c0/scx_during_m3_ds_2.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0063c0/scx_during_m3_1.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0063c0/scx_during_m3_1.gbc@dmg  # ppu-mode3
-gambatte/scx_during_m3/scx_0063c0/scx_during_m3_2.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0063c0/scx_during_m3_2.gbc@dmg  # ppu-mode3
-gambatte/scx_during_m3/scx_0063c0/scx_during_m3_ds_1.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0063c0/scx_during_m3_ds_2.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0360c0/scx_during_m3_1.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0360c0/scx_during_m3_1.gbc@dmg  # ppu-mode3
-gambatte/scx_during_m3/scx_0360c0/scx_during_m3_2.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0360c0/scx_during_m3_2.gbc@dmg  # ppu-mode3
-gambatte/scx_during_m3/scx_0360c0/scx_during_m3_3.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0360c0/scx_during_m3_3.gbc@dmg  # ppu-mode3
-gambatte/scx_during_m3/scx_0360c0/scx_during_m3_4.gbc@dmg  # ppu-mode3
-gambatte/scx_during_m3/scx_0360c0/scx_during_m3_ds_1.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0360c0/scx_during_m3_ds_2.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0360c0/scx_during_m3_ds_3.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0363c0/scx_during_m3_1.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0363c0/scx_during_m3_1.gbc@dmg  # ppu-mode3
-gambatte/scx_during_m3/scx_0363c0/scx_during_m3_2.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0363c0/scx_during_m3_2.gbc@dmg  # ppu-mode3
-gambatte/scx_during_m3/scx_0363c0/scx_during_m3_ds_1.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0363c0/scx_during_m3_ds_2.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0367c0/scx_during_m3_1.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0367c0/scx_during_m3_1.gbc@dmg  # ppu-mode3
-gambatte/scx_during_m3/scx_0367c0/scx_during_m3_2.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0367c0/scx_during_m3_2.gbc@dmg  # ppu-mode3
-gambatte/scx_during_m3/scx_0367c0/scx_during_m3_3.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0367c0/scx_during_m3_3.gbc@dmg  # ppu-mode3
-gambatte/scx_during_m3/scx_0367c0/scx_during_m3_ds_1.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0367c0/scx_during_m3_ds_2.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0367c0/scx_during_m3_ds_3.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0761c0/scx_during_m3_1.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0761c0/scx_during_m3_1.gbc@dmg  # ppu-mode3
-gambatte/scx_during_m3/scx_0761c0/scx_during_m3_2.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0761c0/scx_during_m3_2.gbc@dmg  # ppu-mode3
-gambatte/scx_during_m3/scx_0761c0/scx_during_m3_3.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0761c0/scx_during_m3_3.gbc@dmg  # ppu-mode3
-gambatte/scx_during_m3/scx_0761c0/scx_during_m3_4.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0761c0/scx_during_m3_4.gbc@dmg  # ppu-mode3
-gambatte/scx_during_m3/scx_0761c0/scx_during_m3_ds_1.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0761c0/scx_during_m3_ds_2.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0761c0/scx_during_m3_ds_3.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0761c0/scx_during_m3_ds_4.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0761c0/scx_during_m3_ds_5.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_0761c0/scx_during_m3_ds_6.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_attrib_during_m3_spx2_ds.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_during_m3_spx2.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_during_m3_spx2_ds.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_m3_extend_1_dmg08_cgb04c_out3.gbc@cgb  # ppu-mode3
-gambatte/scx_during_m3/scx_m3_extend_1_dmg08_cgb04c_out3.gbc@dmg  # ppu-mode3
-gambatte/scx_during_m3/scx_m3_extend_ds_1_cgb04c_out3.gbc@cgb  # ppu-mode3
-gambatte/scy/scx3/scy_during_m3_1.gbc@cgb  # ppu-mode3
-gambatte/scy/scx3/scy_during_m3_1.gbc@dmg  # ppu-mode3
-gambatte/scy/scx3/scy_during_m3_2.gbc@cgb  # ppu-mode3
-gambatte/scy/scx3/scy_during_m3_2.gbc@dmg  # ppu-mode3
-gambatte/scy/scy_during_m3_1.gbc@cgb  # ppu-mode3
-gambatte/scy/scy_during_m3_1.gbc@dmg  # ppu-mode3
-gambatte/scy/scy_during_m3_2.gbc@cgb  # ppu-mode3
-gambatte/scy/scy_during_m3_2.gbc@dmg  # ppu-mode3
-gambatte/scy/scy_during_m3_ds_1.gbc@cgb  # ppu-mode3
-gambatte/scy/scy_during_m3_ds_2.gbc@cgb  # ppu-mode3
-gambatte/scy/scy_during_m3_spx08_ds_1.gbc@cgb  # ppu-mode3
-gambatte/scy/scy_during_m3_spx08_ds_2.gbc@cgb  # ppu-mode3
-gambatte/scy/scy_during_m3_spx08_ds_3.gbc@cgb  # ppu-mode3
-gambatte/scy/scy_during_m3_spx08_ds_4.gbc@cgb  # ppu-mode3
+gambatte/scx_during_m3/scx_0360c0/scx_during_m3_2.gbc@cgb  # ppu-mode3: SCX's fine bits cut short mid-drop: hardware's x lags Cartouche's, seen at the next SCX write (#317)
+gambatte/scx_during_m3/scx_0360c0/scx_during_m3_2.gbc@dmg  # ppu-mode3: SCX's fine bits cut short mid-drop: hardware's x lags Cartouche's, seen at the next SCX write (#317)
+gambatte/scx_during_m3/scx_0360c0/scx_during_m3_3.gbc@cgb  # ppu-mode3: SCX's fine bits cut short mid-drop: hardware's x lags Cartouche's, seen at the next SCX write (#317)
+gambatte/scx_during_m3/scx_0360c0/scx_during_m3_3.gbc@dmg  # ppu-mode3: SCX's fine bits cut short mid-drop: hardware's x lags Cartouche's, seen at the next SCX write (#317)
+gambatte/scx_during_m3/scx_0360c0/scx_during_m3_ds_2.gbc@cgb  # ppu-mode3: SCX's fine bits cut short mid-drop: hardware's x lags Cartouche's, seen at the next SCX write (#317)
+gambatte/scx_during_m3/scx_0360c0/scx_during_m3_ds_3.gbc@cgb  # ppu-mode3: SCX's fine bits cut short mid-drop: hardware's x lags Cartouche's, seen at the next SCX write (#317)
+gambatte/scx_during_m3/scx_0761c0/scx_during_m3_2.gbc@cgb  # ppu-mode3: SCX's fine bits cut short mid-drop: hardware's x lags Cartouche's, seen at the next SCX write (#317)
+gambatte/scx_during_m3/scx_0761c0/scx_during_m3_2.gbc@dmg  # ppu-mode3: SCX's fine bits cut short mid-drop: hardware's x lags Cartouche's, seen at the next SCX write (#317)
+gambatte/scx_during_m3/scx_0761c0/scx_during_m3_3.gbc@cgb  # ppu-mode3: SCX's fine bits cut short mid-drop: hardware's x lags Cartouche's, seen at the next SCX write (#317)
+gambatte/scx_during_m3/scx_0761c0/scx_during_m3_3.gbc@dmg  # ppu-mode3: SCX's fine bits cut short mid-drop: hardware's x lags Cartouche's, seen at the next SCX write (#317)
+gambatte/scx_during_m3/scx_0761c0/scx_during_m3_4.gbc@cgb  # ppu-mode3: SCX's fine bits cut short mid-drop: hardware's x lags Cartouche's, seen at the next SCX write (#317)
+gambatte/scx_during_m3/scx_0761c0/scx_during_m3_4.gbc@dmg  # ppu-mode3: SCX's fine bits cut short mid-drop: hardware's x lags Cartouche's, seen at the next SCX write (#317)
+gambatte/scx_during_m3/scx_0761c0/scx_during_m3_ds_2.gbc@cgb  # ppu-mode3: SCX's fine bits cut short mid-drop: hardware's x lags Cartouche's, seen at the next SCX write (#317)
+gambatte/scx_during_m3/scx_0761c0/scx_during_m3_ds_3.gbc@cgb  # ppu-mode3: SCX's fine bits cut short mid-drop: hardware's x lags Cartouche's, seen at the next SCX write (#317)
+gambatte/scx_during_m3/scx_0761c0/scx_during_m3_ds_4.gbc@cgb  # ppu-mode3: SCX's fine bits cut short mid-drop: hardware's x lags Cartouche's, seen at the next SCX write (#317)
+gambatte/scx_during_m3/scx_0761c0/scx_during_m3_ds_5.gbc@cgb  # ppu-mode3: SCX's fine bits cut short mid-drop: hardware's x lags Cartouche's, seen at the next SCX write (#317)
+gambatte/scx_during_m3/scx_attrib_during_m3_spx2_ds.gbc@cgb  # ppu-mode3: CGB: a write beside an OBJ fetch at a low X reaches the BG fetcher at another dot (#317)
+gambatte/scx_during_m3/scx_during_m3_spx2.gbc@cgb  # ppu-mode3: CGB: a write beside an OBJ fetch at a low X reaches the BG fetcher at another dot (#317)
+gambatte/scx_during_m3/scx_during_m3_spx2_ds.gbc@cgb  # ppu-mode3: CGB: a write beside an OBJ fetch at a low X reaches the BG fetcher at another dot (#317)
+gambatte/scx_during_m3/scx_m3_extend_1_dmg08_cgb04c_out3.gbc@cgb  # ppu-mode3: SCX's fine bits lowered below the pixels already dropped: the drop wraps, mode 3 is 8 dots longer (#317)
+gambatte/scx_during_m3/scx_m3_extend_1_dmg08_cgb04c_out3.gbc@dmg  # ppu-mode3: SCX's fine bits lowered below the pixels already dropped: the drop wraps, mode 3 is 8 dots longer (#317)
+gambatte/scx_during_m3/scx_m3_extend_ds_1_cgb04c_out3.gbc@cgb  # ppu-mode3: SCX's fine bits lowered below the pixels already dropped: the drop wraps, mode 3 is 8 dots longer (#317)
+gambatte/scy/scy_during_m3_spx08_ds_1.gbc@cgb  # ppu-mode3: CGB: a write beside an OBJ fetch at a low X reaches the BG fetcher at another dot (#317)
+gambatte/scy/scy_during_m3_spx08_ds_2.gbc@cgb  # ppu-mode3: CGB: a write beside an OBJ fetch at a low X reaches the BG fetcher at another dot (#317)
+gambatte/scy/scy_during_m3_spx08_ds_3.gbc@cgb  # ppu-mode3: CGB: a write beside an OBJ fetch at a low X reaches the BG fetcher at another dot (#317)
+gambatte/scy/scy_during_m3_spx08_ds_4.gbc@cgb  # ppu-mode3: CGB: a write beside an OBJ fetch at a low X reaches the BG fetcher at another dot (#317)
 gambatte/sound/ch1_duty0_pos6_to_pos7_timing_ds_6_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
 gambatte/speedchange/speedchange2_ch1_duty0_pos6_to_pos7_timing_ds_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
 gambatte/speedchange/speedchange2_ch1_duty0_pos6_to_pos7_timing_nop_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
