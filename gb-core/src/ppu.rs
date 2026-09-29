@@ -217,12 +217,27 @@ impl Ppu {
         // OAM and the palettes from its 4th; double speed: OAM from mode 2's 2nd dot, the rest from
         // the 3rd. Only a PPU off the CPU's M-cycle grid (a CGB after a speed switch) tells these
         // from one M-cycle (Gambatte `vram_m3`, `oam_access`, `cgbpal_m3` `*_lcdoffset*`).
+        let palette = matches!(addr, 0xFF69 | 0xFF6B);
         let lag = match (self.m_cycle_dots, addr) {
             (4, 0x8000..=0x9FFF) => 3,
             (4, _) => 4,
             (_, 0xFE00..=0xFE9F) => 1,
+            (_, 0xFF69 | 0xFF6B) => 3,
             _ => 2,
         };
+        // The palettes stay locked 4 dots after STAT shows mode 0, 2 in double speed (SameBoy's
+        // `cgb_palettes_blocked`, MIT; Gambatte `cgbpal_m3/cgbpal_m3end_*` per SCX and speed).
+        if palette && self.mode == PpuMode::HBlank && self.mode_clock < if self.m_cycle_dots == 4 { 7 } else { 6 } {
+            return true;
+        }
+        // A CGB's line after the LCD turns on locks the palettes, and in single speed VRAM writes,
+        // one M-cycle later than STAT shows mode 3, as its VRAM reads (Gambatte
+        // `enable_display/ly0_late_cgbpr*`, `ly0_late_cgbpw*`, `ly0_late_vramw_*`, each `_1`/`_2`).
+        if (self.cgb_mode || self.compat) && self.lcd_on_line0 && self.mode == PpuMode::Drawing
+            && (palette || write && (0x8000..=0x9FFF).contains(&addr) && self.m_cycle_dots == 4)
+        {
+            return self.mode_clock >= if self.m_cycle_dots == 4 { 8 } else { 6 };
+        }
         let shown = match self.stat_mode(lag, lag) {
             2 if self.lcd_on_line0 && self.mode == PpuMode::Drawing => 0,
             m => m,
@@ -1777,6 +1792,49 @@ mod tests {
         assert!(!p.win_carry);
         while p.ly < 12 { p.step(1); }
         assert_eq!(p.window_line_counter, 2);
+    }
+
+    /// SCX written as mode 3 starts: the first tile follows it up to the first fetch's last read,
+    /// and with a fine scroll the fine bits are sampled again that many dots later.
+    #[test]
+    fn scx_write_per_dot_takes_effect_at_column() {
+        // Map columns 12+ dark (tile 1), columns 0-11 light (tile 0).
+        let first_px = |scx0: u8, d: u32| {
+            let p = run_line10(|p| {
+                p.vram[16..32].fill(0xFF);
+                for col in 12..32 { p.vram[0x1820 + col] = 1; } // map row 1 (line 10)
+                p.scx = scx0;
+            }, |p, dot| if dot == d { p.write_register(0xFF43, 0x60 | scx0 & 7) });
+            shades(&p, 10)[0]
+        };
+        // The FIFO runs 2 dots behind mode 3 on a DMG (`FIFO_LAG`): the read is at its dot 6.
+        let last = (0..20).rev().find(|&d| first_px(0, d) == 3).expect("an early write moves it");
+        assert!(first_px(0, 0) == 3 && first_px(0, last + 1) == 0);
+        assert_eq!(last, 6 + 2 - 1);
+        // SCX 3 → 0 (a shorter drop): the first tile moves up to 3 dots later.
+        let last3 = (0..20).rev().find(|&d| {
+            let p = run_line10(|p| {
+                p.vram[16..32].fill(0xFF);
+                for col in 12..32 { p.vram[0x1820 + col] = 1; }
+                p.scx = 3;
+            }, |p, dot| if dot == d { p.write_register(0xFF43, 0x60) });
+            shades(&p, 10)[0] == 3
+        }).unwrap();
+        assert_eq!(last3, last + 3);
+    }
+
+    /// A CGB's palettes stay locked 4 dots after STAT shows mode 0 (2 in double speed).
+    #[test]
+    fn cgb_bcpd_lock_edges_per_scx() {
+        for (scx, ds) in [(0, false), (5, false), (0, true)] {
+            let mut p = Ppu::new();
+            (p.lcdc, p.ly, p.cgb_mode, p.scx) = (0x91, 10, true, scx);
+            if ds { p.m_cycle_dots = 2; }
+            while p.mode != PpuMode::HBlank { p.step(1); }
+            while p.read_register(0xFF41) & 3 != 0 { p.step(1); }
+            let tail = (0..).take_while(|_| { let l = p.cpu_locked(0xFF69, false); if l { p.step(1); } l }).count();
+            assert_eq!(tail, if ds { 2 } else { 4 }, "SCX {scx}, double speed {ds}");
+        }
     }
 
     /// The first tile is fetched twice, but its tile number is read by the first fetch only.
