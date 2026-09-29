@@ -217,7 +217,17 @@ impl Ppu {
             }
             0xFF42 => self.scy,
             0xFF43 => self.scx,
-            0xFF44 => self.ly,
+            0xFF44 => {
+                // CGB: read on the dot before LY moves on, LY shows LY & (LY + 1) (the bits still
+                // settling); a CGB B/C single speed also on the dot before that (Age lcd-align-ly).
+                let left = match self.mode {
+                    PpuMode::HBlank => (376 + MODE0_EARLY - self.mode3_len).wrapping_sub(self.mode_clock),
+                    PpuMode::VBlank if (144..153).contains(&self.ly) => 456 - self.mode_clock,
+                    _ => 0,
+                };
+                let glitch = left == 1 || left == 2 && self.m_cycle_dots == 4 && self.rev != Revision::CgbE;
+                if glitch && (self.cgb_mode || self.compat) { self.ly & (self.ly + 1) } else { self.ly }
+            }
             0xFF45 => self.lyc,
             0xFF47 => self.bgp,
             0xFF48 => self.obp0,
@@ -366,8 +376,10 @@ impl Ppu {
                 }
             }
             PpuMode::VBlank => {
-                // Line 153 shows LY = 153 for one M-cycle only, then 0 (compared with LYC too).
-                if self.ly == 153 && self.mode_clock >= 4 {
+                // Line 153 shows LY = 153 for 4 dots only, then 0 (compared with LYC too); 5 on a
+                // CGB E and in double speed (Age ly, lcd-align-ly).
+                let shown = if self.m_cycle_dots == 2 || self.rev == Revision::CgbE { 5 } else { 4 };
+                if self.ly == 153 && self.mode_clock >= shown {
                     self.ly = 0;
                 }
                 if self.mode_clock >= 456 {
@@ -735,6 +747,35 @@ mod tests {
             assert!(!p.cpu_locked(0xFE00, true) && !p.cpu_locked(0x8000, false), "{rev:?}");
             p.step(1);
             assert!(!p.cpu_locked(0xFE00, false), "{rev:?}: a dot later");
+        }
+    }
+
+    /// LY as read on each dot around its increments (Age ly, lcd-align-ly): the last three dots of
+    /// line 1 (a CGB reads 1 & 2 = 0 on the last one, a CGB B/C single speed on the last two), and
+    /// how many dots line 153 shows 153 (5 on a CGB E and in double speed).
+    #[test]
+    fn ly_increments_per_model() {
+        for (cgb, rev, m_cycle_dots, last3, shows_153) in [
+            (false, Revision::Default, 4, [1, 1, 1], 4),
+            (true, Revision::Default, 4, [1, 0, 0], 4),
+            (true, Revision::CgbC, 4, [1, 0, 0], 4),
+            (true, Revision::CgbE, 4, [1, 1, 0], 5),
+            (true, Revision::CgbC, 2, [1, 1, 0], 5),
+            (true, Revision::CgbE, 2, [1, 1, 0], 5),
+        ] {
+            let mut p = Ppu::new();
+            (p.lcdc, p.ly, p.cgb_mode, p.rev, p.m_cycle_dots) = (0x81, 1, cgb, rev, m_cycle_dots);
+            let mut reads = vec![];
+            while p.ly == 1 {
+                reads.push(p.read_register(0xFF44));
+                p.step(1);
+            }
+            assert_eq!(p.read_register(0xFF44), 2);
+            assert_eq!(reads[reads.len() - 3..], last3, "{cgb} {rev:?} {m_cycle_dots}");
+            while !(p.ly == 153 && p.mode == PpuMode::VBlank) { p.step(1); }
+            let mut n = 0;
+            while p.read_register(0xFF44) == 153 { n += 1; p.step(1); }
+            assert_eq!(n, shows_153, "{cgb} {rev:?} {m_cycle_dots}");
         }
     }
 
