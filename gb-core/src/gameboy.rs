@@ -211,6 +211,7 @@ impl GameBoy {
     /// The hardware revision to emulate; call it before the hand-over (`skip_boot_rom`).
     pub fn set_revision(&mut self, rev: Revision) {
         self.bus.rev = rev;
+        self.bus.apu.rev = rev;
     }
 
     pub fn skip_boot_rom(&mut self) {
@@ -832,6 +833,7 @@ impl GameBoy {
         self.bus.timer.div_hold = (spsw >> 3) & 3;
         self.bus.ppu.opri = byte(TIMING_TAIL_LEN + 6).unwrap_or(0) & 1;
         self.bus.rev = byte(TIMING_TAIL_LEN + 7).and_then(|r| Revision::ALL.get(r as usize)).copied().unwrap_or_default();
+        self.bus.apu.rev = self.bus.rev;
         true
     }
 }
@@ -955,7 +957,7 @@ mod tests {
 
         let mut g = GameBoy::new(rom.clone()).unwrap();
         assert!(g.load_state(&state));
-        assert_eq!(g.bus.rev, Revision::Dmg0);
+        assert_eq!((g.bus.rev, g.bus.apu.rev), (Revision::Dmg0, Revision::Dmg0));
         assert_eq!(g.save_state(), state);
 
         let mut g = GameBoy::new(rom).unwrap();

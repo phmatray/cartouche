@@ -8,6 +8,8 @@
 // bus reports through `div_event`, as on hardware (so a DIV write clocks it too).
 // Output mixed to stereo at 44100 Hz
 
+use crate::gameboy::Revision;
+
 const CPU_CLOCK: u32 = 4_194_304;
 const SAMPLE_RATE: u32 = 44_100;
 const CYCLES_PER_SAMPLE: f64 = CPU_CLOCK as f64 / SAMPLE_RATE as f64;
@@ -60,20 +62,26 @@ impl Length {
     }
 
     /// NRx4 write. `first_half`: the next frame-sequencer step won't clock length, in
-    /// which case enabling length (and a trigger reload) clocks it once more.
-    fn write_nrx4(&mut self, value: u8, first_half: bool, channel_enabled: &mut bool) {
+    /// which case enabling length (and a trigger reload) clocks it once more. `old`: CGB 0-B,
+    /// where length only has to have been off before, whatever the write sets (SameSuite
+    /// `*_extra_length_clocking`); `late_stop`: CGB B's CH3, which that clock stops one write late.
+    fn write_nrx4(&mut self, value: u8, first_half: bool, channel_enabled: &mut bool, old: bool, late_stop: bool) {
         let was_enabled = self.enabled;
         self.enabled = value & 0x40 != 0;
         let trigger = value & 0x80 != 0;
-        if first_half && !was_enabled && self.enabled && self.counter != 0 {
+        let extra = first_half && (self.enabled || old);
+        if extra && !was_enabled && !trigger && late_stop && self.counter == 0 {
+            // ponytail: the one reading of "two writes to stop at length 1" the ROM pins down.
+            *channel_enabled = false;
+        } else if extra && !was_enabled && self.counter != 0 {
             self.counter -= 1;
-            if self.counter == 0 && !trigger {
+            if self.counter == 0 && !trigger && !late_stop {
                 *channel_enabled = false;
             }
         }
         if trigger && self.counter == 0 {
             self.counter = self.max;
-            if self.enabled && first_half {
+            if extra {
                 self.counter -= 1;
             }
         }
@@ -322,7 +330,7 @@ impl SquareChannel {
 
     /// `lf_div`: the 1 MHz phase of the 2 MHz clock. `first_half`: the next DIV-APU event won't
     /// clock length.
-    fn write_nrx4(&mut self, value: u8, first_half: bool, lf_div: u16, cgb: bool) {
+    fn write_nrx4(&mut self, value: u8, first_half: bool, lf_div: u16, cgb: bool, old_length: bool) {
         // The frequency's high bits leaving 7 just as the countdown reloads: the duty step that
         // reload made is taken back (CGB-D/E; elsewhere only on an odd countdown).
         if value & 0x80 == 0 && self.enabled && self.frequency >> 8 == 7 && value & 7 != 7
@@ -375,7 +383,7 @@ impl SquareChannel {
                 self.suppressed = !force_unsuppressed;
             }
         }
-        self.length.write_nrx4(value, first_half, &mut self.enabled);
+        self.length.write_nrx4(value, first_half, &mut self.enabled, old_length, false);
         if !self.enabled {
             self.sample = 0;
         }
@@ -708,9 +716,9 @@ impl WaveChannel {
         self.frequency = (self.frequency & 0x700) | value as u16;
     }
 
-    pub fn write_nr34(&mut self, value: u8, first_half: bool, cgb: bool) {
+    pub fn write_nr34(&mut self, value: u8, first_half: bool, cgb: bool, rev: Revision) {
         self.frequency = (self.frequency & 0x00FF) | (((value & 0x07) as u16) << 8);
-        self.length.write_nrx4(value, first_half, &mut self.enabled);
+        self.length.write_nrx4(value, first_half, &mut self.enabled, old_length(cgb, rev), cgb && rev == Revision::CgbB);
         if value & 0x80 != 0 {
             self.trigger(cgb);
         }
@@ -1192,7 +1200,7 @@ impl NoiseChannel {
     }
 
     /// NR44. `first_half`: the next DIV-APU event won't clock length.
-    fn write_nr44(&mut self, value: u8, first_half: bool, cgb: bool) {
+    fn write_nr44(&mut self, value: u8, first_half: bool, cgb: bool, old_length: bool) {
         self.nr44 = value;
         let mut trigger = value & 0x80 != 0;
         if trigger {
@@ -1213,7 +1221,7 @@ impl NoiseChannel {
                 }
             }
         }
-        self.length.write_nrx4(if trigger { value } else { value & 0x7F }, first_half, &mut self.enabled);
+        self.length.write_nrx4(if trigger { value } else { value & 0x7F }, first_half, &mut self.enabled, old_length, false);
         if !self.enabled {
             self.sample = 0;
         }
@@ -1237,6 +1245,11 @@ impl NoiseChannel {
 }
 
 /// A channel's nibble in PCM12/PCM34: its output while it plays, else 0.
+/// CGB 0-B length counters: an NRx4 write clocks them whatever it sets (see `Length::write_nrx4`).
+fn old_length(cgb: bool, rev: Revision) -> bool {
+    cgb && matches!(rev, Revision::Cgb0 | Revision::CgbA | Revision::CgbB)
+}
+
 fn pcm(playing: bool, sample: u8) -> u8 {
     if playing { sample } else { 0 }
 }
@@ -1249,6 +1262,8 @@ pub struct Apu {
     enabled: bool,
     /// CGB APU quirks (wave RAM access, length counters on power-off). Synced by the bus.
     pub cgb_mode: bool,
+    /// The hardware revision (`GameBoy::set_revision`); read on register writes only.
+    pub rev: Revision,
     pub ch1: SquareChannel,
     pub ch1_sweep: Sweep,
     pub ch2: SquareChannel,
@@ -1288,6 +1303,7 @@ impl Apu {
         Self {
             enabled: false,
             cgb_mode: false,
+            rev: Revision::Default,
             ch1: SquareChannel::new(),
             ch1_sweep: Sweep::new(),
             ch2: SquareChannel::new(),
@@ -1588,6 +1604,7 @@ impl Apu {
             self.regs[(addr - 0xFF10) as usize] = value;
         }
         let first_half = self.length_first_half();
+        let old = old_length(self.cgb_mode, self.rev);
         match addr {
             // CH1 — Square with sweep
             0xFF10 => self.ch1_sweep.write_nr10(value, &mut self.ch1, self.lf_div, self.cgb_mode, self.double_speed),
@@ -1596,7 +1613,7 @@ impl Apu {
             0xFF13 => self.ch1.write_nrx3(value),
             0xFF14 => {
                 let was_active = self.ch1.enabled;
-                self.ch1.write_nrx4(value, first_half, self.lf_div, self.cgb_mode);
+                self.ch1.write_nrx4(value, first_half, self.lf_div, self.cgb_mode, old);
                 if value & 0x80 != 0 {
                     self.ch1_sweep.trigger(&self.ch1, was_active, self.lf_div, self.cgb_mode);
                 }
@@ -1606,20 +1623,20 @@ impl Apu {
             0xFF16 => self.ch2.write_nrx1(value),
             0xFF17 => self.ch2.write_nrx2(value, self.cgb_mode),
             0xFF18 => self.ch2.write_nrx3(value),
-            0xFF19 => self.ch2.write_nrx4(value, first_half, self.lf_div, self.cgb_mode),
+            0xFF19 => self.ch2.write_nrx4(value, first_half, self.lf_div, self.cgb_mode, old),
 
             // CH3 — Wave
             0xFF1A => self.ch3.write_nr30(value),
             0xFF1B => self.ch3.write_nr31(value),
             0xFF1C => self.ch3.write_nr32(value),
             0xFF1D => self.ch3.write_nr33(value),
-            0xFF1E => self.ch3.write_nr34(value, first_half, self.cgb_mode),
+            0xFF1E => self.ch3.write_nr34(value, first_half, self.cgb_mode, self.rev),
 
             // CH4 — Noise
             0xFF20 => self.ch4.write_nr41(value),
             0xFF21 => self.ch4.write_nr42(value, self.cgb_mode),
             0xFF22 => self.ch4.write_nr43(value, self.cgb_mode),
-            0xFF23 => self.ch4.write_nr44(value, first_half, self.cgb_mode),
+            0xFF23 => self.ch4.write_nr44(value, first_half, self.cgb_mode, old),
 
             // Control
             0xFF24 => self.nr50 = value,
@@ -1638,6 +1655,7 @@ impl Apu {
         let wave_ram = self.ch3.wave_ram;
         let old = std::mem::replace(self, Apu::new());
         self.cgb_mode = old.cgb_mode;
+        self.rev = old.rev;
         self.channel_muted = old.channel_muted;
         self.capacitor = old.capacitor;
         self.charged = old.charged;
@@ -2028,6 +2046,35 @@ mod tests {
         apu.cgb_mode = false;
         assert_eq!(apu.read_register(0xFF76), 0xFF, "no PCM registers on a DMG");
         assert_eq!(apu.read_register(0xFF77), 0xFF);
+    }
+
+    /// Writes to NRx4 (length off) until the channel stops, in the first half of a DIV-APU period
+    /// on `rev`, a length of 1 loaded: how many it took, 0 none of three.
+    fn writes_to_stop(rev: Revision, nrx1: u16, len: u8, nrx4: u16, dac: (u16, u8), bit: u8) -> usize {
+        let mut apu = Apu::new();
+        apu.cgb_mode = true;
+        apu.rev = rev;
+        for (reg, v) in [(0xFF26, 0x80), dac, (nrx1, len), (nrx4, 0x80)] {
+            apu.write_register(reg, v);
+        }
+        apu.div_event(false); // next event won't clock length: the first half
+        assert_ne!(apu.read_register(0xFF26) & bit, 0, "{rev:?}: playing");
+        (1..=3).find(|_| { apu.write_register(nrx4, 0x00); apu.read_register(0xFF26) & bit == 0 }).unwrap_or(0)
+    }
+
+    /// Extra length clocking: CGB E needs length to be enabled by the write, CGB 0/B only that it
+    /// was off before (SameSuite `*_extra_length_clocking-cgb0B`), and CGB B's CH3 stops a write late.
+    #[test]
+    fn length_enable_extra_clock_cgb0() {
+        let ch1 = |rev| writes_to_stop(rev, 0xFF11, 63, 0xFF14, (0xFF12, 0xF0), 1);
+        let ch2 = |rev| writes_to_stop(rev, 0xFF16, 63, 0xFF19, (0xFF17, 0xF0), 2);
+        let ch3 = |rev| writes_to_stop(rev, 0xFF1B, 255, 0xFF1E, (0xFF1A, 0x80), 4);
+        let ch4 = |rev| writes_to_stop(rev, 0xFF20, 63, 0xFF23, (0xFF21, 0xF0), 8);
+        for rev in [Revision::CgbE, Revision::CgbC, Revision::Default] {
+            assert_eq!([ch1(rev), ch2(rev), ch3(rev), ch4(rev)], [0; 4], "{rev:?}");
+        }
+        assert_eq!([ch1(Revision::Cgb0), ch2(Revision::Cgb0), ch3(Revision::Cgb0), ch4(Revision::Cgb0)], [1; 4]);
+        assert_eq!([ch1(Revision::CgbB), ch2(Revision::CgbB), ch3(Revision::CgbB), ch4(Revision::CgbB)], [1, 1, 2, 1]);
     }
 
     /// A v3-v7 APU block (the T-cycle model's 113 bytes): power, registers, the playing channels,
