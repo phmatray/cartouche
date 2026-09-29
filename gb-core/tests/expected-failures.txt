@@ -31,12 +31,8 @@ gbmicrotest/lyc1_int_if_edge_a.gb  # stat
 gbmicrotest/lyc1_int_if_edge_c.gb  # stat
 gbmicrotest/lyc1_write_timing_b.gb  # stat
 gbmicrotest/lyc1_write_timing_c.gb  # stat
-gbmicrotest/oam_int_halt_a.gb  # ppu
-gbmicrotest/oam_int_halt_b.gb  # ppu
-gbmicrotest/oam_int_if_level_d.gb  # ppu
 gbmicrotest/oam_int_inc_sled.gb  # ppu
 gbmicrotest/oam_int_nops_a.gb  # ppu
-gbmicrotest/oam_int_nops_b.gb  # ppu
 gbmicrotest/stat_write_glitch_l0_a.gb  # stat
 gbmicrotest/stat_write_glitch_l0_b.gb  # stat
 gbmicrotest/stat_write_glitch_l143_b.gb  # stat
