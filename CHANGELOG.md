@@ -4,6 +4,34 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.10.1](https://github.com/phmatray/cartouche/compare/v1.10.0...v1.10.1) (2026-09-29)
+
+
+### Fixed
+
+* **core:** a CGB cancels a window turned off in its first fetch ([#314](https://github.com/phmatray/cartouche/issues/314)) ([#323](https://github.com/phmatray/cartouche/issues/323)) ([d6280d1](https://github.com/phmatray/cartouche/commit/d6280d1816b53a14674de6ab262814e0fb0e06a7))
+* **core:** APU trigger timing, counter reloads and the hand-over APU/DIV state ([#286](https://github.com/phmatray/cartouche/issues/286)) ([#300](https://github.com/phmatray/cartouche/issues/300)) ([125b205](https://github.com/phmatray/cartouche/commit/125b205924de7ed21f1be0b90717647704e0beb5))
+* **core:** CGB PPU phase off the M-cycle grid and the CGB hand-over LY/STAT ([#287](https://github.com/phmatray/cartouche/issues/287)) ([#304](https://github.com/phmatray/cartouche/issues/304)) ([3df2e92](https://github.com/phmatray/cartouche/commit/3df2e9269c82d7cc61e8ecc90f8765ae7e9f6e8a))
+* **core:** CPU reads during an OAM DMA per bus and model ([#293](https://github.com/phmatray/cartouche/issues/293)) ([#302](https://github.com/phmatray/cartouche/issues/302)) ([4e69477](https://github.com/phmatray/cartouche/commit/4e694772ad6de5d47be48f9a74c1a873003dafd7))
+* **core:** CPU writes during an OAM DMA conflict on its bus ([#288](https://github.com/phmatray/cartouche/issues/288)) ([#301](https://github.com/phmatray/cartouche/issues/301)) ([eee4f46](https://github.com/phmatray/cartouche/commit/eee4f466538610aee640ff3237ee0fc13c303c9e))
+* **core:** double-speed mode-3 timing with OBJs ([#307](https://github.com/phmatray/cartouche/issues/307)) ([#310](https://github.com/phmatray/cartouche/issues/310)) ([0fa6a7e](https://github.com/phmatray/cartouche/commit/0fa6a7ef2c7018c957ad2924b3538917c036045f))
+* **core:** HALT on a mode-0 edge and off-grid STAT leftovers after [#313](https://github.com/phmatray/cartouche/issues/313) ([#321](https://github.com/phmatray/cartouche/issues/321)) ([#324](https://github.com/phmatray/cartouche/issues/324)) ([7f59d2d](https://github.com/phmatray/cartouche/commit/7f59d2d389c1ff701eaf72b2fdb24b9647a45378))
+* **core:** HDMA/GDMA timing — per-M-cycle VRAM DMA across HALT, speed switch and OAM DMA ([#295](https://github.com/phmatray/cartouche/issues/295)) ([#319](https://github.com/phmatray/cartouche/issues/319)) ([5f6ed6e](https://github.com/phmatray/cartouche/commit/5f6ed6eaa1740498706c1cc2df1479600a4271b2))
+* **core:** interrupt request edges for IF writes, dispatch, timer and serial ([#285](https://github.com/phmatray/cartouche/issues/285)) ([#299](https://github.com/phmatray/cartouche/issues/299)) ([8b23d98](https://github.com/phmatray/cartouche/commit/8b23d98fdca9ebda63440c566ed487926dba66b2))
+* **core:** LYC comparator edges on lines 144 and 153 and STAT write timing ([#292](https://github.com/phmatray/cartouche/issues/292)) ([#311](https://github.com/phmatray/cartouche/issues/311)) ([6b7ecec](https://github.com/phmatray/cartouche/commit/6b7ecec7874f9ea9afbb3b7c50ef87cbfdef89e3))
+* **core:** mode-3 fine-scroll drop compares SCX live ([#317](https://github.com/phmatray/cartouche/issues/317)) ([#320](https://github.com/phmatray/cartouche/issues/320)) ([77d5c1d](https://github.com/phmatray/cartouche/commit/77d5c1dc586231c5676ee0eed044273c2a78f30f))
+* **core:** mode-3 register sampling and CGB palette/VRAM lock edges ([#291](https://github.com/phmatray/cartouche/issues/291)) ([#316](https://github.com/phmatray/cartouche/issues/316)) ([c2f0cef](https://github.com/phmatray/cartouche/commit/c2f0cef5aa9f51724c6d0ed41e0a3cda71eb88e2))
+* **core:** OAM scan reads each entry at its own dot ([#289](https://github.com/phmatray/cartouche/issues/289)) ([#305](https://github.com/phmatray/cartouche/issues/305)) ([67fe3e6](https://github.com/phmatray/cartouche/commit/67fe3e662a5100839f23521110b0c00cf21960d5))
+* **core:** STAT sources against late STAT and LYC writes, precedence and HALT wake ([#294](https://github.com/phmatray/cartouche/issues/294)) ([#312](https://github.com/phmatray/cartouche/issues/312)) ([5d2564f](https://github.com/phmatray/cartouche/commit/5d2564f94e15e2ef297889fd255ba0d064c3a6d2))
+* **core:** STAT/LYC write edges left after [#294](https://github.com/phmatray/cartouche/issues/294) ([#313](https://github.com/phmatray/cartouche/issues/313)) ([#315](https://github.com/phmatray/cartouche/issues/315)) ([922cf3e](https://github.com/phmatray/cartouche/commit/922cf3e803697fe6b3849032c85af057ca2768b8))
+* **core:** window triggers — late WY, WX and LCDC.5 writes, WX = $A6 ([#290](https://github.com/phmatray/cartouche/issues/290)) ([#308](https://github.com/phmatray/cartouche/issues/308)) ([78bbaf6](https://github.com/phmatray/cartouche/commit/78bbaf606952a0e0c5eaafeb8164e7f1fe59a717))
+
+
+### Performance
+
+* **core:** catch the APU up lazily instead of stepping it every M-cycle ([#298](https://github.com/phmatray/cartouche/issues/298)) ([#306](https://github.com/phmatray/cartouche/issues/306)) ([3606b27](https://github.com/phmatray/cartouche/commit/3606b27e1c2688f7d13d66d44fa00e25f525f1ae))
+* **core:** win back bench headroom before the Gambatte fixes ([#284](https://github.com/phmatray/cartouche/issues/284)) ([#296](https://github.com/phmatray/cartouche/issues/296)) ([aa6a515](https://github.com/phmatray/cartouche/commit/aa6a5155b8bc96d5d46038d3e56d655386e2e3a2))
+
 ## [1.10.0](https://github.com/phmatray/cartouche/compare/v1.9.0...v1.10.0) (2026-09-29)
 
 
