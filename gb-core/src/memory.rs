@@ -70,6 +70,29 @@ pub struct MemoryBus {
     pub rev: crate::gameboy::Revision,
 }
 
+/// The bus an address sits on, as the OAM DMA sees it: it holds one bus while it runs.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Bus {
+    /// The cartridge (ROM, its RAM) and, on a Game Boy, work RAM.
+    External,
+    Vram,
+    /// Work RAM and its echo, a bus of its own on Game Boy Color hardware.
+    Wram,
+    Oam,
+    /// I/O registers and HRAM, never taken by the DMA.
+    Io,
+}
+
+pub(crate) fn bus_of(addr: u16, cgb: bool) -> Bus {
+    match addr {
+        0x8000..=0x9FFF => Bus::Vram,
+        0xC000..=0xFDFF if cgb => Bus::Wram,
+        0xFE00..=0xFEFF => Bus::Oam,
+        0xFF00.. => Bus::Io,
+        _ => Bus::External,
+    }
+}
+
 impl MemoryBus {
     pub fn new(cartridge: Cartridge, cgb_mode: bool) -> Self {
         let mut ppu = Ppu::new();
@@ -137,21 +160,20 @@ impl MemoryBus {
     }
 
     /// Whether a CPU read collides with the running OAM DMA: OAM itself, or an address on
-    /// the bus the DMA reads from. Buses: VRAM, the external one (ROM, cartridge RAM, and WRAM
-    /// on a Game Boy) and, on a Game Boy Color, WRAM's own. I/O and HRAM stay reachable, so a
-    /// DMA from VRAM (or from WRAM on a Color) leaves ROM fetches alone. The Color quirks
-    /// follow SameBoy: WRAM is busy unless the DMA reads VRAM, and a DMA from echo RAM
-    /// ($E000+) blocks everything but VRAM.
+    /// the bus the DMA reads from (`bus_of`). I/O and HRAM stay reachable, so a DMA from VRAM
+    /// (or from WRAM on a Color) leaves ROM fetches alone. The Color quirks follow SameBoy:
+    /// WRAM is busy unless the DMA reads VRAM, and a DMA from echo RAM ($E000+) blocks
+    /// everything but VRAM.
     fn dma_conflict(&self, addr: u16) -> bool {
         let cgb = self.cgb_mode || self.ppu.compat; // Color hardware, whatever the mode
-        let bus = |a: u16| match a { 0x8000..=0x9FFF => 1, 0xC000.. if cgb => 2, _ => 0 };
         let src = (self.dma_source as u16) << 8;
-        match addr {
-            0xFE00..=0xFEFF => true,
-            0xFF00.. => false,
-            0xC000.. if cgb => bus(src) != 1,
-            _ if cgb && src >= 0xE000 => bus(addr) != 1,
-            _ => bus(addr) == bus(src),
+        let src_bus = bus_of(self.dma_src(0), cgb);
+        match bus_of(addr, cgb) {
+            Bus::Oam => true,
+            Bus::Io => false,
+            Bus::Wram => src_bus != Bus::Vram,
+            bus if cgb && src >= 0xE000 => bus != Bus::Vram,
+            bus => bus == src_bus,
         }
     }
 
@@ -758,6 +780,22 @@ mod tests {
         assert_eq!(bus.read_byte(0xFE00), 0xFF, "the M-cycle of the last byte is still blocked");
         bus.cycle_tick();
         assert_eq!(bus.read_byte(0xFE00), 0x01, "done");
+    }
+
+    #[test]
+    fn bus_of_maps_every_region() {
+        use Bus::*;
+        for (addr, dmg, cgb) in [
+            (0x0000, External, External), (0x7FFF, External, External),
+            (0x8000, Vram, Vram), (0x9FFF, Vram, Vram),
+            (0xA000, External, External), (0xBFFF, External, External),
+            (0xC000, External, Wram), (0xDFFF, External, Wram),
+            (0xE000, External, Wram), (0xFDFF, External, Wram),
+            (0xFE00, Oam, Oam), (0xFEFF, Oam, Oam),
+            (0xFF00, Io, Io), (0xFF80, Io, Io), (0xFFFF, Io, Io),
+        ] {
+            assert_eq!([bus_of(addr, false), bus_of(addr, true)], [dmg, cgb], "{addr:04X}");
+        }
     }
 
     #[test]
