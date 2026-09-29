@@ -146,7 +146,8 @@ fn tile25_footprint(gb: &GameBoy) -> Vec<bool> {
             }
             let row = if o[3] & 0x40 != 0 { height - 1 - row } else { row };
             let tile = if height == 16 { (o[2] & 0xFE) | (row >= 8) as u8 } else { o[2] };
-            if tile == 25 {
+            // In CGB mode, attribute bit 3 takes the tile from VRAM bank 1, where no boot ROM writes.
+            if tile == 25 && !(p.cgb_mode && o[3] & 0x08 != 0) {
                 for x in (o[1] as usize).saturating_sub(8)..(o[1] as usize).min(160) {
                     fp[y * 160 + x] = true;
                 }
@@ -155,14 +156,16 @@ fn tile25_footprint(gb: &GameBoy) -> Vec<bool> {
         if lcdc & 0x10 == 0 {
             continue;
         }
-        let map = |bit: u8, cx: usize, cy: usize| p.vram[if lcdc & bit != 0 { 0x1C00 } else { 0x1800 } + cy / 8 % 32 * 32 + cx / 8 % 32];
+        let map = |bit: u8, cx: usize, cy: usize| {
+            let at = if lcdc & bit != 0 { 0x1C00 } else { 0x1800 } + cy / 8 % 32 * 32 + cx / 8 % 32;
+            p.vram[at] == 25 && !(p.cgb_mode && p.vram[0x2000 + at] & 0x08 != 0)
+        };
         for x in 0..160 {
-            let tile = if win_line != 0xFF && x >= win_x as usize {
+            fp[y * 160 + x] |= if win_line != 0xFF && x >= win_x as usize {
                 map(0x40, x - win_x as usize, win_line as usize)
             } else {
                 map(0x08, x + scx as usize, y + scy as usize)
             };
-            fp[y * 160 + x] |= tile == 25;
         }
     }
     fp
