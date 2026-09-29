@@ -177,8 +177,8 @@ fn compare_screen(gb: &GameBoy, hw: Hw, reference: &Path) -> Verdict {
 
 /// The screen pixels (160x144, row-major) drawn from tile 25 ($8190): where the Nintendo boot ROM
 /// leaves its ® and Cartouche's boot ROMs leave nothing. OBJs whose tile at that row is 25 (the
-/// 8x16 half included) and BG/window pixels fetched from tile 25 with LCDC.4 set (or fed a tile-25
-/// OBJ row by a CGB TILE_SEL write, which the trace records as tile 25): a structural
+/// 8x16 half included) and BG/window pixels fetched from tile 25 with LCDC.4 set (outside CGB mode,
+/// also those a CGB TILE_SEL write fed a tile-25 OBJ row, traced as tile 25 from $8000): a structural
 /// footprint from OAM, the layer trace's per-pixel tile record and per-line registers of the shown
 /// frame (in CGB mode, or untraced, the tile maps with each line's SCX, SCY and window position),
 /// never the glyph's bytes. It never turns a fail into a pass: it only tells a ®-only fail from one
@@ -210,16 +210,6 @@ fn tile25_footprint(gb: &GameBoy) -> Vec<bool> {
                 }
             }
         }
-        // Tile data at $8000-$8FFF at some dot of the line: a traced line records each mid-line
-        // LCDC write, so a fetch caught during a brief LCDC.4 switch counts (the map lookup below
-        // keeps the line's LCDC).
-        let seen = match traced {
-            Some(t) if t.rendered(y) => t.line(y)[line::LCDC_SEEN],
-            _ => lcdc,
-        };
-        if seen & 0x10 == 0 {
-            continue;
-        }
         let map = |bit: u8, cx: usize, cy: usize| {
             let at = if lcdc & bit != 0 { 0x1C00 } else { 0x1800 } + cy / 8 % 32 * 32 + cx / 8 % 32;
             p.vram[at] == 25 && !(p.cgb_mode && p.vram[0x2000 + at] & 0x08 != 0)
@@ -227,8 +217,9 @@ fn tile25_footprint(gb: &GameBoy) -> Vec<bool> {
         // Traced outside CGB mode: the tile each pixel was fetched with, wherever a mid-line write
         // moved it. (In CGB mode the trace has no VRAM bank, so the per-line map lookup stays.)
         if let Some(t) = traced.filter(|t| t.rendered(y) && !p.cgb_mode) {
+            // Tile 25 read from $8000-$8FFF (`ids` bit 3), whatever LCDC.4 was at the line start.
             for x in 0..160 {
-                fp[y * 160 + x] |= t.tile[y * 160 + x] == 25;
+                fp[y * 160 + x] |= t.tile[y * 160 + x] == 25 && t.info[(y * 160 + x) * 4 + 2] & 0x08 != 0;
             }
             continue;
         }

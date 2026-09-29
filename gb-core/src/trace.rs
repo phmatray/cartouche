@@ -13,7 +13,8 @@
 //! - `info`: 4 bytes per pixel: `[layer, slot, ids, attr]`
 //!   - layer: where the shown pixel came from, `LAYER_BG` / `LAYER_WIN` / `LAYER_OBJ`
 //!   - slot: OAM index (0..40) of the claiming OBJ, `NO_OBJ` when none
-//!   - ids: bits 0-1 BG/window colour id, bit 2 CGB BG-to-OBJ tile priority, bits 4-5 OBJ colour id
+//!   - ids: bits 0-1 BG/window colour id, bit 2 CGB BG-to-OBJ tile priority, bit 3 the BG/window
+//!     tile's data read (at least partly) from $8000-$8FFF, bits 4-5 OBJ colour id
 //!   - attr: OAM attribute byte of the claiming OBJ
 //! - `tile`: 1 byte per pixel, the BG/window tile number the pixel was fetched with (after any
 //!   mid-line SCX/SCY/LCDC write, as the fetcher read the map). 0 where no tile was fetched (the
@@ -72,9 +73,6 @@ pub mod line {
     /// 5-byte records `[slot, y, x, tile, attr]` in OAM order (raw OAM values).
     pub const NSPR: usize = 11;
     pub const SPRITES: usize = 12;
-    /// LCDC with every bit it had at some dot of the line's mode 3 (the value at the first dot,
-    /// ORed with each mid-line write): bit 4 set means some fetch may have used $8000-$8FFF.
-    pub const LCDC_SEEN: usize = 62;
 }
 pub const LINE_RENDERED: u8 = 1;
 pub const LINE_CGB: u8 = 2;

@@ -273,7 +273,6 @@ impl Ppu {
                 let was_enabled = self.lcdc & 0x80 != 0;
                 let tile_sel = (self.lcdc ^ value) & 0x10 != 0;
                 self.lcdc = value;
-                self.line.lcdc_seen |= value;
                 if tile_sel { self.tile_sel_switch(); }
                 let is_enabled = self.lcdc & 0x80 != 0;
                 if was_enabled && !is_enabled {
