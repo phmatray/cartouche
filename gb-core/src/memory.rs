@@ -72,6 +72,8 @@ pub struct MemoryBus {
     pub watch: Option<Box<crate::debug::WatchSet>>,
     /// The hardware revision (`GameBoy::set_revision`), for subsystems to read as a plain field.
     pub rev: crate::gameboy::Revision,
+    /// The CPU is halted past HALT's first M-cycle: the OAM DMA waits (`dma_tick`).
+    pub(crate) dma_hold: bool,
     /// The RAM a Game Boy Color up to revision D has at $FEA0-$FEFF (`fea0_index`).
     pub(crate) fea0: [u8; 0x30],
 }
@@ -140,6 +142,7 @@ impl MemoryBus {
             cheats: Default::default(),
             watch: None,
             rev: crate::gameboy::Revision::Default,
+            dma_hold: false,
             fea0: [0; 0x30],
         }
     }
@@ -693,12 +696,20 @@ impl MemoryBus {
             }
             self.dma_active = true;
             self.dma_index = 0;
+            self.ppu.set_oam_dma(true);
         }
         if !self.dma_active {
             return;
         }
+        // HALT holds the DMA's copying after its first M-cycle, not its end once the last byte
+        // is in (as SameBoy's `GB_dma_run`, MIT; Gambatte hwtests `oamdmasrc80_halt_m2irq/lycirq_read8000`:
+        // a DMA started before HALT is still copying after it, `oamdma_late_halt_stat_1/_2`).
+        if self.dma_hold && self.dma_index < 0xA0 {
+            return;
+        }
         if self.dma_index >= 0xA0 {
             self.dma_active = false;
+            self.ppu.set_oam_dma(false);
             return;
         }
         let cgb = self.cgb_mode || self.ppu.compat;
@@ -747,6 +758,7 @@ impl MemoryBus {
     pub fn cycle_tick(&mut self) {
         self.tick_components();
     }
+
 
     pub fn cycle_read(&mut self, addr: u16) -> u8 {
         self.tick_components();
@@ -1079,6 +1091,20 @@ mod tests {
         for _ in 0..160 { bus.cycle_tick(); }
         let oam: Vec<u8> = (5..9).map(|i| bus.ppu.read_oam(i)).collect();
         assert_eq!(oam, [0x00, 0xFF, 0x94, 0x00], "PC high in M-cycle 4 (byte 6), low in 5 (byte 7)");
+    }
+
+    /// HALT holds the OAM DMA after its first M-cycle: a VRAM read after 50 halted M-cycles still
+    /// sees the byte copied in that first one.
+    #[test]
+    fn oam_dma_from_vram_while_halted() {
+        let mut bus = bus();
+        for i in 0..0xA0 { bus.write_byte(0x8000 + i, 0xA0 - i as u8); }
+        bus.write_byte(0xFF46, 0x80);
+        for _ in 0..4 { bus.cycle_tick(); } // bytes 0-2 copied
+        let mut cpu = crate::cpu::Cpu::new();
+        (cpu.halted, cpu.halt_grace) = (true, true);
+        for _ in 0..50 { cpu.step(&mut bus).unwrap(); }
+        assert_eq!(bus.read_byte(0x8000), 0xA0 - 3, "byte 3, copied in HALT's first M-cycle");
     }
 
     /// A DMA from $FE00 copies work RAM's $DE00 page on a DMG, $FF on a CGB (the external bus).
