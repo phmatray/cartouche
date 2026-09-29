@@ -57,9 +57,10 @@ pub struct MemoryBus {
     pub(crate) hdma_remaining: u8,
     /// RP ($FF56, CGB): bit 0 = LED on, bits 6-7 = read enable (both set: bit 1 shows the sensor).
     pub(crate) rp: u8,
-    /// The PPU's IF bits (VBlank, STAT) the M-cycle just run raised from clear: see `if_hidden`.
+    /// The IF bits the M-cycle just run raised from clear, after the CPU's access in it: the PPU's
+    /// (VBlank, STAT), the timer's and the serial port's (`raise_late`, `if_hidden`).
     /// Not saved: it only matters at the boundary after that M-cycle (`GameBoy::load_state`).
-    pub(crate) ppu_fresh: u8,
+    pub(crate) if_late: u8,
     /// Whether the infrared sensor sees light (a linked partner's LED); never set when alone.
     pub ir_light_in: bool,
     /// Active cheat codes (Game Genie ROM patches, GameShark RAM writes).
@@ -130,7 +131,7 @@ impl MemoryBus {
             hdma_dest: 0,
             hdma_remaining: 0,
             rp: 0,
-            ppu_fresh: 0,
+            if_late: 0,
             ir_light_in: false,
             cheats: Default::default(),
             watch: None,
@@ -388,12 +389,19 @@ impl MemoryBus {
                 if before & !self.joypad.read() & 0x0F != 0 { self.interrupts.request(JOYPAD_BIT); }
                 if let Some(s) = self.sgb.as_deref_mut() { s.write_p1(value); }
             }
-            0xFF01 => self.serial.write(addr, value, self.timer.div_counter),
-            0xFF02 => self.serial.write(addr, if self.cgb_mode { value } else { value & !0x02 }, self.timer.div_counter),
+            0xFF01 => { self.serial.write(addr, value, self.timer.div_counter); }
+            0xFF02 => {
+                // Stopped before its 8th edge: the request of this M-cycle is withdrawn.
+                if self.serial.write(addr, if self.cgb_mode { value } else { value & !0x02 }, self.timer.div_counter) {
+                    self.interrupts.interrupt_flag &= !(self.if_late & SERIAL_BIT);
+                    self.if_late &= !SERIAL_BIT;
+                }
+            }
             0xFF04..=0xFF07 => {
                 // An overflow requests the interrupt at once, a TIMA write cancelling the reload withdraws it (Timer::step).
                 let (pending, div) = (self.timer.reload_pending, self.timer.div_counter);
                 self.timer.write(addr, value);
+                if addr == 0xFF04 { self.serial.div_reset(div); }
                 self.div_apu_edge(div, true);
                 match (pending, self.timer.reload_pending) {
                     (false, true) => self.interrupts.request(TIMER_BIT),
@@ -401,7 +409,10 @@ impl MemoryBus {
                     _ => {}
                 }
             }
-            0xFF0F => self.interrupts.interrupt_flag = value & 0x1F | self.if_hidden(),
+            0xFF0F => {
+                let seen = if self.ppu.mode0_edge_first_dot() { STAT_BIT } else { 0 };
+                self.interrupts.interrupt_flag = value & 0x1F | self.if_hidden() & !seen;
+            }
             0xFF10..=0xFF3F => {
                 let was_on = self.apu.is_on();
                 self.apu.write_register(addr, value);
@@ -423,7 +434,7 @@ impl MemoryBus {
                     if std::mem::take(&mut self.ppu.stat_write_irq) { self.interrupts.request(STAT_BIT); }
                     if std::mem::take(&mut self.ppu.stat_write_drop) && self.if_hidden() & STAT_BIT != 0 {
                         self.interrupts.interrupt_flag &= !STAT_BIT;
-                        self.ppu_fresh &= !STAT_BIT;
+                        self.if_late &= !STAT_BIT;
                     }
                 }
             }
@@ -553,7 +564,18 @@ impl MemoryBus {
         self.serial.clear_serial_output();
     }
 
-    /// The PPU's interrupt requests of this M-cycle, and which of them are fresh (`ppu_fresh`).
+    /// A timer or serial request of this M-cycle: it reaches IF after the CPU's access in it
+    /// (`if_hidden`), as the PPU's do. The timer's is the TIMA reload's, one M-cycle after the
+    /// overflow (`Timer::step`): an IF read or write in the overflow's M-cycle misses it, a write
+    /// there doesn't clear it (Gambatte tima `tc00_irq_1/2`, `tc00_irq_ifw_1/2`, their `_ds` twins).
+    #[inline]
+    fn raise_late(&mut self, bit: u8) {
+        self.if_late |= bit & !self.interrupts.interrupt_flag;
+        self.interrupts.request(bit);
+    }
+
+    /// The PPU's interrupt requests of this M-cycle, and which of them are fresh (`if_late`); it
+    /// also runs the M-cycle after a `raise_late`, to clear that one.
     /// Kept out of the per-M-cycle path: a few calls per line.
     #[inline(never)]
     fn ppu_irqs(&mut self, vblank_irq: bool, stat_irq: bool) {
@@ -565,13 +587,13 @@ impl MemoryBus {
         if stat_irq {
             self.interrupts.request(STAT_BIT);
         }
-        self.ppu_fresh = self.interrupts.interrupt_flag & !before;
+        self.if_late = self.interrupts.interrupt_flag & !before;
     }
 
     fn tick_components(&mut self) {
         let ppu_step = if self.double_speed { 2 } else { 4 };
         let (vblank_irq, stat_irq, hblank_entry) = self.ppu.step(ppu_step);
-        if vblank_irq | stat_irq || self.ppu_fresh != 0 {
+        if vblank_irq | stat_irq || self.if_late != 0 {
             self.ppu_irqs(vblank_irq, stat_irq);
         }
         if hblank_entry && self.hdma_active {
@@ -580,11 +602,11 @@ impl MemoryBus {
         }
         let div = self.timer.div_counter;
         if self.timer.step(4) {
-            self.interrupts.request(TIMER_BIT);
+            self.raise_late(TIMER_BIT);
         }
         self.div_apu_edge(div, false);
         if self.serial.tick(4) {
-            self.interrupts.request(SERIAL_BIT);
+            self.raise_late(SERIAL_BIT);
         }
         self.cartridge.tick();
         self.cartridge.tick_clock(ppu_step as u64);
@@ -654,13 +676,17 @@ impl MemoryBus {
     }
 
     /// IF bits whose line rises only at the end of this M-cycle. A halted CPU samples IF
-    /// mid-cycle, so these wake it one M-cycle later. The timer raises IF.2 with the TIMA reload,
-    /// at the next M-cycle boundary; the bus requests it one M-cycle ahead (see `Timer::step`),
-    /// which a running CPU's fetch-time sample needs but a halted one must not see yet.
+    /// mid-cycle, so these wake it one M-cycle later; so does the dispatch that clears the bit it
+    /// takes (`Cpu::dispatch`). The timer raises IF.2 with the TIMA reload, at the next M-cycle
+    /// boundary; the bus requests it one M-cycle ahead (see `Timer::step`), which a running CPU's
+    /// fetch-time sample needs but a halted one must not see yet. The serial port's IF.3 and
+    /// line 0's mode-2 edge (which, unlike the other lines', is not early: `Ppu::mode2_early`)
+    /// also rise after that sample (Gambatte `start_wait_trigger_int8_read_if_2` on the DMG,
+    /// `lyc153int_m2irq_late_retrigger_1/2`).
     pub fn late_interrupts(&self) -> u8 {
-        let stat = if self.ppu_fresh & STAT_BIT != 0 && self.ppu.mode0_edge_late()
-            || self.ppu_fresh & STAT_BIT != 0 && self.ppu.mode2_early() { STAT_BIT } else { 0 };
-        stat | if self.timer.reload_pending { TIMER_BIT } else { 0 }
+        let stat = self.if_late & STAT_BIT != 0
+            && (self.ppu.mode0_edge_late() || self.ppu.mode2_early() || self.ppu.ly == 0 && self.ppu.mode2_edge_now());
+        (if stat { STAT_BIT } else { 0 }) | self.if_late & SERIAL_BIT | if self.timer.reload_pending { TIMER_BIT } else { 0 }
     }
 
     /// The PPU's IF bits raised late in the M-cycle just run, after the CPU's read or write of IF
@@ -673,8 +699,8 @@ impl MemoryBus {
     /// M-cycle later (`late_interrupts`). Not a mode-2 edge a STAT write raises at mode 2's start,
     /// which such a read sees (`mode2_edge_now`).
     pub(crate) fn if_hidden(&self) -> u8 {
-        if self.ppu_fresh == 0 { return 0; }
-        self.ppu_fresh & if self.ppu.mode2_edge_now() { !STAT_BIT } else { 0xFF }
+        if self.if_late == 0 { return 0; }
+        self.if_late & if self.ppu.mode2_edge_now() { !STAT_BIT } else { 0xFF }
     }
 
     pub fn cycle_tick(&mut self) {
@@ -703,6 +729,11 @@ impl MemoryBus {
 
     pub fn cycle_write(&mut self, addr: u16, value: u8) {
         self.tick_components();
+        self.write_access(addr, value);
+    }
+
+    /// The CPU's write of an M-cycle whose components have already run.
+    pub(crate) fn write_access(&mut self, addr: u16, value: u8) {
         if (0xFE00..=0xFEFF).contains(&addr) { self.ppu.oam_bug_write(); }
         if let Some(w) = &mut self.watch { w.record(addr, value, true); }
         if self.dma_active && self.dma_write_conflict(addr, value) {
@@ -1201,6 +1232,94 @@ mod tests {
             if clear { bus.write_byte(0xFF0F, 0); }
             bus.cycle_tick();
             assert_eq!(bus.read_byte(0xFF0F) & 3, 3, "seen the next M-cycle (write in between: {clear})");
+        }
+    }
+
+    /// A dispatch takes the timer interrupt already requested; TIMA overflowing again in its M4
+    /// is taken with it (IF.2 clear afterwards), in its M5 it retriggers (IF.2 set) on a DMG: the
+    /// bit is let go at M5's sampling point, which the TIMA reload misses there but not on a CGB
+    /// (Gambatte `tc00_irq_late_retrigger_1..3`).
+    #[test]
+    fn source_rising_after_dispatch_clear_retriggers() {
+        for (m, cgb, retriggers) in [(3, false, false), (4, false, false), (5, false, true), (4, true, false), (5, true, false)] {
+            let mut bus = bus();
+            bus.cgb_mode = cgb;
+            // TAC 4: DIV bit 9 falls when the counter reaches $400, `m` M-cycles into the dispatch.
+            (bus.timer.div_counter, bus.timer.tima, bus.timer.tac) = (0x400 - 4 * m, 0xFF, 0x04);
+            (bus.interrupts.interrupt_enable, bus.interrupts.interrupt_flag) = (TIMER_BIT, TIMER_BIT);
+            let mut cpu = crate::cpu::Cpu::new();
+            (cpu.ime, cpu.regs.sp, cpu.regs.pc) = (true, 0xD000, 0x1234);
+            cpu.handle_interrupts(&mut bus);
+            assert_eq!(cpu.regs.pc, 0x50, "M{m}: dispatched");
+            assert_eq!(bus.timer.tima, 0x00, "M{m}: overflowed during the dispatch");
+            assert_eq!(bus.interrupts.interrupt_flag & TIMER_BIT != 0, retriggers, "overflow in M{m}, CGB {cgb}");
+        }
+    }
+
+    /// An IF write comes later in its M-cycle than a read: a mode-0 edge in the M-cycle's first
+    /// dot (SCX 3) is missed by a read but cleared by a write; a later one (SCX 4) survives it
+    /// (Gambatte `m2int_m0irq_scx3_ifw_1..4`, `_ds_1/2`).
+    #[test]
+    fn if_write_sees_a_mode0_edge_of_the_first_dot() {
+        for (scx, cleared) in [(3, true), (4, false)] {
+            let mut bus = line10_mode0_irq(scx);
+            while bus.interrupts.interrupt_flag & STAT_BIT == 0 { bus.cycle_tick(); }
+            assert_eq!(bus.read_byte(0xFF0F) & STAT_BIT, 0, "SCX {scx}: a read misses it");
+            bus.write_byte(0xFF0F, 0);
+            bus.cycle_tick();
+            assert_eq!(bus.read_byte(0xFF0F) & STAT_BIT == 0, cleared, "SCX {scx}");
+        }
+    }
+
+    /// SC's unused bits read 1, and bit 1 (the fast clock) only exists in Color mode: $FF/$FD
+    /// while a transfer runs, $7F/$7D once done. The last M-cycle of a transfer still reads it
+    /// running, and stopping it there (SC bit 7 or bit 0 cleared) keeps its interrupt from firing
+    /// (Gambatte `start_wait_read_sc_1/2`, `start_wait_stop_read_if_1/2`, `start_wait_sc80_read_if_1/2`).
+    #[test]
+    fn sc_reads_unused_bits_per_model() {
+        for (cgb, busy, done) in [(false, 0xFF, 0x7F), (true, 0xFD, 0x7D)] {
+            let last_cycle = || {
+                let mut bus = bus();
+                bus.cgb_mode = cgb;
+                (bus.serial.control, bus.serial.remaining) = (0x81, 4);
+                bus.cycle_tick();
+                bus
+            };
+            let mut bus = last_cycle();
+            assert_eq!(bus.read_byte(0xFF02), busy, "CGB {cgb}: the last M-cycle");
+            bus.cycle_tick();
+            assert_eq!(bus.read_byte(0xFF02), done, "CGB {cgb}: done");
+            assert_ne!(bus.interrupts.interrupt_flag & SERIAL_BIT, 0);
+            for stop in [0x01, 0x80] {
+                let mut bus = last_cycle();
+                bus.write_byte(0xFF02, stop);
+                bus.cycle_tick();
+                assert_eq!(bus.interrupts.interrupt_flag & SERIAL_BIT, 0, "CGB {cgb}: SC = {stop:#x} in the last M-cycle");
+                assert_eq!(bus.read_byte(0xFF01), 0x7F, "7 bits in");
+            }
+        }
+    }
+
+    /// The timer's and the serial port's requests reach IF late in their M-cycle, like the PPU's
+    /// (`raise_late`): an IF read in it misses them, an IF write in it doesn't clear them.
+    #[test]
+    fn if_write_in_the_rising_cycle_keeps_the_request() {
+        for (bit, arm) in [
+            // TIMA at $FF, one M-cycle before TAC 1's input bit (DIV bit 3) falls.
+            (TIMER_BIT, (|b: &mut MemoryBus| (b.timer.div_counter, b.timer.tima, b.timer.tac) = (0x000C, 0xFF, 0x05)) as fn(&mut MemoryBus)),
+            // A transfer's last internal-clock M-cycle.
+            (SERIAL_BIT, |b: &mut MemoryBus| (b.serial.control, b.serial.remaining) = (0x81, 4)),
+        ] {
+            for clear in [false, true] {
+                let mut bus = bus();
+                arm(&mut bus);
+                bus.cycle_tick();
+                assert_ne!(bus.interrupts.interrupt_flag & bit, 0, "{bit:#x}: requested");
+                assert_eq!(bus.read_byte(0xFF0F) & bit, 0, "{bit:#x}: not seen in its own M-cycle");
+                if clear { bus.write_byte(0xFF0F, 0); }
+                bus.cycle_tick();
+                assert_eq!(bus.read_byte(0xFF0F) & bit, bit, "{bit:#x}: seen the next M-cycle (write in between: {clear})");
+            }
         }
     }
 }
