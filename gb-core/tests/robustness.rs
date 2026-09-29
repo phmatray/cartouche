@@ -60,8 +60,9 @@ fn a_color_dma_from_wram_leaves_rom_fetches_alone() {
     gb.cpu.regs.b = 0;
     for _ in 0..5 { gb.step_instruction().unwrap(); }
     assert_eq!(gb.cpu.regs.b, 0x42, "WRAM has its own bus on a Color");
+    for i in 0..0xA0 { gb.bus.write_byte(0xC000 + i, 0x77); }
     gb.bus.write_byte(0xFF46, 0xC0);
-    assert_eq!(gb.bus.read_byte(0xC000), 0xFF, "WRAM is busy");
+    assert_eq!(gb.bus.read_byte(0xC123), 0x77, "WRAM is busy: a read sees the DMA's byte");
     assert_ne!(gb.bus.read_byte(0x0100), 0xFF);
 }
 
