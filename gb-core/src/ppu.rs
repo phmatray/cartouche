@@ -1209,6 +1209,42 @@ mod tests {
         assert!(!patterns(false).contains(&glitch));
     }
 
+    /// An 8x16 → 8x8 LCDC.2 write swept across an OBJ fetch: each row byte is read with the OBJ
+    /// size of its dot, the high byte 2 dots after the low one. Line 10 is row 10 of an 8x16 OBJ
+    /// (tile 3, row 2: colour 2) or row 2 of an 8x8 one (tile 2: colour 1); a write between the
+    /// two reads mixes the 8x16 low byte with the 8x8 high byte, both 0. A DMG reads both one dot
+    /// later than a CGB: its high byte on the dot the pixels resume (Mealybug
+    /// `m3_lcdc_obj_size_change`, `m3_lcdc_obj_size_change_scx`).
+    #[test]
+    fn dmg_obj_size_switch_mid_fetch() {
+        let colours = |cgb: bool| -> Vec<(u32, u8)> {
+            (20..80).map(|dot| {
+                let p = run_line10(|p| {
+                    (p.cgb_mode, p.lcdc) = (cgb, 0x97);
+                    p.oam[0..4].copy_from_slice(&[16, 16, 2, 0]); // rows 0-15 on lines 0-15, x 8-15
+                    p.vram[0x24] = 0xFF; // tile 2, row 2: colour 1
+                    p.vram[0x35] = 0xFF; // tile 3, row 2: colour 2
+                    for (c, rgb) in [0x7FFFu16, 0x001F, 0x03E0, 0x7C00].iter().enumerate() {
+                        p.bg_cram[c * 2..c * 2 + 2].copy_from_slice(&rgb.to_le_bytes());
+                        p.obj_cram[c * 2..c * 2 + 2].copy_from_slice(&rgb.to_le_bytes());
+                    }
+                }, |p, d| if d == dot { p.write_register(0xFF40, 0x93) });
+                let c = &p.framebuffer[(10 * SCREEN_WIDTH + 8) * 4..][..3];
+                let id = if cgb {
+                    [[255, 255, 255], [255, 0, 0], [0, 255, 0], [0, 0, 255]].iter().position(|k| k[..] == *c).unwrap() as u8
+                } else {
+                    shades(&p, 10)[8]
+                };
+                (dot, id)
+            }).collect()
+        };
+        // The mode-3 dot of the write: a CGB's FIFO runs 2 dots ahead of a DMG's (`FIFO_LAG`).
+        for (cgb, first) in [(false, 36), (true, 33)] {
+            let c = colours(cgb);
+            assert!(c.iter().all(|&(d, id)| id == if d < first { 1 } else if d < first + 2 { 0 } else { 2 }), "cgb {cgb}: {c:?}");
+        }
+    }
+
     /// CGB: an SCY write between a tile's two data reads. A CGB D latched the row with the tile
     /// number, so both bytes come from one row; a CGB C reads the row at each data fetch, so it
     /// can mix row 2's low byte ($00) with row 3's high byte ($FF): colour 2 (Mealybug

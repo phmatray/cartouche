@@ -37,10 +37,12 @@ use crate::trace::{LAYER_BG, LAYER_OBJ, LAYER_WIN, NO_OBJ};
 /// (Mealybug's CGB ROMs: `m3_scx_high_5_bits`, `m3_scy_change`, `m3_lcdc_obj_size_change`).
 const FIFO_LAG: [u32; 2] = [8, 6];
 const OUT_DELAY: [u32; 2] = [1, 3];
-/// Dots left of the 6-dot OBJ fetch when it reads its row's low, then high byte (Mealybug
-/// `m3_lcdc_obj_size_change`: each read uses the OBJ size of its dot).
-const OBJ_LO_AT: u8 = 2;
-const OBJ_HI_AT: u8 = 0;
+/// Dots left of the 6-dot OBJ fetch when it reads its row's low byte: (DMG, CGB). The high byte
+/// comes 2 dots later: on a CGB the fetch's last dot, on a DMG the dot after it, as the pixels
+/// resume. Each read uses the OBJ size of its dot (Mealybug `m3_lcdc_obj_size_change` and
+/// `m3_lcdc_obj_size_change_scx`, DMG and CGB: an 8x16 → 8x8 write between the two reads gives
+/// the 8x8 low byte with the 8x16 high byte).
+const OBJ_LO_AT: [u8; 2] = [1, 2];
 
 #[derive(Clone, Copy, Default, PartialEq, Debug)]
 pub(crate) enum FetchStep {
@@ -142,6 +144,8 @@ pub(crate) struct LineState {
     pub obj_fetch: Option<(u8, u8)>,
     /// Dots left of the running OBJ fetch.
     pub obj_dots: u8,
+    /// `OBJ_LO_AT` of the model.
+    pub obj_lo_at: u8,
     pub window_triggered: bool,
     /// Window restarts on this line after the first: each moves the window to its next row.
     pub win_rows: u8,
@@ -189,6 +193,7 @@ impl Ppu {
             obj_xs,
             lag: FIFO_LAG[(self.cgb_mode || self.compat) as usize],
             out_delay: OUT_DELAY[(self.cgb_mode || self.compat) as usize],
+            obj_lo_at: OBJ_LO_AT[(self.cgb_mode || self.compat) as usize],
             // Line 0 draws one M-cycle earlier after the mode 2 interrupt than the other lines
             // (Mealybug's DMG ROMs make up for it by waiting one M-cycle less on line 0).
             lead: if self.ly == 0 && !self.lcd_on_line0 { 4 } else { 0 },
@@ -420,6 +425,14 @@ impl Ppu {
         bank + tile as usize * 16 + (row & 7) as usize * 2
     }
 
+    /// The running OBJ fetch reads its row's high byte and merges the row into the OBJ FIFO.
+    #[inline]
+    fn obj_hi(&mut self, i: u8, lo: u8) {
+        self.line.obj_fetch = None;
+        let a = self.obj_row(i as usize);
+        self.merge_obj(i as usize, 0, lo, self.vram[a + 1]);
+    }
+
     fn merge_obj(&mut self, i: usize, shift: u8, lo: u8, hi: u8) {
         let (_, slot, _, _, attr) = self.line.sprites[i];
         let palette = if self.cgb_mode { attr & 7 } else { attr >> 4 & 1 };
@@ -505,14 +518,16 @@ impl Ppu {
             self.line.fetcher.half = false; // the fetcher waits at Push: its last read is past
             // The OBJ row's low byte, then its high byte, each read with the OBJ size of its dot.
             if let Some((i, lo)) = self.line.obj_fetch {
-                let a = self.obj_row(i as usize);
-                if self.line.obj_dots == OBJ_LO_AT { self.line.obj_fetch = Some((i, self.vram[a])); }
-                if self.line.obj_dots == OBJ_HI_AT {
-                    self.line.obj_fetch = None;
-                    self.merge_obj(i as usize, 0, lo, self.vram[a + 1]);
+                if self.line.obj_dots == self.line.obj_lo_at {
+                    self.line.obj_fetch = Some((i, self.vram[self.obj_row(i as usize)]));
+                } else if self.line.obj_dots + 2 == self.line.obj_lo_at {
+                    self.obj_hi(i, lo);
                 }
             }
             return;
+        }
+        if let Some((i, lo)) = self.line.obj_fetch {
+            self.obj_hi(i, lo); // DMG: the high byte, on the dot the pixels resume
         }
         // The first real tile waits at the push while the OBJs left of it are fetched.
         if !self.line.left_done && !self.line.first_fetch && self.line.fetcher.step == FetchStep::Push {
