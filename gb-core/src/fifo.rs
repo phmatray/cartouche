@@ -241,6 +241,7 @@ impl Ppu {
 
     /// The dot x will reach 160 if no register changes from here: the line run ahead on a copy
     /// (no pixel reaches the LCD). The FIFO lags mode 3, so this is how mode 3 learns its end.
+    #[inline(never)]
     pub(crate) fn predict_len(&mut self) -> u32 {
         let saved = self.line;
         while self.line.x < SCREEN_WIDTH as u8 {
@@ -364,14 +365,26 @@ impl Ppu {
         if self.line.fetcher.window { self.win_line() & 7 } else { self.scy.wrapping_add(self.ly) & 7 }
     }
 
-    /// One dot of the BG/window fetcher.
-    #[inline]
+    /// One dot of the BG/window fetcher. The dots that only wait (the first of a 2-dot read, a
+    /// push while the BG FIFO still holds pixels) stay inline; the rest is a call.
+    #[inline(always)]
     fn fetcher_dot(&mut self) {
-        let f = self.line.fetcher;
-        if f.step != FetchStep::Push && !f.half {
-            self.line.fetcher.half = true;
+        let f = &mut self.line.fetcher;
+        if f.step != FetchStep::Push {
+            if !f.half {
+                f.half = true;
+                return;
+            }
+        } else if self.line.bg.len != 0 {
+            f.half = false;
             return;
         }
+        self.fetcher_step();
+    }
+
+    #[inline(never)]
+    fn fetcher_step(&mut self) {
+        let f = self.line.fetcher;
         self.line.fetcher.half = false;
         match f.step {
             FetchStep::Tile => {
@@ -551,6 +564,7 @@ impl Ppu {
 
     /// OBJs left of the first real tile (OAM X + SCX % 8 below 8) are fetched before the first
     /// pixel: X 0 costs 11 dots, the others 6 plus, for the first, 5 minus X + SCX % 8.
+    #[inline(never)]
     fn fetch_left_objs(&mut self) -> u32 {
         if self.lcdc & 0x02 == 0 { return 0; }
         let fine = self.line.fine;
@@ -757,6 +771,7 @@ impl Ppu {
     /// `ids`: the BG colour id, and in bit 2 the CGB tile's priority over OBJs; `tile`: the BG/window
     /// tile number it was fetched with.
     #[allow(clippy::too_many_arguments)]
+    #[inline(never)]
     fn trace_pixel(&mut self, x: usize, window: bool, ids: u8, tile: u8, bg_color: [u8; 4], obj: Pixel, obj_color: Option<[u8; 4]>, shown: bool) {
         // The BG plane runs under the window too: sample it where the window covers it.
         let under = if window && (self.cgb_mode || self.lcdc & 0x01 != 0) {
