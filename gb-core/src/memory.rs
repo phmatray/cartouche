@@ -1480,6 +1480,60 @@ mod tests {
         assert_eq!(wakes, [63, 64, 64, 64, 64, 65, 65, 65]);
     }
 
+    /// A mode-0 edge in HALT's first M-cycle wakes a DMG an M-cycle later than one halted before
+    /// it, whatever its dot (SCX 3: the edge's first dot, M-cycle 64; Gambatte
+    /// `halt/late_m0int/m0irq_halt_m0stat_scx3_2b` against `scx3_1a..c`).
+    #[test]
+    fn mode0_edge_in_halts_first_m_cycle_wakes_a_dmg_late() {
+        let wake = |halt_at: u32| {
+            let mut bus = line10_mode0_irq(3);
+            for _ in 0..halt_at { bus.cycle_tick(); }
+            let mut cpu = crate::cpu::Cpu::new();
+            (cpu.halted, cpu.halt_grace) = (true, true);
+            let mut m = halt_at;
+            loop {
+                cpu.handle_interrupts(&mut bus);
+                if !cpu.halted { break m; }
+                cpu.step(&mut bus).unwrap();
+                m += 1;
+                assert!(m < 114, "HALT never woke");
+            }
+        };
+        assert_eq!(wake(0), 64);
+        assert_eq!(wake(63), 65, "the edge in HALT's first M-cycle");
+    }
+
+    /// Line 153's own LY = LYC edge rises 2 dots before the line, as every line's does in single
+    /// speed: a PPU a dot off the grid raises it in the M-cycle over line 152's dots 452-455, not
+    /// the next (Gambatte `lcd_offset/offset1/2_lyc99int_*_1`).
+    #[test]
+    fn line153_lyc_edge_rises_two_dots_early() {
+        let mut bus = bus();
+        let p = &mut bus.ppu;
+        (p.lcdc, p.ly, p.mode, p.mode_clock, p.stat, p.lyc) = (0x81, 152, crate::ppu::PpuMode::VBlank, 451, 0x40, 153);
+        bus.interrupts.interrupt_enable = STAT_BIT;
+        bus.cycle_tick();
+        assert_eq!((bus.ppu.ly, bus.ppu.mode_clock), (152, 455));
+        assert_ne!(bus.interrupts.interrupt_flag & STAT_BIT, 0, "LY = LYC 153 at dot 454");
+    }
+
+    /// An interrupt raised in HALT's own fetch means no HALT, whatever IME: with IME on the
+    /// dispatch returns to the HALT itself, as after EI; HALT (Gambatte
+    /// `halt/late_m0int_halt_m0stat_scx2_3a`, `scx3_3a/3b`, which then halt a line).
+    #[test]
+    fn halt_with_an_interrupt_pending_returns_to_it() {
+        let mut bus = bus();
+        bus.write_byte(0xC000, 0x76);
+        let mut cpu = crate::cpu::Cpu::new();
+        (cpu.ime, cpu.regs.sp, cpu.regs.pc) = (true, 0xD000, 0xC000);
+        (bus.interrupts.interrupt_enable, bus.interrupts.interrupt_flag) = (TIMER_BIT, TIMER_BIT);
+        cpu.step(&mut bus).unwrap();
+        assert!(!cpu.halted, "no HALT");
+        cpu.handle_interrupts(&mut bus);
+        assert_eq!(cpu.regs.pc, 0x0050);
+        assert_eq!(u16::from_le_bytes([bus.read_byte(0xCFFE), bus.read_byte(0xCFFF)]), 0xC000, "returns to the HALT");
+    }
+
     /// Line 144's IF.0 and mode-1 STAT edge rise late in their M-cycle: an IF read in it misses
     /// them and an IF write in it doesn't clear them; the next M-cycle reads them
     /// (gbmicrotest `vblank2_int_if_a..d`, `vblank_int_if_a..d`).

@@ -529,12 +529,16 @@ impl Ppu {
     /// A line starts: WY is compared with its LY a few dots in, at once on a CGB in single speed
     /// except on line 0 (Gambatte `window/arg/late_wy_1toFF_*`, `late_wy_2toFF_*`, `late_wy_1/_2`,
     /// `late_wy_ds_*`: WY moved off LY in the line's first M-cycle closes the window on a DMG, not
-    /// on a CGB, on line 0 on both; one M-cycle later it no longer does).
+    /// on a CGB, on line 0 on both; one M-cycle later it no longer does). A CGB in single speed
+    /// compares line 0 at dot 4: off the grid a write landing on dot 3 still closes the window, one
+    /// on dot 7 no longer does (`window/late_wy_lcdoffset1_1/_2`, `arg/late_wy_1toFF_lcdoffset1_2`,
+    /// `late_enable_afterVblank_lcdoffset1_1`, timed from line 153's LY = LYC edge).
     fn wy_line_start(&mut self, line0: bool) {
         let at: u32 = match (self.cgb_mode || self.compat, self.m_cycle_dots == 2, line0) {
             (true, false, false) => 0,
             (true, true, false) => 1,
             (true, true, true) => 5,
+            (true, false, true) => 4,
             _ => 2,
         };
         match at.checked_sub(self.mode_clock) {
@@ -837,10 +841,10 @@ impl Ppu {
         // `m1/lyc143_late_m2enable_lycdisable_*`, `m2enable/late_enable_m0disable_*`,
         // `m2_late_m0disable_*`, `lyc1_m2irq_late_lycdisable_*`, `lyc1_late_m2enable_lycdisable_*`).
         let early = if lyc_write { lead } else if self.m_cycle_dots == 2 { 1 } else { 2 };
-        // A write catches mode 2's pulse for 2 dots, 3 in double speed and on line 0, whose mode
-        // 2 has no early rise (Gambatte `m2enable/late_enable_ly0_lcdoffset2_1/_2` against
-        // `late_enable_lcdoffset2_1/_2`).
-        let pulse = if self.ly == 0 { 3 } else { 4 - self.m_cycle_dots / 2 };
+        // A write catches mode 2's pulse for 2 dots, 3 in double speed, line 0 included (Gambatte
+        // `m2enable/late_enable_ly0_lcdoffset2_1/_2` against `late_enable_lcdoffset2_1/_2`, from
+        // line 153's LY = LYC edge).
+        let pulse = 4 - self.m_cycle_dots / 2;
         let actual = self.compute_stat_line(pulse, early, lyc_write.then_some(lead));
         // In double speed the line's own edge then follows the write's view of LY = LYC for the
         // rest of the line's last 3 dots (line 153: to dot 7), where it would otherwise see the
@@ -905,8 +909,13 @@ impl Ppu {
         // in the M-cycle before the line (`mode2_early`). A write enabling it catches it for 2
         // dots, 3 in double speed: on the CPU's M-cycle grid that is the line's first M-cycle, off
         // it (a CGB after a speed switch) no more (Gambatte `m2enable/late_enable_*lcdoffset*`).
+        // Line 0's rises 2 dots before the line in single speed, as the comparator takes a new
+        // line (`ly_compare`), for the line's own edge (`early` 4): off the grid an IF read shows
+        // it 1 or 2 dots before line 0, not 3 (Gambatte `lcd_offset/offset1/2_lyc99int_m2irq_count_2`
+        // against `offset3_lyc99int_m2irq_count_1`).
         let oam    = ((self.mode == PpuMode::OamScan && !self.lcd_on_line0 || self.mode == PpuMode::VBlank && self.ly == 144)
-            && self.mode_clock < pulse || self.mode2_early_by(early))
+            && self.mode_clock < pulse || self.mode2_early_by(early)
+            || self.mode == PpuMode::VBlank && self.ly == 0 && self.m_cycle_dots == 4 && early == 4 && self.mode_clock >= 454)
             && self.stat & 0x20 != 0;
         // No comparator blank at a line start: the interrupt is requested one M-cycle ahead of the
         // line (the CPU samples IF before its opcode fetch).
@@ -925,6 +934,9 @@ impl Ppu {
     /// in; off it (a CGB after a speed switch) the interrupt comes one M-cycle earlier (Gambatte
     /// `lcd_offset/offset*_lyc98int_ly_count_*`, `vram_m3`/`oam_access`/`cgbpal_m3` `*_lcdoffset*`,
     /// `lycEnable/late_ff4[15]_enable_lcdoffset1_*`). Not in double speed (the `_ds` variants).
+    /// Line 153's own edge too: off the grid its interrupt comes an M-cycle before line 153
+    /// (Gambatte `lcd_offset/offset1/2_lyc99int_*_1`, whose line-0 reads offset 3 pins from the
+    /// other side, `lycEnable/lycwirq_trigger_ly00_stat50_lcdoffset1_1`, `m1/m1irq_late_enable_lcdoffset1_1`).
     #[inline]
     fn ly_compare(&self, irq: bool, edge: bool) -> Option<u8> {
         self.ly_compare_lead(irq, edge, if edge && self.m_cycle_dots == 4 { 2 } else { 0 })
@@ -946,8 +958,6 @@ impl Ppu {
         if irq && edge && lead > 0 {
             if (1..=lead).contains(&self.dots_left()) {
                 return match (self.mode, self.ly) {
-                    // A CGB's LYC write already sees 153 there; the line's own edge doesn't.
-                    (PpuMode::VBlank, 152) => (lead > 2).then_some(153),
                     (PpuMode::VBlank, 0 | 153) => Some(0),
                     (_, ly) => Some(ly + 1),
                 };

@@ -8,6 +8,8 @@ pub struct Cpu {
     pub halted: bool,
     /// HALT's first M-cycle is still to run: the OAM DMA copies on through it (`MemoryBus::dma_hold`).
     pub(crate) halt_grace: bool,
+    /// HALT's first M-cycle has just run (`handle_interrupts`).
+    pub(crate) halt_first: bool,
     pub ime: bool,
     pub ime_pending: bool,
     pub stopped: bool,
@@ -24,6 +26,7 @@ impl Cpu {
             regs: Registers::default(),
             halted: false,
             halt_grace: false,
+            halt_first: false,
             ime: false,
             ime_pending: false,
             stopped: false,
@@ -41,10 +44,15 @@ impl Cpu {
         }
         if self.halted {
             // Off the hot path: only a halted CPU with an interrupt pending gets here.
-            if self.locked || pending & !bus.halt_late_interrupts() == 0 {
+            // A mode-0 edge in HALT's first M-cycle wakes it an M-cycle later, whatever its dot,
+            // as on Color hardware always (`halt_late_interrupts`): Gambatte
+            // `halt/late_m0int/m0irq_halt_m0stat_scx3_2b` on the DMG, against `scx3_1a..c`
+            // (halted an M-cycle earlier) and `scx2_2a/b` (an edge on its last dot, late anyway).
+            let first = if self.halt_first && bus.if_late & STAT_BIT != 0 && bus.ppu.mode0_edge_now() { STAT_BIT } else { 0 };
+            if self.locked || pending & !(bus.halt_late_interrupts() | first) == 0 {
                 return;
             }
-            (self.halted, self.halt_grace, bus.dma_hold) = (false, false, false);
+            (self.halted, self.halt_grace, self.halt_first, bus.dma_hold) = (false, false, false, false);
             bus.hdma_unhalt();
         }
         if self.ime {
@@ -107,8 +115,7 @@ impl Cpu {
 
     /// Execute one instruction. Returns the number of T-cycles consumed.
     pub fn step(&mut self, bus: &mut MemoryBus) -> Result<u32, CpuError> {
-        // IME as this instruction sees it: an EI just before takes effect only after it.
-        let ime = self.ime;
+        // An EI just before takes effect only after this instruction.
         if self.ime_pending {
             self.ime = true;
             self.ime_pending = false;
@@ -126,6 +133,7 @@ impl Cpu {
         if self.halted {
             bus.cycle_tick();
             let grace = std::mem::take(&mut self.halt_grace);
+            self.halt_first = grace;
             if grace { bus.dma_hold = true; bus.hdma_halt(); }
             if bus.hdma_active { bus.hdma_halted(); }
             return Ok(4);
@@ -360,13 +368,15 @@ impl Cpu {
 
             // === HALT ===
             0x76 => {
-                // An interrupt raised in this opcode fetch is pending already: the bug (Age
-                // halt-m0-interrupt, SCX 0-2).
-                if ime || bus.interrupts.pending() == 0 {
+                // An interrupt pending here (raised in this opcode fetch) means no HALT, whatever
+                // IME: the HALT bug. With IME off the next byte is read twice (Age
+                // halt-m0-interrupt, SCX 0-2); with it on the dispatch returns to the HALT itself,
+                // as after EI; HALT, so the CPU halts there with IME off (Gambatte
+                // `halt/late_m0int_halt_m0stat_scx2_3a`, `scx3_3a/3b` against `_4a/4b`, whose
+                // dispatch comes before the HALT: both halt a line).
+                if bus.interrupts.pending() == 0 {
                     (self.halted, self.halt_grace) = (true, true);
                 } else {
-                    // HALT bug: IME=0 but interrupt pending — don't halt,
-                    // and the next instruction byte will be read twice
                     self.halt_bug = true;
                 }
                 Ok(4)

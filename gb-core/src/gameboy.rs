@@ -548,7 +548,13 @@ impl GameBoy {
         data.extend_from_slice(&self.cpu.regs.pc.to_le_bytes());
 
         data.push(self.cpu.ime as u8);
-        data.push(if self.cpu.halted { 1 + self.cpu.halt_grace as u8 } else { 0 }); // 2: HALT's first M-cycle ahead
+        // 2: HALT's first M-cycle ahead, 3: just run.
+        data.push(match (self.cpu.halted, self.cpu.halt_grace, self.cpu.halt_first) {
+            (false, ..) => 0,
+            (true, true, _) => 2,
+            (true, false, true) => 3,
+            (true, false, false) => 1,
+        });
         data.push(self.cpu.halt_bug as u8);
 
         data.push(self.bus.interrupts.interrupt_enable);
@@ -734,8 +740,8 @@ impl GameBoy {
 
         self.cpu.ime = read_u8!() != 0;
         let halted = read_u8!();
-        (self.cpu.halted, self.cpu.halt_grace) = (halted != 0, halted == 2);
-        self.bus.dma_hold = halted == 1;
+        (self.cpu.halted, self.cpu.halt_grace, self.cpu.halt_first) = (halted != 0, halted == 2, halted == 3);
+        self.bus.dma_hold = halted == 1 || halted == 3;
         self.cpu.halt_bug = read_u8!() != 0;
 
         self.bus.interrupts.interrupt_enable = read_u8!();
@@ -1026,6 +1032,23 @@ mod tests {
         assert!(g.load_state(&state[..state.len() - TIMING_TAIL_LEN - 11 - 0x30])); // - 11: RP, mode-3 length, speed switch, OPRI, revision, CPU lock; - 0x30: $FEA0 RAM
         assert!(!g.bus.timer.reload_pending);
         assert_eq!(g.bus.dma_index, 0xA0, "an older state's transfer is already in OAM");
+    }
+
+    /// A halted CPU keeps where it is in HALT: its first M-cycle ahead (2), just run (3), or past (1).
+    #[test]
+    fn save_state_keeps_the_halt_phase() {
+        let mut rom = vec![0u8; 0x8000];
+        rom[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(rom[i]).wrapping_sub(1));
+        for phase in [(true, false), (false, true), (false, false)] {
+            let mut gb = GameBoy::new(rom.clone()).unwrap();
+            gb.skip_boot_rom();
+            (gb.cpu.halted, gb.cpu.halt_grace, gb.cpu.halt_first) = (true, phase.0, phase.1);
+            let state = gb.save_state();
+            let mut g = GameBoy::new(rom.clone()).unwrap();
+            assert!(g.load_state(&state));
+            assert_eq!((g.cpu.halted, g.cpu.halt_grace, g.cpu.halt_first), (true, phase.0, phase.1));
+            assert_eq!(g.bus.dma_hold, !phase.0, "the OAM DMA is held once HALT's first M-cycle ran");
+        }
     }
 
     /// The revision goes with a state; one saved before it existed loads as `Default`.
