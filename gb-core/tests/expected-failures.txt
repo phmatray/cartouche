@@ -26,8 +26,6 @@ age-test-roms/oam/oam-read-dmgC-cgbBC.gb  # ppu
 age-test-roms/oam/oam-write-cgbBCE.gb  # ppu
 age-test-roms/oam/oam-write-dmgC.gb  # ppu
 age-test-roms/oam/oam-write-ncmBCE.gb  # ppu
-age-test-roms/speed-switch/caution/spsw-interrupts-cgbE.gb  # double-speed
-age-test-roms/speed-switch/spsw-tima-cgbE.gb  # double-speed
 age-test-roms/stat-interrupt/stat-int-dmgC-cgbBCE.gb  # stat
 age-test-roms/stat-interrupt/stat-int-ncmBCE.gb  # stat
 age-test-roms/stat-mode-sprites/stat-mode-sprites-dmgC-cgbBCE.gb  # stat
