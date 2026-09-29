@@ -1,6 +1,7 @@
 //! Conformance suites: Mooneye (acceptance + emulator-only MBC), Mealybug Tearoom, SameSuite, Age,
-//! gbmicrotest, rtc3test and Gambatte's hwtests (DMG and CGB rows), from the pinned c-sp/game-boy-test-roms archive that
-//! `scripts/fetch-test-roms.sh` unpacks into test-roms/conformance/ (gitignored, never committed).
+//! gbmicrotest, rtc3test and Gambatte's hwtests (DMG and CGB rows), from the pinned
+//! c-sp/game-boy-test-roms archive that `scripts/fetch-test-roms.sh` unpacks into
+//! test-roms/conformance/ (gitignored, never committed).
 //!
 //! Every ROM of a suite runs and ends as a pass, an expected fail (listed in
 //! expected-failures.txt) or a regression. A listed ROM that passes, or a listed ROM that does
@@ -786,6 +787,9 @@ const GAMBATTE_FONT: usize = 0x7A00;
 /// the ROM under test (never Gambatte's runner's bitmaps): one colour for each glyph colour, and
 /// different colours for different ones, whatever the palette.
 fn hex_verdict(frame: &[u8], rom: &[u8], digits: &str) -> Verdict {
+    if digits.is_empty() {
+        return Verdict::Fail("no digit in its name".into());
+    }
     let glyph = |n: u32| rom.get(GAMBATTE_FONT + 16 * n as usize..).and_then(|g| g.get(..16));
     for (i, d) in digits.chars().enumerate() {
         let Some(want) = glyph(d.to_digit(16).unwrap()).filter(|_| i < 20) else {
@@ -919,6 +923,7 @@ fn gambatte_hex_verdict_reads_the_roms_own_glyph() {
     assert_eq!(hex_verdict(&frame, &rom, "3a"), Verdict::Pass);
     assert!(matches!(hex_verdict(&frame, &rom, "3B"), Verdict::Fail(_)));
     assert!(matches!(hex_verdict(&frame, &rom, "3A0"), Verdict::Fail(_))); // cell 2 is blank
+    assert!(matches!(hex_verdict(&frame, &rom, ""), Verdict::Fail(_)));
     frame[(160 + 9) * 4] ^= 0x10; // one pixel of cell 1
     assert!(matches!(hex_verdict(&frame, &rom, "3A"), Verdict::Fail(_)));
 }
