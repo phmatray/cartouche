@@ -191,7 +191,8 @@ impl Ppu {
     /// Mode 2 → 3: selects the line's OBJs and resets the fetcher.
     pub(crate) fn start_line(&mut self) {
         if self.ly == self.wy { self.window_was_active = true; }
-        let (sprites, nsprites) = if self.lcd_on_line0 { ([(0, 0, 0, 0, 0); 10], 0) } else { self.select_sprites(self.ly as usize) };
+        self.catch_up_scan(); // the scan's last entries may still be ahead (`catch_up_scan`)
+        let (sprites, nsprites) = if self.lcd_on_line0 { ([(0, 0, 0, 0, 0); 10], 0) } else { (self.scan, self.scan_n) };
         let fine = self.scx & 7;
         let mut obj_xs = [0u64; 4];
         for &(x, ..) in &sprites[..nsprites] { obj_xs[x as usize >> 6] |= 1 << (x & 63); }
@@ -218,6 +219,13 @@ impl Ppu {
                 0, if self.lcdc & 0x02 != 0 { nsprites as u8 } else { 0 },
             ];
         }
+    }
+
+    /// The OAM scan found more OBJs after mode 3 began: the line takes them.
+    pub(crate) fn sync_line_sprites(&mut self) {
+        (self.line.sprites, self.line.nsprites, self.line.obj_xs) = (self.scan, self.scan_n, [0; 4]);
+        for &(x, ..) in &self.scan[..self.scan_n] { self.line.obj_xs[x as usize >> 6] |= 1 << (x & 63); }
+        if self.trace.is_some() && self.lcdc & 0x02 != 0 { self.line.record[11] = self.scan_n as u8; }
     }
 
     /// Runs the line up to `dot` (mode 3's dot count, `MODE0_EARLY` ahead of `mode_clock`).

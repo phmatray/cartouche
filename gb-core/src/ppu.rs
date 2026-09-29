@@ -55,6 +55,13 @@ pub struct Ppu {
     pub vram: [u8; 0x4000],
     pub vram_bank: u8,
     pub oam: [u8; 0xA0],
+    /// The OAM scan of the current line, as far as it got (`catch_up_scan`): the OBJs found
+    /// in entries `0..scan_next`, and how many.
+    pub(crate) scan: [Sprite; 10],
+    pub(crate) scan_n: usize,
+    pub(crate) scan_next: u8,
+    /// An OAM DMA holds OAM: the scan reads $FF there (no OBJ on the line).
+    pub(crate) oam_dma: bool,
 
     pub mode: PpuMode,
     pub mode_clock: u32,
@@ -121,6 +128,10 @@ impl Ppu {
             vram: [0; 0x4000],
             vram_bank: 0,
             oam: [0; 0xA0],
+            scan: [(0, 0, 0, 0, 0); 10],
+            scan_n: 0,
+            scan_next: 0,
+            oam_dma: false,
             mode: PpuMode::OamScan,
             mode_clock: 0,
             window_line_counter: 0,
@@ -167,6 +178,7 @@ impl Ppu {
     }
 
     pub fn write_oam(&mut self, offset: u16, value: u8) {
+        if self.scan_next < 40 { self.catch_up_scan(); }
         self.oam[offset as usize] = value;
     }
 
@@ -301,6 +313,14 @@ impl Ppu {
         }
         match addr {
             0xFF40 => {
+                if self.scan_next < 40 {
+                    // A Color's scan sees LCDC.2 set at either end of an entry's 2 dots: going 1 to 0
+                    // reaches it half an M-cycle after going 0 to 1 does (Gambatte hwtests
+                    // `sprites/late_sizechange_2`, `_sp01_2`, `_sp39_2`: the DMG drops the OBJ, the
+                    // CGB still counts it; `late_sizechange2_*` pins the other way on both).
+                    let late = (self.cgb_mode || self.compat) && self.lcdc & !value & 0x04 != 0;
+                    self.catch_up_scan_by(if late { self.m_cycle_dots / 2 } else { 0 });
+                }
                 let was_enabled = self.lcdc & 0x80 != 0;
                 let tile_sel = (self.lcdc ^ value) & 0x10 != 0;
                 self.lcdc = value;
@@ -416,6 +436,7 @@ impl Ppu {
             }
             PpuMode::Drawing => {
                 if !self.line.active { self.start_line(); } // a state loaded in mode 3: redraw the line
+                if self.scan_next < 40 { self.catch_up_scan(); }
                 self.run_line(self.mode_clock + MODE0_EARLY);
                 self.measure_len();
                 if self.mode_clock >= self.mode3_len - MODE0_EARLY {
@@ -444,6 +465,7 @@ impl Ppu {
                         vblank_irq = true;
                     } else {
                         self.mode = PpuMode::OamScan;
+                        (self.scan_n, self.scan_next) = (0, 0);
                     }
                 }
             }
@@ -458,6 +480,7 @@ impl Ppu {
                     self.mode_clock -= 456;
                     if self.ly == 0 {
                         self.mode = PpuMode::OamScan;
+                        (self.scan_n, self.scan_next) = (0, 0);
                     } else {
                         self.ly += 1;
                     }
@@ -644,7 +667,53 @@ impl Ppu {
         self.oam_bug_read();
     }
 
-    /// The first 10 OBJs (OAM order) that overlap `line`.
+    /// The OAM scan reads entry i at dot 2i + 4 of the line (mode 2 is dots 0-79, so
+    /// entry 39 is read in mode 3's first dots), with the OBJ height LCDC.2 has then, and sees no
+    /// OBJ while an OAM DMA holds OAM. It runs lazily: up to the current dot when OAM, LCDC or the
+    /// DMA is about to change, and on through mode 3's first steps. Gambatte hwtests
+    /// `oamdma/late_spNN{x,y}_1/_2` (an OAM DMA starting an M-cycle before or after entry 0, 1, 2
+    /// or 39 is read) and `sprites/late_sizechange[2]_spNN_1/_2` (LCDC.2 flipped around it), both
+    /// models.
+    pub(crate) fn catch_up_scan(&mut self) {
+        self.catch_up_scan_by(0);
+    }
+
+    /// `catch_up_scan` as if `ahead` dots later.
+    fn catch_up_scan_by(&mut self, ahead: u32) {
+        let dot = ahead + match self.mode {
+            _ if self.lcdc & 0x80 == 0 || self.lcd_on_line0 => { self.scan_next = 40; return; }
+            PpuMode::OamScan => self.mode_clock,
+            PpuMode::Drawing => 80 + self.mode_clock,
+            _ => return,
+        };
+        let n = self.scan_n;
+        self.scan_to((dot.saturating_sub(2) / 2).min(40) as usize);
+        if self.mode == PpuMode::Drawing && self.line.active && self.scan_n != n { self.sync_line_sprites(); }
+    }
+
+    /// An OAM DMA takes OAM or gives it back: the scan runs up to now first.
+    pub(crate) fn set_oam_dma(&mut self, on: bool) {
+        if self.scan_next < 40 { self.catch_up_scan(); }
+        self.oam_dma = on;
+    }
+
+    /// Scans OAM entries `scan_next..upto` for the current line.
+    pub(crate) fn scan_to(&mut self, upto: usize) {
+        let height: i16 = if self.lcdc & 0x04 != 0 { 16 } else { 8 };
+        let line = self.ly as i16;
+        for i in self.scan_next as usize..upto {
+            let b = i * 4;
+            let top = self.oam[b] as i16 - 16;
+            if self.scan_n < 10 && !self.oam_dma && (top..top + height).contains(&line) {
+                self.scan[self.scan_n] = (self.oam[b + 1], i, self.oam[b], self.oam[b + 2], self.oam[b + 3]);
+                self.scan_n += 1;
+            }
+        }
+        self.scan_next = self.scan_next.max(upto as u8);
+    }
+
+    /// The first 10 OBJs (OAM order) that overlap `line`, OAM read at once (Pan Docs' model).
+    #[cfg(test)]
     pub(crate) fn select_sprites(&self, line: usize) -> ([Sprite; 10], usize) {
         let height: i16 = if self.lcdc & 0x04 != 0 { 16 } else { 8 };
         let mut out = [(0, 0, 0, 0, 0); 10];
@@ -711,6 +780,44 @@ impl Ppu {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Line 10's OAM scan, stopped at `dot` (mode 2's dots 0-79, then mode 3's).
+    fn scan_at(p: &mut Ppu, dot: u32) {
+        (p.mode, p.mode_clock) = if dot < 80 { (PpuMode::OamScan, dot) } else { (PpuMode::Drawing, dot - 80) };
+    }
+
+    fn line10_scan(lcdc: u8) -> Ppu {
+        let mut p = Ppu::new();
+        (p.lcdc, p.ly, p.scan_n, p.scan_next) = (lcdc, 10, 0, 0);
+        p
+    }
+
+    /// Entry 0 is read at dot 4: an OAM write at dot 0 is seen, one at dot 4 is not.
+    #[test]
+    fn oam_write_mid_scan_is_seen_per_entry() {
+        for (dot, seen) in [(0, 1), (4, 0)] {
+            let mut p = line10_scan(0x83);
+            scan_at(&mut p, dot);
+            p.write_oam(0, 16 + 10); // entry 0 onto line 10
+            scan_at(&mut p, 90);
+            p.catch_up_scan();
+            assert_eq!(p.scan_n, seen, "write at dot {dot}");
+        }
+    }
+
+    /// Entry 39 is read at dot 82, in mode 3: LCDC.2 set at dot 80 makes it 16 tall, at dot 84 too late.
+    #[test]
+    fn size_change_mid_scan_per_entry() {
+        for (dot, seen) in [(80, 1), (84, 0)] {
+            let mut p = line10_scan(0x83);
+            p.oam[39 * 4] = 16 + 2; // rows 2-9 (8 tall) or 2-17 (16 tall)
+            scan_at(&mut p, dot);
+            p.write_register(0xFF40, 0x87);
+            scan_at(&mut p, 90);
+            p.catch_up_scan();
+            assert_eq!(p.scan_n, seen, "LCDC.2 set at dot {dot}");
+        }
+    }
 
     #[test]
     fn ppu_rgb555_white() {

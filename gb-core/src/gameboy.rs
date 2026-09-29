@@ -539,7 +539,7 @@ impl GameBoy {
         data.extend_from_slice(&self.cpu.regs.pc.to_le_bytes());
 
         data.push(self.cpu.ime as u8);
-        data.push(self.cpu.halted as u8);
+        data.push(if self.cpu.halted { 1 + self.cpu.halt_grace as u8 } else { 0 }); // 2: HALT's first M-cycle ahead
         data.push(self.cpu.halt_bug as u8);
 
         data.push(self.bus.interrupts.interrupt_enable);
@@ -720,7 +720,9 @@ impl GameBoy {
         self.cpu.regs.pc = read_u16!();
 
         self.cpu.ime = read_u8!() != 0;
-        self.cpu.halted = read_u8!() != 0;
+        let halted = read_u8!();
+        (self.cpu.halted, self.cpu.halt_grace) = (halted != 0, halted == 2);
+        self.bus.dma_hold = halted == 1;
         self.cpu.halt_bug = read_u8!() != 0;
 
         self.bus.interrupts.interrupt_enable = read_u8!();
@@ -764,6 +766,7 @@ impl GameBoy {
         // Below one line: a larger count would run a line per M-cycle until it drained.
         self.bus.ppu.mode_clock = read_u32!().min(455);
         self.bus.ppu.line.active = false; // a DMG line in mode 3 is redrawn from its first dot
+        (self.bus.ppu.scan_n, self.bus.ppu.scan_next) = (0, 0); // and its OAM scan is read again
         self.bus.ppu.window_line_counter = read_u8!();
         self.bus.ppu.frame_ready = read_u8!() != 0;
 
@@ -875,6 +878,7 @@ impl GameBoy {
         (self.cpu.locked, self.cpu.locked_pc) = (locked, pc);
         self.bus.fea0 = timing.get(TIMING_TAIL_LEN + 11..TIMING_TAIL_LEN + 11 + 0x30)
             .map_or([0; 0x30], |b| b.try_into().unwrap());
+        self.bus.ppu.oam_dma = self.bus.dma_active; // the scan sees no OBJ while the DMA holds OAM
         true
     }
 }
