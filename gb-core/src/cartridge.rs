@@ -733,6 +733,7 @@ impl Cartridge {
     }
 
     /// Advances cartridge hardware by one CPU M-cycle: the camera's capture, the rumble duty meter.
+    #[inline]
     pub fn tick(&mut self) {
         if self.rumble {
             self.motor_total = self.motor_total.saturating_add(1);
@@ -748,6 +749,7 @@ impl Cartridge {
 
     /// Advances the cartridge's clock (MBC3, HuC3, TAMA5) by `dots` of emulated real time: 4 per
     /// M-cycle at single speed, 2 at double speed, also while the CPU is stopped.
+    #[inline]
     pub fn tick_clock(&mut self, dots: u64) {
         self.clock_dots += dots;
         if let Some(rtc) = &mut self.rtc { rtc.tick(dots); }
