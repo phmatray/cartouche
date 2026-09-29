@@ -345,7 +345,9 @@ Cartouche license as `LICENSE.txt`; the in-app Legal page links to all three.
   the duty step on restart, the envelope clock and its lock, CH1's delayed
   sweep calculation, the NRx2 write glitch ("zombie mode"), and the noise
   channel's counter, start delays and NR43 LFSR glitches, all from
-  `Core/apu.c`.
+  `Core/apu.c`. For the older revisions (CGB 0-C and the AGB): the extra
+  length clock of CGB B and older, the NRx4 duty-step quirks limited to CGB
+  D/E, and the CGB 0-C PCM12 read glitch (`pcm_mask`, with `Core/memory.c`).
 - License: Expat (MIT), which covers every file of the SameBoy repository
   except its `iOS` and `HexFiend` directories, so the boot ROMs this fork is
   made from, the colour curves and the APU timing:

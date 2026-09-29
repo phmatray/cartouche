@@ -9,13 +9,6 @@
 
 mooneye-test-suite/acceptance/ppu/hblank_ly_scx_timing-GS.gb  # stat
 mooneye-test-suite/acceptance/ppu/stat_lyc_onoff.gb  # stat
-same-suite/apu/channel_1/channel_1_extra_length_clocking-cgb0B.gb  # apu
-same-suite/apu/channel_1/channel_1_freq_change_timing-A.gb  # apu
-same-suite/apu/channel_1/channel_1_freq_change_timing-cgb0BC.gb  # apu
-same-suite/apu/channel_2/channel_2_extra_length_clocking-cgb0B.gb  # apu
-same-suite/apu/channel_3/channel_3_extra_length_clocking-cgb0.gb  # apu
-same-suite/apu/channel_3/channel_3_extra_length_clocking-cgbB.gb  # apu
-same-suite/apu/channel_4/channel_4_extra_length_clocking-cgb0B.gb  # apu
 age-test-roms/halt/halt-m0-interrupt-dmgC-cgbBCE.gb  # interrupt
 age-test-roms/oam/oam-write-dmgC.gb  # ppu
 age-test-roms/stat-interrupt/stat-int-dmgC-cgbBCE.gb  # stat
@@ -98,8 +91,6 @@ gbmicrotest/vblank_int_if_a.gb  # stat
 gbmicrotest/vblank_int_if_c.gb  # stat
 mealybug-tearoom-tests/ppu/m3_lcdc_bg_en_change.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_lcdc_obj_en_change_variant.gb@dmg  # ppu-mode3: 96 px outside the ® tile's footprint (right-edge OBJs, x 150-155 from line 128); every other differing pixel is the ® (rule-blocked)
-mealybug-tearoom-tests/ppu/m3_lcdc_obj_size_change.gb@dmg  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_lcdc_obj_size_change_scx.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_change.gb@cgb  # ppu-mode3: 8 px outside the ® tile's footprint (x 16-23 of line 128, beside a ® OBJ fetch); every other differing pixel is the ® (rule-blocked)
 mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_change2.gb@cgb  # ppu-mode3: CGB C reference only; no differing pixel is in the ® tile's footprint
 mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change.gb@cgb  # ppu-mode3: 8 px outside the ® tile's footprint (x 8-15 of line 64, beside a ® OBJ fetch); every other differing pixel is the ® (rule-blocked)
