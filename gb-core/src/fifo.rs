@@ -316,8 +316,8 @@ impl Ppu {
         }
     }
 
-    /// WX matches x: at x = WX - 7 (on a DMG not WX 166), or on a DMG one pixel later when the window could not start
-    /// there (LCDC.5 still off) and WX was not just written (SameBoy's model; Mealybug
+    /// WX matches x: at x = WX - 7 (on a DMG not WX 166), or on a DMG one pixel later when the
+    /// window could not start there (LCDC.5 still off) and WX was not just written (SameBoy's model; Mealybug
     /// `m3_lcdc_win_en_change_multiple_wx` lines 16 and 44, LCDC.5 back on one pixel after the match).
     #[inline]
     fn wx_match(&self, x: u8, dmg: bool) -> bool {
