@@ -1,4 +1,5 @@
 use crate::error::CpuError;
+use crate::interrupts::{SERIAL_BIT, TIMER_BIT};
 use crate::memory::MemoryBus;
 use crate::registers::Registers;
 
@@ -71,11 +72,27 @@ impl Cpu {
         bus.cycle_idu(self.regs.sp); // M3: SP--
         self.regs.sp = self.regs.sp.wrapping_sub(1);
         bus.cycle_write(self.regs.sp, (pc >> 8) as u8); // M4: push PC high
-        // The vector is picked from IE & IF only now: a push that wrote IE ($FFFF) can
-        // redirect the dispatch, or cancel it to $0000 (Mooneye ie_push).
-        let vector = bus.interrupts.acknowledge().unwrap_or(0x0000);
+        // The interrupt is picked from IE as that push left it and IF as M4's components left it:
+        // a push that wrote IE ($FFFF) redirects the dispatch, or cancels it to $0000 (Mooneye
+        // ie_push); a source rising in M4 is taken.
+        let (bit, vector) = bus.interrupts.highest(bus.interrupts.interrupt_enable).unwrap_or((0, 0x0000));
+        bus.interrupts.interrupt_flag &= !bit;
         self.regs.sp = self.regs.sp.wrapping_sub(1);
-        bus.cycle_write(self.regs.sp, pc as u8); // M5: push PC low, PC = vector
+        bus.cycle_tick(); // M5: push PC low, PC = vector
+        // The bit is let go at the halted CPU's sampling point of M5: that source rising again
+        // before it is absorbed, after it (`late_interrupts`) it retriggers. Every source pins it
+        // from both sides (Gambatte `*_late_retrigger_1/2`: mode 0 at SCX 0 and 1, mode 2,
+        // LY = LYC, VBlank, TIMA, serial). On a CGB the sources clocked from DIV, TIMA and serial,
+        // rise before that point, in both speeds (`tc00_irq_late_retrigger_2/_ds_2` and
+        // `start_wait_trigger_int8_read_if_2/_ds_2`: $E0 on the CGB, $E4/$E8 on the DMG); in double
+        // speed the PPU's rise after it (`*_late_retrigger_ds_1`).
+        let div = if bus.cgb_mode || bus.ppu.compat { TIMER_BIT | SERIAL_BIT } else { 0 };
+        let late = if bus.double_speed { !div } else { bus.late_interrupts() & !div };
+        let kept = bit & bus.if_late & late;
+        // A push that writes IF ($FF0F) doesn't change the pick, but the pick's bit is cleared
+        // from what it wrote (Gambatte irq_precedence `late_if_via_sp_if_1/2`, `if_and_ie_0_vector_1..4`).
+        bus.write_access(self.regs.sp, pc as u8);
+        bus.interrupts.interrupt_flag &= !(bit & !kept);
         self.regs.pc = vector;
     }
 

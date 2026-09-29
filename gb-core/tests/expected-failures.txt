@@ -55,8 +55,6 @@ gambatte/display_startstate/stat_scx3_1_cgb04c_out87.gbc@cgb  # boot
 gambatte/display_startstate/stat_scx3_2_cgb04c_out84.gbc@cgb  # boot
 gambatte/display_startstate/stat_scx5_1_cgb04c_out87.gbc@cgb  # boot
 gambatte/display_startstate/stat_scx5_2_cgb04c_out84.gbc@cgb  # boot
-gambatte/div/start_inc_1_cgb04c_out1E.gbc@cgb  # timer
-gambatte/div/start_inc_2_cgb04c_out1F.gbc@cgb  # timer
 gambatte/dma/dma_dst_wrap_2_cgb04c_out0.gbc@cgb  # hdma
 gambatte/dma/dma_hiram_read_cgb04c_out7.gbc@cgb  # hdma
 gambatte/dma/dma_hiram_read_result_cgb04c_out1.gbc@cgb  # hdma
@@ -219,10 +217,6 @@ gambatte/irq_precedence/late_hdma_vs_tima_scx1_2_cgb04c_out11E9.gbc@cgb  # inter
 gambatte/irq_precedence/late_hdma_vs_tima_scx1_halt_2_cgb04c_out11C9.gbc@cgb  # interrupt
 gambatte/irq_precedence/late_hdma_vs_tima_scx2_2_cgb04c_out11E9.gbc@cgb  # interrupt
 gambatte/irq_precedence/late_hdma_vs_tima_scx2_halt_2_cgb04c_out11C9.gbc@cgb  # interrupt
-gambatte/irq_precedence/late_if_via_sp_if_1_dmg08_cgb04c_outFD.gbc@cgb  # interrupt
-gambatte/irq_precedence/late_if_via_sp_if_1_dmg08_cgb04c_outFD.gbc@dmg  # interrupt
-gambatte/irq_precedence/late_m0irq_retrigger_2_dmg08_cgb04c_outE0.gbc@cgb  # interrupt
-gambatte/irq_precedence/late_m0irq_retrigger_2_dmg08_cgb04c_outE0.gbc@dmg  # interrupt
 gambatte/irq_precedence/late_m0irq_retrigger_scx1_ds_2_cgb04c_outE0.gbc@cgb  # interrupt
 gambatte/lcd_offset/offset1_lyc8fint_m1stat_1_cgb04c_outC4.gbc@cgb  # stat
 gambatte/lcd_offset/offset1_lyc98int_ly_count_1_cgb04c_out99.gbc@cgb  # stat
@@ -259,8 +253,6 @@ gambatte/lcdirq_precedence/m1irq_lcdstat50_lyc8f_dmg08_cgb04c_out3.gbc@cgb  # st
 gambatte/lcdirq_precedence/m1irq_lcdstat50_lyc8f_dmg08_cgb04c_out3.gbc@dmg  # stat
 gambatte/ly0/lycint152_lyc0flag_ds_2_cgb04c_outC5.gbc@cgb  # stat
 gambatte/ly0/lycint152_lyc0flag_ds_3_cgb04c_outC4.gbc@cgb  # stat
-gambatte/ly0/lycint152_lyc0irq_late_retrigger_2_dmg08_cgb04c_outE0.gbc@cgb  # stat
-gambatte/ly0/lycint152_lyc0irq_late_retrigger_2_dmg08_cgb04c_outE0.gbc@dmg  # stat
 gambatte/ly0/lycint152_lyc153flag_ds_2_cgb04c_outC5.gbc@cgb  # stat
 gambatte/ly0/lycint152_lyc153flag_ds_3_cgb04c_outC5.gbc@cgb  # stat
 gambatte/ly0/lycint152_lyc153irq_2_dmg08_cgb04c_outE2.gbc@cgb  # stat
@@ -385,8 +377,6 @@ gambatte/m1/lycint_m1intirq_1_dmg08_cgb04c_out3.gbc@cgb  # stat
 gambatte/m1/lycint_m1intirq_1_dmg08_cgb04c_out3.gbc@dmg  # stat
 gambatte/m1/lycint_m1intirq_2_dmg08_cgb04c_out1.gbc@cgb  # stat
 gambatte/m1/lycint_m1intirq_2_dmg08_cgb04c_out1.gbc@dmg  # stat
-gambatte/m1/lycint_vblankirq_late_retrigger_2_dmg08_cgb04c_out0.gbc@cgb  # stat
-gambatte/m1/lycint_vblankirq_late_retrigger_2_dmg08_cgb04c_out0.gbc@dmg  # stat
 gambatte/m1/m1irq_enable_after_lyc144_2_dmg08_out1_cgb04c_out3.gbc@dmg  # stat
 gambatte/m1/m1irq_late_enable_ds_1_cgb04c_out2.gbc@cgb  # stat
 gambatte/m1/m1irq_late_enable_ds_lcdoffset1_1_cgb04c_out2.gbc@cgb  # stat
@@ -429,11 +419,6 @@ gambatte/m2enable/m2_late_m0disable_1_dmg08_cgb04c_out2.gbc@cgb  # stat
 gambatte/m2enable/m2_late_m0disable_1_dmg08_cgb04c_out2.gbc@dmg  # stat
 gambatte/m2enable/m2_late_m0disable_ds_1_cgb04c_out2.gbc@cgb  # stat
 gambatte/m2enable/m2_late_m1disable_ly0_ds_1_cgb04c_out2.gbc@cgb  # stat
-gambatte/m2int_m0irq/m2int_m0irq_scx3_ifw_2_dmg08_cgb04c_out0.gbc@cgb  # stat
-gambatte/m2int_m0irq/m2int_m0irq_scx3_ifw_2_dmg08_cgb04c_out0.gbc@dmg  # stat
-gambatte/m2int_m0irq/m2int_m0irq_scx3_ifw_4_dmg08_cgb04c_out0.gbc@cgb  # stat
-gambatte/m2int_m0irq/m2int_m0irq_scx3_ifw_4_dmg08_cgb04c_out0.gbc@dmg  # stat
-gambatte/m2int_m0irq/m2int_m0irq_scx3_ifw_ds_2_cgb04c_out0.gbc@cgb  # stat
 gambatte/miscmstatirq/lycstatwirq_trigger_ly00_10_50_1_dmg08_cgb04c_outE0.gbc@cgb  # stat
 gambatte/miscmstatirq/lycstatwirq_trigger_ly00_10_50_1_dmg08_cgb04c_outE0.gbc@dmg  # stat
 gambatte/miscmstatirq/lycstatwirq_trigger_ly00_10_50_ds_1_cgb04c_outE0.gbc@cgb  # stat
@@ -542,129 +527,32 @@ gambatte/scy/scy_during_m3_spx08_ds_1.gbc@cgb  # ppu-mode3
 gambatte/scy/scy_during_m3_spx08_ds_2.gbc@cgb  # ppu-mode3
 gambatte/scy/scy_during_m3_spx08_ds_3.gbc@cgb  # ppu-mode3
 gambatte/scy/scy_during_m3_spx08_ds_4.gbc@cgb  # ppu-mode3
-gambatte/serial/div_write_start_wait_read_if_1_dmg08_cgb04c_outE0.gbc@cgb  # serial
-gambatte/serial/div_write_start_wait_read_if_1_dmg08_cgb04c_outE0.gbc@dmg  # serial
-gambatte/serial/nopx1_div_write_start_wait_read_if_1_dmg08_cgb04c_outE0.gbc@cgb  # serial
-gambatte/serial/nopx1_div_write_start_wait_read_if_1_dmg08_cgb04c_outE0.gbc@dmg  # serial
-gambatte/serial/nopx1_start83_wait_read_if_2_dmg08_outE0_cgb04c_outE8.gbc@cgb  # serial
-gambatte/serial/nopx1_start_wait_read_if_1_dmg08_cgb04c_outE0.gbc@cgb  # serial
-gambatte/serial/nopx1_start_wait_read_if_1_dmg08_cgb04c_outE0.gbc@dmg  # serial
-gambatte/serial/nopx2_start83_wait_read_if_1_dmg08_cgb04c_outE0.gbc@cgb  # serial
-gambatte/serial/nopx2_start_wait_read_if_1_dmg08_cgb04c_outE0.gbc@cgb  # serial
-gambatte/serial/nopx2_start_wait_read_if_1_dmg08_cgb04c_outE0.gbc@dmg  # serial
-gambatte/serial/start83_late_div_write_wait_read_if_1b_cgb04c_outE8.gbc@cgb  # serial
-gambatte/serial/start83_late_div_write_wait_read_if_2b_cgb04c_outE8.gbc@cgb  # serial
-gambatte/serial/start_late_div_write_wait_read_if_1a_dmg08_cgb04c_outE0.gbc@cgb  # serial
-gambatte/serial/start_late_div_write_wait_read_if_1a_dmg08_cgb04c_outE0.gbc@dmg  # serial
-gambatte/serial/start_late_div_write_wait_read_if_2b_dmg08_cgb04c_outE8.gbc@cgb  # serial
-gambatte/serial/start_late_div_write_wait_read_if_2b_dmg08_cgb04c_outE8.gbc@dmg  # serial
-gambatte/serial/start_late_div_write_wait_read_if_3a_dmg08_cgb04c_outE0.gbc@cgb  # serial
-gambatte/serial/start_late_div_write_wait_read_if_3a_dmg08_cgb04c_outE0.gbc@dmg  # serial
-gambatte/serial/start_late_div_write_wait_read_if_4_dmg08_cgb04c_outE8.gbc@cgb  # serial
-gambatte/serial/start_late_div_write_wait_read_if_4_dmg08_cgb04c_outE8.gbc@dmg  # serial
-gambatte/serial/start_wait_clear_if_read_if_1_dmg08_cgb04c_outE8.gbc@cgb  # serial
-gambatte/serial/start_wait_clear_if_read_if_1_dmg08_cgb04c_outE8.gbc@dmg  # serial
-gambatte/serial/start_wait_clear_if_read_if_ds_1_cgb04c_outE8.gbc@cgb  # serial
-gambatte/serial/start_wait_read_if_1_dmg08_cgb04c_outE0.gbc@cgb  # serial
-gambatte/serial/start_wait_read_if_1_dmg08_cgb04c_outE0.gbc@dmg  # serial
 gambatte/serial/start_wait_read_if_ds_1_cgb04c_outE0.gbc@cgb  # serial
 gambatte/serial/start_wait_read_if_ds_2_cgb04c_outE8.gbc@cgb  # serial
-gambatte/serial/start_wait_read_sb_1_dmg08_cgb04c_out7F.gbc@cgb  # serial
-gambatte/serial/start_wait_read_sb_1_dmg08_cgb04c_out7F.gbc@dmg  # serial
-gambatte/serial/start_wait_read_sc_1_dmg08_outFF_cgb04c_outFD.gbc@cgb  # serial
-gambatte/serial/start_wait_read_sc_1_dmg08_outFF_cgb04c_outFD.gbc@dmg  # serial
-gambatte/serial/start_wait_restart_read_if_1_dmg08_cgb04c_outE0.gbc@cgb  # serial
-gambatte/serial/start_wait_restart_read_if_1_dmg08_cgb04c_outE0.gbc@dmg  # serial
-gambatte/serial/start_wait_sc80_read_if_1_dmg08_cgb04c_outE0.gbc@cgb  # serial
-gambatte/serial/start_wait_sc80_read_if_1_dmg08_cgb04c_outE0.gbc@dmg  # serial
-gambatte/serial/start_wait_stop_read_if_1_dmg08_cgb04c_outE0.gbc@cgb  # serial
-gambatte/serial/start_wait_stop_read_if_1_dmg08_cgb04c_outE0.gbc@dmg  # serial
-gambatte/serial/start_wait_trigger_int8_read_if_2_dmg08_outE8_cgb04c_outE0.gbc@cgb  # serial
-gambatte/serial/start_wait_trigger_int8_read_if_ds_2_cgb04c_outE0.gbc@cgb  # serial
-gambatte/sound/ch1_duty0_pos6_to_pos7_timing_ds_6_cgb04c_outaudio1.gbc@cgb  # apu
-gambatte/sound/ch1_duty0_to_duty3_pos3_2_dmg08_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch1_duty0_to_duty3_pos3_2_dmg08_cgb04c_outaudio0.gbc@dmg  # apu
-gambatte/sound/ch1_duty0_to_duty3_pos3_dmg08_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch1_duty0_to_duty3_pos3_dmg08_cgb04c_outaudio0.gbc@dmg  # apu
-gambatte/sound/ch1_init_pos_1_dmg08_outaudio0_cgb04c_outaudio1.gbc@dmg  # apu
-gambatte/sound/ch1_init_pos_4_dmg08_outaudio1_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch1_init_pos_5_dmg08_outaudio1_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch1_init_pos_6_dmg08_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch1_init_pos_6_dmg08_cgb04c_outaudio0.gbc@dmg  # apu
-gambatte/sound/ch1_init_pos_7_dmg08_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch1_init_pos_7_dmg08_cgb04c_outaudio0.gbc@dmg  # apu
-gambatte/sound/ch1_init_pos_8_dmg08_outaudio0_cgb04c_outaudio1.gbc@dmg  # apu
-gambatte/sound/ch1_init_reset_sweep_counter_timing_10_dmg08_outaudio0_cgb04c_outaudio1.gbc@cgb  # apu
-gambatte/sound/ch1_init_reset_sweep_counter_timing_2_dmg08_xoutaudio1lowpitch_cgb04c_outaudio1.gbc@cgb  # apu
-gambatte/sound/ch1_init_reset_sweep_counter_timing_3_dmg08_outaudio0_cgb04c_outaudio1.gbc@cgb  # apu
-gambatte/sound/ch1_init_reset_sweep_counter_timing_4_dmg08_outaudio1_cgb04c_outaudio0.gbc@dmg  # apu
-gambatte/sound/ch1_init_reset_sweep_counter_timing_9_dmg08_outaudio1_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch1_init_reset_sweep_counter_timing_nr52_2_dmg08_out0_cgb04c_out1.gbc@cgb  # apu
-gambatte/sound/ch1_init_reset_sweep_counter_timing_nr52_3_dmg08_out0_cgb04c_out1.gbc@cgb  # apu
-gambatte/sound/ch2_init_env_counter_timing_2_dmg08_outaudio1_cgb04c_outaudio0.gbc@dmg  # apu
-gambatte/sound/ch2_init_env_counter_timing_3_dmg08_outaudio1_cgb04c_outaudio0.gbc@dmg  # apu
-gambatte/sound/ch2_init_env_counter_timing_4_dmg08_cgb04c_outaudio1.gbc@cgb  # apu
-gambatte/sound/ch2_init_env_counter_timing_4_dmg08_cgb04c_outaudio1.gbc@dmg  # apu
-gambatte/sound/ch2_init_reset_env_counter_timing_10_dmg08_outaudio1_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_env_counter_timing_11_dmg08_outaudio0_cgb04c_outaudio1.gbc@dmg  # apu
-gambatte/sound/ch2_init_reset_env_counter_timing_14_dmg08_outaudio0_cgb04c_outaudio1.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_env_counter_timing_15_dmg08_outaudio1_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_env_counter_timing_2_dmg08_outaudio1_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_env_counter_timing_4_dmg08_outaudio0_cgb04c_outaudio1.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_env_counter_timing_5_dmg08_outaudio0_cgb04c_outaudio1.gbc@dmg  # apu
-gambatte/sound/ch2_init_reset_env_counter_timing_7_dmg08_outaudio1_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_length_counter_timing_2_dmg08_outaudio0_cgb04c_outaudio1.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_length_counter_timing_3_dmg08_outaudio1_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_length_counter_timing_6_dmg08_outaudio1_cgb04c_outaudio0.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_length_counter_timing_7_dmg08_outaudio0_cgb04c_outaudio1.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_length_counter_timing_nr52_1_dmg08_out2_cgb04c_out0.gbc@cgb  # apu
-gambatte/sound/ch2_init_reset_length_counter_timing_nr52_4_dmg08_out2_cgb04c_out0.gbc@cgb  # apu
-gambatte/sound/ch2_late_reset_nr52_2b_dmg08_cgb04c_out0.gbc@cgb  # apu
-gambatte/sound/ch2_late_reset_nr52_2b_dmg08_cgb04c_out0.gbc@dmg  # apu
-gambatte/sound/ch2_late_reset_nr52_ds_2b_cgb04c_out0.gbc@cgb  # apu
-gambatte/speedchange/speedchange2_ch1_duty0_pos6_to_pos7_timing_ds_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange2_ch1_duty0_pos6_to_pos7_timing_nop_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange2_ch1_duty0_pos6_to_pos7_timing_nop_ds_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange2_ch2_nr52_1b_cgb04c_outF0.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange2_ch2_nr52_2b_cgb04c_outF0.gbc@cgb  # double-speed
+gambatte/sound/ch1_duty0_pos6_to_pos7_timing_ds_6_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange2_ch1_duty0_pos6_to_pos7_timing_ds_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange2_ch1_duty0_pos6_to_pos7_timing_nop_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange2_ch1_duty0_pos6_to_pos7_timing_nop_ds_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange2_ch2_nr52_1b_cgb04c_outF0.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange2_ch2_nr52_2b_cgb04c_outF0.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
 gambatte/speedchange/speedchange2_ly44_m3_stat_4_cgb04c_outC2.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange2_nop_ch1_duty0_pos6_to_pos7_timing_ds_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange3_ch1_duty0_pos6_to_pos7_timing_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange3_ch1_duty0_pos6_to_pos7_timing_nop_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange3_ch2_nr52_2b_cgb04c_outF0.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange3_nop_ch1_duty0_pos6_to_pos7_timing_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange_ch1_duty0_pos6_to_pos7_timing_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange_ch1_duty0_pos6_to_pos7_timing_ds_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange_ch1_duty0_pos6_to_pos7_timing_nop_2_cgb04c_outaudio1.gbc@cgb  # double-speed
-gambatte/speedchange/speedchange_ch1_nr4init_duty0_pos6_to_pos7_timing_2_cgb04c_outaudio1.gbc@cgb  # double-speed
+gambatte/speedchange/speedchange2_nop_ch1_duty0_pos6_to_pos7_timing_ds_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange3_ch1_duty0_pos6_to_pos7_timing_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange3_ch1_duty0_pos6_to_pos7_timing_nop_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange3_ch2_nr52_2b_cgb04c_outF0.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange3_nop_ch1_duty0_pos6_to_pos7_timing_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange_ch1_duty0_pos6_to_pos7_timing_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange_ch1_duty0_pos6_to_pos7_timing_ds_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange_ch1_duty0_pos6_to_pos7_timing_nop_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
+gambatte/speedchange/speedchange_ch1_nr4init_duty0_pos6_to_pos7_timing_2_cgb04c_outaudio1.gbc@cgb  # apu: CPU/APU phase across speed switches (#303)
 gambatte/sprites/10spritesPrLine_10xposA7_m0irq_2_dmg08_cgb04c_out2.gbc@cgb  # ppu-mode3: handed to #291: mode-3 length with 10 OBJs at X $A7
 gambatte/sprites/10spritesPrLine_10xposA7_m0irq_2_dmg08_cgb04c_out2.gbc@dmg  # ppu-mode3: handed to #291: mode-3 length with 10 OBJs at X $A7
 gambatte/sprites/enable/late_disable_ds_3_cgb04c_out3.gbc@cgb  # ppu-mode3: handed to #287: CGB double-speed mode-3 timing after LCD on (the scan sees the OBJ as hardware does; STAT still reads mode 0)
 gambatte/sprites/late_disable_ds_1_cgb04c_out3.gbc@cgb  # ppu-mode3: handed to #287: CGB double-speed mode-3 timing after LCD on (the scan sees the OBJ as hardware does; STAT still reads mode 0)
 gambatte/sprites/sprite_late_disable_spx1A_1_dmg08_out0.gb@dmg  # ppu-mode3: handed to #291: LCDC.1 off mid mode 3 aborts the OBJ fetch at X $1A one M-cycle later on hardware (spx18/19/1B pass)
 gambatte/sprites/sprite_late_late_disable_spx1A_1_dmg08_out0.gb@dmg  # ppu-mode3: handed to #291: LCDC.1 off mid mode 3 aborts the OBJ fetch at X $1A one M-cycle later on hardware (spx18/19/1B pass)
-gambatte/tima/tc00_irq_1_dmg08_cgb04c_outE0.gbc@cgb  # timer
-gambatte/tima/tc00_irq_1_dmg08_cgb04c_outE0.gbc@dmg  # timer
 gambatte/tima/tc00_irq_ds_1_cgb04c_outE0.gbc@cgb  # timer
 gambatte/tima/tc00_irq_ds_2_cgb04c_outE4.gbc@cgb  # timer
-gambatte/tima/tc00_irq_ifw_1_dmg08_cgb04c_outE4.gbc@cgb  # timer
-gambatte/tima/tc00_irq_ifw_1_dmg08_cgb04c_outE4.gbc@dmg  # timer
-gambatte/tima/tc00_irq_ifw_ds_1_cgb04c_outE4.gbc@cgb  # timer
-gambatte/tima/tc00_irq_late_retrigger_2_dmg08_outE4_cgb04c_outE0.gbc@cgb  # timer
-gambatte/tima/tc00_irq_late_retrigger_ds_2_cgb04c_outE0.gbc@cgb  # timer
-gambatte/tima/tc00_late_div_write_if_1a_dmg08_cgb04c_outE0.gbc@cgb  # timer
-gambatte/tima/tc00_late_div_write_if_1a_dmg08_cgb04c_outE0.gbc@dmg  # timer
-gambatte/tima/tc00_start_2_cgb04c_outF1.gbc@cgb  # timer
-gambatte/tima/tc01_1stopstart_irq_1_dmg08_cgb04c_outE0.gbc@cgb  # timer
-gambatte/tima/tc01_1stopstart_irq_1_dmg08_cgb04c_outE0.gbc@dmg  # timer
-gambatte/tima/tc01_1stopstart_offset1_irq_1_dmg08_cgb04c_outE0.gbc@cgb  # timer
-gambatte/tima/tc01_1stopstart_offset1_irq_1_dmg08_cgb04c_outE0.gbc@dmg  # timer
-gambatte/tima/tc01_1stopstart_offset2_irq_1_dmg08_cgb04c_outE0.gbc@cgb  # timer
-gambatte/tima/tc01_1stopstart_offset2_irq_1_dmg08_cgb04c_outE0.gbc@dmg  # timer
-gambatte/tima/tc01_1stopstart_offset3_irq_1_dmg08_cgb04c_outE0.gbc@cgb  # timer
-gambatte/tima/tc01_1stopstart_offset3_irq_1_dmg08_cgb04c_outE0.gbc@dmg  # timer
-gambatte/tima/tc01_irq_1_dmg08_cgb04c_outE0.gbc@cgb  # timer
-gambatte/tima/tc01_irq_1_dmg08_cgb04c_outE0.gbc@dmg  # timer
 gambatte/vram_m3/preread_lcdoffset2_1_cgb04c_out0.gbc@cgb  # ppu-mode3
 gambatte/vram_m3/prewrite_lcdoffset2_1_cgb04c_out1.gbc@cgb  # ppu-mode3
 gambatte/window/arg/late_enable_afterVblank_4_dmg08_out3_cgb04c_out0.gbc@cgb  # ppu-mode3
