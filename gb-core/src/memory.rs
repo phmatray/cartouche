@@ -57,16 +57,9 @@ pub struct MemoryBus {
     pub(crate) hdma_remaining: u8,
     /// RP ($FF56, CGB): bit 0 = LED on, bits 6-7 = read enable (both set: bit 1 shows the sensor).
     pub(crate) rp: u8,
-    /// The last mode-0 start raised IF.1 (the STAT line rose and IF.1 was clear): see `if_hidden`.
-    /// Not saved: it only matters within the M-cycle of that edge.
-    pub(crate) stat_fresh: bool,
-    /// The mode-2 STAT source rose in this M-cycle, the one before its line (`Ppu::mode2_early`):
-    /// IF.1 is set at the M-cycle's end, after the CPU's access, although a running CPU's next
-    /// opcode fetch dispatches it. `mode2_fresh`: and IF.1 was clear, so a read misses it and a
-    /// halted CPU wakes one M-cycle later (gbmicrotest `int_oam_*`, `oam_int_if_edge_*`, Mooneye
-    /// `intr_2_*`). Not saved, like `stat_fresh`.
-    pub(crate) mode2_edge: bool,
-    pub(crate) mode2_fresh: bool,
+    /// The PPU's IF bits (VBlank, STAT) the M-cycle just run raised from clear: see `if_hidden`.
+    /// Not saved: it only matters at the boundary after that M-cycle (`GameBoy::load_state`).
+    pub(crate) ppu_fresh: u8,
     /// Whether the infrared sensor sees light (a linked partner's LED); never set when alone.
     pub ir_light_in: bool,
     /// Active cheat codes (Game Genie ROM patches, GameShark RAM writes).
@@ -112,9 +105,7 @@ impl MemoryBus {
             hdma_dest: 0,
             hdma_remaining: 0,
             rp: 0,
-            stat_fresh: false,
-            mode2_edge: false,
-            mode2_fresh: false,
+            ppu_fresh: 0,
             ir_light_in: false,
             cheats: Default::default(),
             watch: None,
@@ -290,8 +281,7 @@ impl MemoryBus {
                     _ => {}
                 }
             }
-            // The mode-2 edge of this M-cycle lands after the write (`mode2_edge`).
-            0xFF0F => self.interrupts.interrupt_flag = value & 0x1F | if self.mode2_edge { STAT_BIT } else { 0 },
+            0xFF0F => self.interrupts.interrupt_flag = value & 0x1F | self.if_hidden(),
             0xFF10..=0xFF3F => {
                 let was_on = self.apu.is_on();
                 self.apu.write_register(addr, value);
@@ -308,6 +298,11 @@ impl MemoryBus {
                     self.dma_delay = 2;
                 } else {
                     self.ppu.write_register(addr, value);
+                    if std::mem::take(&mut self.ppu.stat_write_irq) { self.interrupts.request(STAT_BIT); }
+                    if std::mem::take(&mut self.ppu.stat_write_drop) && self.if_hidden() & STAT_BIT != 0 {
+                        self.interrupts.interrupt_flag &= !STAT_BIT;
+                        self.ppu_fresh &= !STAT_BIT;
+                    }
                 }
             }
             0xFF4D => {
@@ -436,18 +431,26 @@ impl MemoryBus {
         self.serial.clear_serial_output();
     }
 
-    fn tick_components(&mut self) {
-        let ppu_step = if self.double_speed { 2 } else { 4 };
-        let (vblank_irq, stat_irq, hblank_entry) = self.ppu.step(ppu_step);
+    /// The PPU's interrupt requests of this M-cycle, and which of them are fresh (`ppu_fresh`).
+    /// Kept out of the per-M-cycle path: a few calls per line.
+    #[inline(never)]
+    fn ppu_irqs(&mut self, vblank_irq: bool, stat_irq: bool) {
+        let before = self.interrupts.interrupt_flag;
         if vblank_irq {
             self.interrupts.request(VBLANK_BIT);
             if let Some(s) = self.sgb.as_deref_mut() { s.vblank(&self.ppu.framebuffer, self.apu.read_register(0xFF26) & 0x0F != 0); }
         }
-        if hblank_entry { self.stat_fresh = stat_irq && self.interrupts.interrupt_flag & STAT_BIT == 0; }
-        self.mode2_edge = stat_irq && self.ppu.mode2_early();
-        self.mode2_fresh = self.mode2_edge && self.interrupts.interrupt_flag & STAT_BIT == 0;
         if stat_irq {
             self.interrupts.request(STAT_BIT);
+        }
+        self.ppu_fresh = self.interrupts.interrupt_flag & !before;
+    }
+
+    fn tick_components(&mut self) {
+        let ppu_step = if self.double_speed { 2 } else { 4 };
+        let (vblank_irq, stat_irq, hblank_entry) = self.ppu.step(ppu_step);
+        if vblank_irq | stat_irq || self.ppu_fresh != 0 {
+            self.ppu_irqs(vblank_irq, stat_irq);
         }
         if hblank_entry && self.hdma_active {
             self.hdma_step();
@@ -532,13 +535,23 @@ impl MemoryBus {
     /// at the next M-cycle boundary; the bus requests it one M-cycle ahead (see `Timer::step`),
     /// which a running CPU's fetch-time sample needs but a halted one must not see yet.
     pub fn late_interrupts(&self) -> u8 {
-        let stat = if self.stat_fresh && self.ppu.mode0_edge_late() || self.mode2_fresh { STAT_BIT } else { 0 };
+        let stat = if self.ppu_fresh & STAT_BIT != 0 && self.ppu.mode0_edge_late()
+            || self.ppu_fresh & STAT_BIT != 0 && self.ppu.mode2_early() { STAT_BIT } else { 0 };
         stat | if self.timer.reload_pending { TIMER_BIT } else { 0 }
     }
 
-    /// IF bits raised in this M-cycle after the CPU's read of IF samples them (`Ppu::mode0_edge_now`).
+    /// The PPU's IF bits raised late in the M-cycle just run, after the CPU's read or write of IF
+    /// in it: that access doesn't see them (nor clear them), though the next opcode fetch
+    /// dispatches them. Mode 0 for every SCX (gbmicrotest `hblank_int_scx0..7_if_a/b/c`,
+    /// `hblank_int_if_a/b`), VBlank's IF.0 and mode-1 STAT edge (`vblank2_int_if_a..d`,
+    /// `vblank_int_if_a..d`, `stat_write_glitch_l143_c/d`), the LY = LYC edge (`lyc1_int_if_edge_a..d`).
+    /// So is the mode-2 edge, which rises in the M-cycle before its line (`Ppu::mode2_early`):
+    /// a read or write of IF there misses it (`oam_int_if_edge_a..d`), a halted CPU wakes one
+    /// M-cycle later (`late_interrupts`). Not a mode-2 edge a STAT write raises at mode 2's start,
+    /// which such a read sees (`mode2_edge_now`).
     pub(crate) fn if_hidden(&self) -> u8 {
-        if self.stat_fresh && self.ppu.mode0_edge_now() || self.mode2_fresh { STAT_BIT } else { 0 }
+        if self.ppu_fresh == 0 { return 0; }
+        self.ppu_fresh & if self.ppu.mode2_edge_now() { !STAT_BIT } else { 0xFF }
     }
 
     pub fn cycle_tick(&mut self) {
@@ -905,5 +918,23 @@ mod tests {
             }
         }).collect();
         assert_eq!(wakes, [63, 64, 64, 64, 64, 65, 65, 65]);
+    }
+
+    /// Line 144's IF.0 and mode-1 STAT edge rise late in their M-cycle: an IF read in it misses
+    /// them and an IF write in it doesn't clear them; the next M-cycle reads them
+    /// (gbmicrotest `vblank2_int_if_a..d`, `vblank_int_if_a..d`).
+    #[test]
+    fn vblank_if_rises_on_line_144_mcycle() {
+        for clear in [false, true] {
+            let mut bus = bus();
+            let p = &mut bus.ppu;
+            (p.lcdc, p.ly, p.mode, p.mode_clock, p.stat) = (0x81, 143, crate::ppu::PpuMode::HBlank, 0, 0x10);
+            while bus.interrupts.interrupt_flag & VBLANK_BIT == 0 { bus.cycle_tick(); }
+            assert_eq!(bus.ppu.ly, 144);
+            assert_eq!(bus.read_byte(0xFF0F) & 3, 0, "not seen in its own M-cycle");
+            if clear { bus.write_byte(0xFF0F, 0); }
+            bus.cycle_tick();
+            assert_eq!(bus.read_byte(0xFF0F) & 3, 3, "seen the next M-cycle (write in between: {clear})");
+        }
     }
 }
