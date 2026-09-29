@@ -432,7 +432,8 @@ impl Ppu {
     #[inline]
     fn mode0_edge_age(&self) -> Option<u32> {
         let rose = self.lcdc & 0x80 != 0 && self.mode == PpuMode::HBlank && self.stat & 0x08 != 0;
-        (rose && self.mode_clock < self.m_cycle_dots).then_some(self.mode_clock)
+        let age = self.mode_clock.wrapping_sub(self.mode0_irq_delay());
+        (rose && age < self.m_cycle_dots).then_some(age)
     }
 
     /// The mode-0 interrupt rose in the M-cycle just run: an IF read in that M-cycle does not see
@@ -452,14 +453,36 @@ impl Ppu {
         self.mode0_edge_age().is_some_and(|age| age < self.m_cycle_dots / 2)
     }
 
+    /// The M-cycle before a line's mode 2, for lines 1-144 (not line 0): the mode-2 STAT source
+    /// rises there already, so a running CPU dispatches its interrupt one M-cycle before STAT reads
+    /// mode 2 (gbmicrotest `int_oam_*`, `lcdon_to_oam_int_l*`, `line_144_oam_int_*`, Age stat-int,
+    /// stat-mode-sprites, stat-mode-window; SameBoy: "1 T-cycle before STAT actually changes,
+    /// except on line 0"). IF reads, IF writes and HALT see it at the M-cycle's end (`MemoryBus::mode2_edge`).
+    #[inline]
+    pub(crate) fn mode2_early(&self) -> bool {
+        let left = self.m_cycle_dots;
+        match self.mode {
+            PpuMode::HBlank => self.mode_clock + left >= 376 + MODE0_EARLY - self.mode3_len,
+            _ => false,
+        }
+    }
+
+    /// Dots from HBlank's start to its STAT source: 2 in double speed, where the mode-0 interrupt
+    /// comes later against mode 3's end than in single speed (Age stat-int, double-speed rows, all
+    /// SCX; SameBoy raises it a dot later in double speed).
+    #[inline]
+    fn mode0_irq_delay(&self) -> u32 {
+        if self.m_cycle_dots == 2 { 2 } else { 0 }
+    }
+
     /// OR of all enabled STAT interrupt sources. Used for rising-edge detection.
     fn compute_stat_line(&self) -> bool {
-        let hblank = self.mode == PpuMode::HBlank && self.stat & 0x08 != 0;
+        let hblank = self.mode == PpuMode::HBlank && self.mode_clock >= self.mode0_irq_delay() && self.stat & 0x08 != 0;
         let vblank = self.mode == PpuMode::VBlank  && self.stat & 0x10 != 0;
-        // Mode 2 is a pulse at the line start, not a level (`MODE2_PULSE`). Line 144 has it too;
-        // line 0 after LCD on doesn't.
-        let oam    = (self.mode == PpuMode::OamScan && !self.lcd_on_line0 || self.mode == PpuMode::VBlank && self.ly == 144)
-            && self.mode_clock < MODE2_PULSE + self.m_cycle_dots && self.stat & 0x20 != 0;
+        // Mode 2 is a pulse at the line start, not a level (`MODE2_PULSE`), from the M-cycle before
+        // the line (`mode2_early`). Line 144 has it too; line 0 after LCD on doesn't.
+        let oam    = ((self.mode == PpuMode::OamScan && !self.lcd_on_line0 || self.mode == PpuMode::VBlank && self.ly == 144)
+            && self.mode_clock < MODE2_PULSE + self.m_cycle_dots || self.mode2_early()) && self.stat & 0x20 != 0;
         // No comparator blank at a line start: the interrupt is requested one M-cycle ahead of the
         // line (the CPU samples IF before its opcode fetch).
         let lyc    = self.ly_compare(true) == Some(self.lyc) && self.stat & 0x40 != 0;
@@ -731,6 +754,8 @@ mod tests {
         assert_eq!(p.read_register(0xFF44), 0);
     }
 
+    /// Line 0 after LCD on has no OAM scan, so no mode-2 edge: the only one is line 1's, in line
+    /// 0's last M-cycle (`mode2_early`).
     #[test]
     fn lcd_on_line_0_has_no_mode2_stat_edge() {
         let mut p = Ppu::new();
@@ -738,7 +763,7 @@ mod tests {
         p.write_register(0xFF40, 0x80);
         while p.ly == 0 {
             let fired = p.step(4).1;
-            assert_eq!(fired, p.ly == 1, "line 0 after LCD on skips the OAM scan; line 1 has one");
+            assert_eq!(fired, p.ly == 0 && p.mode2_early(), "line 0 after LCD on skips the OAM scan; line 1 has one");
         }
     }
 
@@ -756,7 +781,7 @@ mod tests {
             assert_eq!(p.step(4).1, fires, "STAT written in M-cycle {m_cycle} of mode 2");
             let mut next_line = false;
             while !next_line { next_line = p.step(4).1; }
-            assert_eq!((p.ly, p.mode), (11, PpuMode::OamScan), "then with the next line");
+            assert_eq!((p.ly, p.mode), (10, PpuMode::HBlank), "then in the M-cycle before the next line");
         }
     }
 
@@ -877,6 +902,33 @@ mod tests {
                 dots += 1;
             }
             assert_eq!(dots, lag, "{m_cycle_dots} dots per M-cycle");
+        }
+    }
+
+    /// M-cycles from the one raising line 8's mode-2 interrupt to the first STAT read of mode 0,
+    /// with an OBJ at X 8 or the window at WX 7 (SCX 0), in single and double speed. Age
+    /// stat-mode-sprites and stat-mode-window read STAT this many M-cycles after the interrupt
+    /// (5 of dispatch, the handler's, a NOP run, and the read's 3rd M-cycle).
+    #[test]
+    fn stat_mode_end_with_objs_and_window_ds() {
+        for (ds, window, first_mode0) in [(false, false, 67), (false, true, 66), (true, false, 134), (true, true, 131)] {
+            let mut p = Ppu::new();
+            let m = if ds { 2 } else { 4 };
+            (p.m_cycle_dots, p.cgb_mode, p.stat) = (m, ds, 0x20);
+            if window { (p.lcdc, p.wy, p.wx) = (0xA0, 8, 7) } else { p.lcdc = 0x82 }
+            p.oam[0..2].copy_from_slice(&[24, 8]); // row 0 on line 8, X 8
+            (p.ly, p.mode, p.mode_clock) = (7, PpuMode::OamScan, 40);
+            while !p.step(m).1 {}
+            assert_eq!((p.ly, p.mode), (7, PpuMode::HBlank), "the interrupt comes in line 7's last M-cycle");
+            let (mut k, mut drawing) = (0, false);
+            loop {
+                p.step(m);
+                k += 1;
+                let mode = p.read_register(0xFF41) & 3;
+                if drawing && mode == 0 { break; }
+                drawing |= mode == 3;
+            }
+            assert_eq!(k, first_mode0, "double speed {ds}, window {window}");
         }
     }
 
@@ -1083,13 +1135,14 @@ mod tests {
     /// SCX fine-scroll discard, plus 6 when the window shows on the line, plus each OBJ's fetch: 6
     /// dots, and for the first OBJ (left to right) on a BG/window tile, 5 minus the OBJ's offset in
     /// that tile (≥ 0). OBJs at OAM X 0 share a tile of their own: the first costs 11 whatever SCX.
-    /// On a DMG, WX 0 with a fine scroll costs one dot more. The pixel FIFO must add up to it.
+    /// WX 0 with a fine scroll costs one dot more. The pixel FIFO must add up to it.
     fn pan_docs_len(p: &Ppu) -> u32 {
         let fine = (p.scx % 8) as i32;
-        let window = p.lcdc & 0x20 != 0 && (p.cgb_mode || p.lcdc & 0x01 != 0)
-            && (p.window_was_active || p.ly == p.wy) && p.wx <= 166;
+        // A DMG never matches WX 166 in mode 3 (Age stat-mode-window).
+        let window = p.lcdc & 0x20 != 0 && (p.window_was_active || p.ly == p.wy)
+            && p.wx <= if p.cgb_mode || p.compat { 166 } else { 165 };
         let mut len = 172 + fine as u32 + if window { 6 } else { 0 };
-        if window && p.wx == 0 && fine > 0 && !p.cgb_mode { len += 1; }
+        if window && p.wx == 0 && fine > 0 { len += 1; }
         if p.lcdc & 0x02 == 0 { return len; }
         let (mut objs, n) = p.select_sprites(p.ly as usize);
         objs[..n].sort_by_key(|o| o.0); // fetched left to right
@@ -1311,7 +1364,7 @@ mod tests {
             }, |p, d| match d {
                 _ if d == dot => p.write_register(0xFF40, 0x91),
                 _ if d == dot + 8 => p.write_register(0xFF40, 0x93),
-                120 => { p.write_register(0xFF47, 0xFF); p.bg_cram[0..2].copy_from_slice(&0x001Fu16.to_le_bytes()); }
+                116 => { p.write_register(0xFF47, 0xFF); p.bg_cram[0..2].copy_from_slice(&0x001Fu16.to_le_bytes()); }
                 _ => {}
             });
             let row: Vec<[u8; 3]> = p.framebuffer[10 * SCREEN_WIDTH * 4..11 * SCREEN_WIDTH * 4].chunks(4).map(|c| [c[0], c[1], c[2]]).collect();
@@ -1328,11 +1381,11 @@ mod tests {
     fn dmg_obj_disable_aborts_obj_fetch() {
         // Fetched: the new BGP from x 90 (11 dots of OBJ penalty); OBJs off at the match: from 101.
         let dmg = obj_en_pulse(false);
-        let aborted: Vec<usize> = dmg.iter().filter(|r| (27..=36).contains(&r.0)).map(|r| r.2).collect();
+        let aborted: Vec<usize> = dmg.iter().filter(|r| (23..=32).contains(&r.0)).map(|r| r.2).collect();
         // Off while the OBJ waits for the tile (5 dots), then during its fetch (6): each dot later
         // saves one dot less, and the fetch gives back the dot it had begun.
         assert_eq!(aborted, [100, 99, 98, 97, 96, 96, 95, 94, 93, 92], "{dmg:?}");
-        assert!(dmg.iter().all(|r| (27..=36).contains(&r.0) != (r.2 == 90 || r.2 == 101)), "{dmg:?}");
+        assert!(dmg.iter().all(|r| (23..=32).contains(&r.0) != (r.2 == 90 || r.2 == 101)), "{dmg:?}");
         let cgb = obj_en_pulse(true);
         assert!(cgb.iter().all(|r| r.2 == 90 || r.2 == 101), "a CGB never stops an OBJ fetch: {cgb:?}");
     }
@@ -1367,7 +1420,7 @@ mod tests {
             }).collect()
         };
         // The mode-3 dot of the write: a CGB's FIFO runs 2 dots ahead of a DMG's (`FIFO_LAG`).
-        for (cgb, first) in [(false, 36), (true, 33)] {
+        for (cgb, first) in [(false, 32), (true, 29)] {
             let c = colours(cgb);
             assert!(c.iter().all(|&(d, id)| id == if d < first { 1 } else if d < first + 2 { 0 } else { 2 }), "cgb {cgb}: {c:?}");
         }

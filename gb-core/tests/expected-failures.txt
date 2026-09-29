@@ -9,30 +9,13 @@
 
 mooneye-test-suite/acceptance/ppu/stat_lyc_onoff.gb  # stat
 age-test-roms/oam/oam-write-dmgC.gb  # ppu
-age-test-roms/stat-interrupt/stat-int-dmgC-cgbBCE.gb  # stat
-age-test-roms/stat-interrupt/stat-int-ncmBCE.gb  # stat
-age-test-roms/stat-mode-sprites/stat-mode-sprites-dmgC-cgbBCE.gb  # stat
-age-test-roms/stat-mode-sprites/stat-mode-sprites-ds-cgbBCE.gb  # double-speed
-age-test-roms/stat-mode-window/stat-mode-window-cgbBCE.gb  # stat
-age-test-roms/stat-mode-window/stat-mode-window-dmgC.gb  # stat
-age-test-roms/stat-mode-window/stat-mode-window-ds-cgbBCE.gb  # double-speed
-age-test-roms/stat-mode-window/stat-mode-window-ncmBCE.gb  # stat
 gbmicrotest/halt_op_dupe_delay.gb  # rom-defect: https://github.com/aappleby/gbmicrotest/issues/3 expects DIV $55 ~60 M-cycles after a DIV reset; the HALT bug gives $01, as SameBoy (#215)
-gbmicrotest/int_oam_incs.gb  # ppu
-gbmicrotest/int_oam_nops.gb  # ppu
-gbmicrotest/lcdon_to_oam_int_l0.gb  # ppu
-gbmicrotest/lcdon_to_oam_int_l1.gb  # ppu
-gbmicrotest/lcdon_to_oam_int_l2.gb  # ppu
-gbmicrotest/line_144_oam_int_b.gb  # ppu
 gbmicrotest/line_144_oam_int_c.gb  # ppu
-gbmicrotest/line_144_oam_int_d.gb  # ppu
 gbmicrotest/line_153_lyc0_int_inc_sled.gb  # stat
 gbmicrotest/lyc1_int_if_edge_a.gb  # stat
 gbmicrotest/lyc1_int_if_edge_c.gb  # stat
 gbmicrotest/lyc1_write_timing_b.gb  # stat
 gbmicrotest/lyc1_write_timing_c.gb  # stat
-gbmicrotest/oam_int_inc_sled.gb  # ppu
-gbmicrotest/oam_int_nops_a.gb  # ppu
 gbmicrotest/stat_write_glitch_l0_a.gb  # stat
 gbmicrotest/stat_write_glitch_l0_b.gb  # stat
 gbmicrotest/stat_write_glitch_l143_b.gb  # stat

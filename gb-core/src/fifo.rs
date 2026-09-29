@@ -35,7 +35,9 @@ use crate::trace::{LAYER_BG, LAYER_OBJ, LAYER_WIN, NO_OBJ};
 /// Dots the fetcher runs behind mode 3 as the CPU sees it, and from a pixel leaving the BG FIFO
 /// to the LCD: (DMG, CGB). A CGB fetches 2 dots earlier and shows the pixel at the same time
 /// (Mealybug's CGB ROMs: `m3_scx_high_5_bits`, `m3_scy_change`, `m3_lcdc_obj_size_change`).
-const FIFO_LAG: [u32; 2] = [8, 6];
+/// Single speed; in double speed the fetcher lags 2 dots more: the mode-2 interrupt that these
+/// ROMs sync on comes one M-cycle ahead of the line (`Ppu::mode2_early`), 4 dots or 2.
+const FIFO_LAG: [u32; 2] = [4, 2];
 const OUT_DELAY: [u32; 2] = [1, 3];
 /// Dots left of the 6-dot OBJ fetch when it reads its row's low byte: (DMG, CGB). The high byte
 /// comes 2 dots later: on a CGB the fetch's last dot, on a DMG the dot after it, as the pixels
@@ -110,7 +112,7 @@ pub(crate) struct LineState {
     pub active: bool,
     /// Dots of mode 3 run so far.
     pub dot: u32,
-    /// Dots this line runs ahead of the others.
+    /// Dots this line runs ahead of the others (an aborted OBJ fetch).
     pub lead: u32,
     /// `FIFO_LAG` and `OUT_DELAY` of the model.
     pub lag: u32,
@@ -191,12 +193,9 @@ impl Ppu {
             sprites,
             nsprites,
             obj_xs,
-            lag: FIFO_LAG[(self.cgb_mode || self.compat) as usize],
+            lag: FIFO_LAG[(self.cgb_mode || self.compat) as usize] + 4 - self.m_cycle_dots, // see FIFO_LAG
             out_delay: OUT_DELAY[(self.cgb_mode || self.compat) as usize],
             obj_lo_at: OBJ_LO_AT[(self.cgb_mode || self.compat) as usize],
-            // Line 0 draws one M-cycle earlier after the mode 2 interrupt than the other lines
-            // (Mealybug's DMG ROMs make up for it by waiting one M-cycle less on line 0).
-            lead: if self.ly == 0 && !self.lcd_on_line0 { 4 } else { 0 },
             ..LineState::default()
         };
         if self.trace.is_some() {
@@ -275,10 +274,11 @@ impl Ppu {
         self.window_was_active || self.ly == self.wy
     }
 
-    /// LCDC turns the window on (on a DMG, LCDC bit 0 turns it off too).
+    /// LCDC turns the window on. On a DMG, LCDC bit 0 off blanks it but it still runs: it still
+    /// lengthens mode 3 (Age stat-mode-window-dmgC, whose LCDC has bit 0 off; SameBoy agrees).
     #[inline]
     fn win_on(&self) -> bool {
-        self.lcdc & 0x20 != 0 && (self.cgb_mode || self.lcdc & 0x01 != 0)
+        self.lcdc & 0x20 != 0
     }
 
     /// WX as the window compares it: a write reaches it one dot late (Mealybug `m3_wx_5_change`,
@@ -384,7 +384,7 @@ impl Ppu {
                     // gbmicrotest win0-3 measure) by starting the next fetch early. With WX 0 and a fine
                     // scroll, the window comes one dot later (Mealybug `m3_window_timing_wx_0`). A WX
                     // 0-6 written mid-line is matched on its dot (`fifo_dot`), not per invisible pixel.
-                    let early = if self.line.win_skip == 7 && self.line.fine != 0 && !self.cgb_mode { 4 } else { 5 };
+                    let early = if self.line.win_skip == 7 && self.line.fine != 0 { 4 } else { 5 };
                     for _ in 0..self.line.win_skip.min(early) { self.fetcher_dot(); }
                 }
             }
@@ -558,7 +558,8 @@ impl Ppu {
         // dropped, the BG FIFO is emptied and the fetcher restarts on the window map.
         let x = self.line.x;
         if !self.line.fetcher.window && self.line.left_done && self.line.discard == 0 && self.win_on()
-            && if self.line.win_skip > 0 { x == 0 } else { self.wy_ok() && x + 7 == self.wx_seen() }
+            && if self.line.win_skip > 0 { x == 0 } else { self.wy_ok() && x + 7 == self.wx_seen() && (x < 159 || self.cgb_mode || self.compat) }
+            // (A DMG never matches WX 166 in mode 3: no window, no penalty. Age stat-mode-window.)
         {
             // Turned off and on again, the window starts over on its next row.
             if self.line.window_triggered { self.line.win_rows += 1; }

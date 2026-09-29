@@ -313,9 +313,9 @@ impl Cpu {
 
             // === HALT ===
             0x76 => {
-                // An interrupt raised in this opcode fetch is not seen yet (`MemoryBus::if_hidden`):
-                // it wakes the HALT at once instead of causing the bug (Age halt-m0-interrupt).
-                if ime || bus.interrupts.pending() & !bus.if_hidden() == 0 {
+                // An interrupt raised in this opcode fetch is pending already: the bug (Age
+                // halt-m0-interrupt, SCX 0-2).
+                if ime || bus.interrupts.pending() == 0 {
                     self.halted = true;
                 } else {
                     // HALT bug: IME=0 but interrupt pending — don't halt,
