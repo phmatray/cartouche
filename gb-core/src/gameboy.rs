@@ -277,6 +277,14 @@ impl GameBoy {
         self.bus.ppu.ly = 153;
         self.bus.ppu.mode = crate::ppu::PpuMode::VBlank;
         self.bus.ppu.mode_clock = 396;
+        if self.console == Console::Cgb {
+            // A CGB hands a CGB cartridge over in VBlank, LY $90: LY reads $90 11 M-cycles in, and
+            // line 0 of the next frame shows mode 3 1162 M-cycles in, mode 0 one later, at SCX
+            // 0/2/3/5 (Gambatte `display_startstate/ly`, `stat[_scxN]_1/2`). Dot 164 of line 144
+            // is the one position on the M-cycle grid both agree on.
+            self.bus.ppu.ly = 144;
+            self.bus.ppu.mode_clock = 164;
+        }
         if self.bus.rev == Revision::Dmg0 && self.console == Console::Dmg {
             // DMG-CPU 0 checks the header before it shows the logo, and hands over earlier: DIV
             // $18 (boot_div-dmg0 pins its phase: $1900 comes 53 M-cycles in), LY $91 in VBlank
@@ -907,6 +915,26 @@ const SAVE_VERSION: u32 = 8;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A CGB cartridge starts in VBlank, LY $90: LY reads $90 11 M-cycles in, and line 0 of the
+    /// next frame shows mode 3 1162 M-cycles in, mode 0 one later (Gambatte `display_startstate`).
+    #[test]
+    fn cgb_handover_ly_stat() {
+        let mut rom = vec![0u8; 0x8000];
+        rom[0x100..0x102].copy_from_slice(&[0x18, 0xFE]);
+        rom[0x143] = 0xC0;
+        rom[0x14D] = (0x134..=0x14C).fold(0u8, |c, i| c.wrapping_sub(rom[i]).wrapping_sub(1));
+        let mut gb = GameBoy::new(rom).unwrap();
+        let mut reads = Vec::new();
+        for m in 1..=1163u32 {
+            gb.bus.cycle_tick();
+            if [11, 1162, 1163].contains(&m) {
+                reads.push((gb.bus.read_byte(0xFF44), gb.bus.read_byte(0xFF41)));
+            }
+        }
+        assert_eq!(reads[0].0, 0x90);
+        assert_eq!([reads[1], reads[2]], [(0, 0x87), (0, 0x84)]);
+    }
 
     /// A damaged state's PPU line, line clock, HBlank DMA and serial transfer are clamped to values the machine can
     /// run from (release builds wrap instead of panicking: these ran a line per M-cycle for seconds,
