@@ -913,7 +913,7 @@ impl Ppu {
         // line (`ly_compare`), for the line's own edge (`early` 4): off the grid an IF read shows
         // it 1 or 2 dots before line 0, not 3 (Gambatte `lcd_offset/offset1/2_lyc99int_m2irq_count_2`
         // against `offset3_lyc99int_m2irq_count_1`).
-        let oam   = ((self.mode == PpuMode::OamScan && !self.lcd_on_line0 || self.mode == PpuMode::VBlank && self.ly == 144)
+        let oam    = ((self.mode == PpuMode::OamScan && !self.lcd_on_line0 || self.mode == PpuMode::VBlank && self.ly == 144)
             && self.mode_clock < pulse || self.mode2_early_by(early)
             || self.mode == PpuMode::VBlank && self.ly == 0 && self.m_cycle_dots == 4 && early == 4 && self.mode_clock >= 454)
             && self.stat & 0x20 != 0;
