@@ -4,6 +4,38 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.10.0](https://github.com/phmatray/cartouche/compare/v1.9.0...v1.10.0) (2026-09-29)
+
+
+### Added
+
+* **core:** DMG window-off colour-0 pixel on every line once the window drew ([#279](https://github.com/phmatray/cartouche/issues/279)) ([#280](https://github.com/phmatray/cartouche/issues/280)) ([69f8c3a](https://github.com/phmatray/cartouche/commit/69f8c3a2974bd014e523086ee698e357f7101476))
+* **core:** per-pixel BG/window tile number in the layer trace ([#264](https://github.com/phmatray/cartouche/issues/264)) ([#265](https://github.com/phmatray/cartouche/issues/265)) ([a4eea88](https://github.com/phmatray/cartouche/commit/a4eea88fdf925f764edf7c6067792eb797025d5f))
+* **core:** selectable hardware revision, DMG-CPU 0 hand-over first ([#242](https://github.com/phmatray/cartouche/issues/242)) ([#257](https://github.com/phmatray/cartouche/issues/257)) ([b31ac44](https://github.com/phmatray/cartouche/commit/b31ac4434f4dd685eb329a7b037a3e794188d51c))
+* **core:** WX 0-6 window width and WX matches while the window is off ([#228](https://github.com/phmatray/cartouche/issues/228)) ([#278](https://github.com/phmatray/cartouche/issues/278)) ([e128204](https://github.com/phmatray/cartouche/commit/e128204351f340da776a66240da3cb751c06b2b8))
+
+
+### Fixed
+
+* **core:** an invalid opcode locks the CPU like hardware ([#276](https://github.com/phmatray/cartouche/issues/276)) ([#277](https://github.com/phmatray/cartouche/issues/277)) ([d768049](https://github.com/phmatray/cartouche/commit/d768049ab80073cbddb6b98e3f66aa94ffcb4cf0))
+* **core:** APU timings of CGB 0/B/C and AGB ([#248](https://github.com/phmatray/cartouche/issues/248)) ([#268](https://github.com/phmatray/cartouche/issues/268)) ([034158c](https://github.com/phmatray/cartouche/commit/034158c3f21bb9c22def3744f494a55091834950))
+* **core:** CGB BG row beside a tile-25 OBJ fetch on an LCDC.4 change ([#263](https://github.com/phmatray/cartouche/issues/263)) ([#275](https://github.com/phmatray/cartouche/issues/275)) ([bd094ae](https://github.com/phmatray/cartouche/commit/bd094ae18ade41a110b0b29225f8a65734838bd0))
+* **core:** CGB E and CGB C revision timings ([#247](https://github.com/phmatray/cartouche/issues/247)) ([#267](https://github.com/phmatray/cartouche/issues/267)) ([a000ca4](https://github.com/phmatray/cartouche/commit/a000ca42e79b91a9fff166b641951e8aa9ddd41c))
+* **core:** DMG OBJ size change during mode 3 ([#252](https://github.com/phmatray/cartouche/issues/252)) ([#269](https://github.com/phmatray/cartouche/issues/269)) ([c4547a9](https://github.com/phmatray/cartouche/commit/c4547a915aad78a9470e4cca9075f1af76078edf))
+* **core:** DMG right-edge OBJs when LCDC.1 changes in mode 3 ([#262](https://github.com/phmatray/cartouche/issues/262)) ([#271](https://github.com/phmatray/cartouche/issues/271)) ([21ac31d](https://github.com/phmatray/cartouche/commit/21ac31ddaad349a9ec5a753978785c9f05338d72))
+* **core:** LY, OAM and VRAM access edges per model ([#253](https://github.com/phmatray/cartouche/issues/253)) ([#270](https://github.com/phmatray/cartouche/issues/270)) ([4dc35c1](https://github.com/phmatray/cartouche/commit/4dc35c1a45e1e4d91f5e7d599ef57f719ebddcb1))
+* **core:** LYC and VBlank interrupt edges, and the DMG STAT-write glitch ([#251](https://github.com/phmatray/cartouche/issues/251)) ([#274](https://github.com/phmatray/cartouche/issues/274)) ([bf0bc66](https://github.com/phmatray/cartouche/commit/bf0bc66dc2b6df6e17c8a55c1ac8e0ebb3874354))
+* **core:** MBC1 multicart (MBC1M) bank mapping ([#246](https://github.com/phmatray/cartouche/issues/246)) ([#255](https://github.com/phmatray/cartouche/issues/255)) ([3466873](https://github.com/phmatray/cartouche/commit/346687382b5affc7a02059722f774bcac2c4c86a))
+* **core:** mode-0 STAT interrupt edge per SCX ([#249](https://github.com/phmatray/cartouche/issues/249)) ([#266](https://github.com/phmatray/cartouche/issues/266)) ([854f588](https://github.com/phmatray/cartouche/commit/854f5888fd52d816ddd6c17587daedf324cacf82))
+* **core:** run SameSuite sgb/ on the Super Game Boy, fix MLT_REQ player IDs ([#245](https://github.com/phmatray/cartouche/issues/245)) ([#261](https://github.com/phmatray/cartouche/issues/261)) ([a83c3c9](https://github.com/phmatray/cartouche/commit/a83c3c9c957ba13e1931dcf7188a1196d8aebc0f))
+* **core:** STAT mode with OBJs and the window, and mid-line BGP/SCX ([#254](https://github.com/phmatray/cartouche/issues/254)) ([#273](https://github.com/phmatray/cartouche/issues/273)) ([9347041](https://github.com/phmatray/cartouche/commit/934704149201a0cd0eb000c51431e7c0f02a299a))
+* **core:** the mode-2 STAT source is a pulse, not a level ([#250](https://github.com/phmatray/cartouche/issues/250)) ([#272](https://github.com/phmatray/cartouche/issues/272)) ([6caf24d](https://github.com/phmatray/cartouche/commit/6caf24d92cace4dccc98d7a1d325703f218a52c7))
+
+
+### Performance
+
+* **core:** win back bench headroom before the remaining conformance fixes ([#241](https://github.com/phmatray/cartouche/issues/241)) ([#260](https://github.com/phmatray/cartouche/issues/260)) ([82b88fa](https://github.com/phmatray/cartouche/commit/82b88fac672ac23e15db57ae35cf84059fccfd0f))
+
 ## [1.9.0](https://github.com/phmatray/cartouche/compare/v1.8.0...v1.9.0) (2026-09-28)
 
 
