@@ -464,17 +464,11 @@ gambatte/oamdma/late_sp01y_ds_1_cgb04c_out3.gbc@cgb  # oam-dma
 gambatte/oamdma/late_sp39x_4_cgb04c_out3.gbc@cgb  # oam-dma
 gambatte/oamdma/late_sp39x_ds_2_cgb04c_out3.gbc@cgb  # oam-dma
 gambatte/oamdma/late_sp39y_ds_1_cgb04c_out3.gbc@cgb  # oam-dma
-gambatte/oamdma/oamdma_late_halt_stat_1_dmg08_cgb04c_out0.gbc@cgb  # oam-dma
-gambatte/oamdma/oamdma_late_halt_stat_1_dmg08_cgb04c_out0.gbc@dmg  # oam-dma
 gambatte/oamdma/oamdma_late_speedchange_stat_2_cgb04c_out3.gbc@cgb  # oam-dma
 gambatte/oamdma/oamdma_srcFE00_busyread0000_dmg08_cgb04c_out0.gbc@dmg  # oam-dma: expects $FF from the power-on work RAM at $DExx that the DMA copies and the ROM never writes (per-unit contents; srcFF00 expects $00 at $DFxx)
 gambatte/oamdma/oamdma_srcFE00_busyreadA000_dmg08_cgb04c_out0.gbc@dmg  # oam-dma: expects $FF from the power-on work RAM at $DExx that the DMA copies and the ROM never writes (per-unit contents; srcFF00 expects $00 at $DFxx)
 gambatte/oamdma/oamdma_srcFE00_busyreadC000_dmg08_out0_cgb_xoutblank.gbc@dmg  # oam-dma: expects $FF from the power-on work RAM at $DExx that the DMA copies and the ROM never writes (per-unit contents; srcFF00 expects $00 at $DFxx)
 gambatte/oamdma/oamdma_srcFE00_readFE00_dmg08_cgb04c_out0.gbc@dmg  # oam-dma: expects $FF from the power-on work RAM at $DExx that the DMA copies and the ROM never writes (per-unit contents; srcFF00 expects $00 at $DFxx)
-gambatte/oamdma/oamdmasrc80_halt_lycirq_read8000_dmg08_cgb04c_out81.gbc@cgb  # oam-dma
-gambatte/oamdma/oamdmasrc80_halt_lycirq_read8000_dmg08_cgb04c_out81.gbc@dmg  # oam-dma
-gambatte/oamdma/oamdmasrc80_halt_m2irq_read8000_dmg08_cgb04c_out81.gbc@cgb  # oam-dma
-gambatte/oamdma/oamdmasrc80_halt_m2irq_read8000_dmg08_cgb04c_out81.gbc@dmg  # oam-dma
 gambatte/oamdma/oamdmasrcC000_hdmasrc0000_cgb04c_out0A940C0D.gbc@cgb  # oam-dma
 gambatte/oamdma/oamdmasrcC0_speedchange_readC000_cgb04c_out11.gbc@cgb  # oam-dma
 gambatte/scx_during_m3/scx_0060c0/scx_during_m3_1.gbc@cgb  # ppu-mode3

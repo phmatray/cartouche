@@ -520,7 +520,7 @@ impl GameBoy {
         data.extend_from_slice(&self.cpu.regs.pc.to_le_bytes());
 
         data.push(self.cpu.ime as u8);
-        data.push(self.cpu.halted as u8);
+        data.push(if self.cpu.halted { 1 + self.cpu.halt_grace as u8 } else { 0 }); // 2: HALT's first M-cycle ahead
         data.push(self.cpu.halt_bug as u8);
 
         data.push(self.bus.interrupts.interrupt_enable);
@@ -701,7 +701,8 @@ impl GameBoy {
         self.cpu.regs.pc = read_u16!();
 
         self.cpu.ime = read_u8!() != 0;
-        self.cpu.halted = read_u8!() != 0;
+        let halted = read_u8!();
+        (self.cpu.halted, self.cpu.halt_grace) = (halted != 0, halted == 2);
         self.cpu.halt_bug = read_u8!() != 0;
 
         self.bus.interrupts.interrupt_enable = read_u8!();
