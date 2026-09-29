@@ -625,6 +625,8 @@ impl GameBoy {
         // Then the lock of an invalid opcode (absent from older states: not locked): flag, PC LE.
         let [lo, hi] = self.cpu.locked_pc.to_le_bytes();
         data.extend_from_slice(&[self.cpu.locked as u8, lo, hi]);
+        // Then a Color's RAM at $FEA0-$FEFF (absent from older states: zeros).
+        data.extend_from_slice(&self.bus.fea0);
 
         data
     }
@@ -863,6 +865,8 @@ impl GameBoy {
             _ => (false, 0),
         };
         (self.cpu.locked, self.cpu.locked_pc) = (locked, pc);
+        self.bus.fea0 = timing.get(TIMING_TAIL_LEN + 11..TIMING_TAIL_LEN + 11 + 0x30)
+            .map_or([0; 0x30], |b| b.try_into().unwrap());
         true
     }
 }
@@ -967,7 +971,7 @@ mod tests {
         assert_eq!(g.save_state(), state);
 
         let mut g = GameBoy::new(rom).unwrap();
-        assert!(g.load_state(&state[..state.len() - TIMING_TAIL_LEN - 11])); // - 11: RP, mode-3 length, speed switch, OPRI, revision, CPU lock
+        assert!(g.load_state(&state[..state.len() - TIMING_TAIL_LEN - 11 - 0x30])); // - 11: RP, mode-3 length, speed switch, OPRI, revision, CPU lock; - 0x30: $FEA0 RAM
         assert!(!g.bus.timer.reload_pending);
         assert_eq!(g.bus.dma_index, 0xA0, "an older state's transfer is already in OAM");
     }
@@ -991,7 +995,7 @@ mod tests {
 
         let mut g = GameBoy::new(rom).unwrap();
         g.set_revision(Revision::CgbE);
-        assert!(g.load_state(&state[..state.len() - 4])); // without the revision and the CPU lock
+        assert!(g.load_state(&state[..state.len() - 4 - 0x30])); // without the revision, the CPU lock and $FEA0 RAM
         assert_eq!((g.bus.rev, g.bus.ppu.rev), (Revision::Default, Revision::Default));
     }
 
@@ -1033,7 +1037,7 @@ mod tests {
 
         let mut g = GameBoy::new(rom).unwrap();
         g.bus.ppu.mode3_len = 200;
-        assert!(g.load_state(&state[..state.len() - 10])); // without the mode-3 length, speed switch, OPRI, revision and CPU lock
+        assert!(g.load_state(&state[..state.len() - 10 - 0x30])); // without the mode-3 length, speed switch, OPRI, revision, CPU lock and $FEA0 RAM
         assert_eq!(g.bus.ppu.mode3_len, 172);
     }
 
@@ -1060,7 +1064,7 @@ mod tests {
 
         // The pre-change layout ends right after KEY0 (then the mapper block, the timing tail, RP
         // the mode-3 length, the speed-switch byte, OPRI, the revision and the CPU lock).
-        let end = state.len() - TIMING_TAIL_LEN - 11;
+        let end = state.len() - TIMING_TAIL_LEN - 11 - 0x30;
         let extra = u16::from_le_bytes([state[end - 151], state[end - 150]]);
         assert_eq!(extra, 149, "mode, address, result, opcode, 128 bytes of nibbles, IR LED, clock tail");
         let old = &state[..end - 151];
@@ -1127,7 +1131,7 @@ mod tests {
     /// state cut right after KEY0 (before the mapper block existed) still loads.
     fn reload(gb: &GameBoy, rom: &[u8]) -> GameBoy {
         let state = gb.save_state();
-        let cut = state.len() - 11 - TIMING_TAIL_LEN - 2 - gb.bus.cartridge.export_extra().len(); // 11: RP, mode-3 length, speed switch, OPRI, revision, CPU lock
+        let cut = state.len() - 11 - 0x30 - TIMING_TAIL_LEN - 2 - gb.bus.cartridge.export_extra().len(); // 11: RP, mode-3 length, speed switch, OPRI, revision, CPU lock; 0x30: $FEA0 RAM
         assert_eq!(state[cut..cut + 2], (gb.bus.cartridge.export_extra().len() as u16).to_le_bytes());
         let mut old = GameBoy::new(rom.to_vec()).unwrap();
         assert!(old.load_state(&state[..cut]), "a state without the mapper block");
