@@ -200,7 +200,6 @@ gambatte/lcd_offset/offset2_lyc99int_m0stat_count_scx2_1_cgb04c_out90.gbc@cgb  #
 gambatte/lcd_offset/offset2_lyc99int_m2irq_count_1_cgb04c_out98.gbc@cgb  # stat
 gambatte/lycEnable/ff45_enable_weirdpoint_ds_lcdoffset1_2_cgb04c_out0.gbc@cgb  # stat
 gambatte/lycEnable/ff45_enable_weirdpoint_lcdoffset1_2_cgb04c_out0.gbc@cgb  # stat
-gambatte/lycEnable/late_ff41_enable_ds_1_cgb04c_out3.gbc@cgb  # stat
 gambatte/lycEnable/late_ff45_enable_ds_lcdoffset1_2_cgb04c_out0.gbc@cgb  # stat
 gambatte/lycEnable/lyc153_late_ff45_enable_ds_lcdoffset1_2_cgb04c_outE0.gbc@cgb  # stat
 gambatte/lycEnable/lyc_ff45_trigger_delay_2_dmg08_out0_cgb04c_out2.gbc@cgb  # stat
@@ -211,7 +210,6 @@ gambatte/m0enable/enable_wxA6_2x_spxA7_ds_2_cgb04c_out2.gbc@cgb  # stat
 gambatte/m0enable/enable_wxA6_2x_spxA7_ds_3_cgb04c_out2.gbc@cgb  # stat
 gambatte/m1/m1irq_late_enable_lcdoffset1_1_cgb04c_out2.gbc@cgb  # stat
 gambatte/m2enable/late_enable_ly0_lcdoffset2_1_cgb04c_out2.gbc@cgb  # stat
-gambatte/miscmstatirq/lycstatwirq_trigger_m0_late_ly44_lyc44_08_40_ds_3_cgb04c_outE2.gbc@cgb  # stat
 gambatte/oam_access/midwrite_2_dmg08_out1_cgb04c_out0.gbc@cgb  # ppu
 gambatte/oamdma/oamdma_srcFE00_busyread0000_dmg08_cgb04c_out0.gbc@dmg  # oam-dma: expects $FF from the power-on work RAM at $DExx that the DMA copies and the ROM never writes (per-unit contents; srcFF00 expects $00 at $DFxx)
 gambatte/oamdma/oamdma_srcFE00_busyreadA000_dmg08_cgb04c_out0.gbc@dmg  # oam-dma: expects $FF from the power-on work RAM at $DExx that the DMA copies and the ROM never writes (per-unit contents; srcFF00 expects $00 at $DFxx)

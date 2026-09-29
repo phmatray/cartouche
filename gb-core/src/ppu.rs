@@ -432,12 +432,18 @@ impl Ppu {
                     // `late_enable_m0disable_2`, `lyc0/lyc1_late_m2enable_lycdisable_*`,
                     // `late_m1disable_ly0_2`, `m2_late_m1disable_ly0_ds_1`,
                     // `miscmstatirq/lycstatwirq_trigger_*`.)
+                    // In double speed the write lands on the line's dot 0, where LY = LYC still
+                    // compares the line before and mode 0 has fallen: a source it enables rises
+                    // there (`lycEnable/late_ff41_enable_ds_1/_2`,
+                    // `miscmstatirq/lycstatwirq_trigger_m0_late_ly44_lyc44_08_40_ds_3/_4`).
                     let lyc = self.lyc == self.ly;
+                    let lyc_before = if dmg { lyc } else { self.lyc == self.ly.saturating_sub(1) };
                     let early = if self.ly == 0 { 0x10 } else { 0x20 };
-                    let before = |s: u8| s & early != 0 || s & 0x40 != 0 && lyc;
+                    let before = |s: u8| s & early != 0 || s & 0x40 != 0 && lyc_before;
                     let after = |s: u8| s & 0x20 != 0 || s & 0x40 != 0 && lyc;
                     let was = self.stat_edge_now;
-                    let now = !self.stat_line_before && (dmg || before(self.stat)) || !before(self.stat) && after(self.stat);
+                    let low = if dmg { !self.stat_line_before } else { !before(old) };
+                    let now = low && (dmg || before(self.stat)) || !before(self.stat) && after(self.stat);
                     (self.stat_write_irq, self.stat_write_drop) = (now && !was, was && !now);
                 }
                 self.write_vs_mode0_edge(old, self.lyc, dmg, false, was_high);
