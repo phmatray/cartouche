@@ -487,7 +487,7 @@ impl Ppu {
         self.line.lcdc_prev = self.line.lcdc_prev << 8 | self.lcdc as u16;
     }
 
-    #[inline]
+    #[inline(always)]
     fn fifo_dot(&mut self) {
         // WX 0-6 is matched before x = 0 (x = WX - 7), while the first tile is being fetched; the
         // first match holds (a later WX 0-6 match on the same line is no new start).

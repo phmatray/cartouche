@@ -397,6 +397,7 @@ impl Ppu {
     /// The line LY=LYC compares against: none for the first M-cycle of a line (the comparator
     /// is updating), and on line 153 (whose LY reads 0 after its first M-cycle) 153 for one
     /// M-cycle, none for one, then 0 through line 0.
+    #[inline]
     fn ly_compare(&self, irq: bool) -> Option<u8> {
         let c = self.mode_clock;
         match (self.mode, self.ly) {

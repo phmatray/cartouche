@@ -52,17 +52,13 @@ impl Timer {
             return false;
         }
 
-        for _ in 0..cycles {
-            let old_div = self.div_counter;
-            self.div_counter = self.div_counter.wrapping_add(1);
-
-            if self.tac & 0x04 != 0 {
-                let bit_mask = self.tac_bit_mask();
-
-                // Falling edge: selected bit was 1, now is 0
-                if (old_div & bit_mask != 0) && (self.div_counter & bit_mask == 0) {
-                    self.increment();
-                }
+        let old = self.div_counter as u32;
+        self.div_counter = self.div_counter.wrapping_add(cycles as u16);
+        if self.tac & 0x04 != 0 {
+            // The selected bit falls each time the counter reaches a multiple of twice its value.
+            let period = self.tac_bit_mask() as u32 * 2;
+            for _ in 0..(old + cycles) / period - old / period {
+                self.increment();
             }
         }
 
@@ -147,6 +143,24 @@ mod tests {
         t.write(0xFF07, 0x05);
         assert!(!t.reload_pending, "same TAC: no edge");
         assert_eq!(t.tima, 0xFF);
+    }
+
+    /// `step` counts a whole M-cycle at once: the same TIMA, DIV and overflow as ticking each
+    /// T-cycle and looking for the selected bit's falling edge, across the DIV wrap too.
+    #[test]
+    fn a_whole_m_cycle_ticks_like_its_t_cycles() {
+        for tac in 4..8 {
+            for div in (0..=0xFFFFu16).step_by(3) {
+                let mut t = Timer { div_counter: div, tima: 0xFF, tac, ..Timer::new() };
+                let mut edges = 0;
+                for i in 0..4u16 {
+                    let (old, new) = (div.wrapping_add(i), div.wrapping_add(i + 1));
+                    if old & t.tac_bit_mask() != 0 && new & t.tac_bit_mask() == 0 { edges += 1; }
+                }
+                assert_eq!(t.step(4), edges > 0, "tac {tac} div {div:#06x}");
+                assert_eq!((t.tima, t.div_counter), (0xFFu8.wrapping_add(edges), div.wrapping_add(4)));
+            }
+        }
     }
 
     #[test]
