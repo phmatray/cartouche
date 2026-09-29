@@ -23,7 +23,7 @@ pub enum Model {
 
 /// The hardware revision within a model's family (DMG-CPU 0, CGB E, ...). `Default` is the hybrid
 /// the core has always modelled, and the only one the web app uses. Chosen before the hand-over
-/// (`set_revision`, then `skip_boot_rom`) and read from `bus.rev`, a plain field.
+/// (`with_boot_revision`, or `set_revision` then `skip_boot_rom`) and read from `bus.rev`, a plain field.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum Revision {
     #[default]

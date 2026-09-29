@@ -183,7 +183,7 @@ impl Ppu {
         } else {
             // A CGB E unlocks OAM one dot after STAT shows mode 0 in single speed (Age oam-read's `EFF`).
             let e_lag = from == 2 && self.rev == Revision::CgbE && self.m_cycle_dots == 4
-                && self.mode == PpuMode::HBlank && self.mode_clock == 5 - self.m_cycle_dots / 2;
+                && self.mode == PpuMode::HBlank && self.mode_clock == 3;
             shown >= from || internal >= from || e_lag
         }
     }
