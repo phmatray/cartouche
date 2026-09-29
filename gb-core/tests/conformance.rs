@@ -484,6 +484,14 @@ fn runs_verdict_fails_on_emulator_error() {
     assert!(matches!(&v, Verdict::Fail(why) if why.starts_with("emulator error")), "{v:?}");
 }
 
+/// A probe with an oracle would otherwise run under Probe yet be counted as a probe without one.
+#[test]
+fn probes_with_an_oracle_are_not_listed_without_a_verdict() {
+    for (stem, _) in PROBE_ORACLES {
+        assert!(!NO_VERDICT.contains(&format!("gbmicrotest/{stem}.gb")), "{stem} has an oracle: remove it from probes-without-verdict.txt");
+    }
+}
+
 #[test]
 fn probe_verdict_compares_bytes() {
     let mut gb = synthetic(&[]);
