@@ -57,6 +57,9 @@ pub struct MemoryBus {
     pub(crate) hdma_remaining: u8,
     /// RP ($FF56, CGB): bit 0 = LED on, bits 6-7 = read enable (both set: bit 1 shows the sensor).
     pub(crate) rp: u8,
+    /// The last mode-0 start raised IF.1 (the STAT line rose and IF.1 was clear): see `if_hidden`.
+    /// Not saved: it only matters within the M-cycle of that edge.
+    pub(crate) stat_fresh: bool,
     /// Whether the infrared sensor sees light (a linked partner's LED); never set when alone.
     pub ir_light_in: bool,
     /// Active cheat codes (Game Genie ROM patches, GameShark RAM writes).
@@ -102,6 +105,7 @@ impl MemoryBus {
             hdma_dest: 0,
             hdma_remaining: 0,
             rp: 0,
+            stat_fresh: false,
             ir_light_in: false,
             cheats: Default::default(),
             watch: None,
@@ -207,7 +211,7 @@ impl MemoryBus {
             // SC: unused bits read 1, and bit 1 (the fast clock) exists in Color mode only.
             0xFF02 => self.serial.read(addr) | if self.cgb_mode { 0x7C } else { 0x7E },
             0xFF04..=0xFF07 => self.timer.read(addr),
-            0xFF0F => self.interrupts.interrupt_flag | 0xE0, // bits 5-7 unused, read as 1
+            0xFF0F => (self.interrupts.interrupt_flag & !self.if_hidden()) | 0xE0, // bits 5-7 unused, read as 1
             0xFF10..=0xFF3F | 0xFF76 | 0xFF77 => self.apu.read_register(addr),
             0xFF46 => self.dma_source,
             0xFF40..=0xFF4B => self.ppu.read_register(addr),
@@ -427,6 +431,7 @@ impl MemoryBus {
             self.interrupts.request(VBLANK_BIT);
             if let Some(s) = self.sgb.as_deref_mut() { s.vblank(&self.ppu.framebuffer, self.apu.read_register(0xFF26) & 0x0F != 0); }
         }
+        if hblank_entry { self.stat_fresh = stat_irq && self.interrupts.interrupt_flag & STAT_BIT == 0; }
         if stat_irq {
             self.interrupts.request(STAT_BIT);
         }
@@ -514,6 +519,11 @@ impl MemoryBus {
     /// which a running CPU's fetch-time sample needs but a halted one must not see yet.
     pub fn late_interrupts(&self) -> u8 {
         if self.timer.reload_pending { TIMER_BIT } else { 0 }
+    }
+
+    /// IF bits raised in this M-cycle after the CPU's read of IF samples them (`Ppu::mode0_edge_now`).
+    fn if_hidden(&self) -> u8 {
+        if self.stat_fresh && self.ppu.mode0_edge_now() { STAT_BIT } else { 0 }
     }
 
     pub fn cycle_tick(&mut self) {
@@ -781,5 +791,36 @@ mod tests {
         assert_eq!(bus.ppu.read_oam(0), 0x80, "restarted from byte 0 with the new page");
         for _ in 0..160 { bus.cycle_tick(); }
         assert_eq!(bus.read_byte(0xFE9F), 0x80 | 0x9F);
+    }
+
+    /// DMG line 10 from its first dot, SCX `scx`, the mode-0 STAT interrupt enabled.
+    fn line10_mode0_irq(scx: u8) -> MemoryBus {
+        let mut bus = bus();
+        let p = &mut bus.ppu;
+        (p.lcdc, p.ly, p.mode, p.mode_clock, p.stat, p.scx) = (0x81, 10, crate::ppu::PpuMode::OamScan, 0, 0x08, scx);
+        bus.interrupts.interrupt_enable = STAT_BIT;
+        bus
+    }
+
+    /// The mode-0 edge lands 250 + SCX dots into the line (Pan Docs' 80 + 172 + SCX, less
+    /// `MODE0_EARLY`): IF.1 is set in M-cycle 63 for SCX 0-2, 64 for 3-6, 65 for 7, so the next
+    /// opcode fetch dispatches it, but an IF read in that M-cycle still sees it clear
+    /// (gbmicrotest `hblank_int_scx0..7_if_a/b/c`: 35, 35, 35, 36, 36, 36, 36, 37 NOPs).
+    #[test]
+    fn mode0_if_rises_per_scx() {
+        let rises: Vec<u32> = (0..8).map(|scx| {
+            let mut bus = line10_mode0_irq(scx);
+            let mut m = 0;
+            while bus.interrupts.interrupt_flag & STAT_BIT == 0 {
+                bus.cycle_tick();
+                m += 1;
+                assert!(m < 114, "SCX {scx}: no mode-0 interrupt");
+            }
+            assert_eq!(bus.read_byte(0xFF0F) & STAT_BIT, 0, "SCX {scx}: an IF read in M-cycle {m} misses it");
+            bus.cycle_tick();
+            assert_eq!(bus.read_byte(0xFF0F) & STAT_BIT, STAT_BIT, "SCX {scx}: seen in M-cycle {}", m + 1);
+            m
+        }).collect();
+        assert_eq!(rises, [63, 63, 63, 64, 64, 64, 64, 65]);
     }
 }

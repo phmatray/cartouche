@@ -779,6 +779,9 @@ impl GameBoy {
         self.bus.ppu.window_was_active = read_u8!() != 0;
         self.bus.ppu.lcd_on_line0 = read_u8!() != 0;
         self.bus.ppu.stat_irq_line = read_u8!() != 0;
+        // Not saved: it only counts in the M-cycle of a mode-0 edge, where a set IF.1 is that edge's
+        // (a halted CPU with it already pending would have woken), so a state rebuilds it.
+        self.bus.stat_fresh = true;
         self.cpu.ime_pending = read_u8!() != 0;
         // Before the tail below, STOP never stopped anything: an older state is not in stop mode.
         pos += 1;
