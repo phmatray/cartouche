@@ -178,7 +178,7 @@ listed, not hidden, in `gb-core/tests/expected-failures.txt`.
 | Link cable | Serial transfers between two consoles | ✅ |
 | Infrared (CGB, HuC1, HuC3) | Light between the two consoles of the link page | ✅ |
 | Mooneye acceptance | Timers, DMA, interrupts, PPU and instruction timing | 70/75 |
-| Mooneye emulator-only MBC | MBC1, MBC2 and MBC5 banking | 27/28 |
+| Mooneye emulator-only MBC | MBC1, MBC2 and MBC5 banking | 28/28 |
 | Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 26/51 |
 | SameSuite | APU, HDMA and interrupt edge cases (CGB) | 69/78 |
 | Age | PPU, STAT, OAM/VRAM access and double-speed timing | 19/51 |
