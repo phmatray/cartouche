@@ -331,6 +331,21 @@ fn an_invalid_opcode_locks_the_cpu_and_the_machine_runs_on() {
     assert_ne!(gb.bus.read_byte(0xFF04), div, "the timer runs on");
 }
 
+/// The web side learns about the lock from two getters; it is not an emulator error.
+#[test]
+fn the_lock_is_reported_to_the_web_without_an_error() {
+    let mut emu = gb_core::Emulator::new();
+    assert!(!emu.cpu_locked() && emu.locked_pc() == 0, "no ROM");
+    let mut r = rom(&[0xC3, 0x50, 0x01], &[]);
+    r[0x150..0x152].copy_from_slice(&[0xFB, 0xD3]);
+    assert!(emu.load_rom(&r));
+    assert!(!emu.cpu_locked());
+    assert!(emu.run_frame());
+    assert_eq!(emu.get_error(), None);
+    assert!(emu.cpu_locked());
+    assert_eq!(emu.locked_pc(), 0x0151);
+}
+
 #[test]
 fn a_locked_cpu_stays_locked_through_a_state_and_an_older_state_loads_unlocked() {
     let mut gb = locks_at_0151();
