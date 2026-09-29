@@ -3,6 +3,7 @@ pub const SCREEN_HEIGHT: usize = 144;
 pub const FRAMEBUFFER_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT * 4;
 
 use crate::fifo::LineState;
+use crate::gameboy::Revision;
 use crate::trace::Tracer;
 
 /// An OBJ selected for a scanline: (x, OAM slot, y, tile, attributes), raw OAM values.
@@ -62,6 +63,9 @@ pub struct Ppu {
     pub mode3_len: u32,
     /// Dots per CPU M-cycle: 4, or 2 in CGB double speed (set by the bus when the speed changes).
     pub m_cycle_dots: u32,
+    /// The hardware revision (a copy of `MemoryBus::rev`, set with it): CGB E reads line 0's first
+    /// STAT M-cycle and OAM around mode 0 differently.
+    pub rev: Revision,
 
     /// The line-by-line picture being drawn.
     pub framebuffer: [u8; FRAMEBUFFER_SIZE],
@@ -114,6 +118,7 @@ impl Ppu {
             lcd_on_line0: false,
             mode3_len: MODE3_MAX,
             m_cycle_dots: 4,
+            rev: Revision::Default,
             framebuffer: [0; FRAMEBUFFER_SIZE],
             front: vec![0; FRAMEBUFFER_SIZE],
             frame_ready: false,
@@ -176,7 +181,10 @@ impl Ppu {
         if write {
             shown >= from && !(shown == 2 && self.mode == PpuMode::Drawing)
         } else {
-            shown >= from || internal >= from
+            // A CGB E unlocks OAM one dot after STAT shows mode 0 in single speed (Age oam-read's `EFF`).
+            let e_lag = from == 2 && self.rev == Revision::CgbE && self.m_cycle_dots == 4
+                && self.mode == PpuMode::HBlank && self.mode_clock == 5 - self.m_cycle_dots / 2;
+            shown >= from || internal >= from || e_lag
         }
     }
 
@@ -195,9 +203,9 @@ impl Ppu {
                     PpuMode::OamScan if self.lcd_on_line0 => 0,
                     PpuMode::Drawing if self.lcd_on_line0 && self.mode_clock < 4 => 0,
                     PpuMode::Drawing if self.mode_clock < m => 2,
-                    // Line 0 after VBlank: 0 like the other lines in single speed, still 1 in double
-                    // speed (Age stat-mode, CGB B/C).
-                    PpuMode::OamScan if self.mode_clock < m => if self.ly == 0 && m == 2 { 1 } else { 0 },
+                    // Line 0 after VBlank: 0 like the other lines in single speed on a CGB B/C, still
+                    // 1 in double speed and on a CGB E, which has no mode-0 M-cycle there (Age stat-mode).
+                    PpuMode::OamScan if self.mode_clock < m => if self.ly == 0 && (m == 2 || self.rev == Revision::CgbE) { 1 } else { 0 },
                     PpuMode::VBlank if self.mode_clock < m && self.ly == 144 => 0,
                     mode => mode as u8,
                 };
@@ -701,16 +709,32 @@ mod tests {
     }
 
     /// The first M-cycle of line 0 after VBlank reads mode 0 in single speed, still 1 in double
-    /// speed (Age stat-mode, CGB B/C).
+    /// speed (Age stat-mode, CGB B/C) and on a CGB E (stat-mode-cgbE's `M1E`).
     #[test]
     fn line_0_after_vblank_first_m_cycle() {
-        for (m_cycle_dots, mode) in [(4, 0), (2, 1)] {
+        for (m_cycle_dots, rev, mode) in [(4, Revision::Default, 0), (4, Revision::CgbC, 0), (2, Revision::Default, 1), (4, Revision::CgbE, 1)] {
             let mut p = Ppu::new();
-            (p.lcdc, p.mode, p.ly, p.mode_clock, p.m_cycle_dots) = (0x81, PpuMode::VBlank, 153, 400, m_cycle_dots);
+            (p.lcdc, p.mode, p.ly, p.mode_clock, p.m_cycle_dots, p.rev) = (0x81, PpuMode::VBlank, 153, 400, m_cycle_dots, rev);
             while p.mode == PpuMode::VBlank { p.step(1); }
-            assert_eq!(p.read_register(0xFF41) & 3, mode, "{m_cycle_dots} dots per M-cycle");
+            assert_eq!(p.read_register(0xFF41) & 3, mode, "{m_cycle_dots} dots per M-cycle, {rev:?}");
             while p.mode_clock < m_cycle_dots { p.step(1); }
             assert_eq!(p.read_register(0xFF41) & 3, 2);
+        }
+    }
+
+    /// In single speed a CGB E keeps OAM locked for reads one dot after STAT shows mode 0; a CGB
+    /// B/C reads it there (Age oam-read's `EFF`). Writes and VRAM are unchanged.
+    #[test]
+    fn cgb_e_unlocks_oam_reads_a_dot_after_mode_0() {
+        for (rev, locked) in [(Revision::Default, false), (Revision::CgbC, false), (Revision::CgbE, true)] {
+            let mut p = Ppu::new();
+            (p.lcdc, p.ly, p.rev) = (0x81, 10, rev);
+            while !p.step(1).2 {}
+            while p.read_register(0xFF41) & 3 == 3 { p.step(1); }
+            assert_eq!(p.cpu_locked(0xFE00, false), locked, "{rev:?}");
+            assert!(!p.cpu_locked(0xFE00, true) && !p.cpu_locked(0x8000, false), "{rev:?}");
+            p.step(1);
+            assert!(!p.cpu_locked(0xFE00, false), "{rev:?}: a dot later");
         }
     }
 

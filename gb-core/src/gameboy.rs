@@ -98,6 +98,11 @@ impl GameBoy {
     /// anything else) starts from the post-boot state (DMG and CGB cartridges) or runs the plain CGB
     /// boot ROM unseen (`finish_boot`, colourised DMG cartridges).
     pub fn with_boot(rom_data: Vec<u8>, colorize: bool, palette: u8, animation: u8) -> Result<Self, EmulatorError> {
+        Self::with_boot_revision(rom_data, colorize, palette, animation, Revision::Default)
+    }
+
+    /// `with_boot` on hardware revision `rev`, chosen before the boot ROM runs or is skipped.
+    pub fn with_boot_revision(rom_data: Vec<u8>, colorize: bool, palette: u8, animation: u8, rev: Revision) -> Result<Self, EmulatorError> {
         let animation = if (1..=3).contains(&animation) { animation } else { 0 };
         let cartridge = Cartridge::from_rom(rom_data)?;
         let cgb_cart = cartridge.cgb_mode();
@@ -114,6 +119,7 @@ impl GameBoy {
             boot: animation,
             debugger: None,
         };
+        gb.set_revision(rev);
         gb.bus.boot_rom = crate::boot_rom::image(gb.console, animation);
         if gb.console == Console::Compat {
             gb.palette = if palette <= 12 { palette } else { 0 };
@@ -211,6 +217,7 @@ impl GameBoy {
     /// The hardware revision to emulate; call it before the hand-over (`skip_boot_rom`).
     pub fn set_revision(&mut self, rev: Revision) {
         self.bus.rev = rev;
+        self.bus.ppu.rev = rev;
     }
 
     pub fn skip_boot_rom(&mut self) {
@@ -831,7 +838,7 @@ impl GameBoy {
         self.bus.apu_event_due = (spsw & 2 != 0).then_some(spsw & 4 != 0);
         self.bus.timer.div_hold = (spsw >> 3) & 3;
         self.bus.ppu.opri = byte(TIMING_TAIL_LEN + 6).unwrap_or(0) & 1;
-        self.bus.rev = byte(TIMING_TAIL_LEN + 7).and_then(|r| Revision::ALL.get(r as usize)).copied().unwrap_or_default();
+        self.set_revision(byte(TIMING_TAIL_LEN + 7).and_then(|r| Revision::ALL.get(r as usize)).copied().unwrap_or_default());
         true
     }
 }
@@ -959,9 +966,9 @@ mod tests {
         assert_eq!(g.save_state(), state);
 
         let mut g = GameBoy::new(rom).unwrap();
-        g.bus.rev = Revision::CgbE;
+        g.set_revision(Revision::CgbE);
         assert!(g.load_state(&state[..state.len() - 1]));
-        assert_eq!(g.bus.rev, Revision::Default);
+        assert_eq!((g.bus.rev, g.bus.ppu.rev), (Revision::Default, Revision::Default));
     }
 
     /// KEY0 set by the CGB boot ROM (DMG compatibility) goes with a state saved before it unmaps.

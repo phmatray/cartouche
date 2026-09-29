@@ -89,9 +89,7 @@ fn boot(path: &Path, hw: Hw, rev: Revision) -> Result<GameBoy, String> {
             Ok(gb)
         }
         Hw::Cgb => {
-            // ponytail: set after the CGB boot ROM ran; no CGB revision changes the hand-over yet.
-            let mut gb = GameBoy::with_boot(rom, true, 0, 0).map_err(|e| e.to_string())?;
-            gb.set_revision(rev);
+            let mut gb = GameBoy::with_boot_revision(rom, true, 0, 0, rev).map_err(|e| e.to_string())?;
             gb.finish_boot().map_err(|e| e.to_string())?;
             Ok(gb)
         }
