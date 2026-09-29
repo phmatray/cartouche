@@ -1447,7 +1447,8 @@ impl Apu {
         if self.div_divider & 1 == 1 {
             self.clock_length_all();
         }
-        if self.div_divider & 3 == 3 && self.triggered & if self.cgb_mode { 0x11 } else { 1 } == 0 {
+        let sweep_reloading = self.triggered & if self.cgb_mode { 0x11 } else { 1 };
+        if self.div_divider & 3 == 3 && sweep_reloading == 0 {
             self.ch1_sweep.div_event(&mut self.ch1, self.lf_div, self.double_speed, div_write);
         }
     }
@@ -2091,6 +2092,34 @@ mod tests {
         }
         assert_eq!(other.ch1.frequency, 0x742);
         assert_eq!(other.ch3.wave_ram[5], 0xA5);
+    }
+
+    /// The latched duty bits and fresh triggers ride in an optional tail: a block written before
+    /// it loads with the bits its duty steps give (so old save states still load, as they were).
+    #[test]
+    fn the_state_tail_is_optional() {
+        let mut apu = Apu::new();
+        for (reg, v) in [(0xFF26, 0x80), (0xFF11, 0x00), (0xFF12, 0xF0), (0xFF13, 0xC0), (0xFF14, 0x87)] {
+            apu.write_register(reg, v);
+        }
+        apu.step(131 + 1 + 128 * 6); // step 7: duty 0's high bit
+        apu.write_register(0xFF11, 0xC0); // duty 3 reads 0 there: the latch keeps 1
+        apu.write_register(0xFF19, 0x80);
+        let mut state = Vec::new();
+        apu.export_state(&mut state);
+
+        let mut same = Apu::new();
+        assert!(same.import_state(&state, &mut 0, 8));
+        assert!(same.ch1.high && same.triggered == apu.triggered && apu.triggered & 2 != 0, "the tail round-trips");
+
+        let len = u16::from_le_bytes([state[0], state[1]]) - 2;
+        let mut old = state[2..2 + len as usize].to_vec();
+        old.splice(0..0, len.to_le_bytes());
+        let (mut before, mut pos) = (Apu::new(), 0);
+        assert!(before.import_state(&old, &mut pos, 8));
+        assert_eq!(pos, old.len());
+        assert!(!before.ch1.high && before.triggered == 0, "no tail: the duty table's bit, no trigger");
+        assert_eq!(before.ch1.duty_position, 7);
     }
 
     /// PCM12 reads channel 1's digital output in its low nibble and channel 2's in the high one
