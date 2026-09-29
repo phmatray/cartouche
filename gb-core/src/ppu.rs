@@ -166,11 +166,14 @@ impl Ppu {
     }
 
     /// The CPU cannot reach OAM in modes 2 and 3 nor VRAM and CGB palette RAM (BCPD/OCPD) in
-    /// mode 3 (reads $FF, writes are dropped; Pan Docs "LCD Color Palettes"). A read is blocked from the M-cycle before STAT shows the mode (the internal mode)
-    /// until STAT shows mode 0; a write only while STAT shows it, except in the M-cycle mode 3
-    /// has begun but STAT still shows mode 2, which lets a write through. The line after the LCD
-    /// turns on has no OAM scan and no lead.
-    /// (gbmicrotest `poweron_oam_*`, `poweron_vram_*`, `oam_*_l0/l1_*`, `vram_*_l0/l1_*`.)
+    /// mode 3 (reads $FF, writes are dropped; Pan Docs "LCD Color Palettes"). A read is blocked
+    /// from the M-cycle before STAT shows the mode (the internal mode) until STAT shows mode 0; a
+    /// write only while STAT shows it, except in the M-cycle mode 3 has begun but STAT still shows
+    /// mode 2, which lets a write through. The line after the LCD turns on has no OAM scan and no
+    /// lead. (gbmicrotest `poweron_oam_*`, `poweron_vram_*`, `oam_*_l0/l1_*`, `vram_*_l0/l1_*`.)
+    /// A CGB differs at the edges, per speed and revision (Age oam-read, oam-write, vram-read).
+    // ponytail: decided per access from the mode and its dot; precompute per-line edge dots if
+    // this ever shows in the bench.
     pub fn cpu_locked(&self, addr: u16, write: bool) -> bool {
         if self.lcdc & 0x80 == 0 || !matches!(addr, 0x8000..=0x9FFF | 0xFE00..=0xFE9F | 0xFF69 | 0xFF6B) {
             return false;
@@ -180,17 +183,32 @@ impl Ppu {
             m => m,
         };
         let internal = match self.mode {
+            // In double speed a CGB B/C has no lead into mode 2; a CGB E has (Age oam-read's `EFF`).
+            PpuMode::OamScan if self.m_cycle_dots == 2 && self.rev != Revision::CgbE => 0,
             PpuMode::OamScan if !self.lcd_on_line0 => 2,
             PpuMode::Drawing if !self.lcd_on_line0 => 3,
             _ => 0,
         };
         let from = if (0xFE00..=0xFE9F).contains(&addr) { 2 } else { 3 };
         if write {
-            shown >= from && !(shown == 2 && self.mode == PpuMode::Drawing)
+            // A CGB drops OAM writes from the internal mode 2 on (in double speed, on the line
+            // after the LCD turns on, from its second M-cycle of mode 3), a DMG only once STAT
+            // shows it (Age oam-write).
+            let lead = from == 2 && (self.cgb_mode || self.compat) && match self.mode {
+                PpuMode::OamScan => !self.lcd_on_line0,
+                PpuMode::Drawing => self.lcd_on_line0 && self.m_cycle_dots == 2 && self.mode_clock >= 2,
+                _ => false,
+            };
+            (shown >= from || lead) && !(shown == 2 && self.mode == PpuMode::Drawing)
         } else {
             // A CGB E unlocks OAM one dot after STAT shows mode 0 in single speed (Age oam-read's `EFF`).
             let e_lag = from == 2 && self.rev == Revision::CgbE && self.m_cycle_dots == 4
                 && self.mode == PpuMode::HBlank && self.mode_clock == 3;
+            if from == 3 && (self.cgb_mode || self.compat) {
+                // A CGB locks VRAM only once STAT shows mode 3, and in single speed the line after
+                // the LCD turns on one M-cycle after that (Age vram-read).
+                return shown == 3 && !(self.lcd_on_line0 && self.m_cycle_dots == 4 && self.mode_clock < 8);
+            }
             shown >= from || internal >= from || e_lag
         }
     }
@@ -224,7 +242,17 @@ impl Ppu {
             }
             0xFF42 => self.scy,
             0xFF43 => self.scx,
-            0xFF44 => self.ly,
+            0xFF44 => {
+                // CGB: read on the dot before LY moves on, LY shows LY & (LY + 1) (the bits still
+                // settling); a CGB B/C single speed also on the dot before that (Age lcd-align-ly).
+                let left = match self.mode {
+                    PpuMode::HBlank => (376 + MODE0_EARLY - self.mode3_len).wrapping_sub(self.mode_clock),
+                    PpuMode::VBlank if (144..153).contains(&self.ly) => 456 - self.mode_clock,
+                    _ => 0,
+                };
+                let glitch = left == 1 || left == 2 && self.m_cycle_dots == 4 && self.rev != Revision::CgbE;
+                if glitch && (self.cgb_mode || self.compat) { self.ly & (self.ly + 1) } else { self.ly }
+            }
             0xFF45 => self.lyc,
             0xFF47 => self.bgp,
             0xFF48 => self.obp0,
@@ -373,8 +401,10 @@ impl Ppu {
                 }
             }
             PpuMode::VBlank => {
-                // Line 153 shows LY = 153 for one M-cycle only, then 0 (compared with LYC too).
-                if self.ly == 153 && self.mode_clock >= 4 {
+                // Line 153 shows LY = 153 for 4 dots only, then 0 (compared with LYC too); 5 on a
+                // CGB E and in double speed (Age ly, lcd-align-ly).
+                let shown = if self.m_cycle_dots == 2 || self.rev == Revision::CgbE { 5 } else { 4 };
+                if self.ly == 153 && self.mode_clock >= shown {
                     self.ly = 0;
                 }
                 if self.mode_clock >= 456 {
@@ -799,6 +829,35 @@ mod tests {
             assert!(!p.cpu_locked(0xFE00, true) && !p.cpu_locked(0x8000, false), "{rev:?}");
             p.step(1);
             assert!(!p.cpu_locked(0xFE00, false), "{rev:?}: a dot later");
+        }
+    }
+
+    /// LY as read on each dot around its increments (Age ly, lcd-align-ly): the last three dots of
+    /// line 1 (a CGB reads 1 & 2 = 0 on the last one, a CGB B/C single speed on the last two), and
+    /// how many dots line 153 shows 153 (5 on a CGB E and in double speed).
+    #[test]
+    fn ly_increments_per_model() {
+        for (cgb, rev, m_cycle_dots, last3, shows_153) in [
+            (false, Revision::Default, 4, [1, 1, 1], 4),
+            (true, Revision::Default, 4, [1, 0, 0], 4),
+            (true, Revision::CgbC, 4, [1, 0, 0], 4),
+            (true, Revision::CgbE, 4, [1, 1, 0], 5),
+            (true, Revision::CgbC, 2, [1, 1, 0], 5),
+            (true, Revision::CgbE, 2, [1, 1, 0], 5),
+        ] {
+            let mut p = Ppu::new();
+            (p.lcdc, p.ly, p.cgb_mode, p.rev, p.m_cycle_dots) = (0x81, 1, cgb, rev, m_cycle_dots);
+            let mut reads = vec![];
+            while p.ly == 1 {
+                reads.push(p.read_register(0xFF44));
+                p.step(1);
+            }
+            assert_eq!(p.read_register(0xFF44), 2);
+            assert_eq!(reads[reads.len() - 3..], last3, "{cgb} {rev:?} {m_cycle_dots}");
+            while !(p.ly == 153 && p.mode == PpuMode::VBlank) { p.step(1); }
+            let mut n = 0;
+            while p.read_register(0xFF44) == 153 { n += 1; p.step(1); }
+            assert_eq!(n, shows_153, "{cgb} {rev:?} {m_cycle_dots}");
         }
     }
 
@@ -1234,6 +1293,48 @@ mod tests {
         let glitch = vec![2, 3, 2, 3, 2, 3, 2, 3];
         assert!(patterns(true).contains(&glitch), "{:?}", patterns(true));
         assert!(!patterns(false).contains(&glitch));
+    }
+
+    /// LCDC.1 turned off for 8 dots, swept across the fetch of an OBJ at X 16, with a BGP write at
+    /// a fixed dot showing how far the pixels are. Returns, per write dot: whether the OBJ shows and
+    /// the x the new BGP starts at.
+    fn obj_en_pulse(cgb: bool) -> Vec<(u32, bool, usize)> {
+        (8..48).map(|dot| {
+            let p = run_line10(|p| {
+                (p.cgb_mode, p.lcdc) = (cgb, 0x93);
+                p.oam[0..4].copy_from_slice(&[26, 16, 1, 0]); // row 0 on line 10, x 8-15
+                p.vram[16..18].fill(0xFF); // tile 1, row 0: colour 3
+                for (c, rgb) in [0x7FFFu16, 0x001F, 0x03E0, 0x7C00].iter().enumerate() {
+                    p.bg_cram[c * 2..c * 2 + 2].copy_from_slice(&rgb.to_le_bytes());
+                    p.obj_cram[c * 2..c * 2 + 2].copy_from_slice(&rgb.to_le_bytes());
+                }
+            }, |p, d| match d {
+                _ if d == dot => p.write_register(0xFF40, 0x91),
+                _ if d == dot + 8 => p.write_register(0xFF40, 0x93),
+                120 => { p.write_register(0xFF47, 0xFF); p.bg_cram[0..2].copy_from_slice(&0x001Fu16.to_le_bytes()); }
+                _ => {}
+            });
+            let row: Vec<[u8; 3]> = p.framebuffer[10 * SCREEN_WIDTH * 4..11 * SCREEN_WIDTH * 4].chunks(4).map(|c| [c[0], c[1], c[2]]).collect();
+            let white = [row[0][0], row[0][1], row[0][2]];
+            let obj = row[8] != white;
+            (dot, obj, (16..160).find(|&x| row[x] != white).unwrap())
+        }).collect()
+    }
+
+    /// DMG: OBJs turned off while an OBJ is being fetched stop the fetch (the OBJ is not drawn) and
+    /// the pixels resume at once, one dot further ahead than the write for the fetch dot already
+    /// begun. A CGB fetches the OBJ anyway (Mealybug `m3_lcdc_obj_en_change_variant`, SameBoy).
+    #[test]
+    fn dmg_obj_disable_aborts_obj_fetch() {
+        // Fetched: the new BGP from x 90 (11 dots of OBJ penalty); OBJs off at the match: from 101.
+        let dmg = obj_en_pulse(false);
+        let aborted: Vec<usize> = dmg.iter().filter(|r| (27..=36).contains(&r.0)).map(|r| r.2).collect();
+        // Off while the OBJ waits for the tile (5 dots), then during its fetch (6): each dot later
+        // saves one dot less, and the fetch gives back the dot it had begun.
+        assert_eq!(aborted, [100, 99, 98, 97, 96, 96, 95, 94, 93, 92], "{dmg:?}");
+        assert!(dmg.iter().all(|r| (27..=36).contains(&r.0) != (r.2 == 90 || r.2 == 101)), "{dmg:?}");
+        let cgb = obj_en_pulse(true);
+        assert!(cgb.iter().all(|r| r.2 == 90 || r.2 == 101), "a CGB never stops an OBJ fetch: {cgb:?}");
     }
 
     /// An 8x16 → 8x8 LCDC.2 write swept across an OBJ fetch: each row byte is read with the OBJ
