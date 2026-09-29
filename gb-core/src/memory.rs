@@ -518,11 +518,12 @@ impl MemoryBus {
     /// at the next M-cycle boundary; the bus requests it one M-cycle ahead (see `Timer::step`),
     /// which a running CPU's fetch-time sample needs but a halted one must not see yet.
     pub fn late_interrupts(&self) -> u8 {
-        if self.timer.reload_pending { TIMER_BIT } else { 0 }
+        let stat = if self.stat_fresh && self.ppu.mode0_edge_late() { STAT_BIT } else { 0 };
+        stat | if self.timer.reload_pending { TIMER_BIT } else { 0 }
     }
 
     /// IF bits raised in this M-cycle after the CPU's read of IF samples them (`Ppu::mode0_edge_now`).
-    fn if_hidden(&self) -> u8 {
+    pub(crate) fn if_hidden(&self) -> u8 {
         if self.stat_fresh && self.ppu.mode0_edge_now() { STAT_BIT } else { 0 }
     }
 
@@ -822,5 +823,26 @@ mod tests {
             m
         }).collect();
         assert_eq!(rises, [63, 63, 63, 64, 64, 64, 64, 65]);
+    }
+
+    /// A halted CPU samples IF halfway through the M-cycle: an edge in the second half of it wakes
+    /// HALT one M-cycle later than a running CPU dispatches: after M-cycle 63 for SCX 0, 64 for 1-4,
+    /// 65 for 5-7 (Mooneye `hblank_ly_scx_timing-GS`: SCX 1-4 one M-cycle after SCX 0).
+    #[test]
+    fn mode0_irq_wakes_halt_on_edge_mcycle() {
+        let wakes: Vec<u32> = (0..8).map(|scx| {
+            let mut bus = line10_mode0_irq(scx);
+            let mut cpu = crate::cpu::Cpu::new();
+            cpu.halted = true;
+            let mut m = 0;
+            loop {
+                cpu.handle_interrupts(&mut bus);
+                if !cpu.halted { break m; }
+                bus.cycle_tick();
+                m += 1;
+                assert!(m < 114, "SCX {scx}: HALT never woke");
+            }
+        }).collect();
+        assert_eq!(wakes, [63, 64, 64, 64, 64, 65, 65, 65]);
     }
 }
