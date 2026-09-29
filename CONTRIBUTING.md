@@ -14,8 +14,9 @@ Never add, attach, paste or link to:
 - sites or torrents where such files can be downloaded.
 
 This applies to code, tests, issues, pull requests, discussions and commit
-history. Such content is removed without discussion. If you need a game to
-reproduce a bug, name it (title, region, revision and the SHA-1 of your own
+history, down to a single tile: no test fixture may hold boot ROM or logo
+bytes, not even the 8 bytes of the ® glyph. Such content is removed without
+discussion. If you need a game to reproduce a bug, name it (title, region, revision and the SHA-1 of your own
 dump) instead of sharing it.
 
 Homebrew is welcome in the catalog only if its license clearly allows it and
@@ -48,6 +49,21 @@ ROM it lists still runs on every CI run, and the test asserts that it fails: CI
 turns red when a listed ROM starts passing, and tells you which line to remove.
 Remove a line only in the change that makes its ROM pass. Add lines only when a
 new suite is added, never to hide a regression.
+
+Its last section, `rule-blocked`, lists the screenshot runs whose reference
+needs data Cartouche may not ship: the ® that Nintendo's boot ROM leaves in
+tile 25. An entry stays there only while every pixel that differs lies where
+tile 25 is drawn (worked out from OAM, the tile maps and the PPU registers,
+never from the glyph); CI fails when one passes or differs anywhere else.
+These entries are not counted as passes.
+
+`gb-core/tests/probes-without-verdict.txt` lists the gbmicrotest probes whose
+upstream source records no expected value, each with that evidence. They run
+on every CI run and must finish without an emulator error, but they never count
+as passes. A ROM cannot be on both lists, and every line must name a ROM that
+exists. A probe leaves this list when its source turns out to record a value.
+That value then goes in `PROBE_ORACLES` in `gb-core/tests/conformance.rs`, with
+the source line it comes from. Never guess a hardware value.
 
 ## Commits and pull requests
 

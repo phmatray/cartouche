@@ -2,15 +2,16 @@
 # plus `@<model or reference>` for screenshot runs (Mealybug, Age screenshots, rtc3test), then `# <area>`.
 # Every ROM here still runs; CI fails when one passes. Remove a line with the fix that makes it pass.
 # Areas: boot, cpu-timing, interrupt, timer, oam-dma, hdma, stat, ppu, ppu-mode3, double-speed,
-# apu, mbc, rtc, sgb, serial, other; no-verdict = a gbmicrotest ROM whose source never writes a verdict
-# to $FF82 (a hardware probe, not a self-checking test), so it times out on every emulator.
+# apu, mbc, rtc, sgb, serial, other; rom-defect = the ROM itself is broken (the line gives the
+# evidence, and the upstream report when there is one). gbmicrotest probes whose source records no
+# value are in probes-without-verdict.txt instead: they run, but have no verdict to fail.
+# rule-blocked = the reference needs data Cartouche may not ship (#240), in its own section at the end.
 
 mooneye-test-suite/acceptance/boot_div-dmg0.gb  # boot: DMG-CPU 0 (the first DMG revision) is not emulated
 mooneye-test-suite/acceptance/boot_hwio-dmg0.gb  # boot: DMG-CPU 0 (the first DMG revision) is not emulated
 mooneye-test-suite/acceptance/boot_regs-dmg0.gb  # boot: DMG-CPU 0 (the first DMG revision) is not emulated
 mooneye-test-suite/acceptance/ppu/hblank_ly_scx_timing-GS.gb  # stat
 mooneye-test-suite/acceptance/ppu/stat_lyc_onoff.gb  # stat
-mooneye-test-suite/emulator-only/mbc1/multicart_rom_8Mb.gb  # mbc
 same-suite/apu/channel_1/channel_1_extra_length_clocking-cgb0B.gb  # apu
 same-suite/apu/channel_1/channel_1_freq_change_timing-A.gb  # apu
 same-suite/apu/channel_1/channel_1_freq_change_timing-cgb0BC.gb  # apu
@@ -18,8 +19,6 @@ same-suite/apu/channel_2/channel_2_extra_length_clocking-cgb0B.gb  # apu
 same-suite/apu/channel_3/channel_3_extra_length_clocking-cgb0.gb  # apu
 same-suite/apu/channel_3/channel_3_extra_length_clocking-cgbB.gb  # apu
 same-suite/apu/channel_4/channel_4_extra_length_clocking-cgb0B.gb  # apu
-same-suite/sgb/command_mlt_req.gb  # sgb
-same-suite/sgb/command_mlt_req_1_incrementing.gb  # sgb
 age-test-roms/halt/halt-m0-interrupt-dmgC-cgbBCE.gb  # interrupt
 age-test-roms/lcd-align-ly/lcd-align-ly-cgbBC.gb  # ppu
 age-test-roms/lcd-align-ly/lcd-align-ly-cgbE.gb  # ppu
@@ -46,24 +45,7 @@ age-test-roms/stat-mode/stat-mode-cgbE.gb  # stat
 age-test-roms/stat-mode/stat-mode-ncmE.gb  # stat
 age-test-roms/vram/vram-read-cgbBCE.gb  # ppu
 age-test-roms/vram/vram-read-ncmBCE.gb  # ppu
-gbmicrotest/000-oam_lock.gb  # no-verdict
-gbmicrotest/000-write_to_x8000.gb  # no-verdict
-gbmicrotest/001-vram_unlocked.gb  # no-verdict
-gbmicrotest/002-vram_locked.gb  # no-verdict
-gbmicrotest/004-tima_boot_phase.gb  # no-verdict
-gbmicrotest/004-tima_cycle_timer.gb  # no-verdict
-gbmicrotest/007-lcd_on_stat.gb  # no-verdict
-gbmicrotest/400-dma.gb  # no-verdict
-gbmicrotest/500-scx-timing.gb  # no-verdict
-gbmicrotest/800-ppu-latch-scx.gb  # no-verdict
-gbmicrotest/801-ppu-latch-scy.gb  # no-verdict
-gbmicrotest/802-ppu-latch-tileselect.gb  # no-verdict
-gbmicrotest/803-ppu-latch-bgdisplay.gb  # no-verdict
-gbmicrotest/audio_testbench.gb  # no-verdict
-gbmicrotest/cpu_bus_1.gb  # no-verdict
-gbmicrotest/dma_basic.gb  # no-verdict
-gbmicrotest/flood_vram.gb  # no-verdict
-gbmicrotest/halt_op_dupe_delay.gb  # other: ROM defect, expects DIV $55 ~60 M-cycles after a DIV reset; the HALT bug gives $01, as SameBoy (#215)
+gbmicrotest/halt_op_dupe_delay.gb  # rom-defect: https://github.com/aappleby/gbmicrotest/issues/3 expects DIV $55 ~60 M-cycles after a DIV reset; the HALT bug gives $01, as SameBoy (#215)
 gbmicrotest/hblank_int_if_a.gb  # stat
 gbmicrotest/hblank_int_l0.gb  # stat
 gbmicrotest/hblank_int_scx0_if_b.gb  # ppu-mode3
@@ -104,31 +86,20 @@ gbmicrotest/int_oam_nops.gb  # ppu
 gbmicrotest/lcdon_to_oam_int_l0.gb  # ppu
 gbmicrotest/lcdon_to_oam_int_l1.gb  # ppu
 gbmicrotest/lcdon_to_oam_int_l2.gb  # ppu
-gbmicrotest/lcdon_write_timing.gb  # no-verdict
 gbmicrotest/line_144_oam_int_b.gb  # ppu
 gbmicrotest/line_144_oam_int_c.gb  # ppu
 gbmicrotest/line_144_oam_int_d.gb  # ppu
 gbmicrotest/line_153_lyc0_int_inc_sled.gb  # stat
-gbmicrotest/ly_while_lcd_off.gb  # no-verdict
 gbmicrotest/lyc1_int_if_edge_a.gb  # stat
 gbmicrotest/lyc1_int_if_edge_c.gb  # stat
 gbmicrotest/lyc1_write_timing_b.gb  # stat
 gbmicrotest/lyc1_write_timing_c.gb  # stat
-gbmicrotest/minimal.gb  # no-verdict
-gbmicrotest/mode2_stat_int_to_oam_unlock.gb  # no-verdict
 gbmicrotest/oam_int_halt_a.gb  # ppu
 gbmicrotest/oam_int_halt_b.gb  # ppu
 gbmicrotest/oam_int_if_level_d.gb  # ppu
 gbmicrotest/oam_int_inc_sled.gb  # ppu
 gbmicrotest/oam_int_nops_a.gb  # ppu
 gbmicrotest/oam_int_nops_b.gb  # ppu
-gbmicrotest/oam_sprite_trashing.gb  # no-verdict
-gbmicrotest/poweron.gb  # no-verdict
-gbmicrotest/ppu_scx_vs_bgp.gb  # no-verdict
-gbmicrotest/ppu_sprite_testbench.gb  # no-verdict
-gbmicrotest/ppu_spritex_vs_scx.gb  # no-verdict
-gbmicrotest/ppu_win_vs_wx.gb  # no-verdict
-gbmicrotest/ppu_wx_early.gb  # no-verdict
 gbmicrotest/stat_write_glitch_l0_a.gb  # stat
 gbmicrotest/stat_write_glitch_l0_b.gb  # stat
 gbmicrotest/stat_write_glitch_l143_b.gb  # stat
@@ -139,37 +110,22 @@ gbmicrotest/stat_write_glitch_l154_b.gb  # stat
 gbmicrotest/stat_write_glitch_l154_d.gb  # stat
 gbmicrotest/stat_write_glitch_l1_b.gb  # stat
 gbmicrotest/stat_write_glitch_l1_c.gb  # stat
-gbmicrotest/temp.gb  # no-verdict (an empty main: it runs off the end of the ROM)
-gbmicrotest/toggle_lcdc.gb  # no-verdict
+gbmicrotest/temp.gb  # rom-defect: an empty main (`nop`, temp.s l.4) runs off the end of the ROM into an invalid opcode, which locks a real CPU; Cartouche stops with an emulator error
 gbmicrotest/vblank2_int_if_a.gb  # stat
 gbmicrotest/vblank2_int_if_c.gb  # stat
 gbmicrotest/vblank_int_if_a.gb  # stat
 gbmicrotest/vblank_int_if_c.gb  # stat
-gbmicrotest/wave_write_to_0xC003.gb  # no-verdict
-mealybug-tearoom-tests/ppu/m3_bgp_change_sprites.gb@cgb  # ppu-mode3: the pixels @dmg fails on (left-edge OBJs use the boot ROM's ® tile, which Cartouche's boot ROM does not have)
-mealybug-tearoom-tests/ppu/m3_bgp_change_sprites.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_lcdc_bg_en_change.gb@dmg  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_lcdc_bg_map_change.gb@cgb  # ppu-mode3: the pixels @dmg fails on (left-edge OBJs use the boot ROM's ® tile, which Cartouche's boot ROM does not have)
-mealybug-tearoom-tests/ppu/m3_lcdc_bg_map_change.gb@dmg  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_lcdc_obj_en_change.gb@cgb  # ppu-mode3: the pixels @dmg fails on (left-edge OBJs use the boot ROM's ® tile, which Cartouche's boot ROM does not have)
-mealybug-tearoom-tests/ppu/m3_lcdc_obj_en_change.gb@dmg  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_lcdc_obj_en_change_variant.gb@cgb  # ppu-mode3: the pixels @dmg fails on (left-edge OBJs use the boot ROM's ® tile, which Cartouche's boot ROM does not have)
-mealybug-tearoom-tests/ppu/m3_lcdc_obj_en_change_variant.gb@dmg  # ppu-mode3
+mealybug-tearoom-tests/ppu/m3_lcdc_obj_en_change_variant.gb@dmg  # ppu-mode3: 96 px outside the ® tile's footprint (right-edge OBJs, x 150-155 from line 128); every other differing pixel is the ® (rule-blocked)
 mealybug-tearoom-tests/ppu/m3_lcdc_obj_size_change.gb@dmg  # ppu-mode3
 mealybug-tearoom-tests/ppu/m3_lcdc_obj_size_change_scx.gb@dmg  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_change.gb@cgb  # ppu-mode3: the pixels @dmg fails on (left-edge OBJs use the boot ROM's ® tile, which Cartouche's boot ROM does not have)
-mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_change.gb@dmg  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_change2.gb@cgb  # ppu-mode3: CGB C reference only, and the ® tile as in m3_lcdc_tile_sel_change
-mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change.gb@cgb  # ppu-mode3: the pixels @dmg fails on (left-edge OBJs use the boot ROM's ® tile, which Cartouche's boot ROM does not have)
-mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change.gb@dmg  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change2.gb@cgb  # ppu-mode3: CGB C reference only, and the ® tile as in m3_lcdc_tile_sel_change
+mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_change.gb@cgb  # ppu-mode3: 8 px outside the ® tile's footprint (x 16-23 of line 128, beside a ® OBJ fetch); every other differing pixel is the ® (rule-blocked)
+mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_change2.gb@cgb  # ppu-mode3: CGB C reference only; no differing pixel is in the ® tile's footprint
+mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change.gb@cgb  # ppu-mode3: 8 px outside the ® tile's footprint (x 8-15 of line 64, beside a ® OBJ fetch); every other differing pixel is the ® (rule-blocked)
+mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change2.gb@cgb  # ppu-mode3: CGB C reference only; no differing pixel is in the ® tile's footprint
 mealybug-tearoom-tests/ppu/m3_lcdc_win_en_change_multiple_wx.gb@dmg  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_lcdc_win_map_change.gb@cgb  # ppu-mode3: the pixels @dmg fails on (left-edge OBJs use the boot ROM's ® tile, which Cartouche's boot ROM does not have)
-mealybug-tearoom-tests/ppu/m3_lcdc_win_map_change.gb@dmg  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_obp0_change.gb@cgb  # ppu-mode3: the pixels @dmg fails on (left-edge OBJs use the boot ROM's ® tile, which Cartouche's boot ROM does not have)
-mealybug-tearoom-tests/ppu/m3_obp0_change.gb@dmg  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_scx_low_3_bits.gb@cgb  # ppu-mode3: the pixels @dmg fails on
-mealybug-tearoom-tests/ppu/m3_scx_low_3_bits.gb@dmg  # ppu-mode3
+mealybug-tearoom-tests/ppu/m3_scx_low_3_bits.gb@cgb  # ppu-mode3: 54 px outside the ® tile's footprint (x 150-151 from line 73: the ® BG cells as a mid-line SCX write shifts them, which the per-line footprint cannot place); every other differing pixel is the ® (rule-blocked)
+mealybug-tearoom-tests/ppu/m3_scx_low_3_bits.gb@dmg  # ppu-mode3: 54 px outside the ® tile's footprint (x 150-151 from line 73: the ® BG cells as a mid-line SCX write shifts them, which the per-line footprint cannot place); every other differing pixel is the ® (rule-blocked)
 mealybug-tearoom-tests/ppu/m3_scy_change2.gb@cgb  # ppu-mode3: CGB C reference only; the fetcher latches the tile row with the tile number, as a CGB D does (m3_scy_change passes)
 age-test-roms/m3-bg-bgp/m3-bg-bgp.gb@dmgC  # ppu-mode3
 age-test-roms/m3-bg-bgp/m3-bg-bgp.gb@ncmBC  # ppu-mode3
@@ -177,3 +133,22 @@ age-test-roms/m3-bg-scx/m3-bg-scx-ds.gb@cgbBCE  # double-speed
 age-test-roms/m3-bg-scx/m3-bg-scx-nocgb.gb@ncmBCE  # ppu-mode3
 age-test-roms/m3-bg-scx/m3-bg-scx.gb@cgbBCE  # ppu-mode3
 age-test-roms/m3-bg-scx/m3-bg-scx.gb@dmgC  # ppu-mode3
+
+# rule-blocked (#240, #243): Mealybug's DMG and CGB references show the ® that Nintendo's boot ROM
+# leaves in tile 25 ($8190). Cartouche ships no Nintendo code or data, tests included, so its tile 25
+# is blank. An entry belongs here only when every differing pixel lies in tile 25's footprint: OBJs
+# and BG/window cells using tile 25, from OAM, the tile maps and each line's registers, never the
+# glyph (conformance.rs `tile25_footprint`). CI fails when one passes, or differs outside it.
+mealybug-tearoom-tests/ppu/m3_bgp_change_sprites.gb@cgb  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data
+mealybug-tearoom-tests/ppu/m3_bgp_change_sprites.gb@dmg  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data
+mealybug-tearoom-tests/ppu/m3_lcdc_bg_map_change.gb@cgb  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data
+mealybug-tearoom-tests/ppu/m3_lcdc_bg_map_change.gb@dmg  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data
+mealybug-tearoom-tests/ppu/m3_lcdc_obj_en_change.gb@cgb  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data
+mealybug-tearoom-tests/ppu/m3_lcdc_obj_en_change.gb@dmg  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data
+mealybug-tearoom-tests/ppu/m3_lcdc_obj_en_change_variant.gb@cgb  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data
+mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_change.gb@dmg  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data
+mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change.gb@dmg  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data
+mealybug-tearoom-tests/ppu/m3_lcdc_win_map_change.gb@cgb  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data
+mealybug-tearoom-tests/ppu/m3_lcdc_win_map_change.gb@dmg  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data
+mealybug-tearoom-tests/ppu/m3_obp0_change.gb@cgb  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data
+mealybug-tearoom-tests/ppu/m3_obp0_change.gb@dmg  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data
