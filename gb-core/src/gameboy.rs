@@ -218,6 +218,7 @@ impl GameBoy {
     pub fn set_revision(&mut self, rev: Revision) {
         self.bus.rev = rev;
         self.bus.ppu.rev = rev;
+        self.bus.apu.rev = rev;
     }
 
     pub fn skip_boot_rom(&mut self) {
@@ -962,7 +963,7 @@ mod tests {
 
         let mut g = GameBoy::new(rom.clone()).unwrap();
         assert!(g.load_state(&state));
-        assert_eq!(g.bus.rev, Revision::Dmg0);
+        assert_eq!((g.bus.rev, g.bus.apu.rev), (Revision::Dmg0, Revision::Dmg0));
         assert_eq!(g.save_state(), state);
 
         let mut g = GameBoy::new(rom).unwrap();
