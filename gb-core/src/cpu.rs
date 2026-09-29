@@ -6,7 +6,7 @@ use crate::registers::Registers;
 pub struct Cpu {
     pub regs: Registers,
     pub halted: bool,
-    /// HALT's first M-cycle is still to run: the OAM DMA copies on through it (`MemoryBus::halt_tick`).
+    /// HALT's first M-cycle is still to run: the OAM DMA copies on through it (`MemoryBus::dma_hold`).
     pub(crate) halt_grace: bool,
     pub ime: bool,
     pub ime_pending: bool,
@@ -44,7 +44,7 @@ impl Cpu {
             if self.locked || pending & !bus.late_interrupts() == 0 {
                 return;
             }
-            (self.halted, self.halt_grace) = (false, false);
+            (self.halted, self.halt_grace, bus.dma_hold) = (false, false, false);
         }
         if self.ime {
             self.dispatch(bus);
@@ -115,7 +115,8 @@ impl Cpu {
         }
 
         if self.halted {
-            if std::mem::take(&mut self.halt_grace) { bus.cycle_tick() } else { bus.halt_tick() }
+            bus.cycle_tick();
+            if std::mem::take(&mut self.halt_grace) { bus.dma_hold = true; }
             return Ok(4);
         }
 

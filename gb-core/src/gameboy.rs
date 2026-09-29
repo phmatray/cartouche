@@ -714,6 +714,7 @@ impl GameBoy {
         self.cpu.ime = read_u8!() != 0;
         let halted = read_u8!();
         (self.cpu.halted, self.cpu.halt_grace) = (halted != 0, halted == 2);
+        self.bus.dma_hold = halted == 1;
         self.cpu.halt_bug = read_u8!() != 0;
 
         self.bus.interrupts.interrupt_enable = read_u8!();

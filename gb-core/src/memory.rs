@@ -69,8 +69,8 @@ pub struct MemoryBus {
     pub watch: Option<Box<crate::debug::WatchSet>>,
     /// The hardware revision (`GameBoy::set_revision`), for subsystems to read as a plain field.
     pub rev: crate::gameboy::Revision,
-    /// The M-cycle being run is one of HALT's: the OAM DMA waits (`halt_tick`).
-    halting: bool,
+    /// The CPU is halted past HALT's first M-cycle: the OAM DMA waits (`dma_tick`).
+    pub(crate) dma_hold: bool,
     /// The RAM a Game Boy Color up to revision D has at $FEA0-$FEFF (`fea0_index`).
     pub(crate) fea0: [u8; 0x30],
 }
@@ -138,7 +138,7 @@ impl MemoryBus {
             cheats: Default::default(),
             watch: None,
             rev: crate::gameboy::Revision::Default,
-            halting: false,
+            dma_hold: false,
             fea0: [0; 0x30],
         }
     }
@@ -621,8 +621,7 @@ impl MemoryBus {
         self.apu.step(ppu_step / 2); // 2 MHz ticks
         self.cycle_count += ppu_step;
 
-        // HALT holds the OAM DMA's copying, not its end once the last byte is in.
-        if !self.halting || self.dma_index >= 0xA0 && self.dma_delay == 0 { self.dma_tick(); }
+        self.dma_tick();
     }
 
     /// The DIV-APU event: DIV bit 4 (bit 5 in double speed) fell since the counter read `old`,
@@ -670,6 +669,12 @@ impl MemoryBus {
         if !self.dma_active {
             return;
         }
+        // HALT holds the DMA's copying after its first M-cycle, not its end once the last byte
+        // is in (as SameBoy's `GB_dma_run`, MIT; Gambatte hwtests `oamdmasrc80_halt_m2irq/lycirq_read8000`:
+        // a DMA started before HALT is still copying after it, `oamdma_late_halt_stat_1/_2`).
+        if self.dma_hold && self.dma_index < 0xA0 {
+            return;
+        }
         if self.dma_index >= 0xA0 {
             self.dma_active = false;
             self.ppu.set_oam_dma(false);
@@ -713,14 +718,6 @@ impl MemoryBus {
         self.tick_components();
     }
 
-    /// An M-cycle of HALT: everything runs but the OAM DMA, which waits for the CPU (as SameBoy's
-    /// `GB_dma_run`, MIT; Gambatte hwtests `oamdmasrc80_halt_m2irq/lycirq_read8000`: a DMA
-    /// started before HALT is still copying after it, `oamdma_late_halt_stat_1/_2`).
-    pub fn halt_tick(&mut self) {
-        self.halting = true;
-        self.tick_components();
-        self.halting = false;
-    }
 
     pub fn cycle_read(&mut self, addr: u16) -> u8 {
         self.tick_components();
