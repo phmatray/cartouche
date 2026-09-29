@@ -31,12 +31,8 @@ gbmicrotest/lyc1_int_if_edge_a.gb  # stat
 gbmicrotest/lyc1_int_if_edge_c.gb  # stat
 gbmicrotest/lyc1_write_timing_b.gb  # stat
 gbmicrotest/lyc1_write_timing_c.gb  # stat
-gbmicrotest/oam_int_halt_a.gb  # ppu
-gbmicrotest/oam_int_halt_b.gb  # ppu
-gbmicrotest/oam_int_if_level_d.gb  # ppu
 gbmicrotest/oam_int_inc_sled.gb  # ppu
 gbmicrotest/oam_int_nops_a.gb  # ppu
-gbmicrotest/oam_int_nops_b.gb  # ppu
 gbmicrotest/stat_write_glitch_l0_a.gb  # stat
 gbmicrotest/stat_write_glitch_l0_b.gb  # stat
 gbmicrotest/stat_write_glitch_l143_b.gb  # stat
@@ -53,7 +49,6 @@ gbmicrotest/vblank2_int_if_c.gb  # stat
 gbmicrotest/vblank_int_if_a.gb  # stat
 gbmicrotest/vblank_int_if_c.gb  # stat
 mealybug-tearoom-tests/ppu/m3_lcdc_bg_en_change.gb@dmg  # ppu-mode3
-mealybug-tearoom-tests/ppu/m3_lcdc_obj_en_change_variant.gb@dmg  # ppu-mode3: 96 px outside the ® tile's footprint (right-edge OBJs, x 150-155 from line 128); every other differing pixel is the ® (rule-blocked)
 mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_change.gb@cgb  # ppu-mode3: 8 px outside the ® tile's footprint (x 16-23 of line 128, beside a ® OBJ fetch); every other differing pixel is the ® (rule-blocked)
 mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_change2.gb@cgb  # ppu-mode3: CGB C reference only; no differing pixel is in the ® tile's footprint
 mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change.gb@cgb  # ppu-mode3: 8 px outside the ® tile's footprint (x 8-15 of line 64, beside a ® OBJ fetch); every other differing pixel is the ® (rule-blocked)
@@ -78,6 +73,7 @@ mealybug-tearoom-tests/ppu/m3_lcdc_bg_map_change.gb@dmg  # rule-blocked: the ® 
 mealybug-tearoom-tests/ppu/m3_lcdc_obj_en_change.gb@cgb  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data
 mealybug-tearoom-tests/ppu/m3_lcdc_obj_en_change.gb@dmg  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data
 mealybug-tearoom-tests/ppu/m3_lcdc_obj_en_change_variant.gb@cgb  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data
+mealybug-tearoom-tests/ppu/m3_lcdc_obj_en_change_variant.gb@dmg  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data
 mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_change.gb@dmg  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data
 mealybug-tearoom-tests/ppu/m3_lcdc_tile_sel_win_change.gb@dmg  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data
 mealybug-tearoom-tests/ppu/m3_lcdc_win_map_change.gb@cgb  # rule-blocked: the ® in tile 25 is Nintendo boot ROM data

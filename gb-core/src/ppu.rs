@@ -14,6 +14,13 @@ pub(crate) type Sprite = (u8, usize, u8, u8, u8);
 /// CPU takes the interrupt, and reads mode 0, at the M-cycle hardware does for every SCX, window
 /// and OBJ (gbmicrotest `hblank_int_scx*`, `ppu_sprite0_scx*`, `sprite_*`, `win*`).
 const MODE0_EARLY: u32 = 2;
+/// Dots the mode-2 STAT source stays high from a line's start: it rises with the line and falls
+/// again early in mode 2, so a STAT write enabling it later in mode 2 raises nothing and the next
+/// interrupt comes with the next line (gbmicrotest `oam_int_if_level_c/d`: a write landing in the
+/// line's first M-cycle fires, one M-cycle later doesn't; `oam_int_nops_b`, `oam_int_halt_a/b`).
+/// Its 4 dots, plus one M-cycle: the STAT line is sampled once per M-cycle, before a CPU write of
+/// that M-cycle is seen (`Ppu::step`).
+const MODE2_PULSE: u32 = 4;
 /// The longest mode 3 a line can have (172 + 7 fine scroll + 6 window + 10 OBJs of 11 dots): what
 /// `mode3_len` holds until the FIFO measures the line (`measure_len`).
 const MODE3_MAX: u32 = 295;
@@ -449,8 +456,10 @@ impl Ppu {
     fn compute_stat_line(&self) -> bool {
         let hblank = self.mode == PpuMode::HBlank && self.stat & 0x08 != 0;
         let vblank = self.mode == PpuMode::VBlank  && self.stat & 0x10 != 0;
-        // Line 144 starts with the mode 2 source too, for one M-cycle.
-        let oam    = (self.mode == PpuMode::OamScan && !self.lcd_on_line0 || self.mode == PpuMode::VBlank && self.ly == 144 && self.mode_clock < 4) && self.stat & 0x20 != 0;
+        // Mode 2 is a pulse at the line start, not a level (`MODE2_PULSE`). Line 144 has it too;
+        // line 0 after LCD on doesn't.
+        let oam    = (self.mode == PpuMode::OamScan && !self.lcd_on_line0 || self.mode == PpuMode::VBlank && self.ly == 144)
+            && self.mode_clock < MODE2_PULSE + self.m_cycle_dots && self.stat & 0x20 != 0;
         // No comparator blank at a line start: the interrupt is requested one M-cycle ahead of the
         // line (the CPU samples IF before its opcode fetch).
         let lyc    = self.ly_compare(true) == Some(self.lyc) && self.stat & 0x40 != 0;
@@ -730,6 +739,24 @@ mod tests {
         while p.ly == 0 {
             let fired = p.step(4).1;
             assert_eq!(fired, p.ly == 1, "line 0 after LCD on skips the OAM scan; line 1 has one");
+        }
+    }
+
+    /// The mode-2 source is a pulse: STAT bit 5 written in a line's first M-cycle raises the
+    /// interrupt, written one M-cycle later it raises nothing until the next line (gbmicrotest
+    /// `oam_int_if_level_c/d`).
+    #[test]
+    fn mode2_stat_source_is_a_pulse() {
+        for (m_cycle, fires) in [(0, true), (1, false), (20, false)] {
+            let mut p = Ppu::new();
+            (p.lcdc, p.ly, p.mode, p.mode_clock) = (0x81, 9, PpuMode::HBlank, 0);
+            while p.ly == 9 { p.step(4); }
+            for _ in 0..m_cycle { p.step(4); }
+            p.write_register(0xFF41, 0x20);
+            assert_eq!(p.step(4).1, fires, "STAT written in M-cycle {m_cycle} of mode 2");
+            let mut next_line = false;
+            while !next_line { next_line = p.step(4).1; }
+            assert_eq!((p.ly, p.mode), (11, PpuMode::OamScan), "then with the next line");
         }
     }
 
@@ -1266,6 +1293,48 @@ mod tests {
         let glitch = vec![2, 3, 2, 3, 2, 3, 2, 3];
         assert!(patterns(true).contains(&glitch), "{:?}", patterns(true));
         assert!(!patterns(false).contains(&glitch));
+    }
+
+    /// LCDC.1 turned off for 8 dots, swept across the fetch of an OBJ at X 16, with a BGP write at
+    /// a fixed dot showing how far the pixels are. Returns, per write dot: whether the OBJ shows and
+    /// the x the new BGP starts at.
+    fn obj_en_pulse(cgb: bool) -> Vec<(u32, bool, usize)> {
+        (8..48).map(|dot| {
+            let p = run_line10(|p| {
+                (p.cgb_mode, p.lcdc) = (cgb, 0x93);
+                p.oam[0..4].copy_from_slice(&[26, 16, 1, 0]); // row 0 on line 10, x 8-15
+                p.vram[16..18].fill(0xFF); // tile 1, row 0: colour 3
+                for (c, rgb) in [0x7FFFu16, 0x001F, 0x03E0, 0x7C00].iter().enumerate() {
+                    p.bg_cram[c * 2..c * 2 + 2].copy_from_slice(&rgb.to_le_bytes());
+                    p.obj_cram[c * 2..c * 2 + 2].copy_from_slice(&rgb.to_le_bytes());
+                }
+            }, |p, d| match d {
+                _ if d == dot => p.write_register(0xFF40, 0x91),
+                _ if d == dot + 8 => p.write_register(0xFF40, 0x93),
+                120 => { p.write_register(0xFF47, 0xFF); p.bg_cram[0..2].copy_from_slice(&0x001Fu16.to_le_bytes()); }
+                _ => {}
+            });
+            let row: Vec<[u8; 3]> = p.framebuffer[10 * SCREEN_WIDTH * 4..11 * SCREEN_WIDTH * 4].chunks(4).map(|c| [c[0], c[1], c[2]]).collect();
+            let white = [row[0][0], row[0][1], row[0][2]];
+            let obj = row[8] != white;
+            (dot, obj, (16..160).find(|&x| row[x] != white).unwrap())
+        }).collect()
+    }
+
+    /// DMG: OBJs turned off while an OBJ is being fetched stop the fetch (the OBJ is not drawn) and
+    /// the pixels resume at once, one dot further ahead than the write for the fetch dot already
+    /// begun. A CGB fetches the OBJ anyway (Mealybug `m3_lcdc_obj_en_change_variant`, SameBoy).
+    #[test]
+    fn dmg_obj_disable_aborts_obj_fetch() {
+        // Fetched: the new BGP from x 90 (11 dots of OBJ penalty); OBJs off at the match: from 101.
+        let dmg = obj_en_pulse(false);
+        let aborted: Vec<usize> = dmg.iter().filter(|r| (27..=36).contains(&r.0)).map(|r| r.2).collect();
+        // Off while the OBJ waits for the tile (5 dots), then during its fetch (6): each dot later
+        // saves one dot less, and the fetch gives back the dot it had begun.
+        assert_eq!(aborted, [100, 99, 98, 97, 96, 96, 95, 94, 93, 92], "{dmg:?}");
+        assert!(dmg.iter().all(|r| (27..=36).contains(&r.0) != (r.2 == 90 || r.2 == 101)), "{dmg:?}");
+        let cgb = obj_en_pulse(true);
+        assert!(cgb.iter().all(|r| r.2 == 90 || r.2 == 101), "a CGB never stops an OBJ fetch: {cgb:?}");
     }
 
     /// An 8x16 → 8x8 LCDC.2 write swept across an OBJ fetch: each row byte is read with the OBJ
