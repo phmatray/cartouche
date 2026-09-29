@@ -69,6 +69,31 @@ pub struct MemoryBus {
     pub watch: Option<Box<crate::debug::WatchSet>>,
     /// The hardware revision (`GameBoy::set_revision`), for subsystems to read as a plain field.
     pub rev: crate::gameboy::Revision,
+    /// The RAM a Game Boy Color up to revision D has at $FEA0-$FEFF (`fea0_index`).
+    pub(crate) fea0: [u8; 0x30],
+}
+
+/// The bus an address sits on, as the OAM DMA sees it: it holds one bus while it runs.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(crate) enum Bus {
+    /// The cartridge (ROM, its RAM) and, on a Game Boy, work RAM.
+    External,
+    Vram,
+    /// Work RAM and its echo, a bus of its own on Game Boy Color hardware.
+    Wram,
+    Oam,
+    /// I/O registers and HRAM, never taken by the DMA.
+    Io,
+}
+
+pub(crate) fn bus_of(addr: u16, cgb: bool) -> Bus {
+    match addr {
+        0x8000..=0x9FFF => Bus::Vram,
+        0xC000..=0xFDFF if cgb => Bus::Wram,
+        0xFE00..=0xFEFF => Bus::Oam,
+        0xFF00.. => Bus::Io,
+        _ => Bus::External,
+    }
 }
 
 impl MemoryBus {
@@ -111,6 +136,7 @@ impl MemoryBus {
             cheats: Default::default(),
             watch: None,
             rev: crate::gameboy::Revision::Default,
+            fea0: [0; 0x30],
         }
     }
 
@@ -138,21 +164,20 @@ impl MemoryBus {
     }
 
     /// Whether a CPU read collides with the running OAM DMA: OAM itself, or an address on
-    /// the bus the DMA reads from. Buses: VRAM, the external one (ROM, cartridge RAM, and WRAM
-    /// on a Game Boy) and, on a Game Boy Color, WRAM's own. I/O and HRAM stay reachable, so a
-    /// DMA from VRAM (or from WRAM on a Color) leaves ROM fetches alone. The Color quirks
-    /// follow SameBoy: WRAM is busy unless the DMA reads VRAM, and a DMA from echo RAM
-    /// ($E000+) blocks everything but VRAM.
+    /// the bus the DMA reads from (`bus_of`). I/O and HRAM stay reachable, so a DMA from VRAM
+    /// (or from WRAM on a Color) leaves ROM fetches alone. The Color quirks follow SameBoy:
+    /// WRAM is busy unless the DMA reads VRAM, and a DMA from echo RAM ($E000+) blocks
+    /// everything but VRAM.
     fn dma_conflict(&self, addr: u16) -> bool {
         let cgb = self.cgb_mode || self.ppu.compat; // Color hardware, whatever the mode
-        let bus = |a: u16| match a { 0x8000..=0x9FFF => 1, 0xC000.. if cgb => 2, _ => 0 };
         let src = (self.dma_source as u16) << 8;
-        match addr {
-            0xFE00..=0xFEFF => true,
-            0xFF00.. => false,
-            0xC000.. if cgb => bus(src) != 1,
-            _ if cgb && src >= 0xE000 => bus(addr) != 1,
-            _ => bus(addr) == bus(src),
+        let src_bus = bus_of(self.dma_src(0), cgb);
+        match bus_of(addr, cgb) {
+            Bus::Oam => true,
+            Bus::Io => false,
+            Bus::Wram => src_bus != Bus::Vram,
+            bus if cgb && src >= 0xE000 => bus != Bus::Vram,
+            bus => bus == src_bus,
         }
     }
 
@@ -183,6 +208,77 @@ impl MemoryBus {
         self.peek(addr)
     }
 
+    /// A CPU write on the bus the running OAM DMA holds: the DMA drives the address, so the
+    /// write never reaches its target, and OAM gets, as the byte being copied (Gambatte hwtests
+    /// `oamdma_src*_busypush*`, `busywrite*`, `*bankchange_1`, over every source page):
+    /// - on a Game Boy, the written value, ANDed with work RAM's byte when the DMA reads it
+    ///   (from $C000-$FF00) as that RAM drives the bus too;
+    /// - on a Color, the written value on the external bus, $00 on VRAM's, and on work RAM's
+    ///   the DMA's own byte. A Color's DMA from $E000+ reads the external bus (`dma_bus`).
+    /// A Color's work RAM write during a DMA from the external bus lands, but in the 4 KB bank
+    /// the DMA's address picks: $C000 when its bit 12 is clear, $D000 when set (as SameBoy's
+    /// `GB_write_memory`, MIT; `busypushC001`/`E001`/`F001`/`FE01` from $0000 and $7F00).
+    /// Returns whether the write was taken.
+    fn dma_write_conflict(&mut self, addr: u16, value: u8) -> bool {
+        let cgb = self.cgb_mode || self.ppu.compat; // Color hardware, whatever the mode
+        let (bus, dma_bus) = (bus_of(addr, cgb), self.dma_bus(cgb));
+        let i = self.dma_index.saturating_sub(1);
+        if bus == Bus::Wram && dma_bus == Bus::External {
+            let at = (self.dma_source as u16) << 8 & 0x1000;
+            self.wram_write(0xC000 | at | addr & 0x0FFF, value);
+            return true;
+        }
+        if matches!(bus, Bus::Oam | Bus::Io) || bus != dma_bus {
+            return false;
+        }
+        let from = self.dma_src(i);
+        let byte = match bus {
+            _ if !cgb && from >= 0xC000 => value & self.peek(from),
+            Bus::Vram if cgb => 0x00,
+            Bus::Wram => return true,
+            _ => value,
+        };
+        self.ppu.write_oam(i as u16, byte);
+        true
+    }
+
+    /// The bus the running OAM DMA reads from. A Color's DMA from $E000 and up reads the
+    /// external bus, where nothing answers: $FF (as SameBoy's `GB_dma_run`, MIT; Gambatte
+    /// hwtests `oamdma_srcE000..srcFF00_busypush*` on the CGB).
+    fn dma_bus(&self, cgb: bool) -> Bus {
+        if cgb && self.dma_source >= 0xE0 { Bus::External } else { bus_of(self.dma_src(0), cgb) }
+    }
+
+    /// $FEA0-$FEFF, past OAM (Pan Docs, "FEA0-FEFF range"): $FF while the PPU holds OAM; then a
+    /// Game Boy reads $00, a CGB E or a GBA the address's high nibble twice, and an older Color
+    /// its RAM there (as SameBoy's `GB_read_oam`, MIT; Gambatte hwtests `oamdma_*_busypushFEA1`,
+    /// `busypushFF01`: a CGB C reads back what was written, a DMG $00).
+    fn read_fea0(&self, addr: u16) -> u8 {
+        let a = addr as u8;
+        match self.fea0_index(addr) {
+            _ if self.ppu.cpu_locked(0xFE00, false) => 0xFF,
+            Some(i) => self.fea0[i],
+            None if self.cgb_mode || self.ppu.compat => (a & 0xF0) | (a >> 4),
+            None => 0x00,
+        }
+    }
+
+    /// Where $FEA0-$FEFF lands in a Color's RAM there (`fea0`): up to revision C, 8 bytes at
+    /// each of $FEA0, $FEC0 and $FEE0, each mirrored four times (bytes 0-23); on a CGB D, the 32
+    /// of $FEA0-$FEBF (0-31) and the 16 of $FEF0-$FEFF (32-47), which $FEC0-$FEEF mirror. None
+    /// on a Game Boy, a CGB E or a GBA.
+    fn fea0_index(&self, addr: u16) -> Option<usize> {
+        use crate::gameboy::Revision::*;
+        let a = addr as usize & 0xFF;
+        match self.rev {
+            _ if !(self.cgb_mode || self.ppu.compat) => None,
+            CgbE | Agb => None,
+            CgbD if a >= 0xC0 => Some(0x20 | a & 0x0F),
+            CgbD => Some(a - 0xA0),
+            _ => Some(((a & 0x60) >> 2 | a & 0x07) - 8),
+        }
+    }
+
     /// The address the OAM DMA reads byte `i` from; pages $E0-$FF read work RAM, like echo RAM.
     fn dma_src(&self, i: u8) -> u16 {
         let src = (self.dma_source as u16) << 8 | i as u16;
@@ -206,7 +302,7 @@ impl MemoryBus {
             0xC000..=0xDFFF => self.wram_read(addr),
             0xE000..=0xFDFF => self.wram_read(addr - 0x2000),
             0xFE00..=0xFE9F => self.ppu.read_oam(addr - 0xFE00),
-            0xFEA0..=0xFEFF => 0xFF,
+            0xFEA0..=0xFEFF => self.read_fea0(addr),
             0xFF00 => self.sgb.as_ref().and_then(|s| s.read_p1(self.joypad.select)).unwrap_or_else(|| self.joypad.read()),
             0xFF01 => self.serial.read(addr),
             // SC: unused bits read 1, and bit 1 (the fast clock) exists in Color mode only.
@@ -261,7 +357,11 @@ impl MemoryBus {
             0xC000..=0xDFFF => self.wram_write(addr, value),
             0xE000..=0xFDFF => self.wram_write(addr - 0x2000, value),
             0xFE00..=0xFE9F => self.ppu.write_oam(addr - 0xFE00, value),
-            0xFEA0..=0xFEFF => {}
+            0xFEA0..=0xFEFF => {
+                if let Some(i) = self.fea0_index(addr).filter(|_| !self.ppu.cpu_locked(0xFE00, true)) {
+                    self.fea0[i] = value;
+                }
+            }
             0xFF00 => {
                 // Selecting a group whose button is held pulls a line low: a joypad interrupt, as a press would.
                 let before = self.joypad.read();
@@ -547,7 +647,8 @@ impl MemoryBus {
             self.dma_active = false;
             return;
         }
-        let byte = self.peek(self.dma_src(self.dma_index));
+        let cgb = self.cgb_mode || self.ppu.compat;
+        let byte = if cgb && self.dma_source >= 0xE0 { 0xFF } else { self.peek(self.dma_src(self.dma_index)) };
         self.ppu.write_oam(self.dma_index as u16, byte);
         self.dma_index += 1;
     }
@@ -611,6 +712,9 @@ impl MemoryBus {
     pub(crate) fn write_access(&mut self, addr: u16, value: u8) {
         if (0xFE00..=0xFEFF).contains(&addr) { self.ppu.oam_bug_write(); }
         if let Some(w) = &mut self.watch { w.record(addr, value, true); }
+        if self.dma_active && self.dma_write_conflict(addr, value) {
+            return;
+        }
         if !self.ppu.cpu_locked(addr, true) {
             self.write_byte(addr, value);
         } else if addr >= 0xFF00 && self.cgb_mode {
@@ -789,6 +893,87 @@ mod tests {
         assert_eq!(bus.read_byte(0xFE00), 0xFF, "the M-cycle of the last byte is still blocked");
         bus.cycle_tick();
         assert_eq!(bus.read_byte(0xFE00), 0x01, "done");
+    }
+
+    #[test]
+    fn bus_of_maps_every_region() {
+        use Bus::*;
+        for (addr, dmg, cgb) in [
+            (0x0000, External, External), (0x7FFF, External, External),
+            (0x8000, Vram, Vram), (0x9FFF, Vram, Vram),
+            (0xA000, External, External), (0xBFFF, External, External),
+            (0xC000, External, Wram), (0xDFFF, External, Wram),
+            (0xE000, External, Wram), (0xFDFF, External, Wram),
+            (0xFE00, Oam, Oam), (0xFEFF, Oam, Oam),
+            (0xFF00, Io, Io), (0xFF80, Io, Io), (0xFFFF, Io, Io),
+        ] {
+            assert_eq!([bus_of(addr, false), bus_of(addr, true)], [dmg, cgb], "{addr:04X}");
+        }
+    }
+
+    /// $FEA0-$FEFF: $00 on a DMG, RAM (mirrored) on a CGB C, the high nibble twice on a CGB E.
+    #[test]
+    fn fea0_area_per_model() {
+        use crate::gameboy::Revision;
+        let mut bus = bus();
+        bus.write_byte(0xFEA0, 0x34);
+        assert_eq!(bus.read_byte(0xFEA0), 0x00, "DMG");
+        bus.cgb_mode = true;
+        bus.write_byte(0xFEA1, 0x34);
+        assert_eq!([bus.read_byte(0xFEA1), bus.read_byte(0xFEB9), bus.read_byte(0xFEC1)], [0x34, 0x34, 0x00], "CGB C");
+        bus.rev = Revision::CgbE;
+        assert_eq!(bus.read_byte(0xFEB9), 0xBB, "CGB E");
+    }
+
+    /// A DMG write on the DMA's bus lands in OAM as the byte being copied (ANDed with work RAM's
+    /// when the DMA reads it), not at its target; a write on the other bus lands.
+    #[test]
+    fn dmg_write_during_dma_same_bus() {
+        let mut bus = bus();
+        bus.write_byte(0xFF46, 0xC0);
+        for _ in 0..4 { bus.cycle_tick(); }
+        bus.cycle_write(0xC001, 0x0A); // the DMA copies byte 3 ($04) this M-cycle
+        bus.cycle_write(0x8000, 0x99); // VRAM: the other bus
+        for _ in 0..160 { bus.cycle_tick(); }
+        assert_eq!(bus.ppu.read_oam(3), 0x0A & 0x04, "work RAM's byte ANDed with the written value");
+        assert_eq!(bus.ppu.read_oam(4), 0x05);
+        assert_eq!(bus.read_byte(0xC001), 0x02, "the target is untouched");
+        assert_eq!(bus.read_byte(0x8000), 0x99);
+
+        bus.write_byte(0xFF46, 0x00); // from ROM (zeros)
+        for _ in 0..4 { bus.cycle_tick(); }
+        bus.cycle_write(0xC001, 0x0A);
+        for _ in 0..160 { bus.cycle_tick(); }
+        assert_eq!(bus.ppu.read_oam(3), 0x0A, "from ROM: the written value");
+        assert_eq!(bus.read_byte(0xC001), 0x02);
+    }
+
+    /// A CGB write on the DMA's bus: OAM gets the value (external bus), $00 (VRAM) or keeps the
+    /// DMA's byte (work RAM), and the target is untouched. A work RAM write during a DMA from the
+    /// external bus lands in the bank the DMA's address bit 12 picks; from $E000+ the DMA reads $FF.
+    #[test]
+    fn cgb_write_during_dma_same_bus() {
+        let run = |page: u8, addr: u16, value: u8| {
+            let mut bus = bus();
+            (bus.cgb_mode, bus.ppu.cgb_mode) = (true, true);
+            bus.write_byte(0x8001, 0x77);
+            bus.write_byte(0xFF46, page);
+            for _ in 0..4 { bus.cycle_tick(); }
+            bus.cycle_write(addr, value); // the DMA copies byte 3 this M-cycle
+            for _ in 0..160 { bus.cycle_tick(); }
+            bus
+        };
+        let b = run(0x00, 0x2000, 0x42);
+        assert_eq!(b.ppu.read_oam(3), 0x42, "external bus: the written value");
+        let b = run(0x80, 0x8001, 0x42);
+        assert_eq!((b.ppu.read_oam(3), b.read_byte(0x8001)), (0x00, 0x77), "VRAM: $00, target untouched");
+        let b = run(0xC0, 0xC001, 0x42);
+        assert_eq!((b.ppu.read_oam(3), b.read_byte(0xC001)), (0x04, 0x02), "work RAM: the DMA's byte, target untouched");
+        let b = run(0x00, 0xD223, 0x42);
+        assert_eq!((b.read_byte(0xC223), b.read_byte(0xD223)), (0x42, 0x00), "from $00xx: bank $C000");
+        let b = run(0x7F, 0xC223, 0x42);
+        assert_eq!((b.read_byte(0xC223), b.read_byte(0xD223)), (0x00, 0x42), "from $7Fxx: bank $D000");
+        assert_eq!(run(0xE0, 0xFF80, 0).ppu.read_oam(3), 0xFF, "from $E000: $FF");
     }
 
     #[test]
