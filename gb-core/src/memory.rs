@@ -535,7 +535,8 @@ impl MemoryBus {
     /// at the next M-cycle boundary; the bus requests it one M-cycle ahead (see `Timer::step`),
     /// which a running CPU's fetch-time sample needs but a halted one must not see yet.
     pub fn late_interrupts(&self) -> u8 {
-        let stat = if self.ppu_fresh & STAT_BIT != 0 && self.ppu.mode0_edge_late() { STAT_BIT } else { 0 };
+        let stat = if self.ppu_fresh & STAT_BIT != 0 && self.ppu.mode0_edge_late()
+            || self.ppu_fresh & STAT_BIT != 0 && self.ppu.mode2_early() { STAT_BIT } else { 0 };
         stat | if self.timer.reload_pending { TIMER_BIT } else { 0 }
     }
 
@@ -544,7 +545,10 @@ impl MemoryBus {
     /// dispatches them. Mode 0 for every SCX (gbmicrotest `hblank_int_scx0..7_if_a/b/c`,
     /// `hblank_int_if_a/b`), VBlank's IF.0 and mode-1 STAT edge (`vblank2_int_if_a..d`,
     /// `vblank_int_if_a..d`, `stat_write_glitch_l143_c/d`), the LY = LYC edge (`lyc1_int_if_edge_a..d`).
-    /// Not a mode-2 edge, which such a read sees (`oam_int_if_edge_a..d`).
+    /// So is the mode-2 edge, which rises in the M-cycle before its line (`Ppu::mode2_early`):
+    /// a read or write of IF there misses it (`oam_int_if_edge_a..d`), a halted CPU wakes one
+    /// M-cycle later (`late_interrupts`). Not a mode-2 edge a STAT write raises at mode 2's start,
+    /// which such a read sees (`mode2_edge_now`).
     pub(crate) fn if_hidden(&self) -> u8 {
         if self.ppu_fresh == 0 { return 0; }
         self.ppu_fresh & if self.ppu.mode2_edge_now() { !STAT_BIT } else { 0xFF }

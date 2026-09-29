@@ -185,8 +185,8 @@ crash. They are not counted in the score.
 | Mooneye emulator-only MBC | MBC1, MBC2 and MBC5 banking | 28/28 |
 | Mealybug Tearoom | Mid-scanline PPU register changes, pixel for pixel | 30/51 ³ |
 | SameSuite | APU, HDMA and interrupt edge cases (CGB), SGB multiplayer | 78/78 ⁴ |
-| Age | PPU, STAT, OAM/VRAM access and double-speed timing | 36/51 |
-| gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 477/489 ² |
+| Age | PPU, STAT, OAM/VRAM access and double-speed timing | 49/51 |
+| gbmicrotest | Cycle-level timer, interrupt and PPU behaviour | 487/489 ² |
 | rtc3test | The MBC3 real-time clock | 6/6 |
 
 ¹ Test 7 runs inside the combined `oam_bug.gb`. Run on its own, that ROM

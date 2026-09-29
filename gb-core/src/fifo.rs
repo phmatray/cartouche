@@ -35,7 +35,9 @@ use crate::trace::{LAYER_BG, LAYER_OBJ, LAYER_WIN, NO_OBJ};
 /// Dots the fetcher runs behind mode 3 as the CPU sees it, and from a pixel leaving the BG FIFO
 /// to the LCD: (DMG, CGB). A CGB fetches 2 dots earlier and shows the pixel at the same time
 /// (Mealybug's CGB ROMs: `m3_scx_high_5_bits`, `m3_scy_change`, `m3_lcdc_obj_size_change`).
-const FIFO_LAG: [u32; 2] = [8, 6];
+/// Single speed; in double speed the fetcher lags 2 dots more: the mode-2 interrupt that these
+/// ROMs sync on comes one M-cycle ahead of the line (`Ppu::mode2_early`), 4 dots or 2.
+const FIFO_LAG: [u32; 2] = [4, 2];
 const OUT_DELAY: [u32; 2] = [1, 3];
 /// Dots left of the 6-dot OBJ fetch when it reads its row's low byte: (DMG, CGB). The high byte
 /// comes 2 dots later: on a CGB the fetch's last dot, on a DMG the dot after it, as the pixels
@@ -116,7 +118,7 @@ pub(crate) struct LineState {
     pub active: bool,
     /// Dots of mode 3 run so far.
     pub dot: u32,
-    /// Dots this line runs ahead of the others.
+    /// Dots this line runs ahead of the others (an aborted OBJ fetch).
     pub lead: u32,
     /// `FIFO_LAG` and `OUT_DELAY` of the model.
     pub lag: u32,
@@ -204,12 +206,9 @@ impl Ppu {
             sprites,
             nsprites,
             obj_xs,
-            lag: FIFO_LAG[(self.cgb_mode || self.compat) as usize],
+            lag: FIFO_LAG[(self.cgb_mode || self.compat) as usize] + 4 - self.m_cycle_dots, // see FIFO_LAG
             out_delay: OUT_DELAY[(self.cgb_mode || self.compat) as usize],
             obj_lo_at: OBJ_LO_AT[(self.cgb_mode || self.compat) as usize],
-            // Line 0 draws one M-cycle earlier after the mode 2 interrupt than the other lines
-            // (Mealybug's DMG ROMs make up for it by waiting one M-cycle less on line 0).
-            lead: if self.ly == 0 && !self.lcd_on_line0 { 4 } else { 0 },
             sel_obj: self.line.sel_obj,
             ..LineState::default()
         };
@@ -289,10 +288,11 @@ impl Ppu {
         self.window_was_active || self.ly == self.wy
     }
 
-    /// LCDC turns the window on (on a DMG, LCDC bit 0 turns it off too).
+    /// LCDC turns the window on. On a DMG, LCDC bit 0 off blanks it but it still runs: it still
+    /// lengthens mode 3 (Age stat-mode-window-dmgC, whose LCDC has bit 0 off; SameBoy agrees).
     #[inline]
     fn win_on(&self) -> bool {
-        self.lcdc & 0x20 != 0 && (self.cgb_mode || self.lcdc & 0x01 != 0)
+        self.lcdc & 0x20 != 0
     }
 
     /// WX as the window compares it: a write reaches it one dot late (Mealybug `m3_wx_5_change`,
@@ -316,13 +316,15 @@ impl Ppu {
         }
     }
 
-    /// WX matches x: at x = WX - 7, or on a DMG one pixel later when the window could not start
-    /// there (LCDC.5 still off) and WX was not just written (SameBoy's model; Mealybug
-    /// `m3_lcdc_win_en_change_multiple_wx` lines 16 and 44, LCDC.5 back on one pixel after the match).
+    /// WX matches x: at x = WX - 7 (on a DMG not WX 166), or on a DMG one pixel later when the
+    /// window could not start there (LCDC.5 still off) and WX was not just written (SameBoy's
+    /// model; Mealybug `m3_lcdc_win_en_change_multiple_wx` lines 16 and 44, LCDC.5 back on one
+    /// pixel after the match).
     #[inline]
     fn wx_match(&self, x: u8, dmg: bool) -> bool {
         let wx = self.wx_seen();
-        x + 7 == wx || dmg && x + 6 == wx && self.line.dot != self.line.wx_dot + 1
+        // A DMG never matches WX 166 in mode 3: no window, no penalty (Age stat-mode-window).
+        x + 7 == wx && !(dmg && x == 159) || dmg && x + 6 == wx && self.line.dot != self.line.wx_dot + 1
     }
 
     /// The window row being drawn.
@@ -334,6 +336,17 @@ impl Ppu {
     #[inline]
     fn fetch_tile_row(&self, tile: u8) -> usize {
         if self.lcdc & 0x10 != 0 { tile as usize * 16 } else { (0x1000 + (tile as i8 as i32) * 16) as usize }
+    }
+
+    /// The BG map column of a tile fetch: SCX's coarse bits for the first tile, then SCX (all of it)
+    /// plus the x the pixels have reached, so a mid-line SCX write moves the next tile by its fine
+    /// bits too. A CGB counts one pixel less, except while an OBJ waits for the tile (SameBoy's
+    /// `during_object_fetch`; Age m3-bg-scx on DMG, CGB, non-CGB mode and double speed).
+    #[inline]
+    fn bg_col(&self, tile_x: u8) -> u8 {
+        if tile_x == 0 { return self.scx >> 3; }
+        let late = if (self.cgb_mode || self.compat) && self.line.obj_pending.is_none() { 7 } else { 8 };
+        ((self.scx as u16 + self.line.x as u16 + late) >> 3) as u8 & 31
     }
 
     /// VRAM address of the fetched tile's row (CGB: in the attribute's bank, flipped by it).
@@ -369,7 +382,7 @@ impl Ppu {
                 let (map, col, row) = if f.window {
                     (self.lcdc & 0x40, f.tile_x & 31, self.win_line() >> 3)
                 } else {
-                    (self.lcdc & 0x08, (self.scx >> 3).wrapping_add(f.tile_x) & 31, self.scy.wrapping_add(self.ly) >> 3)
+                    (self.lcdc & 0x08, self.bg_col(f.tile_x), self.scy.wrapping_add(self.ly) >> 3)
                 };
                 let base = if map != 0 { 0x1C00 } else { 0x1800 };
                 // The first tile is fetched twice, but its number is read once (Mealybug `m3_scy_change`).
@@ -429,7 +442,7 @@ impl Ppu {
                     // gbmicrotest win0-3 measure) by starting the next fetch early. With WX 0 and a fine
                     // scroll, the window comes one dot later (Mealybug `m3_window_timing_wx_0`). A WX
                     // 0-6 written mid-line is matched on its dot (`fifo_dot`), not per invisible pixel.
-                    let early = if self.line.win_skip == 7 && self.line.fine != 0 && !self.cgb_mode { 4 } else { 5 };
+                    let early = if self.line.win_skip == 7 && self.line.fine != 0 { 4 } else { 5 };
                     for _ in 0..self.line.win_skip.min(early) { self.fetcher_dot(); }
                 }
             }
@@ -716,9 +729,14 @@ impl Ppu {
             bg_color = self.get_bg_cram_color(bg.palette & 7, bg_id);
         } else {
             // A DMG shows the dot of a BGP write with both values mixed, a CGB (compatibility mode)
-            // the new one (Mealybug `m3_bgp_change`).
+            // the new one (Mealybug `m3_bgp_change`), a CGB B/C still the old one (Age m3-bg-bgp:
+            // its ncmBC reference is one pixel right of the ncmE one, on every line).
             let bgp = match self.line.bgp_old.take() {
-                Some((old, dot)) if dot + 1 >= self.line.dot && !self.compat => self.bgp | old,
+                Some((old, dot)) if dot + 1 >= self.line.dot => match (self.compat, self.rev) {
+                    (false, _) => self.bgp | old,
+                    (true, Revision::CgbB | Revision::CgbC) => old,
+                    _ => self.bgp,
+                },
                 _ => self.bgp,
             };
             // BG enable reaches the LCD one dot after BGP does, two on a CGB (`m3_lcdc_bg_en_change`).
