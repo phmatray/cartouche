@@ -53,7 +53,7 @@ new suite is added, never to hide a regression.
 Its last section, `rule-blocked`, lists the screenshot runs whose reference
 needs data Cartouche may not ship: the ® that Nintendo's boot ROM leaves in
 tile 25. An entry stays there only while every pixel that differs lies where
-tile 25 is drawn (worked out from OAM, the tile maps and the PPU registers,
+tile 25 is drawn (worked out from OAM and the tile each pixel was fetched with,
 never from the glyph); CI fails when one passes or differs anywhere else.
 These entries are not counted as passes.
 
