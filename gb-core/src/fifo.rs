@@ -427,8 +427,11 @@ impl Ppu {
 
     /// DMG: OBJs turned off (LCDC.1) while an OBJ waits for its fetch or is being fetched stop that
     /// fetch at once; the OBJ is not drawn and the pixels resume on that dot (a CGB fetches it
-    /// anyway). Mealybug `m3_lcdc_obj_en_change` and `m3_lcdc_obj_en_change_variant` on the DMG, as
-    /// SameBoy models it. The OBJs left of the first tile, already merged, are not undone.
+    /// anyway). A fetch already under way also gives back the dot it had begun: the pixels run one
+    /// dot further ahead for the rest of the line, while mode 3 keeps its length (SameBoy's LCDC
+    /// write handler ends the PPU's current step at once but counts it in the line). Mealybug
+    /// `m3_lcdc_obj_en_change_variant` on the DMG: its BGP stripe, OBJs at X 16 and 17. The OBJs left
+    /// of the first tile, already merged, are not undone.
     #[inline]
     fn obj_abort(&self) -> bool {
         self.lcdc & 0x02 == 0 && !(self.cgb_mode || self.compat) && self.line.obj_fetch.is_some() | self.line.obj_pending.is_some()
@@ -524,6 +527,7 @@ impl Ppu {
         }
         if self.line.obj_dots > 0 && self.obj_abort() {
             (self.line.obj_dots, self.line.obj_fetch) = (0, None);
+            self.line.lead += 1; // the fetch dot it had begun (`obj_abort`)
         }
         if self.line.obj_dots > 0 {
             self.line.obj_dots -= 1;
