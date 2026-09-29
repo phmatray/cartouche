@@ -63,13 +63,27 @@ impl Cpu {
         bus.cycle_idu(self.regs.sp); // M2: SP--
         self.regs.sp = self.regs.sp.wrapping_sub(1);
         bus.cycle_write(self.regs.sp, (pc >> 8) as u8); // M3: push PC high
-        // The vector is picked from IE & IF only now: a push that wrote IE ($FFFF) can
-        // redirect the dispatch, or cancel it to $0000 (Mooneye ie_push).
-        let vector = bus.interrupts.acknowledge().unwrap_or(0x0000);
+        // IE as the high-byte push left it: a push that wrote IE ($FFFF) redirects the dispatch,
+        // or cancels it to $0000 (Mooneye ie_push); the low-byte push no longer can.
+        let ie = bus.interrupts.interrupt_enable;
         self.regs.sp = self.regs.sp.wrapping_sub(1);
-        bus.cycle_write(self.regs.sp, pc as u8); // M4: push PC low
-        self.regs.pc = vector;
+        bus.cycle_tick(); // M4: push PC low
+        // IF is sampled once M4's components have run, before the push lands: a source rising in
+        // M4 is taken. A push that writes IF ($FF0F) doesn't change the pick, but the pick's bit
+        // is cleared from what it wrote (Gambatte irq_precedence `late_if_via_sp_if_1/2`,
+        // `if_and_ie_0_vector_1..4`).
+        let (bit, vector) = bus.interrupts.highest(ie).unwrap_or((0, 0x0000));
+        bus.write_access(self.regs.sp, pc as u8);
+        bus.interrupts.interrupt_flag &= !bit;
         bus.cycle_tick(); // M5: jump to vector
+        // The bit is let go at the halted CPU's sampling point of M5, in single speed: that source
+        // rising again before it is absorbed, after it (`late_interrupts`) it retriggers. Every
+        // source pins it from both sides (Gambatte `*_late_retrigger_1/2`: mode 0 at SCX 0 and 1,
+        // mode 2, LY = LYC, VBlank, TIMA, serial). In double speed the M4 clear is the last.
+        if !bus.double_speed {
+            bus.interrupts.interrupt_flag &= !(bit & bus.if_late & !bus.late_interrupts());
+        }
+        self.regs.pc = vector;
     }
 
     /// Execute one instruction. Returns the number of T-cycles consumed.
