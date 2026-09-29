@@ -101,6 +101,7 @@ export function useEmulator() {
       }
       setPower((n) => n + 1);
       stopped.current = false;
+      locked.current = false; // a new console: a lock in its first frame is news too
       setBreakReason(null);
       bpRef.current.forEach((a) => emu.debug_add_breakpoint(a)); // each load builds a new console
       wpRef.current.forEach((w) => emu.debug_add_watchpoint(w.addr, w.kind));
