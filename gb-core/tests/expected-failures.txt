@@ -17,10 +17,7 @@ same-suite/apu/channel_3/channel_3_extra_length_clocking-cgb0.gb  # apu
 same-suite/apu/channel_3/channel_3_extra_length_clocking-cgbB.gb  # apu
 same-suite/apu/channel_4/channel_4_extra_length_clocking-cgb0B.gb  # apu
 age-test-roms/halt/halt-m0-interrupt-dmgC-cgbBCE.gb  # interrupt
-age-test-roms/oam/oam-read-dmgC-cgbBC.gb  # ppu
-age-test-roms/oam/oam-write-cgbBCE.gb  # ppu
 age-test-roms/oam/oam-write-dmgC.gb  # ppu
-age-test-roms/oam/oam-write-ncmBCE.gb  # ppu
 age-test-roms/stat-interrupt/stat-int-dmgC-cgbBCE.gb  # stat
 age-test-roms/stat-interrupt/stat-int-ncmBCE.gb  # stat
 age-test-roms/stat-mode-sprites/stat-mode-sprites-dmgC-cgbBCE.gb  # stat
@@ -29,8 +26,6 @@ age-test-roms/stat-mode-window/stat-mode-window-cgbBCE.gb  # stat
 age-test-roms/stat-mode-window/stat-mode-window-dmgC.gb  # stat
 age-test-roms/stat-mode-window/stat-mode-window-ds-cgbBCE.gb  # double-speed
 age-test-roms/stat-mode-window/stat-mode-window-ncmBCE.gb  # stat
-age-test-roms/vram/vram-read-cgbBCE.gb  # ppu
-age-test-roms/vram/vram-read-ncmBCE.gb  # ppu
 gbmicrotest/halt_op_dupe_delay.gb  # rom-defect: https://github.com/aappleby/gbmicrotest/issues/3 expects DIV $55 ~60 M-cycles after a DIV reset; the HALT bug gives $01, as SameBoy (#215)
 gbmicrotest/hblank_int_if_a.gb  # stat
 gbmicrotest/hblank_int_l0.gb  # stat

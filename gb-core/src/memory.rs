@@ -634,6 +634,48 @@ mod tests {
         bus
     }
 
+    /// M-cycles from 10 into line 9's HBlank (past its mode-3 tail) until, on line 10: STAT shows
+    /// mode 2, an OAM read reads $FF, an OAM write is dropped, STAT shows mode 3, a VRAM read
+    /// reads $FF.
+    fn lock_edges(cgb: bool, ds: bool, rev: crate::gameboy::Revision) -> [u32; 5] {
+        let start = || {
+            let mut bus = bus();
+            (bus.cgb_mode, bus.ppu.cgb_mode, bus.rev, bus.ppu.rev) = (cgb, cgb, rev, rev);
+            (bus.double_speed, bus.ppu.m_cycle_dots) = (ds, if ds { 2 } else { 4 });
+            bus.write_byte(0xFF40, 0x91);
+            while !(bus.ppu.ly == 9 && bus.ppu.mode == crate::ppu::PpuMode::HBlank) { bus.cycle_tick(); }
+            bus
+        };
+        let first = |hit: &dyn Fn(u32) -> bool| (10..400).find(|&k| hit(k)).unwrap();
+        let at = |k: u32| { let mut bus = start(); for _ in 1..k { bus.cycle_tick(); } bus };
+        let stat = |m: u8| first(&|k| { let mut b = at(k); b.cycle_tick(); b.ppu.read_register(0xFF41) & 3 == m });
+        [
+            stat(2),
+            first(&|k| at(k).cycle_read(0xFE00) == 0xFF),
+            first(&|k| { let mut b = at(k); b.cycle_write(0xFE00, 0x99); b.ppu.oam[0] != 0x99 }),
+            stat(3),
+            first(&|k| at(k).cycle_read(0x8000) == 0xFF),
+        ]
+    }
+
+    /// Age oam-read, oam-write, vram-read: a read is blocked one M-cycle before STAT shows mode
+    /// 2 (not in double speed on a CGB B/C), a write on a DMG only once it shows, on a CGB with the
+    /// read; VRAM reads lead mode 3 by an M-cycle on a DMG only.
+    #[test]
+    fn oam_vram_lock_edges_cgb() {
+        use crate::gameboy::Revision;
+        for (cgb, ds, rev, [oam_r, oam_w, vram_r]) in [
+            (false, false, Revision::Default, [1, 0, 1]),
+            (true, false, Revision::Default, [1, 1, 0]),
+            (true, false, Revision::CgbE, [1, 1, 0]),
+            (true, true, Revision::CgbC, [0, 1, 0]),
+            (true, true, Revision::CgbE, [1, 1, 0]),
+        ] {
+            let [s2, r, w, s3, v] = lock_edges(cgb, ds, rev);
+            assert_eq!([s2 - r, s2 - w, s3 - v], [oam_r, oam_w, vram_r], "CGB {cgb}, double speed {ds}, {rev:?}");
+        }
+    }
+
     #[test]
     fn cgb_palette_ram_locked_in_mode3() {
         let mut rom = vec![0u8; 0x8000];

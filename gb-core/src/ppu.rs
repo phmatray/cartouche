@@ -159,11 +159,14 @@ impl Ppu {
     }
 
     /// The CPU cannot reach OAM in modes 2 and 3 nor VRAM and CGB palette RAM (BCPD/OCPD) in
-    /// mode 3 (reads $FF, writes are dropped; Pan Docs "LCD Color Palettes"). A read is blocked from the M-cycle before STAT shows the mode (the internal mode)
-    /// until STAT shows mode 0; a write only while STAT shows it, except in the M-cycle mode 3
-    /// has begun but STAT still shows mode 2, which lets a write through. The line after the LCD
-    /// turns on has no OAM scan and no lead.
-    /// (gbmicrotest `poweron_oam_*`, `poweron_vram_*`, `oam_*_l0/l1_*`, `vram_*_l0/l1_*`.)
+    /// mode 3 (reads $FF, writes are dropped; Pan Docs "LCD Color Palettes"). A read is blocked
+    /// from the M-cycle before STAT shows the mode (the internal mode) until STAT shows mode 0; a
+    /// write only while STAT shows it, except in the M-cycle mode 3 has begun but STAT still shows
+    /// mode 2, which lets a write through. The line after the LCD turns on has no OAM scan and no
+    /// lead. (gbmicrotest `poweron_oam_*`, `poweron_vram_*`, `oam_*_l0/l1_*`, `vram_*_l0/l1_*`.)
+    /// A CGB differs at the edges, per speed and revision (Age oam-read, oam-write, vram-read).
+    // ponytail: decided per access from the mode and its dot; precompute per-line edge dots if
+    // this ever shows in the bench.
     pub fn cpu_locked(&self, addr: u16, write: bool) -> bool {
         if self.lcdc & 0x80 == 0 || !matches!(addr, 0x8000..=0x9FFF | 0xFE00..=0xFE9F | 0xFF69 | 0xFF6B) {
             return false;
@@ -173,17 +176,32 @@ impl Ppu {
             m => m,
         };
         let internal = match self.mode {
+            // In double speed a CGB B/C has no lead into mode 2; a CGB E has (Age oam-read's `EFF`).
+            PpuMode::OamScan if self.m_cycle_dots == 2 && self.rev != Revision::CgbE => 0,
             PpuMode::OamScan if !self.lcd_on_line0 => 2,
             PpuMode::Drawing if !self.lcd_on_line0 => 3,
             _ => 0,
         };
         let from = if (0xFE00..=0xFE9F).contains(&addr) { 2 } else { 3 };
         if write {
-            shown >= from && !(shown == 2 && self.mode == PpuMode::Drawing)
+            // A CGB drops OAM writes from the internal mode 2 on (in double speed, on the line
+            // after the LCD turns on, from its second M-cycle of mode 3), a DMG only once STAT
+            // shows it (Age oam-write).
+            let lead = from == 2 && (self.cgb_mode || self.compat) && match self.mode {
+                PpuMode::OamScan => !self.lcd_on_line0,
+                PpuMode::Drawing => self.lcd_on_line0 && self.m_cycle_dots == 2 && self.mode_clock >= 2,
+                _ => false,
+            };
+            (shown >= from || lead) && !(shown == 2 && self.mode == PpuMode::Drawing)
         } else {
             // A CGB E unlocks OAM one dot after STAT shows mode 0 in single speed (Age oam-read's `EFF`).
             let e_lag = from == 2 && self.rev == Revision::CgbE && self.m_cycle_dots == 4
                 && self.mode == PpuMode::HBlank && self.mode_clock == 3;
+            if from == 3 && (self.cgb_mode || self.compat) {
+                // A CGB locks VRAM only once STAT shows mode 3, and in single speed the line after
+                // the LCD turns on one M-cycle after that (Age vram-read).
+                return shown == 3 && !(self.lcd_on_line0 && self.m_cycle_dots == 4 && self.mode_clock < 8);
+            }
             shown >= from || internal >= from || e_lag
         }
     }
