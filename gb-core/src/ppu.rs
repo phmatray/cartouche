@@ -229,6 +229,7 @@ impl Ppu {
     }
 
     /// The mode STAT shows: mode 1, 2 or 3 `lag` dots after it starts, mode 0 after `MODE0_EARLY`.
+    #[inline]
     fn stat_mode(&self, lag: u32) -> u8 {
         let m = self.m_cycle_dots;
         let hb = 5 - m / 2;
@@ -553,7 +554,7 @@ impl Ppu {
             && self.stat & 0x20 != 0;
         // No comparator blank at a line start: the interrupt is requested one M-cycle ahead of the
         // line (the CPU samples IF before its opcode fetch).
-        let lyc    = self.ly_compare(true, lyc_lead) == Some(self.lyc) && self.stat & 0x40 != 0;
+        let lyc    = self.stat & 0x40 != 0 && self.ly_compare(true, lyc_lead) == Some(self.lyc);
         hblank || vblank || oam || lyc
     }
 
