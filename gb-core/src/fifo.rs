@@ -192,7 +192,6 @@ pub(crate) struct LineState {
 impl Ppu {
     /// Mode 2 → 3: selects the line's OBJs and resets the fetcher.
     pub(crate) fn start_line(&mut self) {
-        if self.ly == self.wy { self.wy_latch = true; }
         let (sprites, nsprites) = if self.lcd_on_line0 { ([(0, 0, 0, 0, 0); 10], 0) } else { self.select_sprites(self.ly as usize) };
         let fine = self.scx & 7;
         let mut obj_xs = [0u64; 4];
@@ -292,7 +291,7 @@ impl Ppu {
 
     #[inline]
     fn wy_ok(&self) -> bool {
-        self.wy_latch || self.ly == self.wy
+        self.wy_latch
     }
 
     /// LCDC turns the window on. On a DMG, LCDC bit 0 off blanks it but it still runs: it still
@@ -625,7 +624,11 @@ impl Ppu {
             }
             if self.line.win_skip == 0 {
                 let wx = self.wx_seen();
-                if wx < 7 && self.line.dot == 6 + wx as u32 && self.win_on() && self.wy_ok() {
+                // WX 0 also matches a few dots later, once WY matches then (Gambatte
+                // `late_scx_late_wy_FFto4_ly4_wx00_1/_2/_3`: WY compared by dot 9 opens it on both
+                // models, SameBoy's WX 0 range).
+                let late0 = wx == 0 && (7..=10).contains(&self.line.dot);
+                if wx < 7 && (self.line.dot == 6 + wx as u32 || late0) && self.win_on() && self.wy_ok() {
                     self.line.win_skip = 7 - wx;
                 }
             } else if self.line.dot == 20 - self.line.win_skip as u32 {

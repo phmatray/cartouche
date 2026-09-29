@@ -161,8 +161,6 @@ gambatte/dmgpalette_during_m3/lycint_dmgpalette_during_m3_3.gb@dmg  # ppu-mode3
 gambatte/dmgpalette_during_m3/lycint_dmgpalette_during_m3_4.gb@dmg  # ppu-mode3
 gambatte/dmgpalette_during_m3/scx3/dmgpalette_during_m3_4.gb@dmg  # ppu-mode3
 gambatte/dmgpalette_during_m3/scx3/dmgpalette_during_m3_5.gb@dmg  # ppu-mode3
-gambatte/enable_display/enable_display_ly0_wemaster_1_dmg08_cgb04c_out3.gbc@cgb  # ppu
-gambatte/enable_display/enable_display_ly0_wemaster_1_dmg08_cgb04c_out3.gbc@dmg  # ppu
 gambatte/enable_display/frame0_m2stat_count_ds_1_cgb04c_out91.gbc@cgb  # ppu
 gambatte/enable_display/frame1_m2irq_count_1_dmg08_cgb04c_out98.gbc@cgb  # ppu
 gambatte/enable_display/frame1_m2irq_count_1_dmg08_cgb04c_out98.gbc@dmg  # ppu
@@ -572,12 +570,6 @@ gambatte/sprites/late_sizechange_sp39_2_dmg08_out0_cgb04c_out3.gbc@dmg  # ppu-mo
 gambatte/sprites/late_sizechange_sp39_ds_1_cgb04c_out0.gbc@cgb  # ppu-mode3
 gambatte/sprites/sprite_late_disable_spx1A_1_dmg08_out0.gb@dmg  # ppu-mode3
 gambatte/sprites/sprite_late_late_disable_spx1A_1_dmg08_out0.gb@dmg  # ppu-mode3
-gambatte/window/arg/late_enable_afterVblank_4_dmg08_out3_cgb04c_out0.gbc@cgb  # ppu-mode3
-gambatte/window/arg/late_enable_afterVblank_5_dmg08_cgb04c_out0.gbc@cgb  # ppu-mode3
-gambatte/window/arg/late_enable_afterVblank_5_dmg08_cgb04c_out0.gbc@dmg  # ppu-mode3
-gambatte/window/arg/late_scx_late_wy_FFto4_ly4_wx00_2_dmg08_out3_cgb04c_out0.gbc@dmg  # ppu-mode3
-gambatte/window/arg/late_scx_late_wy_FFto4_ly4_wx20_2_dmg08_out3_cgb04c_out0.gbc@cgb  # ppu-mode3
-gambatte/window/arg/late_scx_late_wy_FFto4_ly4_wx20_3_dmg08_cgb04c_out0.gbc@dmg  # ppu-mode3
 gambatte/window/arg/late_wx_late_wy_FFto2_ly2_2_dmg08_cgb04c_out3.gbc@cgb  # ppu-mode3
 gambatte/window/arg/late_wx_late_wy_FFto2_ly2_2_dmg08_cgb04c_out3.gbc@dmg  # ppu-mode3
 gambatte/window/arg/late_wy_10to0_ly1_1_dmg08_cgb04c_out3.gbc@cgb  # ppu-mode3
@@ -644,13 +636,8 @@ gambatte/window/late_disable_scx3_1_dmg08_out3_cgb04c_out0.gbc@cgb  # ppu-mode3
 gambatte/window/late_disable_scx5_1_dmg08_out3_cgb04c_out0.gbc@cgb  # ppu-mode3
 gambatte/window/late_disable_scx5_ds_1_cgb04c_out0.gbc@cgb  # ppu-mode3
 gambatte/window/late_disable_wx0f_1_dmg08_out3_cgb04c_out0.gbc@cgb  # ppu-mode3
-gambatte/window/late_enable_afterVblank_2_dmg08_out3_cgb04c_out0.gbc@cgb  # ppu-mode3
-gambatte/window/late_enable_afterVblank_3_dmg08_cgb04c_out0.gbc@cgb  # ppu-mode3
-gambatte/window/late_enable_afterVblank_3_dmg08_cgb04c_out0.gbc@dmg  # ppu-mode3
-gambatte/window/late_enable_afterVblank_ds_2_cgb04c_out0.gbc@cgb  # ppu-mode3
 gambatte/window/late_enable_afterVblank_ds_lcdoffset1_2_cgb04c_out0.gbc@cgb  # ppu-mode3
 gambatte/window/late_enable_afterVblank_lcdoffset1_1_cgb04c_out3.gbc@cgb  # ppu-mode3
-gambatte/window/late_enable_ly0_ds_2_cgb04c_out0.gbc@cgb  # ppu-mode3
 gambatte/window/late_reenable_ds_2_cgb04c_out0.gbc@cgb  # ppu-mode3
 gambatte/window/late_scx_late_disable_1_dmg08_out3_cgb04c_out0.gbc@cgb  # ppu-mode3
 gambatte/window/late_wx_1_dmg08_cgb04c_out0.gbc@cgb  # ppu-mode3
