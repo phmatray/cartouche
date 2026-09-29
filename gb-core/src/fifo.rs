@@ -193,6 +193,9 @@ pub(crate) struct LineState {
     pub relength: bool,
     /// The x the window last started at.
     pub win_x: u8,
+    /// CGB: the BG FIFO, fetcher, `window_triggered` and `win_rows` as the window started, while its
+    /// first tile is fetched: LCDC.5 off then gives them back (`cancel_window`).
+    pub win_undo: Option<(PixelFifo, Fetcher, bool, u8)>,
     /// WX before the last write, and the last dot the window still compares it (`wx_seen`).
     pub wx_old: u8,
     pub wx_dot: u32,
@@ -566,6 +569,22 @@ impl Ppu {
         }
     }
 
+    /// CGB (both modes): LCDC.5 turned off while the window's first tile is being fetched cancels
+    /// the window: the BG FIFO and fetcher go on from where the window stopped them, so the line
+    /// only loses the dots it already waited, not the window's 6. A CGB in single speed sees the
+    /// write a dot sooner than the FIFO does, as it does a WX write (`wx_seen`): that dot is not
+    /// counted. A DMG keeps the window and its penalty. Gambatte `window/late_disable_*`, `_scx2/3/5`,
+    /// `_wx0f`, `late_scx03_wx0f..12`, `late_scx00_wx0f/10_ds`, `late_scx_late_disable`: the line is
+    /// W - T dots longer (W - T + 1 in double speed) up to the window's first push, T its start.
+    pub(crate) fn cancel_window(&mut self) {
+        if self.line.fetcher.window && self.line.fetcher.tile_x == 0 {
+            if let Some((bg, fetcher, triggered, rows)) = self.line.win_undo.take() {
+                (self.line.bg, self.line.fetcher, self.line.window_triggered, self.line.win_rows) = (bg, fetcher, triggered, rows);
+                self.line.dot -= (self.m_cycle_dots == 4) as u32;
+            }
+        }
+    }
+
     /// The OBJ fetch: reads the OBJ's row and merges it into the OBJ FIFO, `shift` pixels already past.
     fn fetch_obj(&mut self, i: usize, shift: u8) {
         let a = self.obj_row(i);
@@ -753,6 +772,7 @@ impl Ppu {
         if !self.line.fetcher.window && self.line.left_done && self.line.discard == 0 && self.win_on()
             && if self.line.win_skip > 0 { x == 0 } else { self.wy_ok() && self.wx_match(x, dmg) }
         {
+            if !dmg { self.line.win_undo = Some((self.line.bg, self.line.fetcher, self.line.window_triggered, self.line.win_rows)); }
             // Turned off and on again, the window starts over on its next row.
             if self.line.window_triggered { self.line.win_rows += 1; }
             self.line.window_triggered = true;

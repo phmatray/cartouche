@@ -376,7 +376,11 @@ impl Ppu {
                 if self.win_carry && self.lcdc & 0x20 == 0 && value & 0x20 != 0 {
                     self.window_line_counter = self.window_line_counter.wrapping_add(1);
                 }
+                let win_off = self.lcdc & !value & 0x20 != 0;
                 self.lcdc = value;
+                if win_off && (self.cgb_mode || self.compat) && self.line.active && self.mode == PpuMode::Drawing {
+                    self.cancel_window();
+                }
                 self.wy_write();
                 self.line.win_was_on |= value & 0x20 != 0;
                 if tile_sel { self.tile_sel_switch(); }
@@ -1790,6 +1794,25 @@ mod tests {
             shades(&p, 10).iter().position(|&v| v == 3).expect("black shows")
         };
         assert_eq!(black_from(15) + 8, black_from(8));
+    }
+
+    #[test]
+    fn cgb_window_off_in_its_first_fetch_cancels_it() {
+        // WX 7 starts the window at FIFO dot 13; LCDC.5 off at dot 16, while its first tile is fetched.
+        let mode3 = |cgb: bool, off_at: Option<u32>| {
+            let mut p = Ppu::new();
+            (p.lcdc, p.ly, p.wx, p.wy, p.wy_latch, p.cgb_mode) = (0xB1, 10, 7, 0, true, cgb);
+            let mut dots = 0;
+            while p.ly == 10 {
+                if p.mode == PpuMode::Drawing && Some(p.line.dot) == off_at { p.write_register(0xFF40, 0x91); }
+                dots += (p.mode == PpuMode::Drawing) as u32;
+                p.step(1);
+            }
+            dots
+        };
+        assert_eq!(mode3(true, Some(16)), mode3(true, None) - 6 + 3, "a CGB loses the 3 dots it waited");
+        assert_eq!(mode3(false, Some(16)), mode3(false, None), "a DMG keeps the window's 6");
+        assert_eq!(mode3(true, Some(24)), mode3(true, None), "past the first push, the window stays");
     }
 
     #[test]
