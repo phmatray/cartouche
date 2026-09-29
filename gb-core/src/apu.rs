@@ -193,6 +193,9 @@ pub struct SquareChannel {
     did_tick: bool,
     /// The digital output (0-15): what PCM12 reads and the DAC converts.
     sample: u8,
+    /// The last duty step raised the output from 0 (for the CGB 0-C PCM12 read glitch). Not in
+    /// save states: it only matters on the tick a reload lands, and only on those revisions.
+    rose: bool,
 }
 
 impl SquareChannel {
@@ -215,6 +218,7 @@ impl SquareChannel {
             just_reloaded: false,
             did_tick: false,
             sample: 0,
+            rose: false,
         }
     }
 
@@ -236,10 +240,17 @@ impl SquareChannel {
             self.duty_position = (self.duty_position + 1) & 7;
             self.suppressed = false;
             self.did_tick = true;
+            self.rose = self.sample == 0;
             self.update_sample();
         }
         self.just_reloaded = left == 0;
         self.countdown -= left;
+    }
+
+    /// PCM12's nibble. CGB 0-C (`glitch`): read on the tick a duty step raises the output from
+    /// 0, it still reads 0 (SameBoy's `pcm_mask`; SameSuite `channel_1_freq_change_timing-cgb0BC`).
+    fn pcm(&self, glitch: bool) -> u8 {
+        if !self.enabled || glitch && self.just_reloaded && self.rose { 0 } else { self.sample }
     }
 
     fn update_sample(&mut self) {
@@ -251,11 +262,6 @@ impl SquareChannel {
     fn silence(&mut self) {
         self.enabled = false;
         self.sample = 0;
-    }
-
-    /// The digital output (0-15) while the channel plays.
-    fn digital(&self) -> u8 {
-        self.sample
     }
 
     pub fn output(&self) -> f32 {
@@ -1568,7 +1574,10 @@ impl Apu {
 
             // PCM12/PCM34 (CGB hardware): each playing channel's digital output, two per byte.
             0xFF76 | 0xFF77 if !self.cgb_mode => 0xFF,
-            0xFF76 => pcm(self.ch2.enabled, self.ch2.digital()) << 4 | pcm(self.ch1.enabled, self.ch1.digital()),
+            0xFF76 => {
+                let glitch = matches!(self.rev, Revision::Cgb0 | Revision::CgbA | Revision::CgbB | Revision::CgbC);
+                self.ch2.pcm(glitch) << 4 | self.ch1.pcm(glitch)
+            }
             0xFF77 => pcm(self.ch4.enabled, self.ch4.digital()) << 4 | pcm(self.ch3.enabled, self.ch3.digital()),
 
             // Write-only (NRx3, NR31, NR41...) and unused registers
@@ -1605,6 +1614,8 @@ impl Apu {
         }
         let first_half = self.length_first_half();
         let old = old_length(self.cgb_mode, self.rev);
+        // The square channels' NRx4 quirks as on a CGB D/E.
+        let de = self.cgb_mode && !matches!(self.rev, Revision::Cgb0 | Revision::CgbA | Revision::CgbB | Revision::CgbC | Revision::Agb);
         match addr {
             // CH1 — Square with sweep
             0xFF10 => self.ch1_sweep.write_nr10(value, &mut self.ch1, self.lf_div, self.cgb_mode, self.double_speed),
@@ -1613,7 +1624,7 @@ impl Apu {
             0xFF13 => self.ch1.write_nrx3(value),
             0xFF14 => {
                 let was_active = self.ch1.enabled;
-                self.ch1.write_nrx4(value, first_half, self.lf_div, self.cgb_mode, old);
+                self.ch1.write_nrx4(value, first_half, self.lf_div, de, old);
                 if value & 0x80 != 0 {
                     self.ch1_sweep.trigger(&self.ch1, was_active, self.lf_div, self.cgb_mode);
                 }
@@ -1623,7 +1634,7 @@ impl Apu {
             0xFF16 => self.ch2.write_nrx1(value),
             0xFF17 => self.ch2.write_nrx2(value, self.cgb_mode),
             0xFF18 => self.ch2.write_nrx3(value),
-            0xFF19 => self.ch2.write_nrx4(value, first_half, self.lf_div, self.cgb_mode, old),
+            0xFF19 => self.ch2.write_nrx4(value, first_half, self.lf_div, de, old),
 
             // CH3 — Wave
             0xFF1A => self.ch3.write_nr30(value),
@@ -2075,6 +2086,38 @@ mod tests {
         }
         assert_eq!([ch1(Revision::Cgb0), ch2(Revision::Cgb0), ch3(Revision::Cgb0), ch4(Revision::Cgb0)], [1; 4]);
         assert_eq!([ch1(Revision::CgbB), ch2(Revision::CgbB), ch3(Revision::CgbB), ch4(Revision::CgbB)], [1, 1, 2, 1]);
+    }
+
+    /// CH1 at $7FC, duty 12.5%, triggered, `n` double-speed M-cycles later (40-71) NR14 drops the
+    /// frequency to $0FC: PCM12 right after that write and 16 M-cycles later.
+    fn freq_change(rev: Revision) -> Vec<(u8, u8)> {
+        (40..72).map(|n| {
+            let mut apu = Apu::new();
+            (apu.cgb_mode, apu.double_speed, apu.rev) = (true, true, rev);
+            for (reg, v) in [(0xFF26, 0x80), (0xFF11, 0x00), (0xFF12, 0xF8), (0xFF13, 0xFC), (0xFF14, 0x87)] {
+                apu.write_register(reg, v);
+            }
+            for _ in 0..n { apu.step(1); }
+            apu.write_register(0xFF14, 0x00);
+            let left = apu.read_register(0xFF76);
+            for _ in 0..16 { apu.step(1); }
+            (left, apu.read_register(0xFF76))
+        }).collect()
+    }
+
+    /// The frequency's high bits leaving 7 on the tick the countdown reloads: a CGB E takes that
+    /// duty step back, the AGB and CGB 0-C keep it (SameSuite `channel_1_freq_change_timing-A`),
+    /// and CGB 0-C read 0 on PCM12 when a duty step raises the output on the read's tick.
+    #[test]
+    fn ch1_freq_change_timing_agb() {
+        let e = freq_change(Revision::CgbE);
+        let agb = freq_change(Revision::Agb);
+        let c = freq_change(Revision::CgbC);
+        assert_eq!(e, freq_change(Revision::Default));
+        let kept = (0..32).filter(|&n| e[n].1 == 0 && agb[n].1 == 0xF).count();
+        assert!(kept > 0, "E {e:02X?}\nAGB {agb:02X?}");
+        assert!((0..32).all(|n| agb[n].1 == c[n].1), "the same duty steps on CGB C and the AGB");
+        assert!((0..32).any(|n| agb[n].0 == 0xF && c[n].0 == 0), "CGB C's PCM read glitch: {c:02X?}");
     }
 
     /// A v3-v7 APU block (the T-cycle model's 113 bytes): power, registers, the playing channels,
