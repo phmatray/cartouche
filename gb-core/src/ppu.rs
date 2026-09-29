@@ -388,7 +388,7 @@ impl Ppu {
                         || self.mode == PpuMode::VBlank
                         || read & 4 != 0
                         || (self.mode == PpuMode::OamScan && !self.lcd_on_line0) && self.mode_clock < MODE2_PULSE);
-                let old = self.stat;
+                let (old, was_high) = (self.stat, self.stat_irq_line);
                 self.stat = (value & 0x78) | (self.stat & 0x07);
                 self.stat_line_written(glitch, false);
                 // A write in the M-cycle line 144 starts lands before the start on a DMG and in
@@ -407,13 +407,35 @@ impl Ppu {
                     let (was, now) = (edge(old), !before(old) && (dmg || before(self.stat)) || edge(self.stat));
                     (self.stat_write_irq, self.stat_write_drop) = (now && !was, was && !now);
                 }
+                if self.lcdc & 0x80 != 0 && self.mode == PpuMode::OamScan && self.mode_clock == 0
+                    && !self.lcd_on_line0 && (dmg || self.m_cycle_dots == 2)
+                {
+                    // A STAT write in a line's first M-cycle lands before the line starts on a
+                    // DMG and in CGB double speed (after it in CGB single speed), as at line 144:
+                    // before the start, mode 2 has risen 2 dots early (line 0: mode 1 still
+                    // holds) and mode 0 has already fallen; LY = LYC compares the new line. A DMG
+                    // glitches there. (Gambatte `m2enable/late_enable_after_lycint_2`,
+                    // `late_enable_m0disable_2`, `lyc0/lyc1_late_m2enable_lycdisable_*`,
+                    // `late_m1disable_ly0_2`, `m2_late_m1disable_ly0_ds_1`,
+                    // `miscmstatirq/lycstatwirq_trigger_*`.)
+                    let lyc = self.lyc == self.ly;
+                    let early = if self.ly == 0 { 0x10 } else { 0x20 };
+                    let before = |s: u8| s & early != 0 || s & 0x40 != 0 && lyc;
+                    let after = |s: u8| s & 0x20 != 0 || s & 0x40 != 0 && lyc;
+                    let was = after(old) && !self.stat_line_before;
+                    let now = !self.stat_line_before && (dmg || before(self.stat)) || !before(self.stat) && after(self.stat);
+                    (self.stat_write_irq, self.stat_write_drop) = (now && !was, was && !now);
+                }
+                self.write_vs_mode0_edge(old, self.lyc, dmg, false, was_high);
             }
             0xFF42 => self.scy = value,
             0xFF43 => self.scx = value,
             0xFF44 => {}
             0xFF45 => {
+                let (old, was_high) = (self.lyc, self.stat_irq_line);
                 self.lyc = value;
                 self.stat_line_written(false, true);
+                self.write_vs_mode0_edge(self.stat, old, false, true, was_high);
             }
             0xFF47 => {
                 self.line.bgp_old = Some((self.bgp, self.line.dot));
@@ -649,6 +671,45 @@ impl Ppu {
     /// halted CPU sees on a normal line, 0 | 1-4 | 5-7 (Mooneye `hblank_ly_scx_timing-GS`, Age
     /// `halt-m0-interrupt`), and on the line after LCD on, 0-2 | 3-6 | 7 (gbmicrotest
     /// `int_hblank_halt_scx0..7`), where a running CPU sees 0 | 1-4 | 5-7 (`int_hblank_nops/incs_scx0..7`).
+    /// A STAT or LYC write in the M-cycle mode 0's STAT source rises lands before that edge on a
+    /// DMG, and on a CGB while the edge is under half an M-cycle old; after it otherwise
+    /// (Gambatte `m0enable/disable_*`, `lycdisable_ff41_*`, `lycdisable_ff45_*`). Before it, the
+    /// sources the write leaves decide the edge `step` took with the old ones: the STAT line
+    /// before the M-cycle, then LY = LYC alone until mode 0, then with mode 0. A DMG STAT write
+    /// glitches as mode 3 shows then (only LY = LYC counts). After it, the edge stays. An LYC
+    /// write counts before the edge on a DMG only while it is under 3 dots old; on a CGB the old
+    /// LYC holds the line through an edge 2 dots or less after the write, or already in its
+    /// M-cycle (`lycdisable_ff45_*`, whose SCX moves the edge a dot at a time).
+    fn write_vs_mode0_edge(&mut self, old_stat: u8, old_lyc: u8, glitch: bool, lyc_write: bool, was_high: bool) {
+        let dmg = !(self.cgb_mode || self.compat);
+        if lyc_write && !dmg && self.stat & 0x08 != 0 && was_high
+            && (self.mode == PpuMode::Drawing && (self.mode3_len - MODE0_EARLY).saturating_sub(self.mode_clock) <= 2 || self.mode0_edge_now())
+        {
+            (self.stat_irq_line, self.stat_write_drop) = (true, false);
+            return;
+        }
+        if !self.mode0_edge_now() { return; }
+        let age = self.mode_clock.wrapping_sub(self.mode0_irq_delay());
+        if dmg && lyc_write && age >= 3 { return; }
+        if !dmg && age >= self.m_cycle_dots / 2 {
+            self.stat_write_drop = false;
+            return;
+        }
+        let ly = self.ly_compare(true, false);
+        let pre = |stat: u8, lyc: u8| stat & 0x40 != 0 && ly == Some(lyc);
+        let post = |stat: u8, lyc: u8| pre(stat, lyc) || stat & 0x08 != 0;
+        let glitch = glitch && self.ly_compare(false, false) == Some(old_lyc);
+        let was = post(old_stat, old_lyc) && !self.stat_line_before;
+        let (pre_now, post_now) = (pre(self.stat, self.lyc), post(self.stat, self.lyc));
+        let now = !self.stat_line_before && (glitch || pre_now) || !pre_now && post_now;
+        (self.stat_write_irq, self.stat_write_drop) = (now && !was, was && !now);
+        self.stat_irq_line = post_now;
+    }
+
+    pub(crate) fn mode0_edge_now(&self) -> bool {
+        self.lcdc & 0x80 != 0 && self.mode == PpuMode::HBlank && self.mode_clock.wrapping_sub(self.mode0_irq_delay()) < self.m_cycle_dots
+    }
+
     pub(crate) fn mode0_edge_late(&self) -> bool {
         self.mode0_edge_age().is_some_and(|age| age < self.m_cycle_dots / 2)
     }
@@ -1321,6 +1382,41 @@ mod tests {
                 dots += 1;
             }
             assert_eq!(dots, lag, "{m_cycle_dots} dots per M-cycle");
+        }
+    }
+
+    /// A STAT write disabling mode 0 in the M-cycle its edge came lands before the edge on a DMG
+    /// (the edge goes), on a CGB only while the edge is under 2 dots old (Gambatte
+    /// `m0enable/disable_scx*_1/_2`).
+    #[test]
+    fn late_ff41_enable_vs_mode0_edge() {
+        for (cgb, age, kept) in [(false, 3, false), (true, 1, false), (true, 2, true), (true, 3, true)] {
+            let mut p = Ppu::new();
+            (p.lcdc, p.ly, p.mode, p.mode3_len, p.stat, p.cgb_mode) = (0x81, 10, PpuMode::Drawing, 172, 0x08, cgb);
+            p.mode_clock = 172 - MODE0_EARLY - 4 + age;
+            p.start_line();
+            p.mode3_len = 172;
+            let (_, irq, _) = p.step(4);
+            assert!(irq && p.mode == PpuMode::HBlank && p.mode_clock == age, "CGB {cgb}, age {age}");
+            p.write_register(0xFF41, 0);
+            assert_eq!(!p.stat_write_drop, kept, "CGB {cgb}, the edge {age} dots old");
+        }
+    }
+
+    /// A DMG STAT write in a line's first M-cycle lands before the line: enabling mode 2 there
+    /// (with mode 0 falling) keeps the line up, where a CGB takes a new edge (Gambatte
+    /// `m2enable/late_enable_m0disable_2`).
+    #[test]
+    fn stat_write_at_line_start() {
+        for (cgb, edge) in [(false, false), (true, true)] {
+            let mut p = Ppu::new();
+            (p.lcdc, p.ly, p.mode, p.mode3_len, p.stat, p.cgb_mode) = (0x81, 1, PpuMode::HBlank, 172, 0x08, cgb);
+            p.mode_clock = 376 + MODE0_EARLY - 172 - 8;
+            p.step(4);
+            p.step(4);
+            assert_eq!((p.ly, p.mode, p.mode_clock), (2, PpuMode::OamScan, 0));
+            p.write_register(0xFF41, 0x20);
+            assert_eq!(p.stat_write_irq, edge, "CGB {cgb}");
         }
     }
 

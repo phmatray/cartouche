@@ -41,7 +41,7 @@ impl Cpu {
         }
         if self.halted {
             // Off the hot path: only a halted CPU with an interrupt pending gets here.
-            if self.locked || pending & !bus.late_interrupts() == 0 {
+            if self.locked || pending & !bus.halt_late_interrupts() == 0 {
                 return;
             }
             (self.halted, self.halt_grace, bus.dma_hold) = (false, false, false);
