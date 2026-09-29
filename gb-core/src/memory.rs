@@ -197,14 +197,34 @@ impl MemoryBus {
 
     pub fn read_byte(&self, addr: u16) -> u8 {
         if self.dma_active && self.dma_conflict(addr) {
-            // On a Game Boy the CPU sees the byte the DMA reads this M-cycle; OAM itself, and
-            // every conflict on Color hardware (as SameBoy), read $FF.
-            if addr >= 0xFE00 || self.cgb_mode || self.ppu.compat {
-                return 0xFF;
-            }
-            return self.peek(self.dma_src(self.dma_index.saturating_sub(1)));
+            return self.conflict_read(addr);
         }
         self.peek(addr)
+    }
+
+    /// What a CPU read on the bus the running OAM DMA holds returns: the byte the DMA reads
+    /// this M-cycle, and $FF for OAM itself. On a Color (as SameBoy's `GB_read_memory`, MIT;
+    /// Gambatte hwtests `oamdma_src*_busypop*`, `busyread*` over every source page), a DMA
+    /// from $E000+ leaves $FF on the external bus, and a work RAM read during a DMA from the
+    /// external bus reads the 4 KB bank the DMA's address picks (`dma_write_conflict`).
+    fn conflict_read(&self, addr: u16) -> u8 {
+        let cgb = self.cgb_mode || self.ppu.compat; // Color hardware, whatever the mode
+        let i = self.dma_index.saturating_sub(1);
+        match (bus_of(addr, cgb), self.dma_bus(cgb)) {
+            (Bus::Oam, _) => 0xFF,
+            (Bus::Wram, Bus::External) => self.wram_read(0xC000 | (self.dma_source as u16) << 8 & 0x1000 | addr & 0x0FFF),
+            (Bus::External, _) if cgb && self.dma_source >= 0xE0 => 0xFF,
+            _ => self.peek(self.dma_src(i)),
+        }
+    }
+
+    /// A Color's CPU read of VRAM during a DMA from VRAM clears the byte the DMA copies this
+    /// M-cycle (Gambatte hwtests `oamdma_src8000/9F00_busypop7FFF/9FFF`: OAM reads back $00).
+    fn dma_read_clobber(&mut self, addr: u16) {
+        let cgb = self.cgb_mode || self.ppu.compat;
+        if cgb && bus_of(addr, cgb) == Bus::Vram && self.dma_bus(cgb) == Bus::Vram {
+            self.ppu.write_oam(self.dma_index.saturating_sub(1) as u16, 0x00);
+        }
     }
 
     /// A CPU write on the bus the running OAM DMA holds: the DMA drives the address, so the
@@ -663,6 +683,7 @@ impl MemoryBus {
         self.tick_components();
         if (0xFE00..=0xFEFF).contains(&addr) { self.ppu.oam_bug_read(); }
         let value = if self.ppu.cpu_locked(addr, false) { 0xFF } else { self.read_byte(addr) };
+        if self.dma_active { self.dma_read_clobber(addr); }
         if let Some(w) = &mut self.watch { w.record(addr, value, false); }
         value
     }
@@ -673,6 +694,7 @@ impl MemoryBus {
         self.tick_components();
         if (0xFE00..=0xFEFF).contains(&addr) { self.ppu.oam_bug_read_inc(); }
         let value = if self.ppu.cpu_locked(addr, false) { 0xFF } else { self.read_byte(addr) };
+        if self.dma_active { self.dma_read_clobber(addr); }
         if let Some(w) = &mut self.watch { w.record(addr, value, false); }
         value
     }
@@ -943,6 +965,33 @@ mod tests {
         let b = run(0x7F, 0xC223, 0x42);
         assert_eq!((b.read_byte(0xC223), b.read_byte(0xD223)), (0x00, 0x42), "from $7Fxx: bank $D000");
         assert_eq!(run(0xE0, 0xFF80, 0).ppu.read_oam(3), 0xFF, "from $E000: $FF");
+    }
+
+    /// A CGB read during a DMA: the DMA's byte on its own bus, $FF on the external bus from
+    /// $E000+, work RAM's remapped bank from the external bus, the addressed byte elsewhere; a
+    /// VRAM read during a VRAM DMA clears the OAM byte copied that M-cycle.
+    #[test]
+    fn cgb_conflict_read_per_bus_pair() {
+        let start = |page: u8| {
+            let mut bus = bus();
+            (bus.cgb_mode, bus.ppu.cgb_mode) = (true, true);
+            bus.write_byte(0x8003, 0x77);
+            bus.write_byte(0xFF46, page);
+            for _ in 0..4 { bus.cycle_tick(); }
+            bus
+        };
+        let mut b = start(0xC0); // work RAM
+        assert_eq!(b.cycle_read(0xD123), 0x04, "work RAM: the DMA's byte ($C003)");
+        assert_eq!(b.cycle_read(0x0100), 0x00, "external: its own byte");
+        let mut b = start(0x00); // ROM (zeros)
+        assert_eq!(b.cycle_read(0xD003), 0x04, "work RAM from the external bus: bank $C000");
+        assert_eq!(b.cycle_read(0x8003), 0x77, "VRAM: its own byte");
+        let mut b = start(0xE0);
+        assert_eq!(b.cycle_read(0x0100), 0xFF, "external, DMA from $E000: $FF");
+        let mut b = start(0x80); // VRAM
+        assert_eq!(b.cycle_read(0x9000), 0x77, "VRAM: the DMA's byte ($8003)");
+        for _ in 0..160 { b.cycle_tick(); }
+        assert_eq!(b.ppu.read_oam(3), 0x00, "the byte copied that M-cycle is cleared");
     }
 
     #[test]
