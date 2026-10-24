@@ -170,11 +170,11 @@ fn xrefs_and_far_call_conventions() {
     let x = ok(&mut s, "xrefs", json!({"target": "02:4005"}));
     let refs = x["refs"].as_array().unwrap();
     assert_eq!(x["count"], 3, "{x}");
-    assert!(refs.contains(&json!({"from": "00:0200", "kind": "far:farcall"})), "{x}");
-    assert!(refs.contains(&json!({"from": "02:4000", "kind": "call"})), "{x}");
-    assert!(refs.contains(&json!({"from": "00:020C", "kind": "call", "ambiguous_bank": true})), "{x}");
+    assert!(refs.contains(&json!({"from": "00:0200", "kind": "far:farcall", "insn": "RST $08"})), "{x}");
+    assert!(refs.contains(&json!({"from": "02:4000", "kind": "call", "insn": "CALL Helper"})), "{x}");
+    assert!(refs.contains(&json!({"from": "00:020C", "kind": "call", "ambiguous_bank": true, "insn": "CALL $4005"})), "{x}");
     let x = ok(&mut s, "xrefs", json!({"target": "03:4000", "kind": "far"}));
-    assert_eq!(x["refs"], json!([{"from": "00:0209", "kind": "far:bankcall"}]), "{x}");
+    assert_eq!(x["refs"], json!([{"from": "00:0209", "kind": "far:bankcall", "insn": "CALL $0280"}]), "{x}");
     // Not visible from the other bank.
     assert_eq!(ok(&mut s, "xrefs", json!({"target": "01:4005"}))["count"], 1, "only the ambiguous bank-0 call");
     // The inline bytes are consumed by the disassembler, and annotated.
@@ -188,7 +188,7 @@ fn xrefs_and_far_call_conventions() {
     assert_eq!(g["unresolved_bank_callees"], 1);
     // Plain call targets are found too.
     let x = ok(&mut s, "xrefs", json!({"target": "00:0340"}));
-    assert_eq!(x["refs"], json!([{"from": "00:0320", "kind": "call"}]));
+    assert_eq!(x["refs"], json!([{"from": "00:0320", "kind": "call", "insn": "CALL $0340"}]));
     let f = ok(&mut s, "function_bounds", json!({"addr": "00:0320"}));
     assert_eq!(f["callees"][0]["to"], "00:0340");
     assert_eq!(f["exits"], json!(["00:032B"]));
@@ -412,12 +412,12 @@ fn review_regressions() {
     let mut file: Value = serde_json::from_str(&std::fs::read_to_string(&db).unwrap()).unwrap();
     file["note"] = json!("top");
     file["roms"][sha]["owner"] = json!("me");
-    file["roms"][sha]["labels"]["00:C000"]["size"] = json!(2);
+    file["roms"][sha]["labels"]["00:C000"]["width"] = json!(2);
     std::fs::write(&db, file.to_string()).unwrap();
     open(&mut s, &test_rom());
     ok(&mut s, "label_set", json!({"addr": "00:0300", "name": "AddBytes"}));
     let file: Value = serde_json::from_str(&std::fs::read_to_string(&db).unwrap()).unwrap();
-    assert_eq!((file["note"].clone(), file["roms"][sha]["owner"].clone(), file["roms"][sha]["labels"]["00:C000"]["size"].clone()), (json!("top"), json!("me"), json!(2)));
+    assert_eq!((file["note"].clone(), file["roms"][sha]["owner"].clone(), file["roms"][sha]["labels"]["00:C000"]["width"].clone()), (json!("top"), json!("me"), json!(2)));
 }
 
 #[test]
@@ -444,4 +444,267 @@ fn every_array_schema_has_items() {
             }
         }
     }
+}
+
+/// A ROM for the sized-label, table and far-call tests (MBC5, 4 banks).
+fn table_rom() -> PathBuf {
+    rom(0x19, 4, &[
+        (0x0010, &[0xC9]), // rst $10: fixed-bank inline far call (dw target follows)
+        (0x0280, &[0xC9]), // regs far-call trampoline
+        // $0600: rst $10 / dw $4005 ; ld a,$01 ; ret
+        (0x0600, &[0xD7, 0x05, 0x40, 0x3E, 0x01, 0xC9]),
+        // $0700: pointers into bank 3
+        (0x0700, &[0x00, 0x40]),
+        // $0800: ld a,3 ; ld hl,$4000 ; jr z,+0 ; call $0280 (bank kept across the conditional jump)
+        (0x0800, &[0x3E, 0x03, 0x21, 0x00, 0x40, 0x28, 0x00, 0xCD, 0x80, 0x02, 0xC9]),
+        // $0810: ld b,2 ; ld a,b ; ld hl,$4005 ; call $0280 (bank copied from B)
+        (0x0810, &[0x06, 0x02, 0x78, 0x21, 0x05, 0x40, 0xCD, 0x80, 0x02, 0xC9]),
+        (bank(1, 0x4005), &[0xC9]),
+        // bank 1 $4100: rst $10 / dw $4005 ; ret
+        (bank(1, 0x4100), &[0xD7, 0x05, 0x40, 0xC9]),
+        // bank 1 $4200: a 4-byte table that reads as "call $4005", then unlabelled code: call $4005 ; ret
+        (bank(1, 0x4200), &[0xCD, 0x05, 0x40, 0x00, 0xCD, 0x05, 0x40, 0xC9]),
+        (bank(1, 0x4300), &[0xC9]),
+        // bank 1 $4400: ld hl,$4410 ; ret ; $4410: dw $4420, $4430
+        (bank(1, 0x4400), &[0x21, 0x10, 0x44, 0xC9]),
+        (bank(1, 0x4410), &[0x20, 0x44, 0x30, 0x44]),
+        (bank(1, 0x4420), &[0xC9]),
+        (bank(1, 0x4430), &[0xC9]),
+        // bank 1 $4500: ld a,[$4410] ; ret (reads the table, doesn't dispatch through it)
+        (bank(1, 0x4500), &[0xFA, 0x10, 0x44, 0xC9]),
+        (bank(2, 0x4005), &[0xC9]),
+        (bank(3, 0x4000), &[0xC9]),
+    ])
+}
+
+fn froms(x: &Value) -> Vec<String> {
+    x["refs"].as_array().unwrap().iter().map(|r| format!("{} {}", r["from"].as_str().unwrap(), r["kind"].as_str().unwrap())).collect()
+}
+
+#[test]
+fn fixed_bank_inline_far_calls() {
+    let (mut s, _) = server();
+    open(&mut s, &table_rom());
+    let bad = call(&mut s, "farcall_set", json!({"name": "near1", "via": "00:0010", "kind": "inline", "layout": ["lo", "hi"]})).unwrap_err();
+    assert!(bad.contains("bank"), "{bad}");
+    assert!(call(&mut s, "farcall_set", json!({"name": "near1", "via": "00:0010", "kind": "inline", "layout": ["bank", "lo", "hi"], "bank": 1})).is_err());
+    ok(&mut s, "farcall_set", json!({"name": "fixedcall", "via": "00:0010", "kind": "inline", "layout": ["lo", "hi"], "bank": "01"}));
+    ok(&mut s, "label_set", json!({"addr": "01:4005", "name": "Target"}));
+    let x = ok(&mut s, "xrefs", json!({"target": "Target", "kind": "far"}));
+    assert_eq!(froms(&x), ["00:0600 far:fixedcall", "01:4100 Target+$FB far:fixedcall"], "{x}");
+    // The inline word is skipped, and the target shown with its label.
+    let l = ok(&mut s, "disasm", json!({"addr": "00:0600", "count": 2}));
+    assert_eq!(l, json!(["00:0600  D70540     RST $10  ; far:fixedcall -> 01:4005 Target", "00:0603  3E01       LD A, $01"]));
+    let f = ok(&mut s, "function_bounds", json!({"addr": "00:0600"}));
+    assert_eq!(f["callees"][0], json!({"to": "01:4005 Target", "kind": "far:fixedcall", "at": "00:0600"}), "{f}");
+    assert_eq!(f["bytes"], 6);
+    let g = ok(&mut s, "callgraph", json!({"addr": "00:0600"}));
+    assert_eq!(g["nodes"][0]["callees"], json!(["01:4005 Target (far:fixedcall)"]));
+    // The convention is stored with its bank, and a DB written by hand with a number works too.
+    assert_eq!(ok(&mut s, "db_dump", json!({}))["knowledge"]["far_calls"][0]["bank"], "01");
+}
+
+#[test]
+fn regs_far_calls_follow_copies_and_conditional_jumps() {
+    let (mut s, _) = server();
+    open(&mut s, &table_rom());
+    ok(&mut s, "farcall_set", json!({"name": "bankcall", "via": "00:0280", "kind": "regs"}));
+    assert_eq!(froms(&ok(&mut s, "xrefs", json!({"target": "03:4000", "kind": "far"}))), ["00:0807 far:bankcall"]);
+    assert_eq!(froms(&ok(&mut s, "xrefs", json!({"target": "02:4005", "kind": "far"}))), ["00:0816 far:bankcall"]);
+    // A label between the loads and the call is a join point: the registers are forgotten there.
+    ok(&mut s, "label_set", json!({"addr": "00:0805", "name": "Join"}));
+    assert_eq!(ok(&mut s, "xrefs", json!({"target": "03:4000", "kind": "far"}))["count"], 0);
+}
+
+#[test]
+fn sized_data_labels_resume_the_sweep() {
+    let (mut s, db) = server();
+    let h = open(&mut s, &table_rom());
+    ok(&mut s, "label_set", json!({"addr": "01:4300", "name": "Later"}));
+    // Unlabelled, the table reads as a call; labelled data without a size, it hides the code after it.
+    assert_eq!(froms(&ok(&mut s, "xrefs", json!({"target": "01:4005", "kind": "call"}))), ["01:4200 call", "01:4204 call"]);
+    ok(&mut s, "label_set", json!({"addr": "01:4200", "name": "Table4", "kind": "data"}));
+    assert_eq!(ok(&mut s, "xrefs", json!({"target": "01:4005", "kind": "call"}))["count"], 0);
+    ok(&mut s, "label_set", json!({"labels": [{"addr": "01:4200", "name": "Table4", "kind": "data", "size": 4}]}));
+    assert_eq!(froms(&ok(&mut s, "xrefs", json!({"target": "01:4005", "kind": "call"}))), ["01:4204 call"]);
+    let r = ok(&mut s, "label_search", json!({"query": "Table4"}));
+    assert_eq!(r["results"][0]["size"], 4, "{r}");
+    assert!(call(&mut s, "label_set", json!({"addr": "01:4200", "name": "T", "size": 0})).is_err());
+    assert!(call(&mut s, "label_set", json!({"addr": "01:4200", "name": "T", "entries": 2})).is_err());
+    // A size written by hand as a hex string is honoured.
+    let sha = h["sha1"].as_str().unwrap();
+    let mut file: Value = serde_json::from_str(&std::fs::read_to_string(&db).unwrap()).unwrap();
+    file["roms"][sha]["labels"]["01:4200"]["size"] = json!("4");
+    std::fs::write(&db, file.to_string()).unwrap();
+    assert_eq!(froms(&ok(&mut s, "xrefs", json!({"target": "01:4005", "kind": "call"}))), ["01:4204 call"]);
+    // near: which label a location falls in.
+    let n = ok(&mut s, "label_search", json!({"near": "01:4206", "limit": 2}));
+    assert_eq!((n["before"][0]["name"].clone(), n["before"][0]["offset"].clone(), n["after"]["name"].clone()), (json!("Table4"), json!("6"), json!("Later")), "{n}");
+    assert_eq!(ok(&mut s, "label_search", json!({"near": "01:4206", "kind": "code"}))["before"], json!([]));
+}
+
+#[test]
+fn jump_and_pointer_tables_are_references() {
+    let (mut s, _) = server();
+    open(&mut s, &table_rom());
+    ok(&mut s, "label_set", json!({"labels": [
+        {"addr": "01:4410", "name": "States", "kind": "jumptable", "entries": 2},
+        {"addr": "01:4420", "name": "StateA"}, {"addr": "01:4400", "name": "Dispatch"},
+        {"addr": "00:0700", "name": "Ptrs", "kind": "pointers", "entries": 1, "target_bank": "03"},
+    ]}));
+    assert!(call(&mut s, "label_set", json!({"addr": "01:4410", "name": "X", "kind": "jumptable"})).is_err(), "entries required");
+    assert_eq!(ok(&mut s, "xrefs", json!({"target": "StateA"}))["refs"], json!([{"from": "01:4410 States", "kind": "table"}]));
+    assert_eq!(froms(&ok(&mut s, "xrefs", json!({"target": "01:4430"}))), ["01:4412 States+$2 table"]);
+    assert_eq!(froms(&ok(&mut s, "xrefs", json!({"target": "03:4000", "kind": "table"}))), ["00:0700 Ptrs table"]);
+    // The function that loads a jumptable gets its entries as callees.
+    let f = ok(&mut s, "function_bounds", json!({"addr": "Dispatch"}));
+    let to: Vec<&str> = f["callees"].as_array().unwrap().iter().map(|c| c["to"].as_str().unwrap()).collect();
+    assert_eq!(to, ["01:4420 StateA", "01:4430"], "{f}");
+    let t = ok(&mut s, "table_entries", json!({"addr": "States"}));
+    assert_eq!(t["entries"], json!([{"at": "01:4410 States", "to": "01:4420 StateA"}, {"at": "01:4412 States+$2", "to": "01:4430 StateA+$10"}]));
+    let t = ok(&mut s, "table_entries", json!({"addr": "00:0700", "entries": 1, "target_bank": null}));
+    assert_eq!(t["entries"][0]["to"], "03:4000", "the declared bank applies");
+    let t = ok(&mut s, "table_entries", json!({"addr": "01:4410", "entries": 1, "target_bank": 2}));
+    assert_eq!(t["entries"][0]["to"], "02:4420");
+}
+
+#[test]
+fn batch_disasm() {
+    let (mut s, _) = server();
+    open(&mut s, &test_rom());
+    let d = ok(&mut s, "disasm", json!({"addrs": ["00:0340", "02:4005"], "count": 1}));
+    assert_eq!(d, json!([{"addr": "00:0340", "lines": ["00:0340  FA03C0     LD A, [$C003]"]}, {"addr": "02:4005", "lines": ["02:4005  C9         RET"]}]));
+}
+
+#[test]
+fn step_sees_reads_and_unchanged_writes() {
+    let (mut s, _) = server();
+    open(&mut s, &test_rom());
+    ok(&mut s, "regs_set", json!({"regs": {"pc": "0160"}}));
+    ok(&mut s, "watchpoint_set", json!({"addr": "C000", "kind": "read"}));
+    let r = ok(&mut s, "step", json!({"count": 10}));
+    assert_eq!((r["steps"].clone(), r["stop"]["kind"].clone(), r["stop"]["pc"].clone()), (json!(1), json!("read"), json!("00:0160")), "{r}");
+    ok(&mut s, "watchpoint_clear", json!({}));
+    // The main loop stores A to $C010; the same value written again still stops a step.
+    ok(&mut s, "mem_write", json!({"addr": "C010", "bytes": "05"}));
+    ok(&mut s, "regs_set", json!({"regs": {"pc": "0150", "a": "05"}}));
+    ok(&mut s, "watchpoint_set", json!({"addr": "C010"}));
+    let r = ok(&mut s, "step", json!({"count": 10}));
+    assert_eq!((r["steps"].clone(), r["stop"]["kind"].clone(), r["stop"]["value"].clone()), (json!(1), json!("write"), json!("05")), "{r}");
+}
+
+#[test]
+fn vram_and_sram_banks() {
+    let (mut s, _) = server();
+    open(&mut s, &rom(0x1B, 4, &[(0x149, &[0x03])])); // MBC5+RAM+BATTERY, 32 KiB
+    ok(&mut s, "mem_write", json!({"addr": "sram2:A010", "bytes": "11 22"}));
+    ok(&mut s, "mem_write", json!({"addr": "vram1:8000", "bytes": "AB"}));
+    let r = ok(&mut s, "mem_read", json!({"addr": "sram2:A010", "len": 2}));
+    assert_eq!(r["rows"], json!(["sram2:A010  11 22"]), "{r}");
+    assert!(ok(&mut s, "mem_read", json!({"addr": "sram0:A010", "len": 2}))["rows"][0].as_str().unwrap().ends_with("00 00"));
+    assert_eq!(ok(&mut s, "mem_read", json!({"addr": "vram1:8000", "len": 1}))["rows"], json!(["vram1:8000  AB"]));
+    assert_ne!(ok(&mut s, "mem_read", json!({"addr": "vram0:8000", "len": 1}))["rows"], json!(["vram0:8000  AB"]));
+    for a in [json!({"addr": "sram4:A000"}), json!({"addr": "vram2:8000"}), json!({"addr": "vram1:9FFF", "len": 2}), json!({"addr": "sram0:8000"})] {
+        assert!(call(&mut s, "mem_read", a.clone()).is_err(), "{a}");
+    }
+    let w = ok(&mut s, "watchpoint_set", json!({"addr": "vram1:8000"}));
+    assert_eq!(w["watchpoints"][0]["addr"], "vram1:8000");
+    assert!(call(&mut s, "watchpoint_set", json!({"addr": "sram1:A000"})).is_err());
+    assert_eq!(ok(&mut s, "watchpoint_clear", json!({"addr": "vram0:8000"}))["watchpoints"].as_array().unwrap().len(), 1, "another bank");
+    assert_eq!(ok(&mut s, "watchpoint_clear", json!({"addr": "vram1:8000"}))["watchpoints"], json!([]));
+    assert_eq!(ok(&mut s, "watchpoint_set", json!({"addr": "8000"}))["watchpoints"][0]["addr"], "00:8000", "a plain address: any bank");
+}
+
+#[test]
+fn mbc1_rom_bank_high_bits() {
+    let (mut s, _) = server();
+    open(&mut s, &rom(0x01, 64, &[(0x0300, &[0xC9])]));
+    ok(&mut s, "call_routine", json!({"addr": "00:0300", "rom_bank": "21"}));
+    assert_eq!(ok(&mut s, "call_routine", json!({"addr": "00:0300", "rom_bank": "05"}))["regs"]["rom_bank"], "05");
+    assert!(call(&mut s, "call_routine", json!({"addr": "00:0300", "rom_bank": "20"})).unwrap_err().contains("MBC1"));
+}
+
+fn screenshot(s: &mut Server) -> Value {
+    let r = s.handle(&json!({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "screenshot", "arguments": {"scale": 1}}})).unwrap();
+    r["result"]["content"].clone()
+}
+
+#[test]
+fn state_load_restores_the_picture() {
+    let (mut s, _) = server();
+    open(&mut s, &test_rom());
+    ok(&mut s, "run", json!({"frames": 2}));
+    let before = screenshot(&mut s);
+    assert_eq!(before.as_array().unwrap().len(), 1, "no note on a live picture");
+    ok(&mut s, "state_save", json!({"slot": "a"}));
+    ok(&mut s, "mem_write", json!({"addr": "8000", "bytes": "FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF"}));
+    ok(&mut s, "run", json!({"frames": 2}));
+    assert_ne!(screenshot(&mut s)[0], before[0], "tile 0 is now black");
+    let l = ok(&mut s, "state_load", json!({"slot": "a"}));
+    assert!(l.get("note").is_none(), "{l}");
+    assert_eq!(screenshot(&mut s), before);
+    // A state file holds no picture: the load says so, and so does the screenshot until frames run.
+    let path = tmp("a.state");
+    ok(&mut s, "state_export", json!({"path": path, "slot": "a"}));
+    assert!(ok(&mut s, "state_import", json!({"path": path}))["note"].as_str().unwrap().contains("no picture"));
+    assert_eq!(screenshot(&mut s)[1]["type"], "text");
+    ok(&mut s, "run", json!({"frames": 2}));
+    assert_eq!(screenshot(&mut s), before);
+}
+
+#[test]
+fn second_review_regressions() {
+    let (mut s, db) = server();
+    let h = open(&mut s, &table_rom());
+    let sha = h["sha1"].as_str().unwrap().to_string();
+    // A data label inside a sized one is part of it, and extends it by its own size.
+    ok(&mut s, "label_set", json!({"labels": [
+        {"addr": "01:4200", "name": "TabA", "kind": "data", "size": 2},
+        {"addr": "01:4201", "name": "TabB", "kind": "data", "size": 6},
+    ]}));
+    assert_eq!(ok(&mut s, "xrefs", json!({"target": "01:4005", "kind": "call"}))["count"], 0);
+    // Reading a byte of a jumptable doesn't make its entries callees.
+    ok(&mut s, "label_set", json!({"addr": "01:4410", "name": "States", "kind": "jumptable", "entries": 2}));
+    assert_eq!(ok(&mut s, "function_bounds", json!({"addr": "01:4500"}))["callees"], json!([]));
+    // Banks are checked against the ROM.
+    assert!(call(&mut s, "table_entries", json!({"addr": "01:4410", "entries": 1, "target_bank": "99"})).is_err());
+    assert!(call(&mut s, "farcall_set", json!({"name": "f", "via": "00:0010", "kind": "inline", "layout": ["lo", "hi"], "bank": "1FF"})).is_err());
+    assert!(call(&mut s, "farcall_set", json!({"name": "f", "via": "00:0280", "kind": "regs", "bank": 1, "bank_reg": "b"})).is_err());
+    // Hand-edited values: an oversized size or entry count, and keys that don't parse.
+    let mut file: Value = serde_json::from_str(&std::fs::read_to_string(&db).unwrap()).unwrap();
+    let labels = &mut file["roms"][&sha]["labels"];
+    labels["01:4200"]["size"] = json!("FFFFFFFF");
+    labels["01:4410"]["entries"] = json!(4294967295u32);
+    labels["0160"] = json!({"name": "Odd", "kind": "code"});
+    labels["bogus"] = json!({"name": "Odder", "kind": "code"});
+    std::fs::write(&db, file.to_string()).unwrap();
+    ok(&mut s, "xrefs", json!({"target": "01:4005"}));
+    let r = ok(&mut s, "label_search", json!({"query": ""}));
+    assert_eq!(r["count"], 5, "{r}");
+}
+
+#[test]
+fn second_review_emulation_regressions() {
+    let (mut s, _) = server();
+    open(&mut s, &rom(0x1B, 4, &[(0x149, &[0x03])]));
+    assert!(call(&mut s, "mem_read", json!({"addr": "sram10000:A000"})).is_err());
+    assert_eq!(ok(&mut s, "mem_write", json!({"addr": "sram0:A000", "bytes": ""}))["written"], 0);
+    // The note clears after two frames since the load, however they are run.
+    ok(&mut s, "run", json!({"frames": 2}));
+    let path = tmp("b.state");
+    ok(&mut s, "state_export", json!({"path": path}));
+    ok(&mut s, "state_import", json!({"path": path}));
+    // A slot saved while the screen is stale has no picture either.
+    ok(&mut s, "state_save", json!({"slot": "x"}));
+    assert!(ok(&mut s, "state_load", json!({"slot": "x"}))["note"].is_string());
+    ok(&mut s, "run", json!({"frames": 1}));
+    assert_eq!(screenshot(&mut s).as_array().unwrap().len(), 2);
+    ok(&mut s, "run", json!({"frames": 1}));
+    assert_eq!(screenshot(&mut s).as_array().unwrap().len(), 1);
+    // MBC1: a refused bank leaves the mapping alone.
+    let (mut s, _) = server();
+    open(&mut s, &rom(0x01, 64, &[(0x0300, &[0xC9])]));
+    ok(&mut s, "call_routine", json!({"addr": "00:0300", "rom_bank": "05"}));
+    assert!(call(&mut s, "call_routine", json!({"addr": "00:0300", "rom_bank": "20"})).is_err());
+    assert_eq!(ok(&mut s, "regs_get", json!({}))["rom_bank"], "05");
 }

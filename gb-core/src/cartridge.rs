@@ -921,6 +921,12 @@ impl Cartridge {
         self.ram.get(i).copied()
     }
 
+    /// Sets byte `i` of the cartridge RAM, whatever bank is paged in or whether it is enabled
+    /// (debugger writes). `false` past the end of the RAM.
+    pub fn set_ram_byte(&mut self, i: usize, value: u8) -> bool {
+        self.ram.get_mut(i).map(|b| *b = value).is_some()
+    }
+
     pub fn export_sram(&self) -> Vec<u8> {
         let mut data = self.ram.clone();
         if let Some(ref rtc) = self.rtc {

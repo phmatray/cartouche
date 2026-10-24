@@ -509,16 +509,24 @@ impl GameBoy {
     }
 
     pub fn step_instruction(&mut self) -> Result<u32, EmulatorError> {
+        self.step_instruction_watched().map(|(cycles, _)| cycles)
+    }
+
+    /// `step_instruction`, also returning the first watched access (`watch_add`) of this step,
+    /// interrupt dispatch included, as (addr, value, write). It never carries over to a run.
+    pub fn step_instruction_watched(&mut self) -> Result<(u32, Option<crate::debug::WatchHit>), EmulatorError> {
+        if let Some(w) = &mut self.bus.watch {
+            w.hit = None;
+        }
         self.bus.cycle_count = 0;
         self.cpu.handle_interrupts(&mut self.bus);
         let stepped = self.cpu.step(&mut self.bus);
         self.bus.apu_catch_up();
+        // Taken even on an error: a step stops anyway, no break left over for the next run_frame.
+        let hit = self.bus.watch.as_mut().and_then(|w| w.hit.take());
         stepped?;
         self.double_speed = self.bus.double_speed;
-        if let Some(w) = &mut self.bus.watch {
-            w.hit = None; // a step stops anyway: no break left over for the next run_frame
-        }
-        Ok(self.bus.cycle_count)
+        Ok((self.bus.cycle_count, hit))
     }
 
     /// A stable 32-bit FNV-1a hash of `save_state()`, to check that two copies of a session agree.

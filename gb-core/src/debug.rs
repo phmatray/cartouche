@@ -32,12 +32,15 @@ impl Break {
 pub const WATCH_READ: u8 = 1;
 pub const WATCH_WRITE: u8 = 2;
 
+/// A watched access: (addr, value, write).
+pub type WatchHit = (u16, u8, bool);
+
 /// Watched addresses, recorded by the bus's CPU accessors (`MemoryBus::cycle_*`), so DMA, HDMA
 /// and the debugger's own reads never fire. Only the first access of an instruction is kept.
 #[derive(Default)]
 pub struct WatchSet {
     pub entries: Vec<(u16, u8)>,
-    pub hit: Option<(u16, u8, bool)>,
+    pub hit: Option<WatchHit>,
 }
 
 impl WatchSet {

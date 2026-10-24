@@ -98,7 +98,7 @@ fn cart_name(t: u8) -> &'static str {
 fn fingerprint(view: &View) -> u64 {
     let mut h = DefaultHasher::new();
     for (k, l) in &view.labels {
-        (k, &l.kind).hash(&mut h);
+        (k, &l.kind, l.size(), l.table()).hash(&mut h);
     }
     for c in &view.convs {
         format!("{c:?}").hash(&mut h);
@@ -128,6 +128,8 @@ pub enum Kind {
     Ld,
     /// A far call through declared convention #n.
     Far(usize),
+    /// An entry of a declared jumptable / pointers table.
+    Table,
 }
 impl Kind {
     pub fn label(&self, view: &View) -> String {
@@ -138,6 +140,7 @@ impl Kind {
             Kind::Rst => "rst".into(),
             Kind::Ld => "ld".into(),
             Kind::Far(i) => format!("far:{}", view.convs.get(*i).map_or("?", |c| c.name())),
+            Kind::Table => "table".into(),
         }
     }
 }
@@ -176,7 +179,7 @@ impl Insn {
             let Some(n) = view.exact(b, r.to) else { continue };
             t = match r.kind {
                 Kind::Rst => t.replace(&format!("${:02X}", r.to), n),
-                Kind::Far(_) => continue,
+                Kind::Far(_) | Kind::Table => continue,
                 _ => t.replace(&format!("${:04X}", r.to), n),
             };
         }
@@ -202,29 +205,21 @@ impl Sweeper {
         let hi = fetch(addr.wrapping_add(2)).unwrap_or(0);
         let op_len = lens()[op as usize];
         let n16 = u16::from_le_bytes([n8, hi]);
-        let in_rom_bank = (0x4000..0x8000).contains(&addr);
-        let target_bank = |t: u16| -> Option<u16> {
-            match t {
-                0..=0x3FFF => Some(0),
-                0x4000..=0x7FFF => in_rom_bank.then_some(bank),
-                0xD000..=0xDFFF => None,
-                _ => Some(0),
-            }
-        };
         let jr = addr.wrapping_add(2).wrapping_add(n8 as i8 as u16);
         let mut refs = vec![];
         let (mut ends, mut flow) = (false, false);
-        let mut push = |kind, cond, to: u16| refs.push(Ref { kind, cond, bank: target_bank(to), to });
+        let mut push = |kind, cond, to: u16| refs.push(Ref { kind, cond, bank: target_bank(bank, addr, to), to });
         match op {
             0xCD => { push(Kind::Call, false, n16); flow = true }
             0xC4 | 0xCC | 0xD4 | 0xDC => { push(Kind::Call, true, n16); flow = true }
             0xC3 => { push(Kind::Jp, false, n16); ends = true }
-            0xC2 | 0xCA | 0xD2 | 0xDA => { push(Kind::Jp, true, n16); flow = true }
+            // Conditional jumps and returns keep the tracked registers: the fall-through path
+            // still holds them.
+            0xC2 | 0xCA | 0xD2 | 0xDA => push(Kind::Jp, true, n16),
             0x18 => { push(Kind::Jr, false, jr); ends = true }
-            0x20 | 0x28 | 0x30 | 0x38 => { push(Kind::Jr, true, jr); flow = true }
+            0x20 | 0x28 | 0x30 | 0x38 => push(Kind::Jr, true, jr),
             _ if op & 0xC7 == 0xC7 => { push(Kind::Rst, false, (op & 0x38) as u16); flow = true }
             0xC9 | 0xD9 | 0xE9 => ends = true,
-            0xC0 | 0xC8 | 0xD0 | 0xD8 => flow = true,
             0x01 | 0x11 | 0x21 | 0x31 | 0x08 | 0xEA | 0xFA => push(Kind::Ld, false, n16),
             0xE0 | 0xF0 => push(Kind::Ld, false, 0xFF00 | n8 as u16),
             _ if illegal(op) => ends = true,
@@ -238,24 +233,24 @@ impl Sweeper {
                     continue;
                 }
                 let far = match c {
-                    Conv::Inline { layout, .. } => {
+                    Conv::Inline { layout, bank, .. } => {
                         let mut part = [0u8; 4];
                         for (j, &what) in layout.iter().enumerate() {
                             part[what as usize] = fetch(addr.wrapping_add(op_len as u16 + j as u16)).unwrap_or(0);
                         }
                         extra = layout.len() as u16;
-                        Some((part[0], u16::from_le_bytes([part[1], part[2]])))
+                        Some((bank.unwrap_or(part[0] as u16), u16::from_le_bytes([part[1], part[2]])))
                     }
-                    Conv::Regs { bank_reg, addr_pair, .. } => {
+                    Conv::Regs { bank_reg, addr_pair, bank, .. } => {
                         let (h, l) = (self.regs[addr_pair * 2], self.regs[addr_pair * 2 + 1]);
-                        match (self.regs[*bank_reg], h, l) {
+                        match (bank.or(self.regs[*bank_reg].map(u16::from)), h, l) {
                             (Some(b), Some(h), Some(l)) => Some((b, u16::from_le_bytes([l, h]))),
                             _ => None,
                         }
                     }
                 };
                 if let Some((b, to)) = far {
-                    let bank = if banked(to) { Some(b as u16) } else { Some(0) };
+                    let bank = if banked(to) { Some(b) } else { Some(0) };
                     refs.push(Ref { kind: Kind::Far(i), cond: r.cond, bank, to });
                 }
                 break;
@@ -276,6 +271,9 @@ impl Sweeper {
         let a = 1u8 << 7;
         match (x, z) {
             (0, 6) if y != 6 => return self.regs[y] = Some(n8),
+            // ld r, r' copies what is known (regs[6], the [hl] slot, is never known).
+            (1, _) if op != 0x76 && y != 6 => return self.regs[y] = self.regs[z as usize],
+            _ if op == 0xAF => return self.regs[7] = Some(0), // xor a
             (0, 1) if q == 0 => {
                 if p < 3 {
                     self.regs[2 * p] = Some((n16 >> 8) as u8);
@@ -286,7 +284,6 @@ impl Sweeper {
             _ => {}
         }
         let kill = match (x, z) {
-            (1, _) if op != 0x76 && y != 6 => 1 << y,
             (2, _) if y != 7 => a,
             (0, 4) | (0, 5) if y != 6 => 1 << y,
             (0, 3) => pair(p),
@@ -313,8 +310,43 @@ impl Sweeper {
     }
 }
 
-/// Linear sweep of a whole bank. Skips the cartridge header, regions labelled data/ram (up to
-/// the next label) and resyncs on a code label that falls inside an instruction.
+/// The bank of a reference from `bank:from` to `to`: bank 0 below $4000, the same bank for
+/// banked code pointing into $4000-$7FFF, unknown (None) from bank 0 into $4000-$7FFF or for
+/// $D000-$DFFF, and 0 for the rest of the address space.
+pub fn target_bank(bank: u16, from: u16, to: u16) -> Option<u16> {
+    match to {
+        0..=0x3FFF => Some(0),
+        0x4000..=0x7FFF => (0x4000..0x8000).contains(&from).then_some(bank),
+        0xD000..=0xDFFF => None,
+        _ => Some(0),
+    }
+}
+
+/// The entries of a 16-bit pointer table at bank:addr: (entry address, target bank, target).
+/// `fixed` is the bank of targets in $4000-$7FFF when they aren't in the table's bank.
+pub fn table_entries(rom: &Rom, bank: u16, addr: u16, n: u32, fixed: Option<u16>) -> Vec<(u16, Option<u16>, u16)> {
+    (0..n)
+        .map_while(|i| {
+            // Both bytes in the table's own ROM region.
+            let end = addr as u32 + 2 * i + 1;
+            if (end < 0x4000) != (addr < 0x4000) || end >= 0x8000 {
+                return None;
+            }
+            let at = (end - 1) as u16;
+            let to = u16::from_le_bytes([rom.byte(bank, at)?, rom.byte(bank, at + 1)?]);
+            let b = match fixed {
+                Some(f) if (0x4000..0x8000).contains(&to) => Some(f),
+                _ => target_bank(bank, addr, to),
+            };
+            Some((at, b, to))
+        })
+        .collect()
+}
+
+/// Linear sweep of a whole bank. Skips the cartridge header and regions labelled data, ram,
+/// jumptable or pointers (their size when known, else up to the next label), resyncs on a code
+/// label that falls inside an instruction, and forgets tracked registers at every code label
+/// (a label is where other paths may join).
 pub fn sweep_bank(rom: &Rom, view: &View, bank: u16, mut f: impl FnMut(&Insn)) {
     if bank as usize * 0x4000 >= rom.data.len() {
         return;
@@ -330,10 +362,32 @@ pub fn sweep_bank(rom: &Rom, view: &View, bank: u16, mut f: impl FnMut(&Insn)) {
             s.reset();
             continue;
         }
-        if view.labels.get(&(bank, a16)).is_some_and(|l| l.kind != "code") {
-            a = view.labels.range((bank, a16 + 1)..(bank, end as u16)).next().map_or(end, |((_, x), _)| *x as u32);
-            s.reset();
-            continue;
+        match view.labels.get(&(bank, a16)) {
+            Some(l) if l.kind != "code" => {
+                a = match l.size() {
+                    // Sized: code resumes right after it, or at a code label inside it. A non-code
+                    // label inside it is part of it, and extends it by its own size.
+                    Some(n) => {
+                        let mut e = a.saturating_add(n).min(end);
+                        let mut x = a + 1;
+                        loop {
+                            match view.labels.range((bank, x as u16)..(bank, e as u16)).next() {
+                                None => break e,
+                                Some(((_, y), l)) if l.kind == "code" => break *y as u32,
+                                Some(((_, y), l)) => {
+                                    e = e.max((*y as u32).saturating_add(l.size().unwrap_or(0)).min(end));
+                                    x = *y as u32 + 1;
+                                }
+                            }
+                        }
+                    }
+                    None => view.labels.range((bank, a16 + 1)..(bank, end as u16)).next().map_or(end, |((_, x), _)| *x as u32),
+                };
+                s.reset();
+                continue;
+            }
+            Some(_) => s.reset(),
+            None => {}
         }
         let Some(i) = s.step(&fetch, view, bank, a16) else { break };
         let after = a16.saturating_add(i.len);
@@ -362,6 +416,13 @@ impl Index {
         let mut refs = vec![];
         for bank in 0..rom.banks() {
             sweep_bank(rom, view, bank, |i| refs.extend(i.refs.iter().map(|r| (i.bank, i.addr, r.clone()))));
+        }
+        for (&(b, a), l) in &view.labels {
+            if let (Some((n, fixed)), true) = (l.table(), a < 0x8000) {
+                for (at, tb, to) in table_entries(rom, b, a, n, fixed) {
+                    refs.push((b, at, Ref { kind: Kind::Table, cond: false, bank: tb, to }));
+                }
+            }
         }
         let mut by_to: HashMap<u16, Vec<u32>> = HashMap::new();
         for (n, (_, _, r)) in refs.iter().enumerate() {
@@ -392,6 +453,10 @@ pub fn disasm(fetch: &dyn Fn(u16) -> Option<u8>, view: &View, bank: u16, start: 
             s.reset();
             continue;
         }
+        let here = if banked(a) { bank } else { 0 };
+        if a != start && view.labels.get(&(here, a)).is_some_and(|l| l.kind == "code") {
+            s.reset();
+        }
         let Some(i) = s.step(fetch, view, bank, a) else { break };
         if let Some(n) = view.exact(i.bank, a) {
             lines.push(format!("{n}:"));
@@ -415,7 +480,9 @@ pub fn disasm(fetch: &dyn Fn(u16) -> Option<u8>, view: &View, bank: u16, start: 
 }
 
 pub fn xrefs(rom: &mut Rom, view: &View, bank: u16, addr: u16, kinds: &[String], limit: usize) -> Value {
-    let idx = rom.index(view);
+    rom.index(view);
+    let rom = &*rom;
+    let idx = &rom.index.as_ref().unwrap().1;
     let mut out = vec![];
     let mut total = 0;
     let mut ambiguous = false;
@@ -428,6 +495,12 @@ pub fn xrefs(rom: &mut Rom, view: &View, bank: u16, addr: u16, kinds: &[String],
         total += 1;
         if out.len() < limit {
             let mut e = json!({"from": view.fmt(*fb, *fa), "kind": kind});
+            if r.kind != Kind::Table {
+                let fetch = |x: u16| rom.byte(*fb, x);
+                if let Some(i) = Sweeper::default().step(&fetch, view, *fb, *fa) {
+                    e["insn"] = json!(i.text(view));
+                }
+            }
             if r.cond {
                 e["cond"] = json!(true);
             }
@@ -546,10 +619,18 @@ pub fn function(rom: &Rom, view: &View, bank: u16, entry: u16) -> Func {
             let Some(i) = s.step(&fetch, view, bank, a) else { break };
             f.insns.insert(a, i.len);
             let far = i.refs.iter().any(|r| matches!(r.kind, Kind::Far(_)));
-            for r in &i.refs {
+            let mut refs = i.refs.clone();
+            // `ld rr, Table` of a declared jumptable: its entries are callees of this function.
+            for r in i.refs.iter().filter(|r| r.kind == Kind::Ld && matches!(i.bytes[0], 0x01 | 0x11 | 0x21)) {
+                let Some(tb) = r.bank else { continue };
+                if let Some((n, fixed)) = view.labels.get(&(tb, r.to)).filter(|l| l.kind == "jumptable").and_then(|l| l.table()) {
+                    refs.extend(table_entries(rom, tb, r.to, n, fixed).into_iter().map(|(_, b, to)| Ref { kind: Kind::Table, cond: false, bank: b, to }));
+                }
+            }
+            for r in &refs {
                 let callee = match r.kind {
                     Kind::Call | Kind::Rst => !far,
-                    Kind::Far(_) => true,
+                    Kind::Far(_) | Kind::Table => true,
                     Kind::Jr | Kind::Jp if local(r.to) => {
                         queue.push_back(r.to);
                         false
