@@ -59,6 +59,24 @@ jobs:
           CARTOUCHE_REQUIRE_ROMS: "1"
         run: cargo test --release --no-fail-fast
 
+  mcp:
+    name: gb-mcp tests (Rust)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: gb-mcp
+
+      # Synthetic ROMs only. The dev profile keeps overflow checks on; --locked catches a lockfile
+      # that release-please or a gb-core change left behind.
+      - name: cargo test
+        working-directory: gb-mcp
+        run: cargo test --locked --no-fail-fast
+
   web:
     name: Web app (WASM + lint + build)
     runs-on: ubuntu-latest
