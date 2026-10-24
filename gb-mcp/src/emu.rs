@@ -40,8 +40,8 @@ pub struct Emu {
     pub bps: Vec<(Option<u16>, u16)>,
     pub wps: Vec<Wp>,
     pub frames: u64,
-    /// The screen predates the state loaded last (it held no picture).
-    pub stale_screen: bool,
+    /// The screen predates the state loaded last (it held no picture), until this frame count.
+    pub stale_screen: Option<u64>,
 }
 
 pub type Loc = (Option<u16>, u16);
@@ -97,14 +97,14 @@ pub fn set_rom_bank(gb: &mut GameBoy, bank: u16) -> R<()> {
     let t = gb.bus.cartridge.read_rom(0x147);
     match t {
         0x01..=0x03 => {
+            if bank & 0x1F == 0 && bank > 0 {
+                return Err(format!("MBC1 cannot map ROM bank {bank:02X} at $4000-$7FFF (the hardware maps {:02X}); its code runs only at $0000-$3FFF in mode 1", bank + 1));
+            }
             gb.bus.write_byte(0x2000, (bank & 0x1F) as u8);
             // The high bits, also cleared when a large ROM had them set (on a small ROM this
             // register may be the RAM bank: left alone).
             if bank > 0x1F || gb.bus.cartridge.read_rom(0x148) >= 5 {
                 gb.bus.write_byte(0x4000, ((bank >> 5) & 3) as u8);
-            }
-            if bank & 0x1F == 0 && bank > 0 {
-                return Err(format!("MBC1 cannot map ROM bank {bank:02X} at $4000-$7FFF (the hardware maps {:02X}); its code runs only at $0000-$3FFF in mode 1", bank + 1));
             }
         }
         0x05 | 0x06 => gb.bus.write_byte(0x2100, (bank & 0x0F) as u8),
@@ -178,7 +178,7 @@ pub fn space(v: &Value) -> R<Option<(Space, u16, u16)>> {
     };
     let (b, a) = (num(&json!(b))?, num(&json!(a))?);
     let base = if sp == Space::Vram { 0x8000 } else { 0xA000 };
-    if !(base..base + 0x2000).contains(&a) || (sp == Space::Vram && b > 1) {
+    if !(base..base + 0x2000).contains(&a) || b > if sp == Space::Vram { 1 } else { 0xFF } {
         return Err(format!("{first:?}: vram0/vram1 cover $8000-$9FFF, sramN (N hex) $A000-$BFFF"));
     }
     Ok(Some((sp, b as u16, a as u16)))
@@ -203,6 +203,9 @@ pub fn space_read(gb: &GameBoy, at: (Space, u16, u16), len: usize) -> R<Vec<u8>>
 
 pub fn space_write(gb: &mut GameBoy, at: (Space, u16, u16), data: &[u8]) -> R<()> {
     let i = space_index(at, data.len())?;
+    if data.is_empty() {
+        return Ok(());
+    }
     match at.0 {
         Space::Vram => gb.bus.ppu.vram[i..i + data.len()].copy_from_slice(data),
         Space::Sram => {
@@ -359,7 +362,7 @@ fn sync_debugger(gb: &mut GameBoy, bps: &[Loc], wps: &[Wp]) {
 pub fn boot(emu: &mut Emu, rom: &Rom, view: &View, frames: u32, inputs: &Inputs) -> R<Value> {
     emu.gb = Some(power_on(rom)?);
     emu.frames = 0;
-    emu.stale_screen = false;
+    emu.stale_screen = None;
     run_frames(emu, rom, view, frames, inputs)
 }
 
@@ -403,8 +406,8 @@ pub fn run_frames(emu: &mut Emu, rom: &Rom, view: &View, frames: u32, inputs: &I
         }
     }
     release(gb, inputs);
-    if done >= 2 {
-        *stale_screen = false; // a whole frame drawn since the load
+    if stale_screen.is_some_and(|f| *total >= f) {
+        *stale_screen = None; // a whole frame drawn since the load
     }
     Ok(json!({"stop": stop.unwrap_or(json!({"reason": "frames"})), "frames_run": done, "total_frames": *total, "regs": regs_json(gb, view)}))
 }
@@ -438,15 +441,27 @@ pub fn step(emu: &mut Emu, rom: &Rom, view: &View, count: u32) -> R<Value> {
             stop = Some(json!({"reason": "cpu_locked", "at": format!("{:04X}", gb.cpu.locked_pc)}));
             break;
         }
-        if log.len() < 64 {
-            log.push(format!("{}  {}", fmt(gb, view, pc), insn_text(gb, view, pc)));
-        }
-        let (pc_loc, insn) = (fmt(gb, view, pc), insn_text(gb, view, pc));
+        // Text only when it is shown: formatting every instruction slows long steps down.
+        let line = (log.len() < 64 || !wps.is_empty()).then(|| (fmt(gb, view, pc), insn_text(gb, view, pc)));
+        // An interrupt dispatched by this step runs the handler's first instruction instead.
+        let pending = gb.bus.interrupts.pending();
+        let vector = (gb.cpu.ime && !gb.cpu.stopped && pending != 0).then(|| 0x40 + 8 * pending.trailing_zeros() as u16);
         let (_, hit) = gb.step_instruction_watched().map_err(|e| e.to_string())?;
         done += 1;
+        let irq = vector.filter(|_| !gb.cpu.ime);
+        let line = match irq {
+            Some(v) => Some((format!("{} (interrupt)", fmt(gb, view, v)), insn_text(gb, view, v))),
+            None => line,
+        };
+        if log.len() < 64 {
+            if let Some((l, i)) = &line {
+                log.push(format!("{l}  {i}"));
+            }
+        }
         if let Some((addr, value, write)) = hit.filter(|&(a, _, w)| wp_hit(gb, wps, a, w)) {
+            let (pc_loc, insn) = line.unwrap_or_default();
             stop = Some(json!({"reason": "watchpoint", "kind": if write { "write" } else { "read" }, "addr": fmt(gb, view, addr),
-                               "value": format!("{value:02X}"), "pc": pc_loc, "insn": insn}));
+                               "value": format!("{value:02X}"), "pc": pc_loc, "insn": insn, "interrupt": irq.is_some()}));
             break;
         }
     }
@@ -624,7 +639,7 @@ pub fn load_slot(emu: &mut Emu, rom: &Rom, name: &str) -> R<bool> {
     if let Some(s) = &slot.screen {
         gb.set_screen(s);
     }
-    emu.stale_screen = slot.screen.is_none();
+    emu.stale_screen = slot.screen.is_none().then_some(emu.frames + 2);
     Ok(slot.screen.is_some())
 }
 

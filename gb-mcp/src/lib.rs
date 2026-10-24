@@ -294,7 +294,7 @@ impl Server {
                 }
                 .min(0x2000);
                 let fixed = match a.get("target_bank") {
-                    Some(x) if !x.is_null() => Some(num(x)? as u16),
+                    Some(x) if !x.is_null() => Some(num(x).ok().filter(|&tb| tb < rom.banks() as u32).ok_or(format!("target_bank {x} (the ROM has {:X} banks)", rom.banks()))? as u16),
                     _ => declared.and_then(|d| d.1),
                 };
                 let list: Vec<Value> = rom::table_entries(rom, b, addr, n, fixed)
@@ -434,8 +434,11 @@ impl Server {
                     }
                     total += 1;
                     if out.len() < max {
-                        let (b, x) = db::parse_key(loc)?;
-                        out.push(show(b, x, l));
+                        // A hand-written key that doesn't parse is still listed, as written.
+                        out.push(match db::parse_key(loc) {
+                            Ok((b, x)) => show(b, x, l),
+                            Err(_) => json!({"addr": loc, "name": l.name, "kind": l.kind}),
+                        });
                     }
                 }
                 if in_comments {
@@ -473,7 +476,11 @@ impl Server {
                     bank: a.get("bank").filter(|x| !x.is_null()).map(|x| num(x).map(|b| json!(format!("{b:02X}")))).transpose()?,
                     extra: Default::default(),
                 };
-                db::conv(&f)?;
+                if let db::Conv::Inline { bank: Some(b), .. } | db::Conv::Regs { bank: Some(b), .. } = db::conv(&f)? {
+                    if b >= rom.banks() {
+                        return Err(format!("bank {b:02X}: the ROM has {:X} banks", rom.banks()));
+                    }
+                }
                 let name = f.name.clone();
                 db.update(&sha, |k| {
                     k.far_calls.retain(|x| x.name != name);
@@ -570,7 +577,9 @@ impl Server {
                 let gb = machine(&mut emu.gb, rom)?;
                 let data = gb.save_state();
                 let n = data.len();
-                emu.slots.insert(slot.clone(), emu::Slot { state: data, screen: Some(gb.screen().to_vec()) });
+                // A screen still stale from a load is not this state's picture.
+                let screen = emu.stale_screen.is_none().then(|| gb.screen().to_vec());
+                emu.slots.insert(slot.clone(), emu::Slot { state: data, screen });
                 json!({"slot": slot, "bytes": n, "slots": emu.slots.keys().collect::<Vec<_>>()})
             }
             "state_load" => {
@@ -607,7 +616,7 @@ impl Server {
                         if !gb.load_state(&data) {
                             return Err(format!("{path}: rejected by the core (another ROM or version?)"));
                         }
-                        emu.stale_screen = true;
+                        emu.stale_screen = Some(emu.frames + 2);
                         json!({"loaded": path, "regs": emu::regs_json(gb, &view), "note": emu::NO_PICTURE})
                     }
                 }
@@ -668,7 +677,7 @@ impl Server {
             }
             "screenshot" => {
                 let png = emu::screenshot(machine(&mut emu.gb, rom)?, opt_num(a, "scale", 2)?)?;
-                return Ok(Out::Png(png, emu.stale_screen.then_some(emu::NO_PICTURE)));
+                return Ok(Out::Png(png, emu.stale_screen.is_some().then_some(emu::NO_PICTURE)));
             }
             _ => return Err(format!("unknown tool {name}")),
         };
@@ -754,7 +763,7 @@ fn tools() -> &'static Vec<Value> {
             t("function_bounds", "Explore one function from its entry (following local branches until RET/JP or an illegal opcode): extent, callees (incl. far calls and tail jumps), exits, JP HL jump tables, illegal opcodes reached.",
               json!({"addr": loc(addr)}), &["addr"]),
             t("table_entries", "List a table of little-endian 16-bit pointers with each target's label: a declared jumptable/pointers label, or any ROM address with \"entries\". Example: {\"addr\": \"01:5000\", \"entries\": 6}.",
-              json!({"addr": loc(addr), "entries": int("Entry count (default: the label's)"), "target_bank": int("Bank of targets in $4000-$7FFF (default: the label's, else the table's own bank)")}), &["addr"]),
+              json!({"addr": loc(addr), "entries": int("Entry count (default: the label's)"), "target_bank": int("Bank of targets in $4000-$7FFF (default: the label's, else the table's own bank; from bank 0 the bank is unknown, shown ??)")}), &["addr"]),
             t("callgraph", "Callees of a function, recursively to a depth (bank-aware; far-call conventions honoured; a declared jumptable loaded with LD rr, Table adds its entries).",
               json!({"addr": loc(addr), "depth": int("Levels (default 2, max 8)")}), &["addr"]),
             t("text_decode", "Decode text with a .tbl charmap (the DB's, or \"charmap\"). Example: {\"addr\": \"0A:5000\", \"terminator\": \"FF\"}.",
@@ -772,7 +781,7 @@ fn tools() -> &'static Vec<Value> {
             t("comment_set", "Attach a comment to a location (shown in disasm). Empty text removes it.",
               json!({"addr": loc(addr), "text": st("Comment")}), &["addr"]),
             t("farcall_set", "Declare a far-call convention so xrefs/disasm/callgraph/function_bounds resolve cross-bank calls. inline: {\"name\": \"farcall\", \"via\": \"00:0008\", \"kind\": \"inline\", \"layout\": [\"bank\", \"lo\", \"hi\"]} (a CALL/RST to via is followed by those bytes, skipped by the sweep). A fixed bank instead of a bank byte: {\"name\": \"fixedcall\", \"via\": \"00:0010\", \"kind\": \"inline\", \"layout\": [\"lo\", \"hi\"], \"bank\": \"02\"}. regs: {\"name\": \"bankcall\", \"via\": \"00:1234\", \"kind\": \"regs\", \"bank_reg\": \"a\", \"addr_reg\": \"hl\"} (ld a,bank ; ld hl,addr ; call via; registers known only from immediates, copies and xor a since the last call/unconditional jump/label).",
-              json!({"name": st("Convention name"), "via": loc("The trampoline routine"), "kind": st("inline | regs"), "layout": list("inline: order of the inline bytes, items bank|lo|hi|skip (bank left out when \"bank\" is given)", json!({"type": "string", "enum": ["bank", "lo", "hi", "skip"]})), "bank": int("A fixed target bank (hex string or number) for conventions that don't pass one"), "bank_reg": st("regs: a|b|c|d|e|h|l (default a)"), "addr_reg": st("regs: bc|de|hl (default hl)")}), &["name", "via", "kind"]),
+              json!({"name": st("Convention name"), "via": loc("The trampoline routine"), "kind": st("inline | regs"), "layout": list("inline: order of the inline bytes, items bank|lo|hi|skip (bank left out when \"bank\" is given)", json!({"type": "string", "enum": ["bank", "lo", "hi", "skip"]})), "bank": int("A fixed target bank (hex string or number) for conventions that don't pass one (not with bank_reg)"), "bank_reg": st("regs: a|b|c|d|e|h|l (default a)"), "addr_reg": st("regs: bc|de|hl (default hl)")}), &["name", "via", "kind"]),
             t("farcall_delete", "Remove a far-call convention.", json!({"name": st("Convention name")}), &["name"]),
             t("charmap_set", "Set the .tbl charmap file used by text_decode (\"\" clears). The file stays wherever the user keeps it.",
               json!({"path": st("Path of the .tbl file")}), &["path"]),
@@ -781,7 +790,7 @@ fn tools() -> &'static Vec<Value> {
               json!({"frames": int("Frames to run (default 0, max 10800)"), "inputs": inputs.clone()}), &[]),
             t("run", "Run frames with an input script; stops early at a breakpoint or watchpoint (reports pc, bank, caller).",
               json!({"frames": int("Frames (default 60, max 10800)"), "inputs": inputs}), &[]),
-            t("step", "Single-step instructions; stops at a breakpoint or after an instruction that reads/writes a watchpoint (as run does).",
+            t("step", "Single-step instructions; stops at a breakpoint or after an instruction that reads/writes a watchpoint (as run does). A step that dispatches an interrupt runs the handler's first instruction (logged \"(interrupt)\").",
               json!({"count": int("Instructions (default 1, max 10000000)")}), &[]),
             t("input", "Press buttons for `hold` frames, then run `after` more frames.",
               json!({"buttons": json!({"type": ["string", "array"], "items": str_items, "description": "\"a\", \"start\", \"a+b\" or [\"up\", \"a\"]"}), "hold": int("Frames held (default 5)"), "after": int("Frames after release (default 0; hold + after at most 10800)")}), &["buttons"]),

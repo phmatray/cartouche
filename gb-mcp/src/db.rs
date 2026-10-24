@@ -81,7 +81,7 @@ impl Label {
 
     /// The bytes a non-code region takes, when known: its size, else a table's entries * 2.
     pub fn size(&self) -> Option<u32> {
-        opt(&self.size).or(self.table().map(|(n, _)| n * 2)).filter(|&n| n > 0)
+        opt(&self.size).or(self.table().map(|(n, _)| n.saturating_mul(2))).filter(|&n| n > 0)
     }
 }
 
@@ -225,7 +225,7 @@ pub fn banked(addr: u16) -> bool {
 pub enum Conv {
     /// layout: 0 bank, 1 lo, 2 hi, 3 skip; `bank`: fixed target bank (no bank byte)
     Inline { name: String, via: (u16, u16), layout: Vec<u8>, bank: Option<u16> },
-    /// bank_reg: B C D E H L - A as 0-7; addr_pair: 0 BC, 1 DE, 2 HL; `bank` overrides bank_reg
+    /// bank_reg: B C D E H L - A as 0-7; addr_pair: 0 BC, 1 DE, 2 HL; `bank`: fixed, instead of bank_reg
     Regs { name: String, via: (u16, u16), bank_reg: usize, addr_pair: usize, bank: Option<u16> },
 }
 impl Conv {
@@ -272,6 +272,9 @@ pub fn conv(f: &FarCall) -> R<Conv> {
             let p = f.addr_reg.as_deref().unwrap_or("hl").to_ascii_lowercase();
             let addr_pair = ["bc", "de", "hl"].iter().position(|x| *x == p)
                 .ok_or(format!("far call {:?}: addr_reg {p:?} (want bc|de|hl)", f.name))?;
+            if bank.is_some() && f.bank_reg.is_some() {
+                return Err(format!("far call {:?}: give a fixed \"bank\" or a \"bank_reg\", not both", f.name));
+            }
             Ok(Conv::Regs { name: f.name.clone(), via, bank_reg, addr_pair, bank })
         }
         o => Err(format!("far call {:?}: kind {o:?} (want inline|regs)", f.name)),

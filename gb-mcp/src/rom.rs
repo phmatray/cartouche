@@ -364,13 +364,24 @@ pub fn sweep_bank(rom: &Rom, view: &View, bank: u16, mut f: impl FnMut(&Insn)) {
         }
         match view.labels.get(&(bank, a16)) {
             Some(l) if l.kind != "code" => {
-                let after = |stop: u32, code_only: bool| {
-                    view.labels.range((bank, a16 + 1)..(bank, stop as u16)).find(|(_, l)| !code_only || l.kind == "code").map_or(stop, |((_, x), _)| *x as u32)
-                };
-                // Sized: code resumes right after it (or at a code label inside it).
                 a = match l.size() {
-                    Some(n) => after((a + n).min(end), true),
-                    None => after(end, false),
+                    // Sized: code resumes right after it, or at a code label inside it. A non-code
+                    // label inside it is part of it, and extends it by its own size.
+                    Some(n) => {
+                        let mut e = a.saturating_add(n).min(end);
+                        let mut x = a + 1;
+                        loop {
+                            match view.labels.range((bank, x as u16)..(bank, e as u16)).next() {
+                                None => break e,
+                                Some(((_, y), l)) if l.kind == "code" => break *y as u32,
+                                Some(((_, y), l)) => {
+                                    e = e.max((*y as u32).saturating_add(l.size().unwrap_or(0)).min(end));
+                                    x = *y as u32 + 1;
+                                }
+                            }
+                        }
+                    }
+                    None => view.labels.range((bank, a16 + 1)..(bank, end as u16)).next().map_or(end, |((_, x), _)| *x as u32),
                 };
                 s.reset();
                 continue;
@@ -610,7 +621,7 @@ pub fn function(rom: &Rom, view: &View, bank: u16, entry: u16) -> Func {
             let far = i.refs.iter().any(|r| matches!(r.kind, Kind::Far(_)));
             let mut refs = i.refs.clone();
             // `ld rr, Table` of a declared jumptable: its entries are callees of this function.
-            for r in i.refs.iter().filter(|r| r.kind == Kind::Ld) {
+            for r in i.refs.iter().filter(|r| r.kind == Kind::Ld && matches!(i.bytes[0], 0x01 | 0x11 | 0x21)) {
                 let Some(tb) = r.bank else { continue };
                 if let Some((n, fixed)) = view.labels.get(&(tb, r.to)).filter(|l| l.kind == "jumptable").and_then(|l| l.table()) {
                     refs.extend(table_entries(rom, tb, r.to, n, fixed).into_iter().map(|(_, b, to)| Ref { kind: Kind::Table, cond: false, bank: b, to }));

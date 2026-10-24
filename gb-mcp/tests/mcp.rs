@@ -470,6 +470,8 @@ fn table_rom() -> PathBuf {
         (bank(1, 0x4410), &[0x20, 0x44, 0x30, 0x44]),
         (bank(1, 0x4420), &[0xC9]),
         (bank(1, 0x4430), &[0xC9]),
+        // bank 1 $4500: ld a,[$4410] ; ret (reads the table, doesn't dispatch through it)
+        (bank(1, 0x4500), &[0xFA, 0x10, 0x44, 0xC9]),
         (bank(2, 0x4005), &[0xC9]),
         (bank(3, 0x4000), &[0xC9]),
     ])
@@ -648,4 +650,61 @@ fn state_load_restores_the_picture() {
     assert_eq!(screenshot(&mut s)[1]["type"], "text");
     ok(&mut s, "run", json!({"frames": 2}));
     assert_eq!(screenshot(&mut s), before);
+}
+
+#[test]
+fn second_review_regressions() {
+    let (mut s, db) = server();
+    let h = open(&mut s, &table_rom());
+    let sha = h["sha1"].as_str().unwrap().to_string();
+    // A data label inside a sized one is part of it, and extends it by its own size.
+    ok(&mut s, "label_set", json!({"labels": [
+        {"addr": "01:4200", "name": "TabA", "kind": "data", "size": 2},
+        {"addr": "01:4201", "name": "TabB", "kind": "data", "size": 6},
+    ]}));
+    assert_eq!(ok(&mut s, "xrefs", json!({"target": "01:4005", "kind": "call"}))["count"], 0);
+    // Reading a byte of a jumptable doesn't make its entries callees.
+    ok(&mut s, "label_set", json!({"addr": "01:4410", "name": "States", "kind": "jumptable", "entries": 2}));
+    assert_eq!(ok(&mut s, "function_bounds", json!({"addr": "01:4500"}))["callees"], json!([]));
+    // Banks are checked against the ROM.
+    assert!(call(&mut s, "table_entries", json!({"addr": "01:4410", "entries": 1, "target_bank": "99"})).is_err());
+    assert!(call(&mut s, "farcall_set", json!({"name": "f", "via": "00:0010", "kind": "inline", "layout": ["lo", "hi"], "bank": "1FF"})).is_err());
+    assert!(call(&mut s, "farcall_set", json!({"name": "f", "via": "00:0280", "kind": "regs", "bank": 1, "bank_reg": "b"})).is_err());
+    // Hand-edited values: an oversized size or entry count, and keys that don't parse.
+    let mut file: Value = serde_json::from_str(&std::fs::read_to_string(&db).unwrap()).unwrap();
+    let labels = &mut file["roms"][&sha]["labels"];
+    labels["01:4200"]["size"] = json!("FFFFFFFF");
+    labels["01:4410"]["entries"] = json!(4294967295u32);
+    labels["0160"] = json!({"name": "Odd", "kind": "code"});
+    labels["bogus"] = json!({"name": "Odder", "kind": "code"});
+    std::fs::write(&db, file.to_string()).unwrap();
+    ok(&mut s, "xrefs", json!({"target": "01:4005"}));
+    let r = ok(&mut s, "label_search", json!({"query": ""}));
+    assert_eq!(r["count"], 5, "{r}");
+}
+
+#[test]
+fn second_review_emulation_regressions() {
+    let (mut s, _) = server();
+    open(&mut s, &rom(0x1B, 4, &[(0x149, &[0x03])]));
+    assert!(call(&mut s, "mem_read", json!({"addr": "sram10000:A000"})).is_err());
+    assert_eq!(ok(&mut s, "mem_write", json!({"addr": "sram0:A000", "bytes": ""}))["written"], 0);
+    // The note clears after two frames since the load, however they are run.
+    ok(&mut s, "run", json!({"frames": 2}));
+    let path = tmp("b.state");
+    ok(&mut s, "state_export", json!({"path": path}));
+    ok(&mut s, "state_import", json!({"path": path}));
+    // A slot saved while the screen is stale has no picture either.
+    ok(&mut s, "state_save", json!({"slot": "x"}));
+    assert!(ok(&mut s, "state_load", json!({"slot": "x"}))["note"].is_string());
+    ok(&mut s, "run", json!({"frames": 1}));
+    assert_eq!(screenshot(&mut s).as_array().unwrap().len(), 2);
+    ok(&mut s, "run", json!({"frames": 1}));
+    assert_eq!(screenshot(&mut s).as_array().unwrap().len(), 1);
+    // MBC1: a refused bank leaves the mapping alone.
+    let (mut s, _) = server();
+    open(&mut s, &rom(0x01, 64, &[(0x0300, &[0xC9])]));
+    ok(&mut s, "call_routine", json!({"addr": "00:0300", "rom_bank": "05"}));
+    assert!(call(&mut s, "call_routine", json!({"addr": "00:0300", "rom_bank": "20"})).is_err());
+    assert_eq!(ok(&mut s, "regs_get", json!({}))["rom_bank"], "05");
 }

@@ -72,7 +72,8 @@ when no session runs. Tool results are JSON text, and `screenshot` is an MCP ima
 How references are found: each bank is swept linearly. The sweep skips the header and regions
 labelled with a non-code kind (`data`, `ram`, `jumptable`, `pointers`): for their `size` when
 they have one (a table's is `entries * 2`), so code right after a table is swept again, else up
-to the next label. It resyncs on a `code` label that falls inside an instruction. Each entry of
+to the next label. A non-code label inside a sized region is part of it (its own size can extend
+it); a `code` label inside it ends it. It resyncs on a `code` label that falls inside an instruction. Each entry of
 a `jumptable` or `pointers` table is a `table` reference from its entry address. An address
 inside a sized region shows as `Name+$off`; past its end it no longer does. A target in
 `$4000-$7FFF` is in the same bank when the reference is banked code.
@@ -107,7 +108,7 @@ and `callgraph` can follow cross-bank calls. Two generic shapes are supported:
 - `regs`: the routine at `via` takes the bank in a register and the address in a register pair,
   set before the call (`ld a, bank ; ld hl, addr ; call via`).
   `{"name": "bankcall", "via": "00:1234", "kind": "regs", "bank_reg": "a", "addr_reg": "hl"}`.
-  A fixed `"bank"` replaces `bank_reg`. Registers are tracked along the straight-line code
+  A fixed `"bank"` replaces `bank_reg` (give one or the other). Registers are tracked along the straight-line code
   before the call: an immediate load (`ld r, n8`, `ld rr, n16`), a copy of a known register
   (`ld r, r'`) and `xor a` make a value known; any other write to the register forgets it, and
   everything is forgotten after a `call`/`rst`, an unconditional `jp`/`jr`/`ret`, a skipped data
@@ -130,7 +131,7 @@ of wall time; 10,000,000 instructions for `step`; and 50,000,000 for `call_routi
 | `emu_boot` | `{"frames": 600, "inputs": ["300:start"]}` | fresh power-on, then frames with an input script |
 | `run` | `{"frames": 240, "inputs": ["10:start", "120:a:8"]}` | stops early at a breakpoint or watchpoint. The result has `stop` (`reason`, `at`/`pc` with bank, `insn`, `caller` = word at SP), `frames_run` and `regs` |
 | `input` | `{"buttons": "a+b", "hold": 8, "after": 30}` | press, hold, release, run on |
-| `step` | `{"count": 10}` | the first 64 executed instructions with labels (`executed_truncated` when more ran), and the next one. Stops after an instruction that hits a watchpoint (same access hook as `run`: reads, and writes even of an unchanged value), reporting `kind`, `addr`, `value`, `pc` and `insn` |
+| `step` | `{"count": 10}` | the first 64 executed instructions with labels (`executed_truncated` when more ran), and the next one. Stops after an instruction that hits a watchpoint (same access hook as `run`: reads, and writes even of an unchanged value), reporting `kind`, `addr`, `value`, `pc` and `insn`. When an interrupt is dispatched during the step, the step runs the handler's first instruction instead: it is logged as `(interrupt)` and the stop says `"interrupt": true` |
 | `call_routine` | `{"addr": "00:1A2B", "regs": {"a": 2}, "stubs": [{"addr": "00:1A40", "regs": {"a": "FF"}}], "from_slot": "title"}` | see below |
 | `mem_read` | `{"addr": "C000", "len": 64}`, `{"addr": "03:D000", "len": 16}`, `{"addr": "vram1:8000", "len": 32}`, `{"addr": "sram2:A000"}` | 16-byte rows with ASCII. `BB:` reads that ROM/WRAM bank without remapping, `vramN:` / `sramN:` that VRAM / cartridge RAM bank (the read must stay in the region). ROM reads work without a session |
 | `mem_write` | `{"addr": "C000", "bytes": "01 02"}` | `BB:DXXX` writes that WRAM bank, `vramN:` / `sramN:` that VRAM / cartridge RAM bank. ROM-area writes reach the MBC registers |
@@ -139,7 +140,7 @@ of wall time; 10,000,000 instructions for `step`; and 50,000,000 for `call_routi
 | `state_export` / `state_import` | `{"path": "/abs/x.state", "slot": "title"}` | without `slot`: the live session. Export refuses paths inside a git repository |
 | `breakpoint_set` / `breakpoint_clear` | `{"addr": "05:6010"}` | bank-aware: the breakpoint fires only when that bank is mapped. Clear with no `addr` removes all |
 | `watchpoint_set` / `watchpoint_clear` | `{"addr": "wTurn", "len": 2, "kind": "write"}`, `{"addr": "vram1:9800", "len": 32}` | `read`, `write` or `access`. `run` and `step` report the accessing instruction (pc + bank), the value and (`run`) the caller. A bank (`BB:`, `vramN:`) fires only while it is mapped; cartridge RAM banks can't be told apart, so watch `$A000-$BFFF` without one |
-| `screenshot` | `{"scale": 3}` | PNG image content. After `state_import` (a file holds no picture), a text note says the picture predates the state, until two frames have run |
+| `screenshot` | `{"scale": 3}` | PNG image content. After `state_import` (a file holds no picture), a text note says the picture predates the state, until two frames have run since the load (a `state_save` meanwhile keeps no picture either) |
 
 Input scripts are lists of `"frame:button[+button][:hold]"`. Frames count from 0 in each call,
 and `hold` defaults to 5 frames. Buttons are `a b start select up down left right`. A hold doesn't
