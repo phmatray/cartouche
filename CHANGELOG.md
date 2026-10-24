@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.11.0](https://github.com/phmatray/cartouche/compare/v1.10.1...v1.11.0) (2026-10-24)
+
+
+### Added
+
+* **mcp:** add gb-mcp, an MCP server for studying Game Boy ROMs ([#328](https://github.com/phmatray/cartouche/issues/328)) ([3f44f89](https://github.com/phmatray/cartouche/commit/3f44f89095468cdeaeafc4536d47d94f662aa142))
+
+
+### Fixed
+
+* **deps:** update non-major dependencies ([#325](https://github.com/phmatray/cartouche/issues/325)) ([ab05e36](https://github.com/phmatray/cartouche/commit/ab05e3611df816ec8784bbd004fa7cdd2fae6510))
+
 ## [1.10.1](https://github.com/phmatray/cartouche/compare/v1.10.0...v1.10.1) (2026-09-29)
 
 
