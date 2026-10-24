@@ -89,8 +89,13 @@ pub fn set_rom_bank(gb: &mut GameBoy, bank: u16) -> R<()> {
     match t {
         0x01..=0x03 => {
             gb.bus.write_byte(0x2000, (bank & 0x1F) as u8);
-            if bank > 0x1F {
+            // The high bits, also cleared when a large ROM had them set (on a small ROM this
+            // register may be the RAM bank: left alone).
+            if bank > 0x1F || gb.bus.cartridge.read_rom(0x148) >= 5 {
                 gb.bus.write_byte(0x4000, ((bank >> 5) & 3) as u8);
+            }
+            if bank & 0x1F == 0 && bank > 0 {
+                return Err(format!("MBC1 cannot map ROM bank {bank:02X} at $4000-$7FFF (the hardware maps {:02X}); its code runs only at $0000-$3FFF in mode 1", bank + 1));
             }
         }
         0x05 | 0x06 => gb.bus.write_byte(0x2100, (bank & 0x0F) as u8),

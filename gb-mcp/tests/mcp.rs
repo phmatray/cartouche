@@ -445,3 +445,12 @@ fn every_array_schema_has_items() {
         }
     }
 }
+
+#[test]
+fn mbc1_rom_bank_high_bits() {
+    let (mut s, _) = server();
+    open(&mut s, &rom(0x01, 64, &[(0x0300, &[0xC9])]));
+    ok(&mut s, "call_routine", json!({"addr": "00:0300", "rom_bank": "21"}));
+    assert_eq!(ok(&mut s, "call_routine", json!({"addr": "00:0300", "rom_bank": "05"}))["regs"]["rom_bank"], "05");
+    assert!(call(&mut s, "call_routine", json!({"addr": "00:0300", "rom_bank": "20"})).unwrap_err().contains("MBC1"));
+}
