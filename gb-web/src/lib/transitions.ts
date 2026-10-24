@@ -74,7 +74,8 @@ function directionOf(from: string, to: string): 'fwd' | 'back' | null {
 
 // ---- running a transition ----
 
-let active: ViewTransition | null = null;
+// Only what we use: react-router (≥ 8.5) adds its own narrower startViewTransition(cb) overload to Document.
+let active: Pick<ViewTransition, 'finished' | 'skipTransition'> | null = null;
 let activeTo = '';
 const waiters: (() => void)[] = [];
 /** Resolves once no route transition is running: heavy start-up work (audio) waits so the landing stays smooth. */
