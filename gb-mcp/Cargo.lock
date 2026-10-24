@@ -81,7 +81,7 @@ dependencies = [
 
 [[package]]
 name = "gb-core"
-version = "1.10.1"
+version = "1.11.0"
 dependencies = [
  "js-sys",
  "log",
@@ -91,7 +91,7 @@ dependencies = [
 
 [[package]]
 name = "gb-mcp"
-version = "1.10.1"
+version = "1.11.0"
 dependencies = [
  "gb-core",
  "png",
