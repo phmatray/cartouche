@@ -18,6 +18,7 @@ cartouche/
 │   │   └── boot_rom.rs       # Cartouche's boot ROMs (gb-core/boot/, built by gb-core/boot-src/build.sh from a SameBoy MIT fork, exact hashes in the guard) + 9-byte test stub; no Nintendo boot ROM or logo, ever
 │   ├── examples/             # render.rs (PNG of a frame), harvest.rs (trace records; refuses to write inside a git repo)
 │   └── tests/                # blargg.rs, acid2.rs, cgb.rs, cpu_tests.rs, homebrew.rs, link.rs, sgb.rs, trace.rs
+├── gb-mcp/                   # Standalone MCP server (stdio) on gb-core for agents studying ROMs: static analysis, a live session, a shared sidecar knowledge DB kept outside the repo (gb-mcp/README.md)
 ├── gb-web/                   # React 19 + Vite + Tailwind v4 + Zustand
 │   ├── rcheevos/             # build.sh + shim.c: RetroAchievements' rcheevos (MIT, pinned + SHA-256) → src/vendor/rcheevos.js (needs emscripten)
 │   └── src/
@@ -82,6 +83,9 @@ cd gb-web && npm test
 
 # Core tests (use --no-fail-fast or cargo stops at the first failing binary)
 cd gb-core && cargo test --release --no-fail-fast
+
+# MCP server (synthetic ROMs only)
+cd gb-mcp && cargo test --release
 ```
 
 ## Keyboard Mapping

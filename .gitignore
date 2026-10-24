@@ -58,3 +58,6 @@ logs/
 !gb-web/public/roms/gbstudio/poltersprite.gb
 !gb-web/public/roms/gbstudio/millennium-gun.gb
 !gb-web/public/roms/gbstudio/dusky-dungeon.gb
+
+# gb-mcp (standalone crate)
+gb-mcp/target/

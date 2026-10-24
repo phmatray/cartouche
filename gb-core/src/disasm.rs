@@ -13,9 +13,16 @@ const ROT: [&str; 8] = ["RLC", "RRC", "RL", "RR", "SLA", "SRA", "SWAP", "SRL"];
 
 /// The instruction at `addr`: its text and its length in bytes (1-3).
 pub fn disassemble_one(bus: &MemoryBus, addr: u16) -> (String, u8) {
-    let op = bus.read_byte(addr);
-    let n8 = bus.read_byte(addr.wrapping_add(1));
-    let n16 = u16::from_le_bytes([n8, bus.read_byte(addr.wrapping_add(2))]);
+    let b = |i: u16| bus.read_byte(addr.wrapping_add(i));
+    disassemble_bytes(addr, [b(0), b(1), b(2)])
+}
+
+/// The instruction made of `bytes` (opcode first; unused trailing bytes are ignored) as if it
+/// sat at `addr` (for relative jump targets): its text and its length in bytes (1-3). For
+/// static tools that read a ROM bank directly instead of through the bus.
+pub fn disassemble_bytes(addr: u16, bytes: [u8; 3]) -> (String, u8) {
+    let [op, n8, hi] = bytes;
+    let n16 = u16::from_le_bytes([n8, hi]);
     let (x, y, z) = (op >> 6, ((op >> 3) & 7) as usize, op & 7);
     let (p, q) = (y >> 1, y & 1);
     let jr = addr.wrapping_add(2).wrapping_add(n8 as i8 as u16);
