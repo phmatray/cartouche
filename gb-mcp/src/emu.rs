@@ -23,16 +23,25 @@ pub struct Wp {
     pub len: u16,
     pub read: bool,
     pub write: bool,
+    /// The ROM/WRAM bank (banked regions) or VRAM bank ($8000-$9FFF) it fires in; None: any.
     pub bank: Option<u16>,
+}
+
+/// A save-state slot, with the picture shown when it was saved: states don't hold one.
+pub struct Slot {
+    pub state: Vec<u8>,
+    pub screen: Option<Vec<u8>>,
 }
 
 #[derive(Default)]
 pub struct Emu {
     pub gb: Option<GameBoy>,
-    pub slots: BTreeMap<String, Vec<u8>>,
+    pub slots: BTreeMap<String, Slot>,
     pub bps: Vec<(Option<u16>, u16)>,
     pub wps: Vec<Wp>,
     pub frames: u64,
+    /// The screen predates the state loaded last (it held no picture).
+    pub stale_screen: bool,
 }
 
 pub type Loc = (Option<u16>, u16);
@@ -147,6 +156,73 @@ pub fn write_loc(gb: &mut GameBoy, (bank, addr): Loc, data: &[u8]) {
             _ => gb.bus.write_byte(a, b),
         }
     }
+}
+
+/// A VRAM or cartridge-RAM space named by a region prefix.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Space {
+    Vram,
+    Sram,
+}
+
+/// "vram1:8000" ($8000-$9FFF, bank 0-1) or "sram2:A000" ($A000-$BFFF, bank hex): a VRAM or
+/// cartridge-RAM bank whatever is mapped. None for any other location.
+pub fn space(v: &Value) -> R<Option<(Space, u16, u16)>> {
+    let Some(first) = v.as_str().and_then(|s| s.split_whitespace().next()) else { return Ok(None) };
+    let Some((p, a)) = first.split_once(':') else { return Ok(None) };
+    let p = p.to_ascii_lowercase();
+    let (sp, b) = match (p.strip_prefix("vram"), p.strip_prefix("sram")) {
+        (Some(b), _) => (Space::Vram, b),
+        (_, Some(b)) => (Space::Sram, b),
+        _ => return Ok(None),
+    };
+    let (b, a) = (num(&json!(b))?, num(&json!(a))?);
+    let base = if sp == Space::Vram { 0x8000 } else { 0xA000 };
+    if !(base..base + 0x2000).contains(&a) || (sp == Space::Vram && b > 1) {
+        return Err(format!("{first:?}: vram0/vram1 cover $8000-$9FFF, sramN (N hex) $A000-$BFFF"));
+    }
+    Ok(Some((sp, b as u16, a as u16)))
+}
+
+/// Index of `a` in the VRAM array or the cartridge RAM, for `len` bytes that must stay in the region.
+fn space_index((sp, b, a): (Space, u16, u16), len: usize) -> R<usize> {
+    let base = if sp == Space::Vram { 0x8000 } else { 0xA000 };
+    if a as usize + len > base + 0x2000 {
+        return Err(format!("{} bytes from ${a:04X} leave ${base:04X}-${:04X}: split the access", len, base + 0x1FFF));
+    }
+    Ok(b as usize * 0x2000 + (a as usize - base))
+}
+
+pub fn space_read(gb: &GameBoy, at: (Space, u16, u16), len: usize) -> R<Vec<u8>> {
+    let i = space_index(at, len)?;
+    match at.0 {
+        Space::Vram => Ok(gb.bus.ppu.vram[i..i + len].to_vec()),
+        Space::Sram => (i..i + len).map(|i| gb.bus.cartridge.ram_byte(i)).collect::<Option<_>>().ok_or(no_sram(at.1)),
+    }
+}
+
+pub fn space_write(gb: &mut GameBoy, at: (Space, u16, u16), data: &[u8]) -> R<()> {
+    let i = space_index(at, data.len())?;
+    match at.0 {
+        Space::Vram => gb.bus.ppu.vram[i..i + data.len()].copy_from_slice(data),
+        Space::Sram => {
+            if gb.bus.cartridge.ram_byte(i + data.len() - 1).is_none() {
+                return Err(no_sram(at.1));
+            }
+            for (k, &v) in data.iter().enumerate() {
+                gb.bus.cartridge.set_ram_byte(i + k, v);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn no_sram(b: u16) -> String {
+    format!("the cartridge has no RAM bank {b:02X} (or not that much RAM)")
+}
+
+pub fn space_name((sp, b, a): (Space, u16, u16)) -> String {
+    format!("{}{b:X}:{a:04X}", if sp == Space::Vram { "vram" } else { "sram" })
 }
 
 /// The instruction at `pc` in the live mapping, labels substituted.
@@ -283,12 +359,13 @@ fn sync_debugger(gb: &mut GameBoy, bps: &[Loc], wps: &[Wp]) {
 pub fn boot(emu: &mut Emu, rom: &Rom, view: &View, frames: u32, inputs: &Inputs) -> R<Value> {
     emu.gb = Some(power_on(rom)?);
     emu.frames = 0;
+    emu.stale_screen = false;
     run_frames(emu, rom, view, frames, inputs)
 }
 
 /// Runs whole frames with an input script, stopping early on a breakpoint or watchpoint.
 pub fn run_frames(emu: &mut Emu, rom: &Rom, view: &View, frames: u32, inputs: &Inputs) -> R<Value> {
-    let Emu { gb, bps, wps, frames: total, .. } = emu;
+    let Emu { gb, bps, wps, frames: total, stale_screen, .. } = emu;
     let gb = machine(gb, rom)?;
     sync_debugger(gb, bps, wps);
     gb.resume_here();
@@ -315,11 +392,7 @@ pub fn run_frames(emu: &mut Emu, rom: &Rom, view: &View, frames: u32, inputs: &I
             }
             Some(Break::Watch { addr, value, write, pc }) => {
                 mid = true;
-                let hit = wps.iter().any(|w| {
-                    addr.wrapping_sub(w.addr) < w.len && if write { w.write } else { w.read }
-                        && w.bank.is_none_or(|b| !banked(addr) || here(gb, addr) == b)
-                });
-                if hit {
+                if wp_hit(gb, wps, addr, write) {
                     stop = Some(json!({"reason": "watchpoint", "kind": if write { "write" } else { "read" },
                         "addr": fmt(gb, view, addr), "value": format!("{value:02X}"), "pc": fmt(gb, view, pc),
                         "insn": insn_text(gb, view, pc), "caller": fmt(gb, view, read16(gb, gb.cpu.regs.sp))}));
@@ -330,16 +403,30 @@ pub fn run_frames(emu: &mut Emu, rom: &Rom, view: &View, frames: u32, inputs: &I
         }
     }
     release(gb, inputs);
+    if done >= 2 {
+        *stale_screen = false; // a whole frame drawn since the load
+    }
     Ok(json!({"stop": stop.unwrap_or(json!({"reason": "frames"})), "frames_run": done, "total_frames": *total, "regs": regs_json(gb, view)}))
 }
 
-/// Single-steps `count` instructions; stops at a breakpoint (not on the first step) or when a
-/// write watchpoint's value changes (reads are not seen in step mode).
+/// Does a watched CPU access (as gb-core reports it) match a watchpoint, kind and bank included?
+fn wp_hit(gb: &GameBoy, wps: &[Wp], addr: u16, write: bool) -> bool {
+    let mapped = match addr {
+        0x8000..=0x9FFF => Some(gb.bus.ppu.vram_bank as u16),
+        _ if banked(addr) => Some(here(gb, addr)),
+        _ => None,
+    };
+    wps.iter().any(|w| {
+        addr.wrapping_sub(w.addr) < w.len && if write { w.write } else { w.read } && w.bank.is_none_or(|b| mapped.is_none_or(|m| m == b))
+    })
+}
+
+/// Single-steps `count` instructions; stops at a breakpoint (not on the first step) or after an
+/// instruction that accessed a watchpoint (the same CPU access hook as `run`).
 pub fn step(emu: &mut Emu, rom: &Rom, view: &View, count: u32) -> R<Value> {
     let Emu { gb, bps, wps, .. } = emu;
     let gb = machine(gb, rom)?;
-    let mut shadow: Vec<(u16, u8)> =
-        wps.iter().filter(|w| w.write).flat_map(|w| (0..w.len).map(move |i| w.addr.wrapping_add(i))).map(|a| (a, gb.bus.read_byte(a))).collect();
+    sync_debugger(gb, bps, wps);
     let (mut log, mut stop, mut done) = (vec![], None, 0u32);
     while done < count {
         let pc = gb.cpu.regs.pc;
@@ -354,17 +441,12 @@ pub fn step(emu: &mut Emu, rom: &Rom, view: &View, count: u32) -> R<Value> {
         if log.len() < 64 {
             log.push(format!("{}  {}", fmt(gb, view, pc), insn_text(gb, view, pc)));
         }
-        let pc_loc = fmt(gb, view, pc);
-        gb.step_instruction().map_err(|e| e.to_string())?;
+        let (pc_loc, insn) = (fmt(gb, view, pc), insn_text(gb, view, pc));
+        let (_, hit) = gb.step_instruction_watched().map_err(|e| e.to_string())?;
         done += 1;
-        for (a, old) in shadow.iter_mut() {
-            let new = gb.bus.read_byte(*a);
-            if new != *old && stop.is_none() {
-                stop = Some(json!({"reason": "watchpoint", "addr": fmt(gb, view, *a), "old": format!("{old:02X}"), "new": format!("{new:02X}"), "pc": pc_loc}));
-            }
-            *old = new;
-        }
-        if stop.is_some() {
+        if let Some((addr, value, write)) = hit.filter(|&(a, _, w)| wp_hit(gb, wps, a, w)) {
+            stop = Some(json!({"reason": "watchpoint", "kind": if write { "write" } else { "read" }, "addr": fmt(gb, view, addr),
+                               "value": format!("{value:02X}"), "pc": pc_loc, "insn": insn}));
             break;
         }
     }
@@ -378,11 +460,7 @@ pub fn step(emu: &mut Emu, rom: &Rom, view: &View, count: u32) -> R<Value> {
 /// interrupts run) until the sentinel comes back, a breakpoint hits or max_steps runs out.
 pub fn call(emu: &mut Emu, rom: &Rom, view: &View, p: &Value) -> R<Value> {
     if let Some(s) = p.get("from_slot").and_then(Value::as_str) {
-        let data = emu.slots.get(s).ok_or(format!("no state slot {s:?}"))?.clone();
-        let gb = machine(&mut emu.gb, rom)?;
-        if !gb.load_state(&data) {
-            return Err(format!("slot {s:?} rejected by the core"));
-        }
+        load_slot(emu, rom, s)?;
     }
     let gb = machine(&mut emu.gb, rom)?;
     let loc = |v: &Value| view.loc(v);
@@ -534,6 +612,24 @@ pub fn call(emu: &mut Emu, rom: &Rom, view: &View, p: &Value) -> R<Value> {
     }
     Ok(Value::Object(out))
 }
+
+/// Restores a slot, and the picture it was saved with. Returns whether there was one: a state
+/// imported from a file has none, so the screen keeps showing the last frame drawn.
+pub fn load_slot(emu: &mut Emu, rom: &Rom, name: &str) -> R<bool> {
+    let slot = emu.slots.get(name).ok_or(format!("no state slot {name:?}; slots: {:?}", emu.slots.keys().collect::<Vec<_>>()))?;
+    let gb = machine(&mut emu.gb, rom)?;
+    if !gb.load_state(&slot.state) {
+        return Err(format!("slot {name:?} rejected by the core"));
+    }
+    if let Some(s) = &slot.screen {
+        gb.set_screen(s);
+    }
+    emu.stale_screen = slot.screen.is_none();
+    Ok(slot.screen.is_some())
+}
+
+/// The note a load without a picture carries.
+pub const NO_PICTURE: &str = "save states hold no picture: screenshot shows the last frame drawn before the load until two frames run (run {\"frames\": 2}); slots saved by state_save keep theirs";
 
 /// [{"addr": "C000", "len": 16}, ...] -> [{"addr", "hex"}].
 pub fn dumps(gb: &GameBoy, rom: &Rom, view: &View, list: &[Value]) -> R<Value> {

@@ -122,7 +122,8 @@ fn bank_range(v: Option<&Value>, banks: u16) -> R<(u16, u16)> {
 
 pub enum Out {
     Json(Value),
-    Png(Vec<u8>),
+    /// An image, with an optional note shown next to it.
+    Png(Vec<u8>, Option<&'static str>),
 }
 
 pub struct Server {
@@ -198,7 +199,11 @@ impl Server {
             .unwrap_or_else(|e| Err(format!("internal error: {}", e.downcast_ref::<&str>().copied().or(e.downcast_ref::<String>().map(String::as_str)).unwrap_or("panic"))));
         Ok(match r {
             Ok(Out::Json(v)) => json!({"content": [{"type": "text", "text": v.to_string()}], "isError": false}),
-            Ok(Out::Png(png)) => json!({"content": [{"type": "image", "data": base64(&png), "mimeType": "image/png"}], "isError": false}),
+            Ok(Out::Png(png, note)) => {
+                let mut c = vec![json!({"type": "image", "data": base64(&png), "mimeType": "image/png"})];
+                c.extend(note.map(|n| json!({"type": "text", "text": n})));
+                json!({"content": c, "isError": false})
+            }
             Err(e) => json!({"content": [{"type": "text", "text": e}], "isError": true}),
         })
     }
@@ -231,15 +236,22 @@ impl Server {
         let j = match name {
             // ---- static analysis ----
             "disasm" => {
-                let (b, addr) = resolve(&view, emu, v("addr")?)?;
                 let until = a.get("until_ret").and_then(Value::as_bool).unwrap_or(false);
                 let count = opt_num(a, "count", if until { 1000 } else { 32 })?.min(5000);
-                if addr < 0x8000 {
-                    json!(rom::disasm(&|x| rom.byte(b, x), &view, b, addr, count, until))
-                } else {
-                    let gb = machine(&mut emu.gb, rom)?;
-                    let l = banked(addr).then_some(b); // "BB:Dxxx": that WRAM bank, not the mapped one
-                    json!(rom::disasm(&|x| Some(emu::read_loc(gb, rom, (l, x), 1)[0]), &view, b, addr, count, until))
+                let mut one = |at: &Value| -> R<Value> {
+                    let (b, addr) = resolve(&view, emu, at)?;
+                    Ok(if addr < 0x8000 {
+                        json!(rom::disasm(&|x| rom.byte(b, x), &view, b, addr, count, until))
+                    } else {
+                        let gb = machine(&mut emu.gb, rom)?;
+                        let l = banked(addr).then_some(b); // "BB:Dxxx": that WRAM bank, not the mapped one
+                        json!(rom::disasm(&|x| Some(emu::read_loc(gb, rom, (l, x), 1)[0]), &view, b, addr, count, until))
+                    })
+                };
+                match a.get("addrs").and_then(Value::as_array) {
+                    Some(list) if list.len() > 64 => return Err("addrs: at most 64 per call".into()),
+                    Some(list) => json!(list.iter().map(|x| Ok(json!({"addr": x, "lines": one(x)?}))).collect::<R<Vec<_>>>()?),
+                    None => one(v("addr")?)?,
                 }
             }
             "xrefs" => {
@@ -268,6 +280,28 @@ impl Server {
                     return Err("function_bounds works on ROM code ($0000-$7FFF)".into());
                 }
                 rom::function_json(&view, &rom::function(rom, &view, b, addr))
+            }
+            "table_entries" => {
+                let (b, addr) = resolve(&view, emu, v("addr")?)?;
+                if addr >= 0x8000 {
+                    return Err("table_entries reads ROM tables ($0000-$7FFF)".into());
+                }
+                let b = if addr < 0x4000 { 0 } else { b };
+                let declared = view.labels.get(&(b, addr)).and_then(Label::table);
+                let n = match a.get("entries") {
+                    Some(x) if !x.is_null() => num(x)?,
+                    _ => declared.ok_or("not a declared jumptable/pointers label: pass \"entries\"")?.0,
+                }
+                .min(0x2000);
+                let fixed = match a.get("target_bank") {
+                    Some(x) if !x.is_null() => Some(num(x)? as u16),
+                    _ => declared.and_then(|d| d.1),
+                };
+                let list: Vec<Value> = rom::table_entries(rom, b, addr, n, fixed)
+                    .into_iter()
+                    .map(|(at, tb, to)| json!({"at": view.fmt(b, at), "to": match tb { Some(tb) => view.fmt(tb, to), None => format!("??:{to:04X}") }}))
+                    .collect();
+                json!({"table": view.fmt_exact(b, addr), "entries": list})
             }
             "callgraph" => {
                 let (b, addr) = resolve(&view, emu, v("addr")?)?;
@@ -305,11 +339,30 @@ impl Server {
                     let (b, addr) = db_loc(&view, it.get("addr").ok_or("label_set needs \"addr\" (or \"labels\": [...])")?)?;
                     let name = label_name(it.get("name").and_then(Value::as_str).ok_or("label_set needs \"name\"")?)?;
                     let kind = it.get("kind").and_then(Value::as_str).unwrap_or(if addr < 0x8000 { "code" } else { "ram" });
-                    if !["code", "data", "ram"].contains(&kind) {
-                        return Err(format!("kind {kind:?}: code|data|ram"));
+                    if !["code", "data", "ram", "jumptable", "pointers"].contains(&kind) {
+                        return Err(format!("kind {kind:?}: code|data|ram|jumptable|pointers"));
+                    }
+                    let field = |k: &str| it.get(k).filter(|x| !x.is_null()).map(|x| num(x).map_err(|e| format!("{k}: {e}"))).transpose();
+                    let (size, entries, target_bank) = (field("size")?, field("entries")?, field("target_bank")?);
+                    let table = matches!(kind, "jumptable" | "pointers");
+                    if size.is_some_and(|n| n == 0 || addr as u32 + n > 0x10000) {
+                        return Err(format!("size: 1 to ${:X} bytes from ${addr:04X}", 0x10000 - addr as u32));
+                    }
+                    if table && (addr >= 0x8000 || !entries.is_some_and(|n| (1..=0x2000).contains(&n))) {
+                        return Err(format!("kind {kind}: a ROM table ($0000-$7FFF) with \"entries\" (1-8192 16-bit pointers)"));
+                    }
+                    if !table && (entries.is_some() || target_bank.is_some()) {
+                        return Err("entries / target_bank: only for kind jumptable or pointers".into());
+                    }
+                    if target_bank.is_some_and(|tb| tb >= rom.banks() as u32) {
+                        return Err(format!("target_bank: the ROM has banks 00-{:02X}", rom.banks() - 1));
                     }
                     let comment = it.get("comment").and_then(Value::as_str).map(String::from);
-                    parsed.push((key(b, addr), Label { name, kind: kind.into(), ..Label::default() }, comment));
+                    let label = Label {
+                        name, kind: kind.into(), size: size.map(|n| json!(n)), entries: entries.map(|n| json!(n)),
+                        target_bank: target_bank.map(|b| json!(format!("{b:02X}"))), ..Label::default()
+                    };
+                    parsed.push((key(b, addr), label, comment));
                 }
                 let moved = db.update(&sha, |k| {
                     let mut moved = vec![];
@@ -346,6 +399,32 @@ impl Server {
                 let kind = s("kind");
                 let max = limit(200)?;
                 let k = db.knowledge(&sha);
+                let show = |b: u16, x: u16, l: &Label| {
+                    let mut e = json!({"addr": key(b, x), "name": l.name, "kind": l.kind});
+                    for (f, val) in [("size", &l.size), ("entries", &l.entries), ("target_bank", &l.target_bank)] {
+                        if let Some(val) = val {
+                            e[f] = val.clone();
+                        }
+                    }
+                    if let Some(c) = k.comments.get(&key(b, x)) {
+                        e["comment"] = json!(c);
+                    }
+                    e
+                };
+                if let Some(near) = a.get("near") {
+                    // The labels around a location, in its bank and ROM/RAM region: "what routine is this in?"
+                    let (b, x) = resolve(&view, emu, near)?;
+                    let b = if banked(x) { b } else { 0 };
+                    let region = |y: u16| if y < 0x4000 { 0 } else if y < 0x8000 { 1 } else { 2 + (y >= 0xD000) as u8 };
+                    let ok = |(&(lb, la), l): &(&(u16, u16), &Label)| lb == b && region(la) == region(x) && kind.is_none_or(|kd| kd == l.kind);
+                    let before: Vec<Value> = view.labels.range(..=(b, x)).rev().filter(ok).take(limit(1)?).map(|(&(lb, la), l)| {
+                        let mut e = show(lb, la, l);
+                        e["offset"] = json!(format!("{:X}", x - la));
+                        e
+                    }).collect();
+                    let after = view.labels.range((b, x.saturating_add(1))..).find(ok).map(|(&(lb, la), l)| show(lb, la, l));
+                    return Ok(Out::Json(json!({"at": view.fmt(b, x), "before": before, "after": after})));
+                }
                 let mut out = vec![];
                 let mut total = 0;
                 for (loc, l) in &k.labels {
@@ -355,11 +434,8 @@ impl Server {
                     }
                     total += 1;
                     if out.len() < max {
-                        let mut e = json!({"addr": loc, "name": l.name, "kind": l.kind});
-                        if let Some(c) = c {
-                            e["comment"] = json!(c);
-                        }
-                        out.push(e);
+                        let (b, x) = db::parse_key(loc)?;
+                        out.push(show(b, x, l));
                     }
                 }
                 if in_comments {
@@ -394,6 +470,7 @@ impl Server {
                     layout: arr(a, "layout").iter().filter_map(Value::as_str).map(String::from).collect(),
                     bank_reg: s("bank_reg").map(String::from),
                     addr_reg: s("addr_reg").map(String::from),
+                    bank: a.get("bank").filter(|x| !x.is_null()).map(|x| num(x).map(|b| json!(format!("{b:02X}")))).transpose()?,
                     extra: Default::default(),
                 };
                 db::conv(&f)?;
@@ -442,8 +519,13 @@ impl Server {
             }
             "call_routine" => emu::call(emu, rom, &view, a)?,
             "mem_read" => {
-                let (b, addr) = view.loc(v("addr")?)?;
                 let len = opt_num(a, "len", 16)?.clamp(1, 0x10000) as usize;
+                if let Some(at) = emu::space(v("addr")?)? {
+                    let data = emu::space_read(machine(&mut emu.gb, rom)?, at, len)?;
+                    let rows: Vec<String> = data.chunks(16).enumerate().map(|(i, c)| format!("{}  {}", emu::space_name((at.0, at.1, at.2 + 16 * i as u16)), hex(c))).collect();
+                    return Ok(Out::Json(json!({"addr": emu::space_name(at), "len": len, "rows": rows})));
+                }
+                let (b, addr) = view.loc(v("addr")?)?;
                 let data = match &emu.gb {
                     // Straight from the ROM file only while the whole read stays in ROM.
                     None if addr as usize + len <= 0x8000 => (0..len).map(|i| rom.byte(b.unwrap_or(1), addr + i as u16).unwrap_or(0xFF)).collect(),
@@ -466,8 +548,13 @@ impl Server {
                 json!({"addr": view.fmt(bank, addr), "len": len, "rows": rows})
             }
             "mem_write" => {
-                let l = view.loc(v("addr")?)?;
                 let data = bytes(v("bytes")?)?;
+                if let Some(at) = emu::space(v("addr")?)? {
+                    let gb = machine(&mut emu.gb, rom)?;
+                    emu::space_write(gb, at, &data)?;
+                    return Ok(Out::Json(json!({"ok": true, "written": data.len(), "now": hex(&emu::space_read(gb, at, data.len())?)})));
+                }
+                let l = view.loc(v("addr")?)?;
                 let gb = machine(&mut emu.gb, rom)?;
                 emu::write_loc(gb, l, &data);
                 json!({"ok": true, "written": data.len(), "now": hex(&emu::read_loc(gb, rom, l, data.len()))})
@@ -480,19 +567,20 @@ impl Server {
             }
             "state_save" => {
                 let slot = s("slot").unwrap_or("default").to_string();
-                let data = machine(&mut emu.gb, rom)?.save_state();
+                let gb = machine(&mut emu.gb, rom)?;
+                let data = gb.save_state();
                 let n = data.len();
-                emu.slots.insert(slot.clone(), data);
+                emu.slots.insert(slot.clone(), emu::Slot { state: data, screen: Some(gb.screen().to_vec()) });
                 json!({"slot": slot, "bytes": n, "slots": emu.slots.keys().collect::<Vec<_>>()})
             }
             "state_load" => {
                 let slot = s("slot").unwrap_or("default");
-                let data = emu.slots.get(slot).ok_or(format!("no state slot {slot:?}; slots: {:?}", emu.slots.keys().collect::<Vec<_>>()))?.clone();
-                let gb = machine(&mut emu.gb, rom)?;
-                if !gb.load_state(&data) {
-                    return Err(format!("slot {slot:?} rejected by the core"));
+                let picture = emu::load_slot(emu, rom, slot)?;
+                let mut out = json!({"slot": slot, "regs": emu::regs_json(machine(&mut emu.gb, rom)?, &view)});
+                if !picture {
+                    out["note"] = json!(emu::NO_PICTURE);
                 }
-                json!({"slot": slot, "regs": emu::regs_json(gb, &view)})
+                out
             }
             "state_export" => {
                 let path = s("path").ok_or("state_export needs \"path\"")?;
@@ -500,7 +588,7 @@ impl Server {
                     return Err(format!("refusing to write a save state inside the git repository {}", repo.display()));
                 }
                 let data = match s("slot") {
-                    Some(slot) => emu.slots.get(slot).ok_or(format!("no state slot {slot:?}"))?.clone(),
+                    Some(slot) => emu.slots.get(slot).ok_or(format!("no state slot {slot:?}"))?.state.clone(),
                     None => machine(&mut emu.gb, rom)?.save_state(),
                 };
                 std::fs::write(path, &data).map_err(|e| format!("{path}: {e}"))?;
@@ -511,7 +599,7 @@ impl Server {
                 let data = std::fs::read(path).map_err(|e| format!("{path}: {e}"))?;
                 match s("slot") {
                     Some(slot) => {
-                        emu.slots.insert(slot.into(), data);
+                        emu.slots.insert(slot.into(), emu::Slot { state: data, screen: None });
                         json!({"slot": slot, "slots": emu.slots.keys().collect::<Vec<_>>()})
                     }
                     None => {
@@ -519,7 +607,8 @@ impl Server {
                         if !gb.load_state(&data) {
                             return Err(format!("{path}: rejected by the core (another ROM or version?)"));
                         }
-                        json!({"loaded": path, "regs": emu::regs_json(gb, &view)})
+                        emu.stale_screen = true;
+                        json!({"loaded": path, "regs": emu::regs_json(gb, &view), "note": emu::NO_PICTURE})
                     }
                 }
             }
@@ -541,7 +630,14 @@ impl Server {
                 json!({"breakpoints": emu.bps.iter().map(|(b, x)| rom::fmt_ref(&view, *b, *x)).collect::<Vec<_>>()})
             }
             "watchpoint_set" => {
-                let (b, addr) = view.loc(v("addr")?)?;
+                let (bank, addr) = match emu::space(v("addr")?)? {
+                    Some((emu::Space::Vram, b, x)) => (Some(b), x),
+                    Some(_) => return Err("a cartridge-RAM bank can't be watched (its mapping isn't visible to the watch filter): watch $A000-$BFFF without a bank".into()),
+                    None => {
+                        let (b, x) = view.loc(v("addr")?)?;
+                        (b.filter(|_| banked(x)), x)
+                    }
+                };
                 let kind = s("kind").unwrap_or("write");
                 let (read, write) = match kind {
                     "read" => (true, false),
@@ -550,20 +646,30 @@ impl Server {
                     o => return Err(format!("kind {o:?}: read|write|access")),
                 };
                 let len = opt_num(a, "len", 1)?.clamp(1, 0x1000) as u16;
-                emu.wps.push(emu::Wp { addr, len, read, write, bank: b.filter(|_| banked(addr)) });
+                emu.wps.push(emu::Wp { addr, len, read, write, bank });
                 wps_json(&view, emu)
             }
             "watchpoint_clear" => {
                 match a.get("addr") {
                     Some(x) => {
-                        let (b, x) = view.loc(x)?;
-                        emu.wps.retain(|w| !(w.addr == x && (b.is_none() || !banked(x) || w.bank == b)));
+                        // A bank given where it matters (a banked region, or vramN:) removes only that bank's.
+                        let (b, x, exact) = match emu::space(x)? {
+                            Some((_, b, x)) => (Some(b), x, true),
+                            None => {
+                                let (b, x) = view.loc(x)?;
+                                (b, x, b.is_some() && banked(x))
+                            }
+                        };
+                        emu.wps.retain(|w| !(w.addr == x && (!exact || w.bank == b)));
                     }
                     None => emu.wps.clear(),
                 }
                 wps_json(&view, emu)
             }
-            "screenshot" => return Ok(Out::Png(emu::screenshot(machine(&mut emu.gb, rom)?, opt_num(a, "scale", 2)?)?)),
+            "screenshot" => {
+                let png = emu::screenshot(machine(&mut emu.gb, rom)?, opt_num(a, "scale", 2)?)?;
+                return Ok(Out::Png(png, emu.stale_screen.then_some(emu::NO_PICTURE)));
+            }
             _ => return Err(format!("unknown tool {name}")),
         };
         Ok(Out::Json(j))
@@ -572,7 +678,10 @@ impl Server {
 
 fn wps_json(view: &View, emu: &Emu) -> Value {
     json!({"watchpoints": emu.wps.iter().map(|w| json!({
-        "addr": rom::fmt_ref(view, if banked(w.addr) { w.bank } else { Some(0) }, w.addr),
+        "addr": match w.bank {
+            Some(b) if (0x8000..0xA000).contains(&w.addr) => emu::space_name((emu::Space::Vram, b, w.addr)),
+            _ => rom::fmt_ref(view, if banked(w.addr) { w.bank } else { Some(0) }, w.addr),
+        },
         "len": w.len, "kind": match (w.read, w.write) { (true, true) => "access", (true, false) => "read", _ => "write" },
     })).collect::<Vec<_>>()})
 }
@@ -634,29 +743,36 @@ fn tools() -> &'static Vec<Value> {
         vec![
             t("rom_open", "Open a ROM file (read-only). Returns the header (title bytes hex+ascii, cart type, ROM/RAM size, CGB flag, SHA-1, banks) and what the knowledge DB holds for it. Resets the emulator session.",
               json!({"path": st("Path of the .gb/.gbc file")}), &["path"]),
-            t("disasm", "Disassemble (RGBDS syntax) with labels substituted for targets and DB comments shown. Example: {\"addr\": \"05:6000\", \"until_ret\": true}. RAM addresses are read from the live session.",
-              json!({"addr": loc(addr), "count": int("Instructions (default 32; 1000 with until_ret)"), "until_ret": bo("Stop after the first unconditional RET/RETI/JP/JR (or an illegal opcode)")}), &["addr"]),
-            t("xrefs", "Every call/jp/jr/rst/ld-immediate reference to a location across the whole ROM (bank-aware, cached index), including far calls through declared conventions (farcall_set). Example: {\"target\": \"00:1A2B\"}.",
-              json!({"target": loc(addr), "kind": json!({"type": ["string", "array"], "items": str_items, "description": "Filter: call|jp|jr|rst|ld|far (or a list)"}), "limit": int("Max results (default 200)")}), &["target"]),
+            t("disasm", "Disassemble (RGBDS syntax) with labels substituted for targets and DB comments shown. Example: {\"addr\": \"05:6000\", \"until_ret\": true}; several places at once: {\"addrs\": [\"05:6000\", \"Memcpy\"], \"count\": 8}. RAM addresses are read from the live session.",
+              json!({"addr": loc(addr), "addrs": list("Batch: up to 64 locations, each disassembled with the same count/until_ret", json!({"type": ["string", "integer"]})), "count": int("Instructions (default 32; 1000 with until_ret)"), "until_ret": bo("Stop after the first unconditional RET/RETI/JP/JR (or an illegal opcode)")}), &[]),
+            t("xrefs", "Every call/jp/jr/rst/ld-immediate reference to a location across the whole ROM (bank-aware, cached index), with the referencing instruction, including far calls through declared conventions (farcall_set) and entries of declared jumptable/pointers tables. For a RAM address, the insn shows reads (LD A, [nn]) vs writes (LD [nn], A) vs pointer loads (LD HL, nn). Example: {\"target\": \"00:1A2B\"}.",
+              json!({"target": loc(addr), "kind": json!({"type": ["string", "array"], "items": str_items, "description": "Filter: call|jp|jr|rst|ld|far|table (or a list)"}), "limit": int("Max results (default 200)")}), &["target"]),
             t("find_bytes", "Search the ROM for a byte pattern with ?? wildcards. Example: {\"pattern\": \"3E ?? CD\"} (LD A, n then a CALL).",
               json!({"pattern": st("Hex bytes, ?? = any byte"), "banks": banks.clone(), "limit": int("Max hits (default 100)")}), &["pattern"]),
             t("find_immediate", "Find instructions with a given immediate (n8 or n16), optionally by mnemonic prefix. Example: {\"value\": \"3C\", \"mnemonic\": \"cp\"} finds every CP A, $3C.",
               json!({"value": int("The immediate value"), "mnemonic": st("Text prefix, spaces ignored: \"cp\", \"ld a\", \"ld hl\""), "banks": banks, "limit": int("Max hits (default 100)")}), &["value"]),
             t("function_bounds", "Explore one function from its entry (following local branches until RET/JP or an illegal opcode): extent, callees (incl. far calls and tail jumps), exits, JP HL jump tables, illegal opcodes reached.",
               json!({"addr": loc(addr)}), &["addr"]),
-            t("callgraph", "Callees of a function, recursively to a depth (bank-aware; far-call conventions honoured).",
+            t("table_entries", "List a table of little-endian 16-bit pointers with each target's label: a declared jumptable/pointers label, or any ROM address with \"entries\". Example: {\"addr\": \"01:5000\", \"entries\": 6}.",
+              json!({"addr": loc(addr), "entries": int("Entry count (default: the label's)"), "target_bank": int("Bank of targets in $4000-$7FFF (default: the label's, else the table's own bank)")}), &["addr"]),
+            t("callgraph", "Callees of a function, recursively to a depth (bank-aware; far-call conventions honoured; a declared jumptable loaded with LD rr, Table adds its entries).",
               json!({"addr": loc(addr), "depth": int("Levels (default 2, max 8)")}), &["addr"]),
             t("text_decode", "Decode text with a .tbl charmap (the DB's, or \"charmap\"). Example: {\"addr\": \"0A:5000\", \"terminator\": \"FF\"}.",
               json!({"addr": loc(addr), "len": int("Max bytes (default 256, 1024 with a terminator)"), "terminator": int("Stop after this byte"), "charmap": st("Path of a .tbl file (overrides the DB's)")}), &["addr"]),
-            t("label_set", "Name a location in the shared knowledge DB (seen by every agent). A name already used elsewhere moves here. Example: {\"addr\": \"00:1A2B\", \"name\": \"Memcpy\", \"comment\": \"copy BC bytes from HL to DE\"} or {\"labels\": [{\"addr\": .., \"name\": ..}, ...]}.",
-              json!({"addr": loc("\"BB:AAAA\" (bank required in $4000-$7FFF / $D000-$DFFF)"), "name": st("Label name (no spaces, not a hex number)"), "kind": st("code | data | ram (default: code in ROM, ram elsewhere). data regions are skipped by the xref sweep"), "comment": st("Optional comment"), "labels": list("Batch: [{addr, name, kind?, comment?}]", obj_items.clone())}), &[]),
+            t("label_set", "Name a location in the shared knowledge DB (seen by every agent). A name already used elsewhere moves here. Example: {\"addr\": \"00:1A2B\", \"name\": \"Memcpy\", \"comment\": \"copy BC bytes from HL to DE\"}, a sized table {\"addr\": \"01:5000\", \"name\": \"Sines\", \"kind\": \"data\", \"size\": 64}, a jump table {\"addr\": \"01:5100\", \"name\": \"StateTable\", \"kind\": \"jumptable\", \"entries\": 6}, or {\"labels\": [{\"addr\": .., \"name\": ..}, ...]}.",
+              json!({"addr": loc("\"BB:AAAA\" (bank required in $4000-$7FFF / $D000-$DFFF)"), "name": st("Label name (no spaces, not a hex number)"),
+                     "kind": st("code | data | ram | jumptable | pointers (default: code in ROM, ram elsewhere). Non-code regions are skipped by the xref sweep: for their size, else up to the next label. jumptable/pointers: 16-bit LE entries, each a reference from the table (xrefs kind table); jumptable entries are also callees"),
+                     "size": int("Bytes the region takes: the sweep resumes code right after it (default for tables: entries * 2)"),
+                     "entries": int("jumptable/pointers: number of 16-bit entries"),
+                     "target_bank": int("jumptable/pointers: ROM bank of entries in $4000-$7FFF (default: the table's bank; from bank 0 the bank is unknown)"),
+                     "comment": st("Optional comment"), "labels": list("Batch: [{addr, name, kind?, size?, entries?, target_bank?, comment?}]", obj_items.clone())}), &[]),
             t("label_delete", "Remove the label at a location.", json!({"addr": loc(addr)}), &["addr"]),
-            t("label_search", "Search labels by substring (case-insensitive) or regex. Example: {\"query\": \"^Mem\", \"regex\": true}.",
-              json!({"query": st("Substring or regex; empty lists all"), "regex": bo("Treat query as a regex"), "kind": st("code|data|ram"), "in_comments": bo("Also search comments"), "limit": int("Max results (default 200)")}), &[]),
+            t("label_search", "Search labels by substring (case-insensitive) or regex. Example: {\"query\": \"^Mem\", \"regex\": true}. With near: the labels at or before a location (nearest first, with offset) and the next one after, in its bank and region: {\"near\": \"02:4F10\", \"kind\": \"code\"} answers which routine contains it.",
+              json!({"query": st("Substring or regex; empty lists all"), "regex": bo("Treat query as a regex"), "kind": st("code|data|ram|jumptable|pointers"), "in_comments": bo("Also search comments"), "near": loc("A location: return the labels around it instead (limit: how many before, default 1)"), "limit": int("Max results (default 200; 1 with near)")}), &[]),
             t("comment_set", "Attach a comment to a location (shown in disasm). Empty text removes it.",
               json!({"addr": loc(addr), "text": st("Comment")}), &["addr"]),
-            t("farcall_set", "Declare a far-call convention so xrefs/disasm/callgraph resolve cross-bank calls. inline: {\"name\": \"farcall\", \"via\": \"00:0008\", \"kind\": \"inline\", \"layout\": [\"bank\", \"lo\", \"hi\"]} (a CALL/RST to via is followed by those bytes). regs: {\"name\": \"bankcall\", \"via\": \"00:1234\", \"kind\": \"regs\", \"bank_reg\": \"a\", \"addr_reg\": \"hl\"} (ld a,bank ; ld hl,addr ; call via).",
-              json!({"name": st("Convention name"), "via": loc("The trampoline routine"), "kind": st("inline | regs"), "layout": list("inline: order of the inline bytes, items bank|lo|hi|skip", json!({"type": "string", "enum": ["bank", "lo", "hi", "skip"]})), "bank_reg": st("regs: a|b|c|d|e|h|l (default a)"), "addr_reg": st("regs: bc|de|hl (default hl)")}), &["name", "via", "kind"]),
+            t("farcall_set", "Declare a far-call convention so xrefs/disasm/callgraph/function_bounds resolve cross-bank calls. inline: {\"name\": \"farcall\", \"via\": \"00:0008\", \"kind\": \"inline\", \"layout\": [\"bank\", \"lo\", \"hi\"]} (a CALL/RST to via is followed by those bytes, skipped by the sweep). A fixed bank instead of a bank byte: {\"name\": \"fixedcall\", \"via\": \"00:0010\", \"kind\": \"inline\", \"layout\": [\"lo\", \"hi\"], \"bank\": \"02\"}. regs: {\"name\": \"bankcall\", \"via\": \"00:1234\", \"kind\": \"regs\", \"bank_reg\": \"a\", \"addr_reg\": \"hl\"} (ld a,bank ; ld hl,addr ; call via; registers known only from immediates, copies and xor a since the last call/unconditional jump/label).",
+              json!({"name": st("Convention name"), "via": loc("The trampoline routine"), "kind": st("inline | regs"), "layout": list("inline: order of the inline bytes, items bank|lo|hi|skip (bank left out when \"bank\" is given)", json!({"type": "string", "enum": ["bank", "lo", "hi", "skip"]})), "bank": int("A fixed target bank (hex string or number) for conventions that don't pass one"), "bank_reg": st("regs: a|b|c|d|e|h|l (default a)"), "addr_reg": st("regs: bc|de|hl (default hl)")}), &["name", "via", "kind"]),
             t("farcall_delete", "Remove a far-call convention.", json!({"name": st("Convention name")}), &["name"]),
             t("charmap_set", "Set the .tbl charmap file used by text_decode (\"\" clears). The file stays wherever the user keeps it.",
               json!({"path": st("Path of the .tbl file")}), &["path"]),
@@ -665,7 +781,7 @@ fn tools() -> &'static Vec<Value> {
               json!({"frames": int("Frames to run (default 0, max 10800)"), "inputs": inputs.clone()}), &[]),
             t("run", "Run frames with an input script; stops early at a breakpoint or watchpoint (reports pc, bank, caller).",
               json!({"frames": int("Frames (default 60, max 10800)"), "inputs": inputs}), &[]),
-            t("step", "Single-step instructions; stops at a breakpoint or when a write watchpoint's value changes.",
+            t("step", "Single-step instructions; stops at a breakpoint or after an instruction that reads/writes a watchpoint (as run does).",
               json!({"count": int("Instructions (default 1, max 10000000)")}), &[]),
             t("input", "Press buttons for `hold` frames, then run `after` more frames.",
               json!({"buttons": json!({"type": ["string", "array"], "items": str_items, "description": "\"a\", \"start\", \"a+b\" or [\"up\", \"a\"]"}), "hold": int("Frames held (default 5)"), "after": int("Frames after release (default 0; hold + after at most 10800)")}), &["buttons"]),
@@ -683,21 +799,21 @@ fn tools() -> &'static Vec<Value> {
                   "trace_steps": int("Also log the first N instructions"), "ime": json!({"type": ["boolean", "integer"], "description": "Override IME"}), "rom_bank": int("Map this ROM bank first"),
                   "svbk": int("Write SVBK ($FF70) first"), "sentinel": int("Return address used (default FEFF)"),
               }), &["addr"]),
-            t("mem_read", "Read memory (live session; ROM reads work without one). \"BB:AAAA\" reads that ROM or WRAM bank without remapping.",
+            t("mem_read", "Read memory (live session; ROM reads work without one). \"BB:AAAA\" reads that ROM or WRAM bank without remapping; \"vram1:8000\" a VRAM bank and \"sram2:A000\" a cartridge RAM bank (hex), whatever is mapped and enabled.",
               json!({"addr": loc(addr), "len": int("Bytes (default 16)")}), &["addr"]),
-            t("mem_write", "Write memory in the session (ROM-area writes reach the MBC registers). \"BB:DXXX\" writes that WRAM bank.",
+            t("mem_write", "Write memory in the session (ROM-area writes reach the MBC registers). \"BB:DXXX\" writes that WRAM bank, \"vram1:8000\" / \"sram2:A000\" that VRAM / cartridge RAM bank.",
               json!({"addr": loc(addr), "bytes": json!({"type": ["string", "array", "integer"], "items": {"type": ["integer", "string"]}, "description": "\"01 02 FF\" or [1, 2, \"FF\"]"})}), &["addr", "bytes"]),
             t("regs_get", "CPU registers, flags, IME, ROM/WRAM banks, pc and stack top with labels.", json!({}), &[]),
             t("regs_set", "Set registers.", json!({"regs": obj("{\"a\": \"12\", \"hl\": \"C000\", \"pc\": \"0150\", \"flags\": {\"c\": true}}")}), &["regs"]),
             t("state_save", "Save the session into a named in-memory slot.", json!({"slot": st("Slot name (default \"default\")")}), &[]),
-            t("state_load", "Restore the session from a slot.", json!({"slot": st("Slot name (default \"default\")")}), &[]),
+            t("state_load", "Restore the session from a slot, and the picture saved with it (a slot imported from a file has none: see the note).", json!({"slot": st("Slot name (default \"default\")")}), &[]),
             t("state_export", "Write the session (or a slot) to a save-state file (never inside a git repository).",
               json!({"path": st("File path"), "slot": st("Export this slot instead of the session")}), &["path"]),
             t("state_import", "Load a save-state file into the session (or into a slot).",
               json!({"path": st("File path"), "slot": st("Import into this slot instead")}), &["path"]),
             t("breakpoint_set", "Stop run/step before the instruction at a location (bank-aware).", json!({"addr": loc(addr)}), &["addr"]),
             t("breakpoint_clear", "Remove a breakpoint (no addr: all).", json!({"addr": loc(addr)}), &[]),
-            t("watchpoint_set", "Stop run when the CPU reads/writes a range; reports value, pc+bank and caller.",
+            t("watchpoint_set", "Stop run/step when the CPU reads/writes a range; reports value, pc+bank and caller. \"BB:AAAA\" / \"vram1:8000\" fire only while that bank is mapped.",
               json!({"addr": loc(addr), "len": int("Bytes (default 1)"), "kind": st("read | write | access (default write)")}), &["addr"]),
             t("watchpoint_clear", "Remove watchpoints starting at addr, in that bank when given (no addr: all).", json!({"addr": loc(addr)}), &[]),
             t("screenshot", "The current screen as a PNG image.", json!({"scale": int("1-8 (default 2)")}), &[]),

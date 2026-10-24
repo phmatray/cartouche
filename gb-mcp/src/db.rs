@@ -46,9 +46,19 @@ pub struct Knowledge {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct Label {
     pub name: String,
-    /// code | data | ram
+    /// code | data | ram | jumptable | pointers
     #[serde(default = "code")]
     pub kind: String,
+    /// Bytes the region takes (data): the sweep resumes code right after it. Without it, a
+    /// non-code region runs to the next label. Kept as JSON (number, or hex string by hand).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<Value>,
+    /// jumptable / pointers: the number of little-endian 16-bit entries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entries: Option<Value>,
+    /// jumptable / pointers: the ROM bank of entries in $4000-$7FFF when it isn't the table's own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_bank: Option<Value>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
 }
@@ -56,11 +66,31 @@ fn code() -> String {
     "code".into()
 }
 
+fn opt(v: &Option<Value>) -> Option<u32> {
+    v.as_ref().and_then(|v| num(v).ok())
+}
+
+impl Label {
+    /// A declared table of 16-bit pointers: (entries, target bank if fixed).
+    pub fn table(&self) -> Option<(u32, Option<u16>)> {
+        if !matches!(self.kind.as_str(), "jumptable" | "pointers") {
+            return None;
+        }
+        Some((opt(&self.entries)?, opt(&self.target_bank).map(|b| b as u16)))
+    }
+
+    /// The bytes a non-code region takes, when known: its size, else a table's entries * 2.
+    pub fn size(&self) -> Option<u32> {
+        opt(&self.size).or(self.table().map(|(n, _)| n * 2)).filter(|&n| n > 0)
+    }
+}
+
 /// A declared far-call convention. `inline`: a CALL/RST to `via` is followed by inline bytes
 /// laid out as `layout` (e.g. ["bank", "lo", "hi"]; "skip" for an ignored byte), and execution
 /// resumes after them. `regs`: `via` takes the bank in the 8-bit register `bank_reg` and the
 /// address in the pair `addr_reg`, loaded by immediates before the call
-/// (e.g. `ld a, bank ; ld hl, addr ; call via`).
+/// (e.g. `ld a, bank ; ld hl, addr ; call via`). `bank`: a fixed target bank instead of a
+/// `bank` layout byte or `bank_reg`.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct FarCall {
     pub name: String,
@@ -72,6 +102,9 @@ pub struct FarCall {
     pub bank_reg: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub addr_reg: Option<String>,
+    /// A fixed target bank, for conventions that don't pass one (e.g. inline ["lo", "hi"]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bank: Option<Value>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
 }
@@ -190,10 +223,10 @@ pub fn banked(addr: u16) -> bool {
 /// A far-call convention, decoded for the sweeper.
 #[derive(Clone, Debug)]
 pub enum Conv {
-    /// layout: 0 bank, 1 lo, 2 hi, 3 skip
-    Inline { name: String, via: (u16, u16), layout: Vec<u8> },
-    /// bank_reg: B C D E H L - A as 0-7; addr_pair: 0 BC, 1 DE, 2 HL
-    Regs { name: String, via: (u16, u16), bank_reg: usize, addr_pair: usize },
+    /// layout: 0 bank, 1 lo, 2 hi, 3 skip; `bank`: fixed target bank (no bank byte)
+    Inline { name: String, via: (u16, u16), layout: Vec<u8>, bank: Option<u16> },
+    /// bank_reg: B C D E H L - A as 0-7; addr_pair: 0 BC, 1 DE, 2 HL; `bank` overrides bank_reg
+    Regs { name: String, via: (u16, u16), bank_reg: usize, addr_pair: usize, bank: Option<u16> },
 }
 impl Conv {
     pub fn name(&self) -> &str {
@@ -210,6 +243,10 @@ impl Conv {
 
 pub fn conv(f: &FarCall) -> R<Conv> {
     let via = parse_key(&canon_key(&f.via)?)?;
+    let bank = match &f.bank {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(num(v).ok().filter(|&b| b <= 0x1FF).ok_or(format!("far call {:?}: bank {v} (want a ROM bank, hex)", f.name))? as u16),
+    };
     match f.kind.as_str() {
         "inline" => {
             let layout = f
@@ -223,10 +260,10 @@ pub fn conv(f: &FarCall) -> R<Conv> {
                     o => Err(format!("far call {:?}: layout item {o:?} (want bank|lo|hi|skip)", f.name)),
                 })
                 .collect::<R<Vec<u8>>>()?;
-            if ![0, 1, 2].iter().all(|x| layout.contains(x)) {
-                return Err(format!("far call {:?}: layout needs bank, lo and hi", f.name));
+            if !layout.contains(&1) || !layout.contains(&2) || layout.contains(&0) == bank.is_some() {
+                return Err(format!("far call {:?}: layout needs lo and hi, and bank unless a fixed \"bank\" is given (not both)", f.name));
             }
-            Ok(Conv::Inline { name: f.name.clone(), via, layout })
+            Ok(Conv::Inline { name: f.name.clone(), via, layout, bank })
         }
         "regs" => {
             let r = f.bank_reg.as_deref().unwrap_or("a").to_ascii_lowercase();
@@ -235,7 +272,7 @@ pub fn conv(f: &FarCall) -> R<Conv> {
             let p = f.addr_reg.as_deref().unwrap_or("hl").to_ascii_lowercase();
             let addr_pair = ["bc", "de", "hl"].iter().position(|x| *x == p)
                 .ok_or(format!("far call {:?}: addr_reg {p:?} (want bc|de|hl)", f.name))?;
-            Ok(Conv::Regs { name: f.name.clone(), via, bank_reg, addr_pair })
+            Ok(Conv::Regs { name: f.name.clone(), via, bank_reg, addr_pair, bank })
         }
         o => Err(format!("far call {:?}: kind {o:?} (want inline|regs)", f.name)),
     }
@@ -278,7 +315,7 @@ impl View {
     }
 
     /// The label at this location, or the nearest one before it in the same bank as
-    /// "name+$off" (up to $100 bytes past it).
+    /// "name+$off" (up to $100 bytes past it, and within its size when it has one).
     pub fn name(&self, bank: u16, addr: u16) -> Option<String> {
         let ((b, a), l) = self.labels.range(..=(bank, addr)).next_back()?;
         if *b != bank {
@@ -286,7 +323,8 @@ impl View {
         }
         let off = addr - a;
         let same_region = (*a < 0x4000) == (addr < 0x4000) && (*a < 0x8000) == (addr < 0x8000);
-        if off > 0x100 || !same_region {
+        // Past a sized region (a table), the bytes are no longer part of it.
+        if off > 0x100 || !same_region || l.size().is_some_and(|n| off as u32 >= n) {
             return None;
         }
         Some(if off == 0 { l.name.clone() } else { format!("{}+${off:X}", l.name) })
