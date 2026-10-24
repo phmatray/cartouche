@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.12.0](https://github.com/phmatray/cartouche/compare/v1.11.0...v1.12.0) (2026-10-24)
+
+
+### Added
+
+* **mcp:** fixed-bank far calls, sized data labels, jump tables and more ([#330](https://github.com/phmatray/cartouche/issues/330)) ([75c8982](https://github.com/phmatray/cartouche/commit/75c89829de734b67025e433ac9c0fe5c70ef31ae))
+* **mcp:** reachability, data views, bank switches and session-safe tools ([#332](https://github.com/phmatray/cartouche/issues/332)) ([3a01e30](https://github.com/phmatray/cartouche/commit/3a01e3054f4819fdfb4c5599940db298b082cf91))
+
 ## [1.11.0](https://github.com/phmatray/cartouche/compare/v1.10.1...v1.11.0) (2026-10-24)
 
 
