@@ -25,6 +25,54 @@ pub struct Wp {
     pub write: bool,
     /// The ROM/WRAM bank (banked regions) or VRAM bank ($8000-$9FFF) it fires in; None: any.
     pub bank: Option<u16>,
+    /// Fires only for an access of this value.
+    pub value: Option<u8>,
+}
+
+/// A breakpoint condition: registers ("a", "hl", ...) and flags ("flags.z", ...) that must hold
+/// these values.
+pub type Cond = Vec<(String, u32)>;
+
+/// {"a": "05", "hl": "C000", "flags": {"z": true}} -> a condition (validated).
+pub fn cond(v: Option<&Value>) -> R<Cond> {
+    let Some(m) = v.filter(|v| !v.is_null()) else { return Ok(vec![]) };
+    let m = m.as_object().ok_or("when: an object of registers, e.g. {\"a\": \"05\", \"flags\": {\"z\": true}}")?;
+    let mut c = vec![];
+    for (k, v) in m {
+        if k == "flags" {
+            for (f, x) in v.as_object().ok_or("when.flags: {\"z\": true, ...}")? {
+                if !["z", "n", "h", "c"].contains(&f.as_str()) {
+                    return Err(format!("when.flags: unknown flag {f:?} (z n h c)"));
+                }
+                c.push((format!("flags.{f}"), flag(x)? as u32));
+            }
+            continue;
+        }
+        if !["a", "f", "b", "c", "d", "e", "h", "l", "af", "bc", "de", "hl", "sp"].contains(&k.as_str()) {
+            return Err(format!("when: unknown register {k:?}"));
+        }
+        c.push((k.clone(), num(v)?));
+    }
+    Ok(c)
+}
+
+fn reg(gb: &GameBoy, k: &str) -> u32 {
+    let r = &gb.cpu.regs;
+    (match k {
+        "a" => r.a as u16, "f" => r.f as u16, "b" => r.b as u16, "c" => r.c as u16, "d" => r.d as u16,
+        "e" => r.e as u16, "h" => r.h as u16, "l" => r.l as u16, "af" => (r.a as u16) << 8 | r.f as u16,
+        "bc" => r.bc(), "de" => r.de(), "hl" => r.hl(), "sp" => r.sp,
+        "flags.z" => r.zero() as u16, "flags.n" => r.subtract() as u16, "flags.h" => r.half_carry() as u16, "flags.c" => r.carry() as u16,
+        _ => return u32::MAX,
+    }) as u32
+}
+
+pub fn cond_ok(gb: &GameBoy, c: &Cond) -> bool {
+    c.iter().all(|(k, v)| reg(gb, k) == *v)
+}
+
+pub fn cond_text(c: &Cond) -> String {
+    c.iter().map(|(k, v)| if k.starts_with("flags.") { format!("{k}={v}") } else { format!("{k}={v:02X}") }).collect::<Vec<_>>().join(" ")
 }
 
 /// A save-state slot, with the picture shown when it was saved: states don't hold one.
@@ -37,11 +85,14 @@ pub struct Slot {
 pub struct Emu {
     pub gb: Option<GameBoy>,
     pub slots: BTreeMap<String, Slot>,
-    pub bps: Vec<(Option<u16>, u16)>,
+    pub bps: Vec<(Loc, Cond)>,
     pub wps: Vec<Wp>,
     pub frames: u64,
     /// The screen predates the state loaded last (it held no picture), until this frame count.
     pub stale_screen: Option<u64>,
+    /// A call_routine that stopped before returning: (pc, sp, halted) to restore and the sentinel,
+    /// for `continue`.
+    pub pending_call: Option<((u16, u16, bool), u16)>,
 }
 
 pub type Loc = (Option<u16>, u16);
@@ -345,9 +396,9 @@ fn release(gb: &mut GameBoy, inputs: &Inputs) {
 
 // ---------- running ----------
 
-fn sync_debugger(gb: &mut GameBoy, bps: &[Loc], wps: &[Wp]) {
+fn sync_debugger(gb: &mut GameBoy, bps: &[(Loc, Cond)], stubs: &[Stub], wps: &[Wp]) {
     let d = gb.debugger_mut();
-    d.breakpoints = bps.iter().map(|b| b.1).collect();
+    d.breakpoints = bps.iter().map(|b| b.0 .1).chain(stubs.iter().map(|s| s.0 .1)).collect();
     d.hit = None;
     gb.bus.watch = None;
     for w in wps {
@@ -358,21 +409,81 @@ fn sync_debugger(gb: &mut GameBoy, bps: &[Loc], wps: &[Wp]) {
     }
 }
 
+/// A stub: at this location, emulate `RET`, then set these registers.
+pub type Stub = (Loc, Option<Value>);
+
+/// [{"addr": .., "regs": {..}}] -> stubs.
+pub fn parse_stubs(view: &View, list: &[Value]) -> R<Vec<Stub>> {
+    list.iter().map(|s| Ok((view.loc(s.get("addr").ok_or("stubs: each needs \"addr\"")?)?, s.get("regs").cloned()))).collect()
+}
+
+/// Returns from the routine at PC (pops the return address), then sets the stub's registers.
+fn take_stub(gb: &mut GameBoy, regs: &Option<Value>) -> R<u16> {
+    let ret = read16(gb, gb.cpu.regs.sp);
+    gb.cpu.regs.sp = gb.cpu.regs.sp.wrapping_add(2);
+    gb.cpu.regs.pc = ret;
+    if let Some(r) = regs {
+        set_regs(gb, r)?;
+    }
+    Ok(ret)
+}
+
+/// The return address nearest the top of the stack: the first of the top 8 words preceded by a
+/// CALL or RST (or a declared inline far call), with its depth in bytes. The word at SP is often
+/// a pushed register, not a return address.
+pub fn caller(gb: &GameBoy, view: &View) -> Value {
+    let sp = gb.cpu.regs.sp;
+    let b = |a: u16| gb.bus.read_byte(a);
+    let inline: Vec<(u16, u16)> = view.convs.iter().filter_map(|c| match c {
+        crate::db::Conv::Inline { via, layout, .. } => Some((via.1, layout.len() as u16)),
+        _ => None,
+    }).collect();
+    let call_to = |w: u16, n: u16, via: Option<u16>| {
+        let at = w.wrapping_sub(n);
+        let rst = b(at.wrapping_sub(1));
+        let op = b(at.wrapping_sub(3));
+        let target = u16::from_le_bytes([b(at.wrapping_sub(2)), b(at.wrapping_sub(1))]);
+        (rst & 0xC7 == 0xC7 && via.is_none_or(|v| v == (rst & 0x38) as u16)) || (matches!(op, 0xCD | 0xC4 | 0xCC | 0xD4 | 0xDC) && via.is_none_or(|v| v == target))
+    };
+    for k in 0..8u16 {
+        let w = read16(gb, sp.wrapping_add(2 * k));
+        if call_to(w, 0, None) || inline.iter().any(|&(via, n)| call_to(w, n, Some(via))) {
+            let mut c = json!({"caller": fmt(gb, view, w)});
+            if k > 0 {
+                c["caller_depth"] = json!(2 * k);
+            }
+            return c;
+        }
+    }
+    json!({"caller": null, "stack_top": fmt(gb, view, read16(gb, sp))})
+}
+
+/// Merges the `caller` fields into a stop report.
+fn with_caller(mut stop: Value, gb: &GameBoy, view: &View) -> Value {
+    if let (Some(s), Value::Object(c)) = (stop.as_object_mut(), caller(gb, view)) {
+        s.extend(c);
+    }
+    stop
+}
+
 /// Power on and run `frames` frames with an input script.
 pub fn boot(emu: &mut Emu, rom: &Rom, view: &View, frames: u32, inputs: &Inputs) -> R<Value> {
     emu.gb = Some(power_on(rom)?);
     emu.frames = 0;
     emu.stale_screen = None;
-    run_frames(emu, rom, view, frames, inputs)
+    emu.pending_call = None;
+    run_frames(emu, rom, view, frames, inputs, &[])
 }
 
 /// Runs whole frames with an input script, stopping early on a breakpoint or watchpoint.
-pub fn run_frames(emu: &mut Emu, rom: &Rom, view: &View, frames: u32, inputs: &Inputs) -> R<Value> {
+/// `stubs` return from a routine whenever it is reached (as in call_routine).
+pub fn run_frames(emu: &mut Emu, rom: &Rom, view: &View, frames: u32, inputs: &Inputs, stubs: &[Stub]) -> R<Value> {
     let Emu { gb, bps, wps, frames: total, stale_screen, .. } = emu;
     let gb = machine(gb, rom)?;
-    sync_debugger(gb, bps, wps);
+    sync_debugger(gb, bps, stubs, wps);
     gb.resume_here();
     let (mut done, mut mid, mut stop) = (0u32, false, None);
+    let mut stub_hits: BTreeMap<String, u64> = BTreeMap::new();
     while done < frames {
         if !mid {
             apply_inputs(gb, inputs, done);
@@ -386,19 +497,23 @@ pub fn run_frames(emu: &mut Emu, rom: &Rom, view: &View, frames: u32, inputs: &I
             }
             Some(Break::Breakpoint(pc)) => {
                 mid = true;
-                if bps.iter().any(|b| at(gb, *b)) {
-                    stop = Some(json!({"reason": "breakpoint", "at": fmt(gb, view, pc), "insn": insn_text(gb, view, pc),
-                                       "caller": fmt(gb, view, read16(gb, gb.cpu.regs.sp))}));
+                if bps.iter().any(|(b, c)| at(gb, *b) && cond_ok(gb, c)) {
+                    stop = Some(with_caller(json!({"reason": "breakpoint", "at": fmt(gb, view, pc), "insn": insn_text(gb, view, pc)}), gb, view));
                     break;
                 }
-                gb.resume_here(); // same address, other bank: keep going
+                if let Some((_, regs)) = stubs.iter().find(|(l, _)| at(gb, *l)) {
+                    *stub_hits.entry(fmt(gb, view, pc)).or_default() += 1;
+                    take_stub(gb, regs)?;
+                    continue;
+                }
+                gb.resume_here(); // same address, other bank, or the condition doesn't hold: keep going
             }
             Some(Break::Watch { addr, value, write, pc }) => {
                 mid = true;
-                if wp_hit(gb, wps, addr, write) {
-                    stop = Some(json!({"reason": "watchpoint", "kind": if write { "write" } else { "read" },
+                if wp_hit(gb, wps, addr, write, value) {
+                    stop = Some(with_caller(json!({"reason": "watchpoint", "kind": if write { "write" } else { "read" },
                         "addr": fmt(gb, view, addr), "value": format!("{value:02X}"), "pc": fmt(gb, view, pc),
-                        "insn": insn_text(gb, view, pc), "caller": fmt(gb, view, read16(gb, gb.cpu.regs.sp))}));
+                        "insn": insn_text(gb, view, pc)}), gb, view));
                     break;
                 }
             }
@@ -409,18 +524,22 @@ pub fn run_frames(emu: &mut Emu, rom: &Rom, view: &View, frames: u32, inputs: &I
     if stale_screen.is_some_and(|f| *total >= f) {
         *stale_screen = None; // a whole frame drawn since the load
     }
-    Ok(json!({"stop": stop.unwrap_or(json!({"reason": "frames"})), "frames_run": done, "total_frames": *total, "regs": regs_json(gb, view)}))
+    let mut out = json!({"stop": stop.unwrap_or(json!({"reason": "frames"})), "frames_run": done, "total_frames": *total, "regs": regs_json(gb, view)});
+    if !stubs.is_empty() {
+        out["stub_hits"] = json!(stub_hits);
+    }
+    Ok(out)
 }
 
 /// Does a watched CPU access (as gb-core reports it) match a watchpoint, kind and bank included?
-fn wp_hit(gb: &GameBoy, wps: &[Wp], addr: u16, write: bool) -> bool {
+fn wp_hit(gb: &GameBoy, wps: &[Wp], addr: u16, write: bool, value: u8) -> bool {
     let mapped = match addr {
         0x8000..=0x9FFF => Some(gb.bus.ppu.vram_bank as u16),
         _ if banked(addr) => Some(here(gb, addr)),
         _ => None,
     };
     wps.iter().any(|w| {
-        addr.wrapping_sub(w.addr) < w.len && if write { w.write } else { w.read } && w.bank.is_none_or(|b| mapped.is_none_or(|m| m == b))
+        addr.wrapping_sub(w.addr) < w.len && if write { w.write } else { w.read } && w.bank.is_none_or(|b| mapped.is_none_or(|m| m == b)) && w.value.is_none_or(|v| v == value)
     })
 }
 
@@ -429,11 +548,11 @@ fn wp_hit(gb: &GameBoy, wps: &[Wp], addr: u16, write: bool) -> bool {
 pub fn step(emu: &mut Emu, rom: &Rom, view: &View, count: u32) -> R<Value> {
     let Emu { gb, bps, wps, .. } = emu;
     let gb = machine(gb, rom)?;
-    sync_debugger(gb, bps, wps);
+    sync_debugger(gb, bps, &[], wps);
     let (mut log, mut stop, mut done) = (vec![], None, 0u32);
     while done < count {
         let pc = gb.cpu.regs.pc;
-        if done > 0 && bps.iter().any(|b| at(gb, *b)) {
+        if done > 0 && bps.iter().any(|(b, c)| at(gb, *b) && cond_ok(gb, c)) {
             stop = Some(json!({"reason": "breakpoint", "at": fmt(gb, view, pc)}));
             break;
         }
@@ -458,7 +577,7 @@ pub fn step(emu: &mut Emu, rom: &Rom, view: &View, count: u32) -> R<Value> {
                 log.push(format!("{l}  {i}"));
             }
         }
-        if let Some((addr, value, write)) = hit.filter(|&(a, _, w)| wp_hit(gb, wps, a, w)) {
+        if let Some((addr, value, write)) = hit.filter(|&(a, v, w)| wp_hit(gb, wps, a, w, v)) {
             let (pc_loc, insn) = line.unwrap_or_default();
             stop = Some(json!({"reason": "watchpoint", "kind": if write { "write" } else { "read" }, "addr": fmt(gb, view, addr),
                                "value": format!("{value:02X}"), "pc": pc_loc, "insn": insn, "interrupt": irq.is_some()}));
@@ -474,16 +593,26 @@ pub fn step(emu: &mut Emu, rom: &Rom, view: &View, count: u32) -> R<Value> {
 /// sentinel return address, jump, and single-step (whole machine clocked, so VBlank waits and
 /// interrupts run) until the sentinel comes back, a breakpoint hits or max_steps runs out.
 pub fn call(emu: &mut Emu, rom: &Rom, view: &View, p: &Value) -> R<Value> {
+    let resuming = p.get("continue").and_then(Value::as_bool) == Some(true);
+    if resuming && (p.get("from_slot").is_some() || p.get("addr").is_some_and(|a| !a.is_null())) {
+        return Err("continue resumes the stopped call where it is: no addr or from_slot".into());
+    }
     if let Some(s) = p.get("from_slot").and_then(Value::as_str) {
         load_slot(emu, rom, s)?;
     }
+    let pending = if resuming {
+        Some(emu.pending_call.ok_or("continue: no stopped call_routine to resume (it returned, or the session changed since)")?)
+    } else {
+        None
+    };
     let gb = machine(&mut emu.gb, rom)?;
     let loc = |v: &Value| view.loc(v);
     if let Some(v) = p.get("ime") {
         gb.cpu.ime = flag(v)?;
         gb.cpu.ime_pending = false;
     }
-    let halted = std::mem::replace(&mut gb.cpu.halted, false);
+    let bank_pre = rom_bank(gb);
+    let halted = if resuming { gb.cpu.halted } else { std::mem::replace(&mut gb.cpu.halted, false) };
     if let Some(b) = p.get("rom_bank") {
         set_rom_bank(gb, num(b)? as u16)?;
     }
@@ -496,24 +625,58 @@ pub fn call(emu: &mut Emu, rom: &Rom, view: &View, p: &Value) -> R<Value> {
     if let Some(r) = p.get("regs") {
         set_regs(gb, r)?;
     }
-    let (bank, addr) = loc(p.get("addr").ok_or("call_routine needs \"addr\"")?)?;
-    if let (Some(b), 0x4000..=0x7FFF) = (bank, addr) {
-        set_rom_bank(gb, b)?;
-    }
-    let sentinel = opt_num(p, "sentinel", 0xFEFF)? as u16;
-    let resume = (gb.cpu.regs.pc, gb.cpu.regs.sp, halted);
-    let sp = gb.cpu.regs.sp.wrapping_sub(2);
-    gb.bus.write_byte(sp, sentinel as u8);
-    gb.bus.write_byte(sp.wrapping_add(1), (sentinel >> 8) as u8);
-    gb.cpu.regs.sp = sp;
-    gb.cpu.regs.pc = addr;
+    let (resume, sentinel) = match pending {
+        Some(pc) => pc,
+        None => {
+            let (bank, addr) = loc(p.get("addr").ok_or("call_routine needs \"addr\" (or \"continue\": true)")?)?;
+            if let (Some(b), 0x4000..=0x7FFF) = (bank, addr) {
+                set_rom_bank(gb, b)?;
+            }
+            let sentinel = opt_num(p, "sentinel", 0xFEFF)? as u16;
+            let resume = (gb.cpu.regs.pc, gb.cpu.regs.sp, halted);
+            let sp = gb.cpu.regs.sp.wrapping_sub(2);
+            gb.bus.write_byte(sp, sentinel as u8);
+            gb.bus.write_byte(sp.wrapping_add(1), (sentinel >> 8) as u8);
+            gb.cpu.regs.sp = sp;
+            gb.cpu.regs.pc = addr;
+            (resume, sentinel)
+        }
+    };
+    // The bank the call mapped, and whether the routine later switched back to the one before.
+    let bank_set = rom_bank(gb);
+    let mut switched_back = None;
 
     let max_steps = capped(p, "max_steps", 5_000_000, MAX_STEPS)? as u64;
-    let trace_on = p.get("trace").is_some_and(|v| v.as_bool().unwrap_or(true));
-    let trace_max = p.get("trace").and_then(Value::as_u64).unwrap_or(2000).min(100_000) as usize;
+    let summary = p.get("trace_summary").and_then(Value::as_bool) == Some(true);
+    let trace_on = summary || p.get("trace").is_some_and(|v| v.as_bool().unwrap_or(true));
+    let trace_max = if summary { usize::MAX } else { p.get("trace").and_then(Value::as_u64).unwrap_or(2000).min(100_000) as usize };
+    let kinds: Vec<String> = arr(p, "trace_kinds").iter().filter_map(Value::as_str).map(str::to_ascii_lowercase).collect();
+    for k in &kinds {
+        if !["call", "rst", "irq", "stub", "bank", "jp_hl"].contains(&k.as_str()) {
+            return Err(format!("trace_kinds: {k:?} (call rst irq stub bank jp_hl)"));
+        }
+    }
+    let mut counts: BTreeMap<String, u64> = BTreeMap::new();
+    // Keeps a trace entry (or counts it, with trace_summary) when its kind is traced.
+    let mut keep = |trace: &mut Vec<Value>, e: Value| {
+        let k = e["kind"].as_str().unwrap_or("");
+        if !kinds.is_empty() && !kinds.iter().any(|x| x == k) {
+            return;
+        }
+        if summary {
+            let to = e.get("to").or(e.get("at")).and_then(Value::as_str).unwrap_or("");
+            *counts.entry(format!("{k} {to}")).or_default() += 1;
+        } else if trace.len() < trace_max {
+            trace.push(e);
+        }
+    };
     let trace_steps = p.get("trace_steps").and_then(Value::as_u64).unwrap_or(0).min(100_000) as usize;
     let bps = arr(p, "breakpoints").iter().map(loc).collect::<R<Vec<_>>>()?;
-    let stubs = arr(p, "stubs").iter().map(|s| Ok((loc(&s["addr"])?, s.get("regs").cloned()))).collect::<R<Vec<_>>>()?;
+    let stubs = parse_stubs(view, arr(p, "stubs"))?;
+    let stub_log: Vec<bool> = arr(p, "stubs").iter().map(|s| s.get("log").and_then(Value::as_bool) == Some(true)).collect();
+    let inputs = parse_inputs(arr(p, "inputs"))?;
+    apply_inputs(gb, &inputs, 0);
+    let (mut per_stub, mut stub_calls): (BTreeMap<String, u64>, Vec<Value>) = (BTreeMap::new(), vec![]);
     let forces = arr(p, "forces").iter().map(|f| Ok((loc(&f["addr"])?, bytes(&f["bytes"])?))).collect::<R<Vec<_>>>()?;
     let mut watch = vec![];
     for w in arr(p, "watch") {
@@ -544,18 +707,19 @@ pub fn call(emu: &mut Emu, rom: &Rom, view: &View, p: &Value) -> R<Value> {
         if steps > 0 && bps.iter().any(|b| at(gb, *b)) {
             break format!("breakpoint {}", fmt(gb, view, pc));
         }
-        if let Some((_, regs)) = stubs.iter().find(|(l, _)| at(gb, *l)) {
+        if let Some(k) = stubs.iter().position(|(l, _)| at(gb, *l)) {
             let from = fmt(gb, view, pc);
-            let ret = read16(gb, gb.cpu.regs.sp);
-            gb.cpu.regs.sp = gb.cpu.regs.sp.wrapping_add(2);
-            gb.cpu.regs.pc = ret;
-            if let Some(r) = regs {
-                set_regs(gb, r)?;
+            if stub_log[k] && stub_calls.len() < 256 {
+                let r = regs_json(gb, view);
+                stub_calls.push(json!({"step": steps, "at": from, "caller": fmt(gb, view, read16(gb, gb.cpu.regs.sp)),
+                                       "a": r["a"], "f": r["f"], "bc": r["bc"], "de": r["de"], "hl": r["hl"]}));
             }
+            let ret = take_stub(gb, &stubs[k].1)?;
             stub_hits += 1;
+            *per_stub.entry(from.clone()).or_default() += 1;
             steps += 1;
             if trace_on && trace.len() < trace_max {
-                trace.push(json!({"step": steps, "kind": "stub", "at": from, "ret": fmt(gb, view, ret)}));
+                keep(&mut trace, json!({"step": steps, "kind": "stub", "at": from, "ret": fmt(gb, view, ret)}));
             }
             continue;
         }
@@ -574,22 +738,26 @@ pub fn call(emu: &mut Emu, rom: &Rom, view: &View, p: &Value) -> R<Value> {
         steps += 1;
         if gb.bus.ppu.ly == 144 && ly_before != 144 {
             vblanks += 1;
+            apply_inputs(gb, &inputs, vblanks as u32);
         }
         let npc = gb.cpu.regs.pc;
+        if switched_back.is_none() && bank_set != bank_pre && rom_bank(gb) == bank_pre && bank_before != bank_pre {
+            switched_back = Some(pcloc(gb, pc, bank_before));
+        }
         if trace_on && trace.len() < trace_max {
             let dispatched = irq && !gb.cpu.ime;
             if dispatched {
                 let vector = 0x40 + 8 * pending.trailing_zeros() as u16;
-                trace.push(json!({"step": steps, "kind": "irq", "from": pcloc(gb, pc, bank_before), "to": view.fmt(0, vector)}));
+                keep(&mut trace, json!({"step": steps, "kind": "irq", "from": pcloc(gb, pc, bank_before), "to": view.fmt(0, vector)}));
             } else if npc != pc.wrapping_add(len as u16) && (text.starts_with("CALL") || text.starts_with("RST")) {
                 let kind = if text.starts_with("RST") { "rst" } else { "call" };
-                trace.push(json!({"step": steps, "kind": kind, "from": pcloc(gb, pc, bank_before), "to": fmt(gb, view, npc),
+                keep(&mut trace, json!({"step": steps, "kind": kind, "from": pcloc(gb, pc, bank_before), "to": fmt(gb, view, npc),
                                   "sp": format!("{:04X}", gb.cpu.regs.sp)}));
             } else if text == "JP HL" {
-                trace.push(json!({"step": steps, "kind": "jp_hl", "from": pcloc(gb, pc, bank_before), "to": fmt(gb, view, npc)}));
+                keep(&mut trace, json!({"step": steps, "kind": "jp_hl", "from": pcloc(gb, pc, bank_before), "to": fmt(gb, view, npc)}));
             }
             if rom_bank(gb) != bank_before {
-                trace.push(json!({"step": steps, "kind": "bank", "at": pcloc(gb, pc, bank_before),
+                keep(&mut trace, json!({"step": steps, "kind": "bank", "at": pcloc(gb, pc, bank_before),
                                   "from": format!("{bank_before:02X}"), "to": format!("{:02X}", rom_bank(gb))}));
             }
         }
@@ -604,9 +772,13 @@ pub fn call(emu: &mut Emu, rom: &Rom, view: &View, p: &Value) -> R<Value> {
             }
         }
     };
+    release(gb, &inputs);
     if reason == "returned" {
         // Back where the session was, so run/step carry on from there, not from the sentinel.
         (gb.cpu.regs.pc, gb.cpu.regs.sp, gb.cpu.halted) = resume;
+        emu.pending_call = None;
+    } else {
+        emu.pending_call = Some((resume, sentinel));
     }
     let mut out = Map::new();
     out.insert("stop_reason".into(), json!(reason));
@@ -614,9 +786,21 @@ pub fn call(emu: &mut Emu, rom: &Rom, view: &View, p: &Value) -> R<Value> {
     out.insert("cycles".into(), json!(cycles));
     out.insert("vblanks".into(), json!(vblanks));
     out.insert("stub_hits".into(), json!(stub_hits));
+    if !stubs.is_empty() {
+        out.insert("stub_counts".into(), json!(per_stub));
+    }
+    if stub_log.contains(&true) {
+        out.insert("stub_log".into(), json!(stub_calls));
+    }
     out.insert("regs".into(), regs_json(gb, view));
     out.insert("dumps".into(), dumps(gb, rom, view, arr(p, "dumps"))?);
-    if trace_on {
+    if let Some(at) = switched_back.filter(|_| reason != "returned") {
+        out.insert("warning".into(), json!(format!("the routine switched the ROM bank back from {bank_set:02X} to {bank_pre:02X} (the bank before the call) at {at}: \
+            if the game restores the bank from its own copy of the current bank, also set that copy with \"writes\"")));
+    }
+    if summary {
+        out.insert("trace_summary".into(), json!(counts));
+    } else if trace_on {
         out.insert("trace".into(), json!(trace));
     }
     if trace_steps > 0 {
@@ -640,6 +824,7 @@ pub fn load_slot(emu: &mut Emu, rom: &Rom, name: &str) -> R<bool> {
         gb.set_screen(s);
     }
     emu.stale_screen = slot.screen.is_none().then_some(emu.frames + 2);
+    emu.pending_call = None;
     Ok(slot.screen.is_some())
 }
 
