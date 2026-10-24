@@ -239,6 +239,20 @@ fn a_watched_access_made_by_a_step_is_not_reported_later() {
 }
 
 #[test]
+fn a_watched_step_reports_its_access_once() {
+    // $0100: LD A, $3F; $0102: LD [$C000], A; $0105: LD A, [$C000]; $0108: JR -2.
+    let mut gb = booted(&[0x3E, 0x3F, 0xEA, 0x00, 0xC0, 0xFA, 0x00, 0xC0, 0x18, 0xFE]);
+    gb.watch_add(0xC000, ACCESS);
+    assert_eq!(gb.step_instruction_watched().unwrap().1, None);
+    assert_eq!(gb.step_instruction_watched().unwrap().1, Some((0xC000, 0x3F, true)));
+    assert_eq!(gb.step_instruction_watched().unwrap().1, Some((0xC000, 0x3F, false)));
+    assert_eq!(gb.step_instruction_watched().unwrap().1, None);
+    gb.watch_remove(0xC000, ACCESS);
+    gb.run_frame().unwrap();
+    assert_eq!(gb.take_break(), None);
+}
+
+#[test]
 fn oam_dma_over_a_watched_address_does_not_fire() {
     // $0100: LD SP, $DFF0; LD A, $C1; LDH [$46], A; JR -2. During the DMA the CPU fetches $FF
     // (RST $38) from ROM: the stack is moved off OAM so only the DMA writes there.
