@@ -40,15 +40,26 @@ pub fn num(v: &Value) -> R<u32> {
     }
 }
 
-/// "01 02 ff" / "0102ff" / [1, 2, "ff"].
+/// "01 02 ff" / "0102ff" / "0x11" / "$11, $22" / [1, 2, "ff"]. A token with a 0x or $ prefix is
+/// one byte; any other token is hex byte pairs.
 pub fn bytes(v: &Value) -> R<Vec<u8>> {
     match v {
         Value::String(s) => {
-            let h: String = s.chars().filter(|c| !c.is_whitespace()).collect();
-            if !h.len().is_multiple_of(2) || !h.is_ascii() {
-                return Err(format!("bad hex bytes {s:?}"));
+            let bad = || format!("bad hex bytes {s:?}: \"01 02 FF\", \"0102FF\" or \"$01, 0x02\"");
+            let mut out = vec![];
+            for t in s.split(|c: char| c.is_whitespace() || c == ',').filter(|t| !t.is_empty()) {
+                match t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")).or_else(|| t.strip_prefix('$')) {
+                    Some(h) if (1..=2).contains(&h.len()) => out.push(u8::from_str_radix(h, 16).map_err(|_| bad())?),
+                    Some(_) => return Err(bad()),
+                    None if t.len().is_multiple_of(2) && t.is_ascii() => {
+                        for i in (0..t.len()).step_by(2) {
+                            out.push(u8::from_str_radix(&t[i..i + 2], 16).map_err(|_| bad())?);
+                        }
+                    }
+                    None => return Err(bad()),
+                }
             }
-            (0..h.len()).step_by(2).map(|i| u8::from_str_radix(&h[i..i + 2], 16).map_err(|_| format!("bad hex bytes {s:?}"))).collect()
+            Ok(out)
         }
         Value::Array(a) => a.iter().map(|x| num(x).map(|n| n as u8)).collect(),
         Value::Number(_) => Ok(vec![num(v)? as u8]),
@@ -146,6 +157,25 @@ fn db_loc(view: &View, v: &Value) -> R<(u16, u16)> {
     }
 }
 
+/// "tool needs \"k\"", naming the arguments the tool doesn't take (a misspelt key, usually).
+fn missing(name: &str, k: &str, a: &Value) -> String {
+    let props = tools().iter().find(|t| t["name"] == name).and_then(|t| t["inputSchema"]["properties"].as_object());
+    let unknown: Vec<&str> = a.as_object().map_or(vec![], |m| m.keys().map(String::as_str).filter(|x| props.is_some_and(|p| !p.contains_key(*x))).collect());
+    if unknown.is_empty() {
+        format!("{name} needs \"{k}\"")
+    } else {
+        format!("{name} needs \"{k}\" (it doesn't take {})", unknown.iter().map(|x| format!("\"{x}\"")).collect::<Vec<_>>().join(", "))
+    }
+}
+
+/// An existing comment followed by a new one (append mode).
+fn joined(old: Option<&String>, new: String) -> String {
+    match old {
+        Some(o) if !o.is_empty() && *o != new => format!("{o} | {new}"),
+        _ => new,
+    }
+}
+
 fn label_name(n: &str) -> R<String> {
     let n = n.trim();
     if n.is_empty() || n.chars().any(|c| c.is_whitespace() || c == ':' || c == '"') {
@@ -176,7 +206,7 @@ impl Server {
                 "protocolVersion": PROTOCOL_VERSION,
                 "capabilities": {"tools": {"listChanged": false}},
                 "serverInfo": {"name": "gb-mcp", "version": env!("CARGO_PKG_VERSION")},
-                "instructions": INSTRUCTIONS,
+                "instructions": instructions(),
             })),
             "ping" => Ok(json!({})),
             "tools/list" => Ok(json!({"tools": tools()})),
@@ -212,15 +242,41 @@ impl Server {
     pub fn call_tool(&mut self, name: &str, a: &Value) -> R<Out> {
         self.db.refresh()?;
         let Server { db, rom, emu } = self;
-        if name == "rom_open" {
-            let path = a.get("path").and_then(Value::as_str).ok_or("rom_open needs \"path\"")?;
-            let r = Rom::open(path)?;
+        let summary = |r: &Rom, db: &Db| {
             let mut h = r.header();
             let k = db.knowledge(&r.sha1);
             h["knowledge"] = json!({"db": db.path(), "labels": k.labels.len(), "comments": k.comments.len(),
                                     "far_calls": k.far_calls.len(), "charmap": k.charmap});
-            *rom = Some(r);
-            *emu = Emu::default();
+            h
+        };
+        if name == "rom_open" {
+            let path = a.get("path").and_then(Value::as_str).ok_or("rom_open needs \"path\"")?;
+            let r = Rom::open(path)?;
+            // The same ROM again leaves the session alone, unless asked to reset it.
+            let keep = rom.as_ref().is_some_and(|o| o.sha1 == r.sha1) && a.get("reset").and_then(Value::as_bool) != Some(true);
+            let mut h = summary(&r, db);
+            h["session"] = json!(if keep { "kept" } else { "reset" });
+            if keep {
+                rom.as_mut().unwrap().path = r.path;
+            } else {
+                *rom = Some(r);
+                *emu = Emu::default();
+            }
+            return Ok(Out::Json(h));
+        }
+        if name == "rom_info" {
+            let Some(r) = rom.as_ref() else { return Ok(Out::Json(json!({"open": false, "db": db.path()}))) };
+            let mut h = summary(r, db);
+            h["open"] = json!(true);
+            let view = View::new(&db.knowledge(&r.sha1));
+            h["session"] = match &emu.gb {
+                None => json!({"powered": false, "slots": emu.slots.keys().collect::<Vec<_>>()}),
+                Some(gb) => json!({
+                    "powered": true, "frames": emu.frames, "pc": emu::fmt(gb, &view, gb.cpu.regs.pc),
+                    "rom_bank": format!("{:02X}", emu::rom_bank(gb)), "slots": emu.slots.keys().collect::<Vec<_>>(),
+                    "breakpoints": emu.bps.len(), "watchpoints": emu.wps.len(), "call_stopped": emu.pending_call.is_some(),
+                }),
+            };
             return Ok(Out::Json(h));
         }
         if name == "db_dump" && a.get("all").and_then(Value::as_bool) == Some(true) {
@@ -230,7 +286,8 @@ impl Server {
         let sha = rom.sha1.clone();
         let mut view = View::new(&db.knowledge(&sha));
         view.rom_banks = rom.banks();
-        let v = |k: &str| a.get(k).ok_or(format!("{name} needs \"{k}\""));
+        view.ends = rom.ends(&view).clone();
+        let v = |k: &str| a.get(k).ok_or_else(|| missing(name, k, a));
         let s = |k: &str| a.get(k).and_then(Value::as_str);
         let limit = |d: u32| opt_num(a, "limit", d).map(|n| n.clamp(1, 100_000) as usize);
         let j = match name {
@@ -255,17 +312,34 @@ impl Server {
                 }
             }
             "xrefs" => {
-                let (b, addr) = resolve(&view, emu, v("target")?)?;
+                // "addr", as every other tool calls a location, works too.
+                let (b, addr) = resolve(&view, emu, a.get("target").or(a.get("addr")).ok_or_else(|| missing(name, "target", a))?)?;
                 let kinds: Vec<String> = match a.get("kind") {
                     Some(Value::String(k)) => vec![k.to_ascii_lowercase()],
                     Some(Value::Array(ks)) => ks.iter().filter_map(Value::as_str).map(str::to_ascii_lowercase).collect(),
                     _ => vec![],
                 };
-                rom::xrefs(rom, &view, if addr < 0x4000 || (!banked(addr)) { 0 } else { b }, addr, &kinds, limit(200)?)
+                let flag = |k: &str| a.get(k).and_then(Value::as_bool) == Some(true);
+                let opts = rom::XrefOpts {
+                    reached_only: flag("reached_only"),
+                    words: flag("words").then(|| bank_range(a.get("banks"), rom.banks())).transpose()?,
+                };
+                rom::xrefs(rom, &view, if addr < 0x4000 || (!banked(addr)) { 0 } else { b }, addr, &kinds, limit(200)?, &opts)
             }
             "find_bytes" => {
                 let pat = rom::pattern(s("pattern").ok_or("find_bytes needs \"pattern\"")?)?;
-                rom::find_bytes(rom, &view, &pat, bank_range(a.get("banks"), rom.banks())?, limit(100)?)
+                let banks = bank_range(a.get("banks"), rom.banks())?;
+                rom::find_bytes(rom, &view, &pat, banks, limit(100)?, a.get("insn_start").and_then(Value::as_bool) == Some(true))
+            }
+            "records" => {
+                let (b, addr) = resolve(&view, emu, v("addr")?)?;
+                if addr >= 0x8000 {
+                    return Err("records reads ROM data ($0000-$7FFF)".into());
+                }
+                let fields: Vec<String> = arr(a, "fields").iter().filter_map(Value::as_str).map(str::to_ascii_lowercase).collect();
+                let term = a.get("terminator").filter(|t| !t.is_null()).map(|t| num(t).map(|n| n as u8)).transpose()?;
+                let fixed = a.get("target_bank").filter(|x| !x.is_null()).map(|x| num(x).map(|n| n as u16)).transpose()?;
+                rom::records(rom, &view, if addr < 0x4000 { 0 } else { b }, addr, &fields, term, opt_num(a, "count", 256)?.min(4096), fixed)?
             }
             "find_immediate" => {
                 let value = num(v("value")?)?;
@@ -335,6 +409,9 @@ impl Server {
                     _ => vec![a.clone()],
                 };
                 let mut parsed = vec![];
+                let mut warnings = vec![];
+                let mut code = std::collections::BTreeMap::new(); // bank -> code labels to check
+                let append_all = a.get("append").and_then(Value::as_bool) == Some(true);
                 for it in &items {
                     let (b, addr) = db_loc(&view, it.get("addr").ok_or("label_set needs \"addr\" (or \"labels\": [...])")?)?;
                     let name = label_name(it.get("name").and_then(Value::as_str).ok_or("label_set needs \"name\"")?)?;
@@ -358,28 +435,59 @@ impl Server {
                         return Err(format!("target_bank: the ROM has banks 00-{:02X}", rom.banks() - 1));
                     }
                     let comment = it.get("comment").and_then(Value::as_str).map(String::from);
+                    let append = append_all || it.get("append").and_then(Value::as_bool) == Some(true);
+                    if kind == "code" && addr < 0x8000 {
+                        code.entry(b).or_insert_with(std::collections::BTreeSet::new).insert(addr);
+                    }
                     let label = Label {
                         name, kind: kind.into(), size: size.map(|n| json!(n)), entries: entries.map(|n| json!(n)),
                         target_bank: target_bank.map(|b| json!(format!("{b:02X}"))), ..Label::default()
                     };
-                    parsed.push((key(b, addr), label, comment));
+                    parsed.push((key(b, addr), label, comment, append));
                 }
-                let moved = db.update(&sha, |k| {
-                    let mut moved = vec![];
-                    for (key, label, comment) in parsed {
+                // A code label inside an instruction of the linear sweep: probably a wrong entry.
+                for (b, addrs) in &code {
+                    for (addr, at) in rom::inside(rom, &view, *b, addrs) {
+                        let fetch = |x: u16| rom.byte(*b, x);
+                        let insn = rom::Sweeper::default().step(&fetch, &view, *b, at).map(|i| i.text(&view)).unwrap_or_default();
+                        warnings.push(format!("{} is inside the instruction {insn} at {} of the linear sweep: check the entry point (disasm and xrefs restart decoding at a label)",
+                                              key(*b, addr), view.fmt(*b, at)));
+                    }
+                }
+                let (moved, replaced) = db.update(&sha, |k| {
+                    let (mut moved, mut replaced) = (vec![], vec![]);
+                    for (key, label, comment, append) in parsed {
                         let old: Vec<String> = k.labels.iter().filter(|(kk, l)| l.name == label.name && **kk != key).map(|(kk, _)| kk.clone()).collect();
                         for o in old {
                             k.labels.remove(&o);
                             moved.push(json!({"name": label.name, "from": o}));
                         }
+                        let mut r = json!({});
                         if let Some(c) = comment {
-                            k.comments.insert(key.clone(), c);
+                            let c = if append { joined(k.comments.get(&key), c) } else { c };
+                            if let Some(o) = k.comments.insert(key.clone(), c.clone()).filter(|o| *o != c && !append) {
+                                r["comment"] = json!(o);
+                            }
+                        }
+                        if let Some(o) = k.labels.get(&key).filter(|o| o.name != label.name) {
+                            r["name"] = json!(o.name);
+                        }
+                        if r != json!({}) {
+                            r["addr"] = json!(key);
+                            replaced.push(r);
                         }
                         k.labels.insert(key, label);
                     }
-                    Ok(moved)
+                    Ok((moved, replaced))
                 })?;
-                json!({"ok": true, "set": items.len(), "moved": moved})
+                let mut out = json!({"ok": true, "set": items.len(), "moved": moved});
+                if !replaced.is_empty() {
+                    out["replaced"] = json!(replaced);
+                }
+                if !warnings.is_empty() {
+                    out["warnings"] = json!(warnings);
+                }
+                out
             }
             "label_delete" => {
                 let (b, addr) = db_loc(&view, v("addr")?)?;
@@ -454,15 +562,23 @@ impl Server {
             "comment_set" => {
                 let (b, addr) = db_loc(&view, v("addr")?)?;
                 let text = s("text").unwrap_or("").to_string();
-                db.update(&sha, |k| {
+                let append = a.get("append").and_then(Value::as_bool) == Some(true);
+                let (old, now) = db.update(&sha, |k| {
+                    let old = k.comments.get(&key(b, addr)).cloned();
                     if text.is_empty() {
                         k.comments.remove(&key(b, addr));
                     } else {
-                        k.comments.insert(key(b, addr), text.clone());
+                        k.comments.insert(key(b, addr), if append { joined(old.as_ref(), text.clone()) } else { text.clone() });
                     }
-                    Ok(())
+                    Ok((old, k.comments.get(&key(b, addr)).cloned()))
                 })?;
-                json!({"ok": true, "addr": view.fmt(b, addr)})
+                let mut out = json!({"ok": true, "addr": view.fmt(b, addr)});
+                if append {
+                    out["comment"] = json!(now);
+                } else if let Some(o) = old.filter(|o| *o != text) {
+                    out["replaced"] = json!(o);
+                }
+                out
             }
             "farcall_set" => {
                 let (vb, va) = db_loc(&view, v("via")?)?;
@@ -476,7 +592,7 @@ impl Server {
                     bank: a.get("bank").filter(|x| !x.is_null()).map(|x| num(x).map(|b| json!(format!("{b:02X}")))).transpose()?,
                     extra: Default::default(),
                 };
-                if let db::Conv::Inline { bank: Some(b), .. } | db::Conv::Regs { bank: Some(b), .. } = db::conv(&f)? {
+                if let db::Conv::Inline { bank: Some(b), .. } | db::Conv::Regs { bank: Some(b), .. } | db::Conv::Switch { bank: Some(b), .. } = db::conv(&f)? {
                     if b >= rom.banks() {
                         return Err(format!("bank {b:02X}: the ROM has {:X} banks", rom.banks()));
                     }
@@ -507,10 +623,64 @@ impl Server {
                 })?;
                 json!({"ok": true, "charmap": (!path.is_empty()).then_some(path), "entries": entries})
             }
-            "db_dump" => json!({"db": db.path(), "sha1": sha, "knowledge": db.knowledge(&sha)}),
+            "db_dump" => {
+                let mut k = db.knowledge(&sha);
+                let sections = arr(a, "sections");
+                let filtered = !sections.is_empty() || ["banks", "range", "limit", "offset"].iter().any(|x| a.get(*x).is_some());
+                if !filtered {
+                    return Ok(Out::Json(json!({"db": db.path(), "sha1": sha, "knowledge": k})));
+                }
+                let want: Vec<&str> = sections.iter().filter_map(Value::as_str).collect();
+                for w in &want {
+                    if !["labels", "comments", "far_calls", "charmap"].contains(w) {
+                        return Err(format!("sections: {w:?} (labels comments far_calls charmap)"));
+                    }
+                }
+                let shown = |x: &str| want.is_empty() || want.contains(&x);
+                let banks = a.get("banks").map(|_| bank_range(a.get("banks"), 0x200)).transpose()?;
+                let range = match s("range") {
+                    Some(r) => {
+                        let (x, y) = r.split_once('-').ok_or("range: \"AAAA-BBBB\" (hex, inclusive)")?;
+                        Some((num(&json!(x))?, num(&json!(y))?))
+                    }
+                    None => None,
+                };
+                let keep = |loc: &String| {
+                    let Ok((b, x)) = db::parse_key(loc) else { return banks.is_none() && range.is_none() };
+                    banks.is_none_or(|(lo, hi)| (lo..=hi).contains(&b)) && range.is_none_or(|(lo, hi)| (lo..=hi).contains(&(x as u32)))
+                };
+                let (offset, max) = (opt_num(a, "offset", 0)? as usize, limit(100_000)?);
+                let mut counts = json!({});
+                let mut page = |m: &mut std::collections::BTreeMap<String, Value>, what: &str| {
+                    let all: Vec<(String, Value)> = std::mem::take(m).into_iter().filter(|(l, _)| keep(l)).collect();
+                    counts[what] = json!(all.len());
+                    m.extend(all.into_iter().skip(offset).take(max));
+                };
+                let mut labels = k.labels.iter().map(|(l, x)| (l.clone(), serde_json::to_value(x).unwrap_or_default())).collect();
+                let mut comments = k.comments.iter().map(|(l, x)| (l.clone(), json!(x))).collect();
+                page(&mut labels, "labels");
+                page(&mut comments, "comments");
+                let mut out = json!({});
+                if shown("labels") {
+                    out["labels"] = json!(labels);
+                }
+                if shown("comments") {
+                    out["comments"] = json!(comments);
+                }
+                if shown("far_calls") {
+                    out["far_calls"] = json!(std::mem::take(&mut k.far_calls));
+                }
+                if shown("charmap") {
+                    out["charmap"] = json!(k.charmap);
+                }
+                json!({"db": db.path(), "sha1": sha, "knowledge": out, "counts": counts, "offset": offset})
+            }
             // ---- emulation ----
             "emu_boot" => emu::boot(emu, rom, &view, capped(a, "frames", 0, emu::MAX_FRAMES)?, &emu::parse_inputs(arr(a, "inputs"))?)?,
-            "run" => emu::run_frames(emu, rom, &view, capped(a, "frames", 60, emu::MAX_FRAMES)?, &emu::parse_inputs(arr(a, "inputs"))?)?,
+            "run" => {
+                let stubs = emu::parse_stubs(&view, arr(a, "stubs"))?;
+                emu::run_frames(emu, rom, &view, capped(a, "frames", 60, emu::MAX_FRAMES)?, &emu::parse_inputs(arr(a, "inputs"))?, &stubs)?
+            }
             "step" => emu::step(emu, rom, &view, capped(a, "count", 1, 10_000_000)?.max(1))?,
             "input" => {
                 let b = match v("buttons")? {
@@ -522,7 +692,7 @@ impl Server {
                 if total > emu::MAX_FRAMES {
                     return Err(format!("hold + after: at most {} frames per call", emu::MAX_FRAMES));
                 }
-                emu::run_frames(emu, rom, &view, total, &vec![(0, emu::buttons(&b)?, hold)])?
+                emu::run_frames(emu, rom, &view, total, &vec![(0, emu::buttons(&b)?, hold)], &[])?
             }
             "call_routine" => emu::call(emu, rom, &view, a)?,
             "mem_read" => {
@@ -617,26 +787,28 @@ impl Server {
                             return Err(format!("{path}: rejected by the core (another ROM or version?)"));
                         }
                         emu.stale_screen = Some(emu.frames + 2);
+                        emu.pending_call = None;
                         json!({"loaded": path, "regs": emu::regs_json(gb, &view), "note": emu::NO_PICTURE})
                     }
                 }
             }
             "breakpoint_set" => {
                 let l = view.loc(v("addr")?)?;
-                if !emu.bps.contains(&l) {
-                    emu.bps.push(l);
-                }
-                json!({"breakpoints": emu.bps.iter().map(|(b, x)| rom::fmt_ref(&view, *b, *x)).collect::<Vec<_>>()})
+                let c = emu::cond(a.get("when"))?;
+                // One breakpoint per location: setting it again replaces its condition.
+                emu.bps.retain(|(x, _)| *x != l);
+                emu.bps.push((l, c));
+                bps_json(&view, emu)
             }
             "breakpoint_clear" => {
                 match a.get("addr") {
                     Some(x) => {
                         let (b, x) = view.loc(x)?;
-                        emu.bps.retain(|(bb, xx)| !(*xx == x && (b.is_none() || *bb == b)));
+                        emu.bps.retain(|((bb, xx), _)| !(*xx == x && (b.is_none() || *bb == b)));
                     }
                     None => emu.bps.clear(),
                 }
-                json!({"breakpoints": emu.bps.iter().map(|(b, x)| rom::fmt_ref(&view, *b, *x)).collect::<Vec<_>>()})
+                bps_json(&view, emu)
             }
             "watchpoint_set" => {
                 let (bank, addr) = match emu::space(v("addr")?)? {
@@ -655,7 +827,8 @@ impl Server {
                     o => return Err(format!("kind {o:?}: read|write|access")),
                 };
                 let len = opt_num(a, "len", 1)?.clamp(1, 0x1000) as u16;
-                emu.wps.push(emu::Wp { addr, len, read, write, bank });
+                let value = a.get("value").filter(|x| !x.is_null()).map(|x| num(x).ok().filter(|&n| n < 0x100).map(|n| n as u8).ok_or(format!("value {x}: a byte"))).transpose()?;
+                emu.wps.push(emu::Wp { addr, len, read, write, bank, value });
                 wps_json(&view, emu)
             }
             "watchpoint_clear" => {
@@ -685,14 +858,27 @@ impl Server {
     }
 }
 
+fn bps_json(view: &View, emu: &Emu) -> Value {
+    json!({"breakpoints": emu.bps.iter().map(|((b, x), c)| {
+        let at = rom::fmt_ref(view, *b, *x);
+        if c.is_empty() { at } else { format!("{at} when {}", emu::cond_text(c)) }
+    }).collect::<Vec<_>>()})
+}
+
 fn wps_json(view: &View, emu: &Emu) -> Value {
-    json!({"watchpoints": emu.wps.iter().map(|w| json!({
-        "addr": match w.bank {
-            Some(b) if (0x8000..0xA000).contains(&w.addr) => emu::space_name((emu::Space::Vram, b, w.addr)),
-            _ => rom::fmt_ref(view, if banked(w.addr) { w.bank } else { Some(0) }, w.addr),
-        },
-        "len": w.len, "kind": match (w.read, w.write) { (true, true) => "access", (true, false) => "read", _ => "write" },
-    })).collect::<Vec<_>>()})
+    json!({"watchpoints": emu.wps.iter().map(|w| {
+        let mut e = json!({
+            "addr": match w.bank {
+                Some(b) if (0x8000..0xA000).contains(&w.addr) => emu::space_name((emu::Space::Vram, b, w.addr)),
+                _ => rom::fmt_ref(view, if banked(w.addr) { w.bank } else { Some(0) }, w.addr),
+            },
+            "len": w.len, "kind": match (w.read, w.write) { (true, true) => "access", (true, false) => "read", _ => "write" },
+        });
+        if let Some(v) = w.value {
+            e["value"] = json!(format!("{v:02X}"));
+        }
+        e
+    }).collect::<Vec<_>>()})
 }
 
 fn rpc_error(id: Value, code: i64, message: &str) -> Value {
@@ -724,18 +910,29 @@ pub fn serve(server: &mut Server, mut input: impl BufRead, mut out: impl Write) 
     }
 }
 
-const INSTRUCTIONS: &str = "Game Boy ROM reverse-engineering server. Start with rom_open. Values: JSON numbers are decimal, \
-strings are hex (\"0x1F\", \"$1F\", \"1F\"). Locations: a label name, \"BB:AAAA\" (bank:addr, hex; the bank matters for \
-$4000-$7FFF ROM and $D000-$DFFF WRAM) or a plain address; any \"BB:AAAA Name\" from an output can be passed back. \
-Labels, comments and far-call conventions are shared with other agents through the knowledge DB: label what you \
-understand (label_set) and check label_search before re-deriving a routine. Emulation keeps one session in memory: \
-emu_boot, then run/input/step, state_save/state_load slots, and call_routine to run one routine in isolation \
-(from_slot restores a slot first).";
+const INSTRUCTIONS: &str = "Game Boy ROM reverse-engineering server. Start with rom_info (read-only: is a ROM open, \
+and the session's state) or rom_open (opening the ROM already open keeps the session). Values: JSON numbers are decimal, \
+strings are hex (\"0x1F\", \"$1F\", \"1F\"): pass hex as a string. Locations: a label name, \"BB:AAAA\" (bank:addr, \
+hex; the bank matters for $4000-$7FFF ROM, never 00 there, and $D000-$DFFF WRAM) or a plain address; any \
+\"BB:AAAA Name\" from an output can be passed back. Labels, comments and far-call conventions are shared with other \
+agents through the knowledge DB: label what you understand (label_set) and check label_search before re-deriving a \
+routine. Emulation keeps one session in memory, shared by every agent using this server: emu_boot, then \
+run/input/step, state_save/state_load slots, and call_routine to run one routine in isolation (from_slot restores a \
+slot first).";
+
+/// The instructions, with every tool's name (a client may show only some of the schemas).
+fn instructions() -> String {
+    let names: Vec<&str> = tools().iter().filter_map(|t| t["name"].as_str()).collect();
+    format!("{INSTRUCTIONS} Tools ({}): {}.", names.len(), names.join(", "))
+}
 
 fn tools() -> &'static Vec<Value> {
     static T: OnceLock<Vec<Value>> = OnceLock::new();
     T.get_or_init(|| {
-        let loc = |d: &str| json!({"type": ["string", "integer"], "description": d});
+        // Hex values are strings only: a client that converts numeric-looking strings to numbers
+        // for an integer-typed field would turn hex "11" into decimal 11. Numbers are still accepted.
+        let loc = |d: &str| json!({"type": "string", "description": d});
+        let hx = |d: &str| json!({"type": "string", "description": format!("{d} (hex string)")});
         let int = |d: &str| json!({"type": ["integer", "string"], "description": d});
         let st = |d: &str| json!({"type": "string", "description": d});
         let bo = |d: &str| json!({"type": "boolean", "description": d});
@@ -743,75 +940,91 @@ fn tools() -> &'static Vec<Value> {
         let list = |d: &str, items: Value| json!({"type": "array", "items": items, "description": d});
         let str_items = json!({"type": "string"});
         let obj_items = json!({"type": "object"});
-        let banks = json!({"type": ["string", "integer"], "description": "Banks to search: \"05\" or \"02-05\" (hex); default all"});
+        let banks = json!({"type": "string", "description": "Banks to search: \"05\" or \"02-05\" (hex); default all"});
         let t = |name: &str, desc: &str, props: Value, req: &[&str]| {
             json!({"name": name, "description": desc, "inputSchema": {"type": "object", "properties": props, "required": req}})
         };
         let inputs = list("Input script: [\"frame:button[+button][:hold]\"], e.g. [\"10:start\", \"60:a+b:8\"]. Frames count from 0 in this call; hold defaults to 5", str_items.clone());
         let addr = "Location: label name, \"BB:AAAA\" (bank:addr hex) or address";
         vec![
-            t("rom_open", "Open a ROM file (read-only). Returns the header (title bytes hex+ascii, cart type, ROM/RAM size, CGB flag, SHA-1, banks) and what the knowledge DB holds for it. Resets the emulator session.",
-              json!({"path": st("Path of the .gb/.gbc file")}), &["path"]),
-            t("disasm", "Disassemble (RGBDS syntax) with labels substituted for targets and DB comments shown. Example: {\"addr\": \"05:6000\", \"until_ret\": true}; several places at once: {\"addrs\": [\"05:6000\", \"Memcpy\"], \"count\": 8}. RAM addresses are read from the live session.",
-              json!({"addr": loc(addr), "addrs": list("Batch: up to 64 locations, each disassembled with the same count/until_ret", json!({"type": ["string", "integer"]})), "count": int("Instructions (default 32; 1000 with until_ret)"), "until_ret": bo("Stop after the first unconditional RET/RETI/JP/JR (or an illegal opcode)")}), &[]),
-            t("xrefs", "Every call/jp/jr/rst/ld-immediate reference to a location across the whole ROM (bank-aware, cached index), with the referencing instruction, including far calls through declared conventions (farcall_set) and entries of declared jumptable/pointers tables. For a RAM address, the insn shows reads (LD A, [nn]) vs writes (LD [nn], A) vs pointer loads (LD HL, nn). Example: {\"target\": \"00:1A2B\"}.",
-              json!({"target": loc(addr), "kind": json!({"type": ["string", "array"], "items": str_items, "description": "Filter: call|jp|jr|rst|ld|far|table (or a list)"}), "limit": int("Max results (default 200)")}), &["target"]),
-            t("find_bytes", "Search the ROM for a byte pattern with ?? wildcards. Example: {\"pattern\": \"3E ?? CD\"} (LD A, n then a CALL).",
-              json!({"pattern": st("Hex bytes, ?? = any byte"), "banks": banks.clone(), "limit": int("Max hits (default 100)")}), &["pattern"]),
-            t("find_immediate", "Find instructions with a given immediate (n8 or n16), optionally by mnemonic prefix. Example: {\"value\": \"3C\", \"mnemonic\": \"cp\"} finds every CP A, $3C.",
-              json!({"value": int("The immediate value"), "mnemonic": st("Text prefix, spaces ignored: \"cp\", \"ld a\", \"ld hl\""), "banks": banks, "limit": int("Max hits (default 100)")}), &["value"]),
+            t("rom_info", "Read-only: whether a ROM is open, its header and DB counts, and the emulator session's state (powered, frames, pc, bank, slots, breakpoints). Changes nothing: use it before rom_open when other agents may share the session.",
+              json!({}), &[]),
+            t("rom_open", "Open a ROM file (read-only). Returns the header (title bytes hex+ascii, cart type, ROM/RAM size, CGB flag, SHA-1, banks) and what the knowledge DB holds for it. Opening another ROM resets the emulator session; opening the ROM already open keeps it (\"session\": \"kept\") unless reset is true.",
+              json!({"path": st("Path of the .gb/.gbc file"), "reset": bo("Reset the session even when this ROM is already open")}), &["path"]),
+            t("disasm", "Disassemble (RGBDS syntax) with labels substituted for targets and DB comments shown. ROM regions labelled data/jumptable/pointers show as DB/DW lines; decoding restarts at a label inside an instruction. A bank-0 CALL/JP into $4000-$7FFF lists the labels at that address in any bank (; ?? ...). Example: {\"addr\": \"05:6000\", \"until_ret\": true}; several places at once: {\"addrs\": [\"05:6000\", \"Memcpy\"], \"count\": 8}. RAM addresses are read from the live session.",
+              json!({"addr": loc(addr), "addrs": list("Batch: up to 64 locations, each disassembled with the same count/until_ret", str_items.clone()), "count": int("Instructions or data lines (default 32; 1000 with until_ret)"), "until_ret": bo("Stop at the end of the function: an unconditional RET/RETI/JP/JR (or an illegal opcode, or a data label) with no earlier forward branch past it; otherwise resume at that branch target")}), &[]),
+            t("xrefs", "Every call/jp/jr/rst/ld-immediate reference to a location across the whole ROM (bank-aware, cached index), with the referencing instruction, including far calls through declared conventions (farcall_set) and entries of declared jumptable/pointers tables. For a RAM address, the insn shows reads (LD A, [nn]) vs writes (LD [nn], A) vs pointer loads (LD HL, nn). A ref flagged unreached comes from bytes no path from the vectors, code labels or declared tables reaches (often data decoded as code). \"inside\" names the routine a mid-function target belongs to. Example: {\"target\": \"00:1A2B\"} (\"addr\" works too).",
+              json!({"target": loc(addr), "addr": loc("Same as target"), "kind": json!({"type": ["string", "array"], "items": str_items, "description": "Filter: call|jp|jr|rst|ld|far|table|word (or a list)"}),
+                     "reached_only": bo("Drop refs flagged unreached"), "words": bo("Also list every little-endian 16-bit occurrence of the address that is not an instruction operand already listed (kind word; pointers in undeclared tables), in banks"),
+                     "banks": json!({"type": "string", "description": "words: banks to scan, \"05\" or \"02-05\" (hex); default all"}), "limit": int("Max results (default 200)")}), &[]),
+            t("find_bytes", "Search the ROM for a byte pattern with wildcards: ?? any byte, ? any nibble. Example: {\"pattern\": \"3E ?? CD\"} (LD A, n then a CALL), {\"pattern\": \"21 ?? 4?\"}. insn_start keeps only hits where an instruction starts (not inside another one's operand).",
+              json!({"pattern": st("Hex bytes; ? = any nibble, ?? = any byte"), "banks": banks.clone(), "insn_start": bo("Only hits at the start of an instruction of the linear sweep"), "limit": int("Max hits (default 100)")}), &["pattern"]),
+            t("find_immediate", "Find instructions with a given immediate (n8 or n16), optionally by mnemonic prefix, at instruction starts only. Example: {\"value\": \"3C\", \"mnemonic\": \"cp\"} finds every CP A, $3C; {\"value\": \"A1\", \"mnemonic\": \"ldh\"} every LDH [$FFA1], A / LDH A, [$FFA1].",
+              json!({"value": hx("The immediate value"), "mnemonic": st("Text prefix, spaces ignored: \"cp\", \"ld a\", \"ld hl\", \"ldh [\""), "banks": banks.clone(), "limit": int("Max hits (default 100)")}), &["value"]),
             t("function_bounds", "Explore one function from its entry (following local branches until RET/JP or an illegal opcode): extent, callees (incl. far calls and tail jumps), exits, JP HL jump tables, illegal opcodes reached.",
               json!({"addr": loc(addr)}), &["addr"]),
             t("table_entries", "List a table of little-endian 16-bit pointers with each target's label: a declared jumptable/pointers label, or any ROM address with \"entries\". Example: {\"addr\": \"01:5000\", \"entries\": 6}.",
-              json!({"addr": loc(addr), "entries": int("Entry count (default: the label's)"), "target_bank": int("Bank of targets in $4000-$7FFF (default: the label's, else the table's own bank; from bank 0 the bank is unknown, shown ??)")}), &["addr"]),
+              json!({"addr": loc(addr), "entries": int("Entry count (default: the label's)"), "target_bank": hx("Bank of targets in $4000-$7FFF (default: the label's, else the table's own bank; from bank 0 the bank is unknown, shown ??)")}), &["addr"]),
+            t("records", "Decode a list of fixed-layout records in ROM, up to a terminator byte: fields b (byte) and w (16-bit pointer, shown with its target's label). Example: {\"addr\": \"05:4000\", \"fields\": [\"b\", \"w\"], \"terminator\": \"00\"} for a list of (byte, pointer) records ended by $00. \"bytes\" is the size to declare with label_set kind data.",
+              json!({"addr": loc(addr), "fields": list("Record layout, in order: b | w", json!({"type": "string", "enum": ["b", "w"]})), "terminator": hx("A record starting with this byte ends the list (consumed)"),
+                     "count": int("Max records (default 256, max 4096)"), "target_bank": hx("Bank of pointers into $4000-$7FFF (default: the list's bank)")}), &["addr", "fields"]),
             t("callgraph", "Callees of a function, recursively to a depth (bank-aware; far-call conventions honoured; a declared jumptable loaded with LD rr, Table adds its entries).",
               json!({"addr": loc(addr), "depth": int("Levels (default 2, max 8)")}), &["addr"]),
             t("text_decode", "Decode text with a .tbl charmap (the DB's, or \"charmap\"). Example: {\"addr\": \"0A:5000\", \"terminator\": \"FF\"}.",
-              json!({"addr": loc(addr), "len": int("Max bytes (default 256, 1024 with a terminator)"), "terminator": int("Stop after this byte"), "charmap": st("Path of a .tbl file (overrides the DB's)")}), &["addr"]),
-            t("label_set", "Name a location in the shared knowledge DB (seen by every agent). A name already used elsewhere moves here. Example: {\"addr\": \"00:1A2B\", \"name\": \"Memcpy\", \"comment\": \"copy BC bytes from HL to DE\"}, a sized table {\"addr\": \"01:5000\", \"name\": \"Sines\", \"kind\": \"data\", \"size\": 64}, a jump table {\"addr\": \"01:5100\", \"name\": \"StateTable\", \"kind\": \"jumptable\", \"entries\": 6}, or {\"labels\": [{\"addr\": .., \"name\": ..}, ...]}.",
+              json!({"addr": loc(addr), "len": int("Max bytes (default 256, 1024 with a terminator)"), "terminator": hx("Stop after this byte"), "charmap": st("Path of a .tbl file (overrides the DB's)")}), &["addr"]),
+            t("label_set", "Name a location in the shared knowledge DB (seen by every agent). A name already used elsewhere moves here. The result lists what it replaced (another name, a comment: use append to keep it) and warns when a code label falls inside an instruction. Example: {\"addr\": \"00:1A2B\", \"name\": \"Memcpy\", \"comment\": \"copy BC bytes from HL to DE\"}, a sized table {\"addr\": \"01:5000\", \"name\": \"Sines\", \"kind\": \"data\", \"size\": 64}, a jump table {\"addr\": \"01:5100\", \"name\": \"StateTable\", \"kind\": \"jumptable\", \"entries\": 6}, or {\"labels\": [{\"addr\": .., \"name\": ..}, ...]}.",
               json!({"addr": loc("\"BB:AAAA\" (bank required in $4000-$7FFF / $D000-$DFFF)"), "name": st("Label name (no spaces, not a hex number)"),
                      "kind": st("code | data | ram | jumptable | pointers (default: code in ROM, ram elsewhere). Non-code regions are skipped by the xref sweep: for their size, else up to the next label. jumptable/pointers: 16-bit LE entries, each a reference from the table (xrefs kind table); jumptable entries are also callees"),
                      "size": int("Bytes the region takes: the sweep resumes code right after it (default for tables: entries * 2)"),
                      "entries": int("jumptable/pointers: number of 16-bit entries"),
-                     "target_bank": int("jumptable/pointers: ROM bank of entries in $4000-$7FFF (default: the table's bank; from bank 0 the bank is unknown)"),
-                     "comment": st("Optional comment"), "labels": list("Batch: [{addr, name, kind?, size?, entries?, target_bank?, comment?}]", obj_items.clone())}), &[]),
+                     "target_bank": hx("jumptable/pointers: ROM bank of entries in $4000-$7FFF (default: the table's bank; from bank 0 the bank is unknown)"),
+                     "comment": st("Optional comment"), "append": bo("Append the comment to the one already there (\" | \") instead of replacing it"),
+                     "labels": list("Batch: [{addr, name, kind?, size?, entries?, target_bank?, comment?, append?}]", obj_items.clone())}), &[]),
             t("label_delete", "Remove the label at a location.", json!({"addr": loc(addr)}), &["addr"]),
             t("label_search", "Search labels by substring (case-insensitive) or regex. Example: {\"query\": \"^Mem\", \"regex\": true}. With near: the labels at or before a location (nearest first, with offset) and the next one after, in its bank and region: {\"near\": \"02:4F10\", \"kind\": \"code\"} answers which routine contains it.",
               json!({"query": st("Substring or regex; empty lists all"), "regex": bo("Treat query as a regex"), "kind": st("code|data|ram|jumptable|pointers"), "in_comments": bo("Also search comments"), "near": loc("A location: return the labels around it instead (limit: how many before, default 1)"), "limit": int("Max results (default 200; 1 with near)")}), &[]),
-            t("comment_set", "Attach a comment to a location (shown in disasm). Empty text removes it.",
-              json!({"addr": loc(addr), "text": st("Comment")}), &["addr"]),
-            t("farcall_set", "Declare a far-call convention so xrefs/disasm/callgraph/function_bounds resolve cross-bank calls. inline: {\"name\": \"farcall\", \"via\": \"00:0008\", \"kind\": \"inline\", \"layout\": [\"bank\", \"lo\", \"hi\"]} (a CALL/RST to via is followed by those bytes, skipped by the sweep). A fixed bank instead of a bank byte: {\"name\": \"fixedcall\", \"via\": \"00:0010\", \"kind\": \"inline\", \"layout\": [\"lo\", \"hi\"], \"bank\": \"02\"}. regs: {\"name\": \"bankcall\", \"via\": \"00:1234\", \"kind\": \"regs\", \"bank_reg\": \"a\", \"addr_reg\": \"hl\"} (ld a,bank ; ld hl,addr ; call via; registers known only from immediates, copies and xor a since the last call/unconditional jump/label).",
-              json!({"name": st("Convention name"), "via": loc("The trampoline routine"), "kind": st("inline | regs"), "layout": list("inline: order of the inline bytes, items bank|lo|hi|skip (bank left out when \"bank\" is given)", json!({"type": "string", "enum": ["bank", "lo", "hi", "skip"]})), "bank": int("A fixed target bank (hex string or number) for conventions that don't pass one (not with bank_reg)"), "bank_reg": st("regs: a|b|c|d|e|h|l (default a)"), "addr_reg": st("regs: bc|de|hl (default hl)")}), &["name", "via", "kind"]),
+            t("comment_set", "Attach a comment to a location (shown in disasm). Empty text removes it. The result shows the comment it replaced; append keeps it.",
+              json!({"addr": loc(addr), "text": st("Comment"), "append": bo("Append to the comment already there (\" | \")")}), &["addr"]),
+            t("farcall_set", "Declare a far-call convention so xrefs/disasm/callgraph/function_bounds resolve cross-bank calls. inline: {\"name\": \"farcall\", \"via\": \"00:0008\", \"kind\": \"inline\", \"layout\": [\"bank\", \"lo\", \"hi\"]} (a CALL/RST to via is followed by those bytes, skipped by the sweep). A fixed bank instead of a bank byte: {\"name\": \"fixedcall\", \"via\": \"00:0010\", \"kind\": \"inline\", \"layout\": [\"lo\", \"hi\"], \"bank\": \"02\"}. regs: {\"name\": \"bankcall\", \"via\": \"00:1234\", \"kind\": \"regs\", \"bank_reg\": \"a\", \"addr_reg\": \"hl\"} (ld a,bank ; ld hl,addr ; call via; registers known only from immediates, copies and xor a since the last call/unconditional jump/label). switch: {\"name\": \"bankswitch\", \"via\": \"00:1234\", \"kind\": \"switch\", \"bank_reg\": \"a\"}, a routine that maps the bank in bank_reg: bank-0 calls/jumps into $4000-$7FFF after it (until a label or an unconditional jump/return) resolve to that bank (as after ld [$2000], a with a known A).",
+              json!({"name": st("Convention name"), "via": loc("The trampoline routine"), "kind": st("inline | regs | switch"), "layout": list("inline: order of the inline bytes, items bank|lo|hi|skip (bank left out when \"bank\" is given)", json!({"type": "string", "enum": ["bank", "lo", "hi", "skip"]})), "bank": hx("A fixed target bank for conventions that don't pass one (not with bank_reg)"), "bank_reg": st("regs/switch: a|b|c|d|e|h|l (default a)"), "addr_reg": st("regs: bc|de|hl (default hl)")}), &["name", "via", "kind"]),
             t("farcall_delete", "Remove a far-call convention.", json!({"name": st("Convention name")}), &["name"]),
             t("charmap_set", "Set the .tbl charmap file used by text_decode (\"\" clears). The file stays wherever the user keeps it.",
               json!({"path": st("Path of the .tbl file")}), &["path"]),
-            t("db_dump", "The knowledge DB entry for the open ROM (all: the whole file).", json!({"all": bo("Every ROM in the file")}), &[]),
+            t("db_dump", "The knowledge DB entry for the open ROM (all: the whole file). It can be large: sections, banks, range, offset and limit return part of it (with \"counts\" of the matching labels/comments). Example: {\"sections\": [\"far_calls\"]}, {\"banks\": \"02\", \"range\": \"4000-4FFF\"}.",
+              json!({"all": bo("Every ROM in the file (no filters)"), "sections": list("Only these: labels | comments | far_calls | charmap", str_items.clone()),
+                     "banks": json!({"type": "string", "description": "Labels/comments in these banks: \"02\" or \"02-05\" (hex)"}), "range": st("Labels/comments in this address range, \"AAAA-BBBB\" (hex, inclusive)"),
+                     "offset": int("Skip this many matching labels (and comments)"), "limit": int("At most this many labels (and comments)")}), &[]),
             t("emu_boot", "Power on a fresh session (post-boot state, boot ROM skipped) and run frames with an input script.",
               json!({"frames": int("Frames to run (default 0, max 10800)"), "inputs": inputs.clone()}), &[]),
-            t("run", "Run frames with an input script; stops early at a breakpoint or watchpoint (reports pc, bank, caller).",
-              json!({"frames": int("Frames (default 60, max 10800)"), "inputs": inputs}), &[]),
+            t("run", "Run frames with an input script; stops early at a breakpoint or watchpoint (reports pc, bank, and caller: the nearest return address on the stack). stubs force a routine's result while the game runs. total_frames counts every frame this session ran since emu_boot (slot loads don't change it).",
+              json!({"frames": int("Frames (default 60, max 10800)"), "inputs": inputs.clone(),
+                     "stubs": list("[{\"addr\": .., \"regs\": {..}}]: whenever addr is reached, emulate RET then set regs (stub_hits counts them)", obj_items.clone())}), &[]),
             t("step", "Single-step instructions; stops at a breakpoint or after an instruction that reads/writes a watchpoint (as run does). A step that dispatches an interrupt runs the handler's first instruction (logged \"(interrupt)\").",
               json!({"count": int("Instructions (default 1, max 10000000)")}), &[]),
             t("input", "Press buttons for `hold` frames, then run `after` more frames.",
               json!({"buttons": json!({"type": ["string", "array"], "items": str_items, "description": "\"a\", \"start\", \"a+b\" or [\"up\", \"a\"]"}), "hold": int("Frames held (default 5)"), "after": int("Frames after release (default 0; hold + after at most 10800)")}), &["buttons"]),
-            t("call_routine", "Call one routine: push a sentinel return address, jump, step the whole machine (VBlank waits and interrupts complete) until it returns; on return PC and SP go back to where the session was. Example: {\"addr\": \"00:1A2B\", \"regs\": {\"a\": 2}, \"stubs\": [{\"addr\": \"00:1A40\", \"regs\": {\"a\": \"FF\"}}]}.",
+            t("call_routine", "Call one routine: push a sentinel return address, jump, step the whole machine (VBlank waits and interrupts complete) until it returns; on return PC and SP go back to where the session was. A call that stops early (breakpoint, max_steps) can be resumed with {\"continue\": true} and new stubs/regs/writes. Example: {\"addr\": \"00:1A2B\", \"regs\": {\"a\": 2}, \"stubs\": [{\"addr\": \"00:1A40\", \"regs\": {\"a\": \"FF\"}, \"log\": true}]}.",
               json!({
-                  "addr": loc("Routine entry"), "from_slot": st("Restore this state slot first (isolated calls)"),
+                  "addr": loc("Routine entry"), "continue": bo("Resume the call_routine that stopped before returning, from where it stopped (no addr)"),
+                  "from_slot": st("Restore this state slot first (isolated calls)"),
                   "regs": obj("{\"a\": .., \"bc\": .., \"sp\": .., \"flags\": {\"z\": true}, \"ime\": false}"),
                   "writes": list("[{\"addr\": \"C000\", \"bytes\": \"01 02\"}] applied before the call", obj_items.clone()),
-                  "stubs": list("[{\"addr\": .., \"regs\": {..}}]: on reaching addr, emulate RET then set regs", obj_items.clone()),
+                  "stubs": list("[{\"addr\": .., \"regs\": {..}, \"log\": true}]: on reaching addr, emulate RET then set regs; stub_counts counts hits per stub, log records a, f, bc, de, hl and the caller at each hit (stub_log, up to 256)", obj_items.clone()),
                   "forces": list("[{\"addr\": .., \"bytes\": ..}]: rewritten before every instruction (pins a variable)", obj_items.clone()),
-                  "breakpoints": list("Locations to stop at", json!({"type": ["string", "integer"]})),
+                  "breakpoints": list("Locations to stop at", str_items.clone()),
+                  "inputs": list("Buttons held during the call: [\"frame:button[+button][:hold]\"], frames counted in VBlanks since the call started", str_items.clone()),
                   "watch": list("[{\"addr\": .., \"len\": n}]: log value changes with pc (len up to 4096)", obj_items.clone()),
                   "dumps": list("[{\"addr\": .., \"len\": n}] read after the call (len up to 65536)", obj_items),
-                  "max_steps": int("Default 5000000, max 50000000"), "trace": json!({"type": ["boolean", "integer"], "description": "Log calls/rst/irq/stub hits/bank switches (true or a cap)"}),
-                  "trace_steps": int("Also log the first N instructions"), "ime": json!({"type": ["boolean", "integer"], "description": "Override IME"}), "rom_bank": int("Map this ROM bank first"),
-                  "svbk": int("Write SVBK ($FF70) first"), "sentinel": int("Return address used (default FEFF)"),
-              }), &["addr"]),
+                  "max_steps": int("Default 5000000, max 50000000"), "trace": json!({"type": ["boolean", "integer"], "description": "Log calls/rst/irq/stub hits/bank switches (true or a cap, default 2000 entries)"}),
+                  "trace_kinds": list("Trace only these kinds: call rst irq stub bank jp_hl", str_items.clone()),
+                  "trace_summary": bo("Instead of the trace list, count trace entries per kind and target (\"call 00:1234 Foo\": n)"),
+                  "trace_steps": int("Also log the first N instructions"), "ime": json!({"type": ["boolean", "integer"], "description": "Override IME"}), "rom_bank": hx("Map this ROM bank first"),
+                  "svbk": hx("Write SVBK ($FF70) first"), "sentinel": hx("Return address used (default FEFF)"),
+              }), &[]),
             t("mem_read", "Read memory (live session; ROM reads work without one). \"BB:AAAA\" reads that ROM or WRAM bank without remapping; \"vram1:8000\" a VRAM bank and \"sram2:A000\" a cartridge RAM bank (hex), whatever is mapped and enabled.",
               json!({"addr": loc(addr), "len": int("Bytes (default 16)")}), &["addr"]),
             t("mem_write", "Write memory in the session (ROM-area writes reach the MBC registers). \"BB:DXXX\" writes that WRAM bank, \"vram1:8000\" / \"sram2:A000\" that VRAM / cartridge RAM bank.",
-              json!({"addr": loc(addr), "bytes": json!({"type": ["string", "array", "integer"], "items": {"type": ["integer", "string"]}, "description": "\"01 02 FF\" or [1, 2, \"FF\"]"})}), &["addr", "bytes"]),
+              json!({"addr": loc(addr), "bytes": json!({"type": ["string", "array"], "items": {"type": "string"}, "description": "Hex: \"11\", \"01 02 FF\", \"0102FF\", \"$11\", \"0x11, 0x22\" or [\"01\", \"FF\"]"})}), &["addr", "bytes"]),
             t("regs_get", "CPU registers, flags, IME, ROM/WRAM banks, pc and stack top with labels.", json!({}), &[]),
             t("regs_set", "Set registers.", json!({"regs": obj("{\"a\": \"12\", \"hl\": \"C000\", \"pc\": \"0150\", \"flags\": {\"c\": true}}")}), &["regs"]),
             t("state_save", "Save the session into a named in-memory slot.", json!({"slot": st("Slot name (default \"default\")")}), &[]),
@@ -820,10 +1033,11 @@ fn tools() -> &'static Vec<Value> {
               json!({"path": st("File path"), "slot": st("Export this slot instead of the session")}), &["path"]),
             t("state_import", "Load a save-state file into the session (or into a slot).",
               json!({"path": st("File path"), "slot": st("Import into this slot instead")}), &["path"]),
-            t("breakpoint_set", "Stop run/step before the instruction at a location (bank-aware).", json!({"addr": loc(addr)}), &["addr"]),
+            t("breakpoint_set", "Stop run/step before the instruction at a location (bank-aware), when the registers in `when` hold those values. Setting it again replaces its condition. Example: {\"addr\": \"00:1A2B\", \"when\": {\"a\": \"05\", \"flags\": {\"c\": true}}}.",
+              json!({"addr": loc(addr), "when": obj("Registers (a f b c d e h l af bc de hl sp, hex strings) and flags {\"z\": true, ...} that must match")}), &["addr"]),
             t("breakpoint_clear", "Remove a breakpoint (no addr: all).", json!({"addr": loc(addr)}), &[]),
             t("watchpoint_set", "Stop run/step when the CPU reads/writes a range; reports value, pc+bank and caller. \"BB:AAAA\" / \"vram1:8000\" fire only while that bank is mapped.",
-              json!({"addr": loc(addr), "len": int("Bytes (default 1)"), "kind": st("read | write | access (default write)")}), &["addr"]),
+              json!({"addr": loc(addr), "len": int("Bytes (default 1)"), "kind": st("read | write | access (default write)"), "value": hx("Fire only for an access of this byte value")}), &["addr"]),
             t("watchpoint_clear", "Remove watchpoints starting at addr, in that bank when given (no addr: all).", json!({"addr": loc(addr)}), &[]),
             t("screenshot", "The current screen as a PNG image.", json!({"scale": int("1-8 (default 2)")}), &[]),
         ]

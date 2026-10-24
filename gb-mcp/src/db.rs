@@ -227,16 +227,19 @@ pub enum Conv {
     Inline { name: String, via: (u16, u16), layout: Vec<u8>, bank: Option<u16> },
     /// bank_reg: B C D E H L - A as 0-7; addr_pair: 0 BC, 1 DE, 2 HL; `bank`: fixed, instead of bank_reg
     Regs { name: String, via: (u16, u16), bank_reg: usize, addr_pair: usize, bank: Option<u16> },
+    /// A bank-switch routine: maps the bank in `bank_reg` (or the fixed `bank`) at $4000-$7FFF,
+    /// so the bank-0 calls and jumps into $4000-$7FFF that follow it resolve to that bank.
+    Switch { name: String, via: (u16, u16), bank_reg: usize, bank: Option<u16> },
 }
 impl Conv {
     pub fn name(&self) -> &str {
         match self {
-            Conv::Inline { name, .. } | Conv::Regs { name, .. } => name,
+            Conv::Inline { name, .. } | Conv::Regs { name, .. } | Conv::Switch { name, .. } => name,
         }
     }
     pub fn via(&self) -> (u16, u16) {
         match self {
-            Conv::Inline { via, .. } | Conv::Regs { via, .. } => *via,
+            Conv::Inline { via, .. } | Conv::Regs { via, .. } | Conv::Switch { via, .. } => *via,
         }
     }
 }
@@ -265,7 +268,7 @@ pub fn conv(f: &FarCall) -> R<Conv> {
             }
             Ok(Conv::Inline { name: f.name.clone(), via, layout, bank })
         }
-        "regs" => {
+        "regs" | "switch" => {
             let r = f.bank_reg.as_deref().unwrap_or("a").to_ascii_lowercase();
             let bank_reg = ["b", "c", "d", "e", "h", "l", "", "a"].iter().position(|x| !x.is_empty() && *x == r)
                 .ok_or(format!("far call {:?}: bank_reg {r:?} (want a|b|c|d|e|h|l)", f.name))?;
@@ -275,9 +278,12 @@ pub fn conv(f: &FarCall) -> R<Conv> {
             if bank.is_some() && f.bank_reg.is_some() {
                 return Err(format!("far call {:?}: give a fixed \"bank\" or a \"bank_reg\", not both", f.name));
             }
+            if f.kind == "switch" {
+                return Ok(Conv::Switch { name: f.name.clone(), via, bank_reg, bank });
+            }
             Ok(Conv::Regs { name: f.name.clone(), via, bank_reg, addr_pair, bank })
         }
-        o => Err(format!("far call {:?}: kind {o:?} (want inline|regs)", f.name)),
+        o => Err(format!("far call {:?}: kind {o:?} (want inline|regs|switch)", f.name)),
     }
 }
 
@@ -300,6 +306,9 @@ pub struct View {
     pub charmap: Option<String>,
     /// The open ROM's bank count, to refuse "BB:AAAA" in a bank that doesn't exist (0: unchecked).
     pub rom_banks: u16,
+    /// Where the function at each unsized code label ends (exclusive, as `function_bounds`
+    /// finds it): past it, an address is no longer shown as "Label+$off".
+    pub ends: HashMap<(u16, u16), u32>,
 }
 
 impl View {
@@ -318,7 +327,8 @@ impl View {
     }
 
     /// The label at this location, or the nearest one before it in the same bank as
-    /// "name+$off" (up to $100 bytes past it, and within its size when it has one).
+    /// "name+$off": within its size when it has one, within its function for a code label whose
+    /// extent is known, else up to $100 bytes past it.
     pub fn name(&self, bank: u16, addr: u16) -> Option<String> {
         let ((b, a), l) = self.labels.range(..=(bank, addr)).next_back()?;
         if *b != bank {
@@ -326,8 +336,14 @@ impl View {
         }
         let off = addr - a;
         let same_region = (*a < 0x4000) == (addr < 0x4000) && (*a < 0x8000) == (addr < 0x8000);
-        // Past a sized region (a table), the bytes are no longer part of it.
-        if off > 0x100 || !same_region || l.size().is_some_and(|n| off as u32 >= n) {
+        let end = match (l.size(), self.ends.get(&(*b, *a))) {
+            // Past a sized region (a table), the bytes are no longer part of it.
+            (Some(n), _) => *a as u32 + n,
+            // Past the function's last instruction, another routine (or data) starts.
+            (None, Some(&e)) if l.kind == "code" => e.max(*a as u32 + 1),
+            _ => *a as u32 + 0x101,
+        };
+        if !same_region || addr as u32 >= end {
             return None;
         }
         Some(if off == 0 { l.name.clone() } else { format!("{}+${off:X}", l.name) })
@@ -376,6 +392,9 @@ impl View {
             return Ok((Some(0), a));
         }
         let Some(b) = b else { return Ok((None, a)) };
+        if b == 0 && a < 0x8000 {
+            return Err(format!("{v}: bank 00 is the fixed $0000-$3FFF; $4000-$7FFF holds a switchable bank (01 and up): give that bank, or a plain address for the bank mapped now"));
+        }
         let (what, n) = if a < 0x8000 { ("ROM", self.rom_banks as u32) } else { ("WRAM", 8) };
         if n > 0 && b >= n {
             return Err(format!("{v}: no {what} bank {b:02X} (banks 00-{:02X})", n - 1));

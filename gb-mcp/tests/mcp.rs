@@ -170,11 +170,12 @@ fn xrefs_and_far_call_conventions() {
     let x = ok(&mut s, "xrefs", json!({"target": "02:4005"}));
     let refs = x["refs"].as_array().unwrap();
     assert_eq!(x["count"], 3, "{x}");
-    assert!(refs.contains(&json!({"from": "00:0200", "kind": "far:farcall", "insn": "RST $08"})), "{x}");
-    assert!(refs.contains(&json!({"from": "02:4000", "kind": "call", "insn": "CALL Helper"})), "{x}");
-    assert!(refs.contains(&json!({"from": "00:020C", "kind": "call", "ambiguous_bank": true, "insn": "CALL $4005"})), "{x}");
+    // Nothing reaches these routines from the vectors or a code label: flagged unreached.
+    assert!(refs.contains(&json!({"from": "00:0200", "kind": "far:farcall", "insn": "RST $08", "unreached": true})), "{x}");
+    assert!(refs.contains(&json!({"from": "02:4000", "kind": "call", "insn": "CALL Helper", "unreached": true})), "{x}");
+    assert!(refs.contains(&json!({"from": "00:020C", "kind": "call", "ambiguous_bank": true, "insn": "CALL $4005", "unreached": true})), "{x}");
     let x = ok(&mut s, "xrefs", json!({"target": "03:4000", "kind": "far"}));
-    assert_eq!(x["refs"], json!([{"from": "00:0209", "kind": "far:bankcall", "insn": "CALL $0280"}]), "{x}");
+    assert_eq!(x["refs"], json!([{"from": "00:0209", "kind": "far:bankcall", "insn": "CALL $0280", "unreached": true}]), "{x}");
     // Not visible from the other bank.
     assert_eq!(ok(&mut s, "xrefs", json!({"target": "01:4005"}))["count"], 1, "only the ambiguous bank-0 call");
     // The inline bytes are consumed by the disassembler, and annotated.
@@ -186,12 +187,13 @@ fn xrefs_and_far_call_conventions() {
     assert!(root.as_array().unwrap().contains(&json!("02:4005 Helper (far:farcall)")), "{g}");
     assert!(root.as_array().unwrap().contains(&json!("03:4000 (far:bankcall)")), "{g}");
     assert_eq!(g["unresolved_bank_callees"], 1);
-    // Plain call targets are found too.
+    // Plain call targets are found too; a code label makes its routine reached.
+    ok(&mut s, "label_set", json!({"addr": "00:0320", "name": "Caller"}));
     let x = ok(&mut s, "xrefs", json!({"target": "00:0340"}));
-    assert_eq!(x["refs"], json!([{"from": "00:0320", "kind": "call", "insn": "CALL $0340"}]));
+    assert_eq!(x["refs"], json!([{"from": "00:0320 Caller", "kind": "call", "insn": "CALL $0340"}]));
     let f = ok(&mut s, "function_bounds", json!({"addr": "00:0320"}));
     assert_eq!(f["callees"][0]["to"], "00:0340");
-    assert_eq!(f["exits"], json!(["00:032B"]));
+    assert_eq!(f["exits"], json!(["00:032B Caller+$B"]));
     assert_eq!(f["bytes"], 12);
 }
 
@@ -491,7 +493,8 @@ fn fixed_bank_inline_far_calls() {
     ok(&mut s, "farcall_set", json!({"name": "fixedcall", "via": "00:0010", "kind": "inline", "layout": ["lo", "hi"], "bank": "01"}));
     ok(&mut s, "label_set", json!({"addr": "01:4005", "name": "Target"}));
     let x = ok(&mut s, "xrefs", json!({"target": "Target", "kind": "far"}));
-    assert_eq!(froms(&x), ["00:0600 far:fixedcall", "01:4100 Target+$FB far:fixedcall"], "{x}");
+    // 01:4100 is past Target's RET: not shown as Target+$FB.
+    assert_eq!(froms(&x), ["00:0600 far:fixedcall", "01:4100 far:fixedcall"], "{x}");
     // The inline word is skipped, and the target shown with its label.
     let l = ok(&mut s, "disasm", json!({"addr": "00:0600", "count": 2}));
     assert_eq!(l, json!(["00:0600  D70540     RST $10  ; far:fixedcall -> 01:4005 Target", "00:0603  3E01       LD A, $01"]));
@@ -561,7 +564,7 @@ fn jump_and_pointer_tables_are_references() {
     let to: Vec<&str> = f["callees"].as_array().unwrap().iter().map(|c| c["to"].as_str().unwrap()).collect();
     assert_eq!(to, ["01:4420 StateA", "01:4430"], "{f}");
     let t = ok(&mut s, "table_entries", json!({"addr": "States"}));
-    assert_eq!(t["entries"], json!([{"at": "01:4410 States", "to": "01:4420 StateA"}, {"at": "01:4412 States+$2", "to": "01:4430 StateA+$10"}]));
+    assert_eq!(t["entries"], json!([{"at": "01:4410 States", "to": "01:4420 StateA"}, {"at": "01:4412 States+$2", "to": "01:4430"}]), "past StateA's RET");
     let t = ok(&mut s, "table_entries", json!({"addr": "00:0700", "entries": 1, "target_bank": null}));
     assert_eq!(t["entries"][0]["to"], "03:4000", "the declared bank applies");
     let t = ok(&mut s, "table_entries", json!({"addr": "01:4410", "entries": 1, "target_bank": 2}));
@@ -707,4 +710,257 @@ fn second_review_emulation_regressions() {
     ok(&mut s, "call_routine", json!({"addr": "00:0300", "rom_bank": "05"}));
     assert!(call(&mut s, "call_routine", json!({"addr": "00:0300", "rom_bank": "20"})).is_err());
     assert_eq!(ok(&mut s, "regs_get", json!({}))["rom_bank"], "05");
+}
+
+/// A ROM for the field-feedback tests (MBC5, 4 banks). The main loop calls $0160.
+fn field_rom() -> PathBuf {
+    rom(0x19, 4, &[
+        // $0150: call $0160 ; ld [$C010],a ; jr $0150 ; $0160: ld a,$01 ; ret
+        (0x0150, &[0xCD, 0x60, 0x01, 0xEA, 0x10, 0xC0, 0x18, 0xF8]),
+        (0x0160, &[0x3E, 0x01, 0xC9]),
+        (0x0280, &[0xC9]), // a bank-switch routine (bank in A)
+        // $0900: ld a,$02 ; ld [$2000],a ; call $4005 ; ret
+        (0x0900, &[0x3E, 0x02, 0xEA, 0x00, 0x20, 0xCD, 0x05, 0x40, 0xC9]),
+        // $0910: ld a,$03 ; call $0280 ; call $4000 ; ret
+        (0x0910, &[0x3E, 0x03, 0xCD, 0x80, 0x02, 0xCD, 0x00, 0x40, 0xC9]),
+        (0x0920, &[0xCD, 0x05, 0x40, 0xC9]), // call $4005 (bank unknown) ; ret
+        // $0A00: 10 data bytes, then ret ; $0A10: two pointers ($0C00, $0920)
+        (0x0A00, &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0xC9]),
+        (0x0A10, &[0x00, 0x0C, 0x20, 0x09]),
+        (0x0B00, &[0x21, 0xAF, 0xC9]), // ld hl,$C9AF (or, from $0B01: xor a ; ret)
+        // $0C00: jr z,$0C05 ; jp $0150 ; $0C05: ret
+        (0x0C00, &[0x28, 0x03, 0xC3, 0x50, 0x01, 0xC9]),
+        // $0D00: records (byte, pointer) ended by $00: (01, $0C00), (02, $0905)
+        (0x0D00, &[0x01, 0x00, 0x0C, 0x02, 0x05, 0x09, 0x00]),
+        // $0E00: call $0E10 ; ld a,$05 ; ret ; $0E10: ret
+        (0x0E00, &[0xCD, 0x10, 0x0E, 0x3E, 0x05, 0xC9]),
+        (0x0E10, &[0xC9]),
+        // $0F00: wait for A: ld a,$10 ; ldh [$00],a ; ldh a,[$00] ; bit 0,a ; jr nz,$0F00 ; ret
+        (0x0F00, &[0x3E, 0x10, 0xE0, 0x00, 0xF0, 0x00, 0xCB, 0x47, 0x20, 0xF6, 0xC9]),
+        (bank(2, 0x4005), &[0xC9]),
+        // bank 2 $4100: ld a,$01 ; ld [$2000],a (maps bank 1 back, and runs on into it)
+        (bank(2, 0x4100), &[0x3E, 0x01, 0xEA, 0x00, 0x20]),
+        (bank(3, 0x4000), &[0xC9]),
+    ])
+}
+
+fn lines(v: &Value) -> Vec<String> {
+    v.as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect()
+}
+
+#[test]
+fn bank_switches_resolve_bank0_calls() {
+    let (mut s, _) = server();
+    open(&mut s, &field_rom());
+    // ld [$2000], a with a known A maps that bank for the calls after it.
+    let x = ok(&mut s, "xrefs", json!({"target": "02:4005", "kind": "call"}));
+    let r = x["refs"].as_array().unwrap();
+    assert!(r.contains(&json!({"from": "00:0905", "kind": "call", "insn": "CALL $4005", "bank_assumed": true, "unreached": true})), "{x}");
+    assert!(r.iter().any(|e| e["from"] == "00:0920" && e["ambiguous_bank"] == true), "{x}");
+    // A declared switch routine does the same.
+    assert_eq!(ok(&mut s, "xrefs", json!({"target": "03:4000", "kind": "call"}))["refs"][0]["ambiguous_bank"], true);
+    ok(&mut s, "farcall_set", json!({"name": "bankswitch", "via": "00:0280", "kind": "switch"}));
+    let x = ok(&mut s, "xrefs", json!({"target": "03:4000", "kind": "call"}));
+    assert_eq!((froms(&x), x["refs"][0]["bank_assumed"].clone()), (vec!["00:0915 call".to_string()], json!(true)), "{x}");
+    ok(&mut s, "label_set", json!({"addr": "02:4005", "name": "Helper"}));
+    let d = lines(&ok(&mut s, "disasm", json!({"addrs": ["00:0905", "00:0920"], "count": 1}))[0]["lines"]);
+    assert_eq!(d, ["00:0905  CD0540     CALL $4005  ; ?? 02:4005 Helper"], "the switch is before the start");
+    let d = lines(&ok(&mut s, "disasm", json!({"addr": "00:0900", "count": 3})));
+    assert_eq!(d[2], "00:0905  CD0540     CALL Helper  ; bank 02 (switched above)");
+    // A bank-0 call with an unknown bank lists the labels at that address.
+    let d = lines(&ok(&mut s, "disasm", json!({"addr": "00:0920", "count": 1})));
+    assert_eq!(d, ["00:0920  CD0540     CALL $4005  ; ?? 02:4005 Helper"]);
+    // reached_only drops refs from code nothing reaches; a code label seeds the descent.
+    ok(&mut s, "label_set", json!({"addr": "00:0900", "name": "Switcher"}));
+    let x = ok(&mut s, "xrefs", json!({"target": "Helper", "reached_only": true}));
+    assert_eq!(froms(&x), ["00:0905 Switcher+$5 call"], "{x}");
+}
+
+#[test]
+fn bank0_is_not_a_switchable_bank() {
+    let (mut s, _) = server();
+    open(&mut s, &field_rom());
+    for (tool, args) in [("disasm", json!({"addr": "00:4005"})), ("breakpoint_set", json!({"addr": "00:6000"})),
+                         ("call_routine", json!({"addr": "00:0E00", "stubs": [{"addr": "00:4005"}]}))] {
+        let e = call(&mut s, tool, args.clone()).unwrap_err();
+        assert!(e.contains("bank 00"), "{tool} {args}: {e}");
+    }
+}
+
+#[test]
+fn disasm_data_tables_mid_labels_and_function_ends() {
+    let (mut s, _) = server();
+    open(&mut s, &field_rom());
+    ok(&mut s, "label_set", json!({"labels": [
+        {"addr": "00:0A00", "name": "Bytes", "kind": "data", "size": 10},
+        {"addr": "00:0A10", "name": "Ptrs", "kind": "jumptable", "entries": 2},
+        {"addr": "00:0C00", "name": "Branchy"},
+    ]}));
+    assert_eq!(lines(&ok(&mut s, "disasm", json!({"addr": "00:0A00", "count": 3}))), [
+        "Bytes:",
+        "00:0A00  0102030405060708 DB $01, $02, $03, $04, $05, $06, $07, $08",
+        "00:0A08  090A       DB $09, $0A",
+        "00:0A0A  C9         RET",
+    ]);
+    assert_eq!(lines(&ok(&mut s, "disasm", json!({"addr": "Ptrs", "count": 2}))), ["Ptrs:", "00:0A10  000C       DW Branchy", "00:0A12  2009       DW $0920"]);
+    // until_ret goes on past an unconditional jump that an earlier branch skips.
+    assert_eq!(lines(&ok(&mut s, "disasm", json!({"addr": "Branchy", "until_ret": true}))), [
+        "Branchy:", "00:0C00  2803       JR Z, $0C05", "00:0C02  C35001     JP $0150", "00:0C05  C9         RET",
+    ]);
+    // A data label alone ends an until_ret listing.
+    assert_eq!(ok(&mut s, "disasm", json!({"addr": "Bytes", "until_ret": true})).as_array().unwrap().len(), 3);
+    // A target inside a routine names it; past its end, no name.
+    let x = ok(&mut s, "xrefs", json!({"target": "00:0C05"}));
+    assert_eq!(x["inside"], "00:0C05 Branchy+$5", "{x}");
+    assert_eq!(ok(&mut s, "label_search", json!({"near": "00:0C05"}))["at"], "00:0C05 Branchy+$5");
+    assert_eq!(ok(&mut s, "mem_read", json!({"addr": "00:0C06"}))["addr"], "00:0C06");
+    // A code label inside an instruction: label_set warns, and disasm restarts there.
+    let before = ok(&mut s, "find_bytes", json!({"pattern": "AF C9", "insn_start": true}));
+    assert_eq!(before["count"], 0, "inside LD HL, $C9AF: {before}");
+    let r = ok(&mut s, "label_set", json!({"addr": "00:0B01", "name": "Mid"}));
+    assert!(r["warnings"][0].as_str().unwrap().contains("inside the instruction LD HL, $C9AF at 00:0B00"), "{r}");
+    let d = lines(&ok(&mut s, "disasm", json!({"addr": "00:0B00", "count": 3})));
+    assert_eq!(&d[..3], ["00:0B00  21         DB $21", "Mid:", "00:0B01  AF         XOR A, A"], "{d:?}");
+    assert_eq!(ok(&mut s, "find_bytes", json!({"pattern": "AF C9", "insn_start": true}))["hits"], json!(["00:0B01 Mid"]));
+}
+
+#[test]
+fn find_bytes_nibbles_records_and_words() {
+    let (mut s, _) = server();
+    open(&mut s, &field_rom());
+    let f = ok(&mut s, "find_bytes", json!({"pattern": "3E 0? EA", "banks": "00"}));
+    assert_eq!(f["hits"], json!(["00:0900"]), "{f}");
+    let f = ok(&mut s, "find_bytes", json!({"pattern": "?E 0?", "banks": "00"}));
+    assert!(f["hits"].as_array().unwrap().contains(&json!("00:0910")), "{f}");
+    assert!(call(&mut s, "find_bytes", json!({"pattern": "3G"})).unwrap_err().contains("3G"));
+    let r = ok(&mut s, "records", json!({"addr": "00:0D00", "fields": ["b", "w"], "terminator": "00"}));
+    assert_eq!(r["records"], json!([{"at": "00:0D00", "fields": ["01", "00:0C00"]}, {"at": "00:0D03", "fields": ["02", "00:0905"]}]), "{r}");
+    assert_eq!((r["bytes"].clone(), r["end"].clone(), r["terminated"].clone()), (json!(7), json!("00:0D07"), json!(true)));
+    // An undeclared pointer: an operand already listed (LD BC, $0C00) isn't repeated as a word...
+    let x = ok(&mut s, "xrefs", json!({"target": "00:0C00", "words": true}));
+    assert_eq!(froms(&x), ["00:0D00 ld", "00:0A10 word"], "{x}");
+    // ...and once the list is data, its pointer is a word in data.
+    ok(&mut s, "label_set", json!({"addr": "00:0D00", "name": "List", "kind": "data", "size": 7}));
+    let x = ok(&mut s, "xrefs", json!({"addr": "00:0C00", "words": true, "kind": "word"}));
+    assert!(x["refs"].as_array().unwrap().contains(&json!({"from": "00:0D01 List+$1", "kind": "word", "in": "data"})), "{x}");
+}
+
+#[test]
+fn arguments_hex_and_tool_discovery() {
+    let (mut s, _) = server();
+    // rom_info changes nothing and works before any ROM.
+    assert_eq!(ok(&mut s, "rom_info", json!({}))["open"], false);
+    let p = field_rom();
+    open(&mut s, &p);
+    assert_eq!(ok(&mut s, "rom_info", json!({}))["session"]["powered"], false);
+    // A misspelt key is named.
+    let e = call(&mut s, "function_bounds", json!({"adr": "00:0E00"})).unwrap_err();
+    assert!(e.contains("needs \"addr\"") && e.contains("\"adr\""), "{e}");
+    // Hex strings with prefixes, separators, or a single byte.
+    for (b, want) in [("0x11", "11"), ("$11, $22", "11 22"), ("11", "11"), ("0102 FF", "01 02 FF")] {
+        assert_eq!(ok(&mut s, "mem_write", json!({"addr": "C000", "bytes": b}))["now"], want, "{b}");
+    }
+    assert!(call(&mut s, "mem_write", json!({"addr": "C000", "bytes": "0x111"})).is_err());
+    // Opening the ROM already open keeps the session; reset starts over.
+    ok(&mut s, "run", json!({"frames": 3}));
+    let i = ok(&mut s, "rom_info", json!({}));
+    assert_eq!((i["session"]["powered"].clone(), i["session"]["frames"].clone()), (json!(true), json!(3)), "{i}");
+    assert_eq!(ok(&mut s, "rom_open", json!({"path": p}))["session"], "kept");
+    assert_eq!(ok(&mut s, "rom_info", json!({}))["session"]["frames"], 3);
+    assert_eq!(ok(&mut s, "rom_open", json!({"path": p, "reset": true}))["session"], "reset");
+    assert_eq!(ok(&mut s, "rom_info", json!({}))["session"]["powered"], false);
+    // Schemas type hex fields as strings, and the instructions name every tool.
+    let r = s.handle(&json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})).unwrap();
+    let tools = r["result"]["tools"].as_array().unwrap();
+    let prop = |t: &str, p: &str| tools.iter().find(|x| x["name"] == t).unwrap()["inputSchema"]["properties"][p]["type"].clone();
+    assert_eq!(prop("find_immediate", "value"), "string");
+    assert_eq!(prop("disasm", "addr"), "string");
+    assert_eq!(prop("mem_write", "bytes"), json!(["string", "array"]));
+    let i = s.handle(&json!({"jsonrpc": "2.0", "id": 2, "method": "initialize", "params": {}})).unwrap();
+    let text = i["result"]["instructions"].as_str().unwrap();
+    for t in tools {
+        assert!(text.contains(t["name"].as_str().unwrap()), "{}", t["name"]);
+    }
+}
+
+#[test]
+fn shared_db_edits_report_what_they_replace() {
+    let (mut s, _) = server();
+    open(&mut s, &field_rom());
+    ok(&mut s, "label_set", json!({"addr": "00:0C00", "name": "Foo", "comment": "one"}));
+    let r = ok(&mut s, "label_set", json!({"addr": "00:0C00", "name": "Bar", "comment": "two"}));
+    assert_eq!(r["replaced"], json!([{"addr": "00:0C00", "name": "Foo", "comment": "one"}]), "{r}");
+    let r = ok(&mut s, "label_set", json!({"addr": "00:0C00", "name": "Bar", "comment": "three", "append": true}));
+    assert!(r.get("replaced").is_none(), "{r}");
+    let r = ok(&mut s, "comment_set", json!({"addr": "00:0C00", "text": "four", "append": true}));
+    assert_eq!(r["comment"], "two | three | four");
+    assert_eq!(ok(&mut s, "comment_set", json!({"addr": "00:0C00", "text": "five"}))["replaced"], "two | three | four");
+    // db_dump in parts.
+    ok(&mut s, "farcall_set", json!({"name": "bankswitch", "via": "00:0280", "kind": "switch"}));
+    ok(&mut s, "label_set", json!({"labels": [{"addr": "02:4005", "name": "Helper"}, {"addr": "03:4000", "name": "Other"}]}));
+    let d = ok(&mut s, "db_dump", json!({"sections": ["far_calls"]}));
+    assert_eq!(d["knowledge"].as_object().unwrap().keys().collect::<Vec<_>>(), ["far_calls"]);
+    let d = ok(&mut s, "db_dump", json!({"banks": "02-03", "sections": ["labels"]}));
+    assert_eq!(d["counts"]["labels"], 2);
+    let d = ok(&mut s, "db_dump", json!({"banks": "02-03", "range": "4000-4000", "limit": 1}));
+    assert_eq!(d["knowledge"]["labels"], json!({"03:4000": {"name": "Other", "kind": "code"}}), "{d}");
+}
+
+#[test]
+fn call_routine_continue_inputs_stubs_and_traces() {
+    let (mut s, _) = server();
+    open(&mut s, &field_rom());
+    // Stop inside, then continue: the call returns and the session goes back where it was.
+    let pc = ok(&mut s, "regs_get", json!({}))["pc"].clone();
+    let r = ok(&mut s, "call_routine", json!({"addr": "00:0E00", "breakpoints": ["00:0E03"]}));
+    assert_eq!(r["stop_reason"], "breakpoint 00:0E03");
+    assert_eq!(ok(&mut s, "rom_info", json!({}))["session"]["call_stopped"], true);
+    let r = ok(&mut s, "call_routine", json!({"continue": true, "regs": {"b": "09"}}));
+    assert_eq!((r["stop_reason"].clone(), r["regs"]["a"].clone(), r["regs"]["pc"].clone()), (json!("returned"), json!("05"), pc), "{r}");
+    assert!(call(&mut s, "call_routine", json!({"continue": true})).unwrap_err().contains("no stopped"));
+    // Stub counts and logged registers; a trace summary and a kind filter.
+    let r = ok(&mut s, "call_routine", json!({"addr": "00:0E00", "regs": {"hl": "1234"}, "stubs": [{"addr": "00:0E10", "log": true}], "trace_summary": true}));
+    assert_eq!(r["stub_counts"], json!({"00:0E10": 1}));
+    assert_eq!((r["stub_log"][0]["hl"].clone(), r["stub_log"][0]["caller"].clone()), (json!("1234"), json!("00:0E03")), "{r}");
+    assert_eq!(r["trace_summary"], json!({"call 00:0E10": 1, "stub 00:0E10": 1}), "{r}");
+    let r = ok(&mut s, "call_routine", json!({"addr": "00:0E00", "trace": true, "trace_kinds": ["call"]}));
+    assert_eq!(r["trace"].as_array().unwrap().len(), 1, "{r}");
+    // A routine that waits for a button: inputs press it.
+    assert_eq!(ok(&mut s, "call_routine", json!({"addr": "00:0F00", "max_steps": 100000}))["stop_reason"], "max_steps");
+    let r = ok(&mut s, "call_routine", json!({"addr": "00:0F00", "inputs": ["2:a"], "max_steps": 1000000}));
+    assert_eq!(r["stop_reason"], "returned", "{r}");
+    assert!(r["vblanks"].as_u64().unwrap() >= 2);
+    // A routine that maps the previous bank back gets a warning.
+    let r = ok(&mut s, "call_routine", json!({"addr": "02:4100", "max_steps": 200}));
+    assert!(r["warning"].as_str().unwrap().contains("from 02 to 01"), "{r}");
+}
+
+#[test]
+fn run_stubs_conditions_and_callers() {
+    let (mut s, _) = server();
+    open(&mut s, &field_rom());
+    let r = ok(&mut s, "run", json!({"frames": 2, "stubs": [{"addr": "00:0160", "regs": {"a": "42"}}]}));
+    assert!(r["stub_hits"]["00:0160"].as_u64().unwrap() > 10, "{r}");
+    assert_eq!(ok(&mut s, "mem_read", json!({"addr": "C010", "len": 1}))["rows"][0].as_str().unwrap()[9..11].to_string(), "42");
+    // A breakpoint whose condition never holds doesn't stop; one that holds does.
+    ok(&mut s, "breakpoint_set", json!({"addr": "00:0153", "when": {"a": "02"}}));
+    assert_eq!(ok(&mut s, "run", json!({"frames": 1}))["stop"]["reason"], "frames");
+    let b = ok(&mut s, "breakpoint_set", json!({"addr": "00:0153", "when": {"a": "01", "flags": {"c": false}}}));
+    assert_eq!(b["breakpoints"], json!(["00:0153 when a=01 flags.c=0"]), "set again: the condition is replaced");
+    ok(&mut s, "breakpoint_set", json!({"addr": "00:0153", "when": {"a": "01"}}));
+    assert_eq!(ok(&mut s, "run", json!({"frames": 1}))["stop"]["at"], "00:0153");
+    assert!(call(&mut s, "breakpoint_set", json!({"addr": "00:0153", "when": {"q": 1}})).is_err());
+    // caller: the return address, found on the stack.
+    ok(&mut s, "breakpoint_clear", json!({}));
+    ok(&mut s, "breakpoint_set", json!({"addr": "00:0162"}));
+    let r = ok(&mut s, "run", json!({"frames": 1}));
+    assert_eq!(r["stop"]["caller"], "00:0153", "{r}");
+    assert!(r["stop"].get("caller_depth").is_none());
+    ok(&mut s, "breakpoint_clear", json!({}));
+    // A watchpoint on a value.
+    ok(&mut s, "watchpoint_set", json!({"addr": "C010", "value": "07"}));
+    assert_eq!(ok(&mut s, "run", json!({"frames": 1}))["stop"]["reason"], "frames");
+    let w = ok(&mut s, "watchpoint_set", json!({"addr": "C010", "value": "01"}));
+    assert_eq!(w["watchpoints"][1]["value"], "01");
+    assert_eq!(ok(&mut s, "run", json!({"frames": 1}))["stop"]["value"], "01");
 }
