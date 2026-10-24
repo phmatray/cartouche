@@ -153,3 +153,13 @@ fn ldh_shows_the_full_address() {
 fn undefined_opcodes_read_as_data() {
     assert_eq!(disassemble_one(&bus(&[0xD3]), 0x0100), ("DB $D3".to_string(), 1));
 }
+
+#[test]
+fn raw_bytes_decode_like_the_bus() {
+    for op in 0..=255u8 {
+        let b = bus(&[op, 0x34, 0x12]);
+        assert_eq!(gb_core::disasm::disassemble_bytes(0x0100, [op, 0x34, 0x12]), disassemble_one(&b, 0x0100), "opcode {op:02X}");
+    }
+    // A banked address keeps its own relative targets.
+    assert_eq!(gb_core::disasm::disassemble_bytes(0x4000, [0x18, 0xFE, 0]), ("JR $4000".to_string(), 2));
+}
